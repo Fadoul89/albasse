@@ -76,9 +76,9 @@ const styles = StyleSheet.create({
   favoriteBtn: { position: 'absolute', top: 8, right: 8 },
   name: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 13, marginBottom: 4 },
   priceRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
-  price: { color: colors.goldLight, fontFamily: fonts.bodyBold, fontSize: 14 },
+  price: { color: colors.success, fontFamily: fonts.bodyBold, fontSize: 14 },
   comparePrice: {
-    color: colors.creamFaint,
+    color: colors.red,
     fontFamily: fonts.body,
     fontSize: 12,
     textDecorationLine: 'line-through',

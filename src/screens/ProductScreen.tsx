@@ -286,11 +286,11 @@ const styles = StyleSheet.create({
   body: { paddingHorizontal: spacing.md, paddingTop: spacing.md },
   name: { fontFamily: fonts.display, fontSize: 22, color: colors.cream, marginBottom: 6 },
   priceRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 },
-  price: { fontFamily: fonts.bodyBold, fontSize: 20, color: colors.goldLight },
+  price: { fontFamily: fonts.bodyBold, fontSize: 20, color: colors.success },
   comparePrice: {
     fontFamily: fonts.body,
     fontSize: 15,
-    color: colors.creamFaint,
+    color: colors.red,
     textDecorationLine: 'line-through',
   },
   description: {
