@@ -69,9 +69,6 @@ export function AccountScreen() {
           <Text style={styles.guestIcon}>👤</Text>
           <Text style={styles.guestText}>Connectez-vous pour accéder à votre compte</Text>
           <GoldButton label="Se connecter" onPress={() => navigation.navigate('Login')} style={{ marginTop: spacing.lg, width: 220 }} />
-          <Pressable style={{ marginTop: spacing.lg }} onPress={() => navigation.navigate('Contact')}>
-            <Text style={styles.contactLink}>📍 Nous contacter</Text>
-          </Pressable>
         </View>
       </View>
     );
@@ -242,10 +239,6 @@ export function AccountScreen() {
       <Pressable style={styles.menuItem} onPress={() => navigation.navigate('NotificationSettings')}>
         <Text style={styles.menuIcon}>⚙️</Text>
         <Text style={styles.menuLabel}>Réglages des notifications</Text>
-      </Pressable>
-      <Pressable style={styles.menuItem} onPress={() => navigation.navigate('Contact')}>
-        <Text style={styles.menuIcon}>📍</Text>
-        <Text style={styles.menuLabel}>Contact</Text>
       </Pressable>
       <Pressable style={styles.menuItem} onPress={() => navigation.navigate('Orders')}>
         <Text style={styles.menuIcon}>📦</Text>
