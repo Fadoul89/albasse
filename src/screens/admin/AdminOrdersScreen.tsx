@@ -7,6 +7,7 @@ import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { CountdownTimer } from '../../components/CountdownTimer';
+import { formatOrderDate, getOrderDay } from '../../lib/formatDuration';
 import { useToastStore } from '../../store/toastStore';
 import type { Order, OrderStatus } from '../../types';
 
@@ -148,6 +149,19 @@ export function AdminOrdersScreen() {
             </View>
             <Text style={styles.customer}>{item.shipping_name} · {item.shipping_phone}</Text>
             <Text style={styles.address}>{item.shipping_address}, {item.shipping_city}</Text>
+            <View style={styles.dateRow}>
+              <Text style={styles.date}>{formatOrderDate(item.created_at)}</Text>
+              {getOrderDay(item.created_at) === 'today' && (
+                <View style={styles.todayBadge}>
+                  <Text style={styles.todayBadgeText}>Aujourd'hui</Text>
+                </View>
+              )}
+              {getOrderDay(item.created_at) === 'yesterday' && (
+                <View style={styles.yesterdayBadge}>
+                  <Text style={styles.yesterdayBadgeText}>Hier</Text>
+                </View>
+              )}
+            </View>
 
             <View style={styles.itemsList}>
               {item.items.map((oi, idx) => (
@@ -254,7 +268,20 @@ const styles = StyleSheet.create({
   orderId: { color: colors.cream, fontFamily: fonts.bodyBold, fontSize: 13 },
   status: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 12 },
   customer: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 13, marginBottom: 2 },
-  address: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 12, marginBottom: 10 },
+  address: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 12, marginBottom: 4 },
+  dateRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
+  date: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 12 },
+  todayBadge: { backgroundColor: colors.gold, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 2 },
+  todayBadgeText: { color: colors.background, fontFamily: fonts.bodyBold, fontSize: 10 },
+  yesterdayBadge: {
+    backgroundColor: colors.panelAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  yesterdayBadgeText: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 10 },
   itemsList: {
     backgroundColor: colors.panelAlt,
     borderRadius: radius.sm,

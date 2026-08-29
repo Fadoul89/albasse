@@ -62,3 +62,28 @@ export function formatDateTime(iso: string | null): string {
     minute: '2-digit',
   });
 }
+
+function isSameDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+export type OrderDay = 'today' | 'yesterday' | 'older';
+
+export function getOrderDay(iso: string): OrderDay {
+  const date = new Date(iso);
+  const now = new Date();
+  if (isSameDay(date, now)) return 'today';
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (isSameDay(date, yesterday)) return 'yesterday';
+  return 'older';
+}
+
+// Date + heure toujours affichees, en plus du badge Aujourd'hui/Hier (voir
+// getOrderDay) qui permet a client et admin de reperer les commandes
+// recentes en un coup d'oeil dans une liste.
+export function formatOrderDate(iso: string): string {
+  const date = new Date(iso);
+  const time = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  return `${date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} à ${time}`;
+}

@@ -10,6 +10,7 @@ import { GoldButton } from '../components/GoldButton';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { OrderStatusStepper } from '../components/OrderStatusStepper';
 import { CountdownTimer } from '../components/CountdownTimer';
+import { formatOrderDate, getOrderDay } from '../lib/formatDuration';
 import type { Order, OrderStatus } from '../types';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
@@ -145,9 +146,19 @@ function OrderCard({
         <Text style={styles.orderId}>Commande #{order.id.slice(0, 8)}</Text>
         <Text style={styles.status}>{STATUS_LABELS[order.status]}</Text>
       </View>
-      <Text style={styles.date}>
-        {new Date(order.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
-      </Text>
+      <View style={styles.dateRow}>
+        <Text style={styles.date}>{formatOrderDate(order.created_at)}</Text>
+        {getOrderDay(order.created_at) === 'today' && (
+          <View style={styles.todayBadge}>
+            <Text style={styles.todayBadgeText}>Aujourd'hui</Text>
+          </View>
+        )}
+        {getOrderDay(order.created_at) === 'yesterday' && (
+          <View style={styles.yesterdayBadge}>
+            <Text style={styles.yesterdayBadgeText}>Hier</Text>
+          </View>
+        )}
+      </View>
 
       <OrderStatusStepper status={order.status} />
 
@@ -249,7 +260,19 @@ const styles = StyleSheet.create({
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 },
   orderId: { color: colors.cream, fontFamily: fonts.bodyBold, fontSize: 14 },
   status: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 12 },
-  date: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 12, marginBottom: 10 },
+  dateRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
+  date: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 12 },
+  todayBadge: { backgroundColor: colors.gold, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 2 },
+  todayBadgeText: { color: colors.background, fontFamily: fonts.bodyBold, fontSize: 10 },
+  yesterdayBadge: {
+    backgroundColor: colors.panelAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  yesterdayBadgeText: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 10 },
   itemsList: {
     backgroundColor: colors.panelAlt,
     borderRadius: radius.sm,
