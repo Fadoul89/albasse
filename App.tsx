@@ -22,6 +22,7 @@ import { useAuthStore } from './src/store/authStore';
 import { Toast } from './src/components/Toast';
 import { initAnalyticsSession } from './src/lib/analytics';
 import { initTikTokPixel } from './src/lib/tiktokPixel';
+import { initGoogleTranslate } from './src/lib/googleTranslate';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -55,6 +56,7 @@ export default function App() {
     if (Platform.OS === 'web') {
       document.title = 'Albasse Shopping';
       initTikTokPixel();
+      initGoogleTranslate();
     }
   }, []);
 
