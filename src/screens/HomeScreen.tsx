@@ -13,6 +13,7 @@ import { CountdownTimer } from '../components/CountdownTimer';
 import { StoreFooter } from '../components/StoreFooter';
 import { CartReminderBanner } from '../components/CartReminderBanner';
 import { CustomerNotificationBell } from '../components/CustomerNotificationBell';
+import { LanguageSwitcher } from '../components/LanguageSwitcher';
 import { ChadFlag } from '../components/ChadFlag';
 
 const CHAD_BLUE = '#0033A0';
@@ -78,7 +79,10 @@ export function HomeScreen() {
             </View>
           </View>
         </View>
-        <CustomerNotificationBell />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <LanguageSwitcher />
+          <CustomerNotificationBell />
+        </View>
       </View>
 
       <View style={styles.independenceBanner}>
