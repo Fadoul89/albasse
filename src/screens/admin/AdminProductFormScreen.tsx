@@ -9,12 +9,15 @@ import type { RootStackParamList } from '../../navigation/types';
 import { colors, fonts, radius, spacing } from '../../theme';
 import { useProduct, useProducts } from '../../hooks/useProducts';
 import { useCategories } from '../../hooks/useCategories';
+import { useReviews } from '../../hooks/useReviews';
 import { useToastStore } from '../../store/toastStore';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { uploadProductImage } from '../../lib/imageUpload';
+import { addFictionalReview, deleteReview } from '../../lib/reviews';
 import { slugify } from '../../lib/slugify';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { GoldButton } from '../../components/GoldButton';
+import { StarRating } from '../../components/StarRating';
 
 interface Props {
   route: RouteProp<RootStackParamList, 'AdminProductForm'>;
@@ -45,6 +48,40 @@ export function AdminProductFormScreen({ route }: Props) {
   );
   const [saving, setSaving] = useState(false);
   const showToast = useToastStore((s) => s.show);
+
+  const { reviews, refresh: refreshReviews } = useReviews(productId ?? '');
+  const [reviewAuthor, setReviewAuthor] = useState('');
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [addingReview, setAddingReview] = useState(false);
+
+  const handleAddReview = async () => {
+    if (!productId || !reviewAuthor.trim() || !reviewComment.trim()) {
+      showToast('Merci de remplir le nom et le commentaire.', { title: 'Champs manquants', type: 'error' });
+      return;
+    }
+    setAddingReview(true);
+    const { error } = await addFictionalReview(productId, reviewAuthor.trim(), reviewRating, reviewComment.trim());
+    setAddingReview(false);
+    if (error) {
+      showToast(error, { title: 'Erreur', type: 'error' });
+      return;
+    }
+    setReviewAuthor('');
+    setReviewComment('');
+    setReviewRating(5);
+    refreshReviews();
+    showToast('Avis ajouté.', { title: 'Avis ajouté ✓', type: 'success' });
+  };
+
+  const handleDeleteReview = async (reviewId: string) => {
+    const { error } = await deleteReview(reviewId);
+    if (error) {
+      showToast(error, { title: 'Erreur', type: 'error' });
+      return;
+    }
+    refreshReviews();
+  };
 
   useEffect(() => {
     if (!categoryId && categories.length > 0) {
@@ -231,6 +268,51 @@ export function AdminProductFormScreen({ route }: Props) {
           loading={saving}
           style={{ marginTop: spacing.lg }}
         />
+
+        {isEditing && productId && (
+          <View style={styles.reviewsSection}>
+            <Text style={styles.label}>Avis clients (fictifs)</Text>
+            <Text style={styles.reviewsHint}>
+              Ajoutez des avis avec des noms différents pour donner confiance aux visiteurs. La note et le
+              nombre d'avis affichés sur le produit se mettent à jour automatiquement.
+            </Text>
+
+            {reviews.map((r) => (
+              <View key={r.id} style={styles.reviewRow}>
+                <View style={{ flex: 1 }}>
+                  <View style={styles.reviewRowHeader}>
+                    <Text style={styles.reviewAuthor}>{r.author_name}</Text>
+                    <StarRating rating={r.rating} size={11} />
+                  </View>
+                  <Text style={styles.reviewComment} numberOfLines={2}>{r.comment}</Text>
+                </View>
+                <Pressable onPress={() => handleDeleteReview(r.id)} hitSlop={8} style={styles.reviewDeleteBtn}>
+                  <Text style={styles.reviewDeleteText}>✕</Text>
+                </Pressable>
+              </View>
+            ))}
+
+            <View style={styles.addReviewForm}>
+              <Field label="Nom de l'auteur" value={reviewAuthor} onChangeText={setReviewAuthor} placeholder="Ex : Aïcha M." />
+              <Text style={styles.label}>Note</Text>
+              <View style={styles.starPickerRow}>
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <Pressable key={s} onPress={() => setReviewRating(s)} hitSlop={6}>
+                    <Text style={[styles.starPicker, s <= reviewRating && styles.starPickerActive]}>★</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Field label="Commentaire" value={reviewComment} onChangeText={setReviewComment} multiline />
+              <GoldButton
+                label="Ajouter l'avis"
+                onPress={handleAddReview}
+                loading={addingReview}
+                variant="outline"
+                style={{ marginTop: spacing.sm }}
+              />
+            </View>
+          </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -307,4 +389,36 @@ const styles = StyleSheet.create({
   chipText: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 12 },
   chipTextActive: { color: colors.goldLight },
   switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
+  reviewsSection: { marginTop: spacing.xl, paddingTop: spacing.lg, borderTopWidth: 1, borderTopColor: colors.border },
+  reviewsHint: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11.5, lineHeight: 16, marginBottom: spacing.md },
+  reviewRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: colors.panel,
+    borderRadius: radius.sm,
+    padding: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  reviewRowHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 },
+  reviewAuthor: { color: colors.cream, fontFamily: fonts.bodySemiBold, fontSize: 13 },
+  reviewComment: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 12, lineHeight: 16 },
+  reviewDeleteBtn: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.red,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reviewDeleteText: { color: colors.cream, fontSize: 11, fontFamily: fonts.bodyBold },
+  addReviewForm: {
+    backgroundColor: colors.panelAlt,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginTop: spacing.sm,
+  },
+  starPickerRow: { flexDirection: 'row', gap: 6, marginBottom: spacing.sm },
+  starPicker: { fontSize: 26, color: colors.creamFaint },
+  starPickerActive: { color: colors.gold },
 });

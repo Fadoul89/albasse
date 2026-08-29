@@ -10,27 +10,23 @@ export function useReviews(productId: string) {
   const [reviews, setReviews] = useState<Review[]>(initial);
   const [isLoading, setIsLoading] = useState(isSupabaseConfigured);
 
-  useEffect(() => {
-    if (!isSupabaseConfigured) return;
-
-    let cancelled = false;
+  const refresh = () => {
+    if (!isSupabaseConfigured || !productId) return;
     setIsLoading(true);
-
     supabase
       .from('reviews')
       .select('*')
       .eq('product_id', productId)
       .order('created_at', { ascending: false })
       .then(({ data, error }) => {
-        if (cancelled) return;
         setReviews(error ? [] : ((data as Review[]) ?? []));
         setIsLoading(false);
       });
+  };
 
-    return () => {
-      cancelled = true;
-    };
+  useEffect(() => {
+    refresh();
   }, [productId]);
 
-  return { reviews, isLoading };
+  return { reviews, isLoading, refresh };
 }
