@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "albasse-web",
+      "runtimeExecutable": "C:\\Users\\HP\\nodejs\\npx.cmd",
+      "runtimeArgs": ["expo", "start", "--web"],
+      "port": 8081
+    }
+  ]
+}

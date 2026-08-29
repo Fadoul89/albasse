@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "Albasse Shopping",
+    "slug": "albasse-shopping",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/logo.jpg",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0c0c0f",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.albasseshopping.app"
+    },
+    "android": {
+      "package": "com.albasseshopping.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/logo.jpg"
+    },
+    "plugins": [
+      "expo-font",
+      "expo-image",
+      "expo-secure-store",
+      "expo-splash-screen",
+      "@react-native-community/datetimepicker"
+    ]
+  }
+}
