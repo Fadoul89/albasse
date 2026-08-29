@@ -61,6 +61,7 @@ export interface Profile {
   login_count: number;
   banned: boolean;
   fake_order_count: number;
+  loyalty_points: number;
   is_affiliate: boolean;
   affiliate_status: 'pending' | 'approved' | 'blocked' | null;
   referral_code: string | null;

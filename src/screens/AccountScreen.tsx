@@ -12,6 +12,7 @@ import { useCustomerMessages } from '../hooks/useCustomerMessages';
 import { useToastStore } from '../store/toastStore';
 import { supabase } from '../lib/supabase';
 import { uploadAvatar } from '../lib/imageUpload';
+import { getLoyaltyStatus, LOYALTY_TIERS } from '../lib/loyalty';
 
 export function AccountScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -96,6 +97,8 @@ export function AccountScreen() {
         </Pressable>
         <Text style={styles.name}>{profile.full_name ?? 'Client Albasse'}</Text>
         <Text style={styles.email}>{profile.email}</Text>
+
+        <LoyaltyCard points={profile.loyalty_points} />
       </View>
 
       {profile.is_admin && (
@@ -261,6 +264,38 @@ export function AccountScreen() {
   );
 }
 
+function LoyaltyCard({ points }: { points: number }) {
+  const status = getLoyaltyStatus(points);
+  return (
+    <View style={styles.loyaltyCard}>
+      <View style={styles.loyaltyHeader}>
+        <Text style={styles.loyaltyTierText}>
+          {status.current.icon} Client {status.current.label}
+        </Text>
+        <Text style={styles.loyaltyPoints}>{points} pts</Text>
+      </View>
+      <View style={styles.loyaltyBarTrack}>
+        <View style={[styles.loyaltyBarFill, { width: `${Math.round(status.progress * 100)}%` }]} />
+      </View>
+      <Text style={styles.loyaltyHint}>
+        {status.next
+          ? `${status.pointsToNext} pts avant le palier ${status.next.icon} ${status.next.label}`
+          : 'Palier maximum atteint 🎉'}
+      </Text>
+      <View style={styles.loyaltyStepsRow}>
+        {LOYALTY_TIERS.map((tier) => (
+          <View key={tier.key} style={styles.loyaltyStep}>
+            <Text style={[styles.loyaltyStepIcon, points < tier.min && styles.loyaltyStepIconLocked]}>
+              {tier.icon}
+            </Text>
+            <Text style={styles.loyaltyStepLabel}>{tier.label}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background, paddingTop: 50, paddingHorizontal: spacing.md },
   headerTitle: { fontFamily: fonts.display, fontSize: 22, color: colors.cream, textAlign: 'center', marginBottom: spacing.lg },
@@ -305,6 +340,32 @@ const styles = StyleSheet.create({
   avatarEditIcon: { fontSize: 11 },
   name: { color: colors.cream, fontFamily: fonts.bodySemiBold, fontSize: 16 },
   email: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 12, marginTop: 2 },
+  loyaltyCard: {
+    width: '100%',
+    backgroundColor: colors.panelAlt,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginTop: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  loyaltyHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  loyaltyTierText: { color: colors.goldLight, fontFamily: fonts.bodyBold, fontSize: 14 },
+  loyaltyPoints: { color: colors.cream, fontFamily: fonts.bodySemiBold, fontSize: 13 },
+  loyaltyBarTrack: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.background,
+    overflow: 'hidden',
+    marginBottom: 6,
+  },
+  loyaltyBarFill: { height: '100%', backgroundColor: colors.gold, borderRadius: 4 },
+  loyaltyHint: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11, marginBottom: 10 },
+  loyaltyStepsRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  loyaltyStep: { alignItems: 'center', flex: 1 },
+  loyaltyStepIcon: { fontSize: 18, opacity: 1 },
+  loyaltyStepIconLocked: { opacity: 0.25 },
+  loyaltyStepLabel: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 9, marginTop: 2 },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',

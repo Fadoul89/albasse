@@ -14,6 +14,7 @@ import {
   accountStatus,
   ACCOUNT_STATUS_LABEL,
 } from '../../lib/formatDuration';
+import { getLoyaltyStatus } from '../../lib/loyalty';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import type { CustomerSummary } from '../../types';
 
@@ -208,6 +209,7 @@ function StatCard({ icon, label, value }: { icon: string; label: string; value: 
 function CustomerRow({ customer, onPress }: { customer: CustomerSummary; onPress: () => void }) {
   const level = engagementLevel(customer.totalDurationSeconds);
   const status = accountStatus(customer.profile.banned, customer.profile.last_login_at);
+  const loyalty = getLoyaltyStatus(customer.profile.loyalty_points);
   return (
     <Pressable style={styles.row} onPress={onPress}>
       <View style={styles.rowHeader}>
@@ -216,6 +218,9 @@ function CustomerRow({ customer, onPress }: { customer: CustomerSummary; onPress
         </Text>
         <Text style={styles.rowBadge}>{ACCOUNT_STATUS_LABEL[status]}</Text>
       </View>
+      <Text style={styles.rowLoyalty}>
+        {loyalty.current.icon} {loyalty.current.label} · {customer.profile.loyalty_points} pts
+      </Text>
       {status !== 'banned' && (
         <Text style={styles.rowEngagement}>{ENGAGEMENT_LABEL[level]}</Text>
       )}
@@ -299,6 +304,7 @@ const styles = StyleSheet.create({
   rowName: { flex: 1, color: colors.cream, fontFamily: fonts.bodySemiBold, fontSize: 14 },
   rowBadge: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 11, marginLeft: 8 },
   rowEngagement: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 10, marginBottom: 2 },
+  rowLoyalty: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 11, marginBottom: 2 },
   rowMeta: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11, marginTop: 2 },
   rowFooter: { flexDirection: 'row', gap: 14, marginTop: 8 },
   rowFooterText: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 11 },
