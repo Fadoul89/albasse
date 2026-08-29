@@ -9,9 +9,13 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { GoldButton } from '../components/GoldButton';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { OrderStatusStepper } from '../components/OrderStatusStepper';
+import { CountdownTimer } from '../components/CountdownTimer';
 import type { Order, OrderStatus } from '../types';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
+const FLAG_DEADLINE_MS = 48 * 60 * 60 * 1000;
+const getFlagDeadline = (createdAt: string) =>
+  new Date(new Date(createdAt).getTime() + FLAG_DEADLINE_MS).toISOString();
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
   pending: 'En attente',
@@ -190,6 +194,13 @@ function OrderCard({
         />
       )}
 
+      {order.status === 'pending' && !order.is_flagged_fake && (
+        <View style={styles.deadlineBox}>
+          <Text style={styles.deadlineLabel}>Merci de confirmer sous 48h, sinon la commande sera signalée :</Text>
+          <CountdownTimer endsAt={getFlagDeadline(order.created_at)} />
+        </View>
+      )}
+
       <View style={styles.cardWarning}>
         <View style={styles.warningDot} />
         <Text style={styles.cardWarningText}>
@@ -220,6 +231,15 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   cardWarningText: { flex: 1, color: '#3a2c00', fontFamily: fonts.bodyMedium, fontSize: 10.5, lineHeight: 14 },
+  deadlineBox: {
+    backgroundColor: colors.panelAlt,
+    borderRadius: radius.sm,
+    padding: spacing.sm,
+    marginTop: spacing.sm,
+    alignItems: 'center',
+    gap: 6,
+  },
+  deadlineLabel: { color: colors.creamFaint, fontFamily: fonts.bodyMedium, fontSize: 10.5, textAlign: 'center' },
   card: {
     backgroundColor: colors.panel,
     borderRadius: radius.md,

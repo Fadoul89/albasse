@@ -12,15 +12,17 @@ export function useMyOrders(userId: string | undefined) {
       return;
     }
     setIsLoading(true);
-    supabase
-      .from('orders')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        setOrders((data as Order[]) ?? []);
-        setIsLoading(false);
-      });
+    supabase.rpc('auto_flag_stale_orders').finally(() => {
+      supabase
+        .from('orders')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .then(({ data }) => {
+          setOrders((data as Order[]) ?? []);
+          setIsLoading(false);
+        });
+    });
   };
 
   useEffect(() => {

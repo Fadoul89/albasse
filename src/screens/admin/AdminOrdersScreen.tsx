@@ -6,10 +6,14 @@ import { useAuthStore } from '../../store/authStore';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { CountdownTimer } from '../../components/CountdownTimer';
 import { useToastStore } from '../../store/toastStore';
 import type { Order, OrderStatus } from '../../types';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
+const FLAG_DEADLINE_MS = 48 * 60 * 60 * 1000;
+const getFlagDeadline = (createdAt: string) =>
+  new Date(new Date(createdAt).getTime() + FLAG_DEADLINE_MS).toISOString();
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
   pending: 'En attente',
@@ -51,21 +55,23 @@ export function AdminOrdersScreen() {
       setLoading(false);
       return;
     }
-    Promise.all([
-      supabase.from('orders').select('*').order('created_at', { ascending: false }),
-      supabase.from('affiliate_commissions').select('order_id, amount, status, profiles(full_name, email)'),
-    ]).then(([ordersRes, commissionsRes]) => {
-      setOrders((ordersRes.data as Order[]) ?? []);
-      const map: Record<string, OrderCommissionInfo> = {};
-      ((commissionsRes.data as any[]) ?? []).forEach((c) => {
-        map[c.order_id] = {
-          affiliateName: c.profiles?.full_name ?? c.profiles?.email ?? '—',
-          amount: Number(c.amount),
-          status: c.status,
-        };
+    supabase.rpc('auto_flag_stale_orders').finally(() => {
+      Promise.all([
+        supabase.from('orders').select('*').order('created_at', { ascending: false }),
+        supabase.from('affiliate_commissions').select('order_id, amount, status, profiles(full_name, email)'),
+      ]).then(([ordersRes, commissionsRes]) => {
+        setOrders((ordersRes.data as Order[]) ?? []);
+        const map: Record<string, OrderCommissionInfo> = {};
+        ((commissionsRes.data as any[]) ?? []).forEach((c) => {
+          map[c.order_id] = {
+            affiliateName: c.profiles?.full_name ?? c.profiles?.email ?? '—',
+            amount: Number(c.amount),
+            status: c.status,
+          };
+        });
+        setCommissionByOrder(map);
+        setLoading(false);
       });
-      setCommissionByOrder(map);
-      setLoading(false);
     });
   }, [profile]);
 
@@ -197,6 +203,15 @@ export function AdminOrdersScreen() {
                 </Text>
               </View>
             )}
+
+            {item.status === 'pending' && !item.is_flagged_fake && (
+              <View style={styles.deadlineBox}>
+                <Text style={styles.deadlineLabel}>
+                  Signalement automatique comme fausse commande dans :
+                </Text>
+                <CountdownTimer endsAt={getFlagDeadline(item.created_at)} />
+              </View>
+            )}
           </View>
           );
         }}
@@ -269,6 +284,15 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   affiliateBannerText: { color: colors.goldLight, fontFamily: fonts.bodyMedium, fontSize: 11, lineHeight: 15 },
+  deadlineBox: {
+    backgroundColor: colors.panelAlt,
+    borderRadius: radius.sm,
+    padding: spacing.sm,
+    marginTop: spacing.sm,
+    alignItems: 'center',
+    gap: 6,
+  },
+  deadlineLabel: { color: colors.creamFaint, fontFamily: fonts.bodyMedium, fontSize: 10.5, textAlign: 'center' },
   flaggedBadge: {
     color: colors.red,
     fontFamily: fonts.bodyBold,
