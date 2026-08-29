@@ -1,6 +1,6 @@
--- Programme de fidelite : 1000 FCFA depenses = 1 point (donc 5000 FCFA = 5
--- points), credites automatiquement quand une commande passe au statut
--- "livree". Les points debloquent des paliers jusqu'a 100 points (Diamond).
+-- Programme de fidelite : 5000 FCFA depenses = 1 point, credites
+-- automatiquement quand une commande passe au statut "livree". Les points
+-- debloquent des paliers jusqu'a 100 points (Diamond).
 alter table profiles add column if not exists loyalty_points integer not null default 0;
 
 create or replace function public.award_loyalty_points()
@@ -11,7 +11,7 @@ set search_path = public
 as $$
 begin
   if new.status = 'delivered' and old.status is distinct from 'delivered' then
-    update profiles set loyalty_points = loyalty_points + floor(new.total / 1000)
+    update profiles set loyalty_points = loyalty_points + floor(new.total / 5000)
     where id = new.user_id;
   end if;
   return new;

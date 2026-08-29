@@ -5,7 +5,7 @@ export interface LoyaltyTier {
   min: number;
 }
 
-// 1000 FCFA depenses = 1 point. Paliers jusqu'a 100 points (Diamond).
+// 5000 FCFA depenses = 1 point. Paliers jusqu'a 100 points (Diamond).
 export const LOYALTY_TIERS: LoyaltyTier[] = [
   { key: 'bronze', label: 'Bronze', icon: '🥉', min: 0 },
   { key: 'argent', label: 'Argent', icon: '🥈', min: 25 },
