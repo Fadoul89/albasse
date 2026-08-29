@@ -165,6 +165,7 @@ export interface FlightRequest {
   passenger_count: number;
   notes: string;
   status: FlightRequestStatus;
+  is_flagged_fake: boolean;
   created_at: string;
 }
 

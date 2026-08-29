@@ -5,6 +5,7 @@ import { useAuthStore } from '../../store/authStore';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { useToastStore } from '../../store/toastStore';
 import type { FlightRequest, FlightRequestStatus } from '../../types';
 
 const STATUS_LABELS: Record<FlightRequestStatus, string> = {
@@ -22,6 +23,9 @@ export function AdminTravelRequestsScreen() {
   const [loading, setLoading] = useState(true);
   const [pendingDelete, setPendingDelete] = useState<FlightRequest | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [pendingFlag, setPendingFlag] = useState<FlightRequest | null>(null);
+  const [flagging, setFlagging] = useState(false);
+  const showToast = useToastStore((s) => s.show);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !profile?.is_admin) {
@@ -68,6 +72,24 @@ export function AdminTravelRequestsScreen() {
     setPendingDelete(null);
   };
 
+  const confirmFlag = async () => {
+    if (!pendingFlag) return;
+    setFlagging(true);
+    const { error } = await supabase.rpc('flag_fake_flight_request', { target_request_id: pendingFlag.id });
+    setFlagging(false);
+    if (error) {
+      console.error('Erreur signalement demande de voyage:', error);
+      showToast(error.message, { title: 'Erreur', type: 'error' });
+      return;
+    }
+    setRequests((prev) => prev.map((r) => (r.id === pendingFlag.id ? { ...r, is_flagged_fake: true } : r)));
+    showToast(
+      `Demande signalée pour ${pendingFlag.full_name}. Le compte est banni automatiquement à la 3e (commandes et demandes de voyage confondues).`,
+      { title: 'Signalée 🚩', type: 'success' }
+    );
+    setPendingFlag(null);
+  };
+
   return (
     <View style={styles.screen}>
       <ScreenHeader title="Demandes de voyage" showBack />
@@ -85,7 +107,10 @@ export function AdminTravelRequestsScreen() {
               <Text style={styles.route}>
                 {item.origin_city} → {item.destination_city}
               </Text>
-              <Text style={styles.status}>{STATUS_LABELS[item.status]}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                {item.is_flagged_fake && <Text style={styles.flaggedBadge}>🚩 Signalée</Text>}
+                <Text style={styles.status}>{STATUS_LABELS[item.status]}</Text>
+              </View>
             </View>
             <Text style={styles.customer}>{item.full_name} · {item.phone}</Text>
             <Text style={styles.dates}>
@@ -100,6 +125,11 @@ export function AdminTravelRequestsScreen() {
               {item.status !== 'booked' && item.status !== 'cancelled' && (
                 <Pressable style={styles.advanceBtn} onPress={() => advanceStatus(item)}>
                   <Text style={styles.advanceText}>Étape suivante →</Text>
+                </Pressable>
+              )}
+              {!item.is_flagged_fake && (
+                <Pressable style={styles.flagBtn} onPress={() => setPendingFlag(item)}>
+                  <Text style={styles.flagText}>🚩 Signaler fausse demande</Text>
                 </Pressable>
               )}
               <Pressable style={styles.deleteBtn} onPress={() => setPendingDelete(item)}>
@@ -119,6 +149,16 @@ export function AdminTravelRequestsScreen() {
         loading={deleting}
         onConfirm={confirmDelete}
         onCancel={() => setPendingDelete(null)}
+      />
+      <ConfirmDialog
+        visible={!!pendingFlag}
+        title="Signaler cette demande comme fausse ?"
+        message={`La demande de ${pendingFlag?.full_name} sera marquée comme non sérieuse. À la 3e signalée (commande ou demande de voyage), le compte du client sera automatiquement banni.`}
+        confirmLabel="Signaler"
+        destructive
+        loading={flagging}
+        onConfirm={confirmFlag}
+        onCancel={() => setPendingFlag(null)}
       />
     </View>
   );
@@ -142,6 +182,17 @@ const styles = StyleSheet.create({
   actionsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 },
   advanceBtn: {},
   advanceText: { color: colors.gold, fontFamily: fonts.bodyMedium, fontSize: 12 },
+  flagBtn: {},
+  flagText: { color: '#f5c542', fontFamily: fonts.bodyMedium, fontSize: 12 },
   deleteBtn: { marginLeft: 'auto' },
   deleteText: { color: colors.red, fontFamily: fonts.bodyMedium, fontSize: 12 },
+  flaggedBadge: {
+    color: colors.red,
+    fontFamily: fonts.bodyBold,
+    fontSize: 10,
+    backgroundColor: 'rgba(216,35,42,0.15)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+  },
 });
