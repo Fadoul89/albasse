@@ -30,6 +30,7 @@ export function TravelScreen() {
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const [confirmedSerious, setConfirmedSerious] = useState(false);
   const showToast = useToastStore((s) => s.show);
 
   const handleSubmit = async () => {
@@ -124,14 +125,21 @@ export function TravelScreen() {
           placeholder="Classe souhaitée, escales, bagages…"
         />
 
-        <View style={styles.warningBox}>
-          <Text style={styles.warningIcon}>⚠️</Text>
-          <Text style={styles.warningText}>
-            Merci de ne faire une demande que si vous êtes réellement intéressé(e). Les demandes non sérieuses
-            ou fausses ralentissent le traitement des vrais voyageurs et peuvent entraîner un blocage de votre
-            compte.
-          </Text>
-        </View>
+        {!confirmedSerious && (
+          <View style={styles.warningBox}>
+            <Text style={styles.warningIcon}>⚠️</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.warningText}>
+                Merci de ne faire une demande que si vous êtes réellement intéressé(e). Les demandes non
+                sérieuses ou fausses ralentissent le traitement des vrais voyageurs et peuvent entraîner un
+                blocage de votre compte.
+              </Text>
+              <Pressable style={styles.seriousBtn} onPress={() => setConfirmedSerious(true)}>
+                <Text style={styles.seriousBtnText}>✓ Je suis sérieux(se)</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
 
         <GoldButton
           label="Envoyer la demande"
@@ -201,7 +209,16 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   warningIcon: { fontSize: 16 },
-  warningText: { flex: 1, color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 12, lineHeight: 17 },
+  warningText: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 12, lineHeight: 17 },
+  seriousBtn: {
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    backgroundColor: colors.red,
+    borderRadius: radius.pill,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  seriousBtnText: { color: colors.cream, fontFamily: fonts.bodyBold, fontSize: 12 },
   airlineRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.md },
   airlineChip: {
     borderWidth: 1,
