@@ -124,11 +124,20 @@ export function TravelScreen() {
           placeholder="Classe souhaitée, escales, bagages…"
         />
 
+        <View style={styles.warningBox}>
+          <Text style={styles.warningIcon}>⚠️</Text>
+          <Text style={styles.warningText}>
+            Merci de ne faire une demande que si vous êtes réellement intéressé(e). Les demandes non sérieuses
+            ou fausses ralentissent le traitement des vrais voyageurs et peuvent entraîner un blocage de votre
+            compte.
+          </Text>
+        </View>
+
         <GoldButton
           label="Envoyer la demande"
           onPress={handleSubmit}
           loading={submitting}
-          style={{ marginTop: spacing.lg }}
+          style={{ marginTop: spacing.md }}
         />
       </ScrollView>
       <ConfirmDialog
@@ -180,6 +189,19 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   label: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 12, marginBottom: 6 },
+  warningBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: 'rgba(216,35,42,0.12)',
+    borderWidth: 1,
+    borderColor: colors.red,
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    marginTop: spacing.md,
+  },
+  warningIcon: { fontSize: 16 },
+  warningText: { flex: 1, color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 12, lineHeight: 17 },
   airlineRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.md },
   airlineChip: {
     borderWidth: 1,
