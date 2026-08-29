@@ -56,7 +56,7 @@ export function AdminOrdersScreen() {
       setLoading(false);
       return;
     }
-    supabase.rpc('auto_flag_stale_orders').finally(() => {
+    supabase.rpc('auto_flag_stale_orders').then(() => {
       Promise.all([
         supabase.from('orders').select('*').order('created_at', { ascending: false }),
         supabase.from('affiliate_commissions').select('order_id, amount, status, profiles(full_name, email)'),

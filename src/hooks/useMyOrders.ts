@@ -12,7 +12,7 @@ export function useMyOrders(userId: string | undefined) {
       return;
     }
     setIsLoading(true);
-    supabase.rpc('auto_flag_stale_orders').finally(() => {
+    supabase.rpc('auto_flag_stale_orders').then(() => {
       supabase
         .from('orders')
         .select('*')
