@@ -8,10 +8,10 @@ export function LanguageSwitcher() {
 
   return (
     <View style={styles.row}>
-      <Pressable style={styles.btn} onPress={translateToArabic}>
+      <Pressable style={[styles.btn, styles.btnArabic]} onPress={translateToArabic}>
         <Text style={styles.btnText}>العربية</Text>
       </Pressable>
-      <Pressable style={styles.btn} onPress={translateToFrench}>
+      <Pressable style={[styles.btn, styles.btnFrench]} onPress={translateToFrench}>
         <Text style={styles.btnText}>🇫🇷 FR</Text>
       </Pressable>
     </View>
@@ -21,12 +21,11 @@ export function LanguageSwitcher() {
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: 6 },
   btn: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.panel,
     borderRadius: radius.pill,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  btnText: { color: colors.creamMuted, fontFamily: fonts.bodyBold, fontSize: 11 },
+  btnArabic: { backgroundColor: '#2e8b57' },
+  btnFrench: { backgroundColor: '#1e5fd8' },
+  btnText: { color: '#ffffff', fontFamily: fonts.bodyBold, fontSize: 11 },
 });
