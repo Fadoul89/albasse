@@ -1,5 +1,7 @@
-import React from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from 'react-native';
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
@@ -7,13 +9,56 @@ import { colors, fonts, radius, spacing } from '../theme';
 import { useAuthStore } from '../store/authStore';
 import { GoldButton } from '../components/GoldButton';
 import { useCustomerMessages } from '../hooks/useCustomerMessages';
+import { useToastStore } from '../store/toastStore';
+import { supabase } from '../lib/supabase';
+import { uploadAvatar } from '../lib/imageUpload';
 
 export function AccountScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const profile = useAuthStore((s) => s.profile);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const signOut = useAuthStore((s) => s.signOut);
+  const refreshProfile = useAuthStore((s) => s.refreshProfile);
   const { unreadCount } = useCustomerMessages();
+  const showToast = useToastStore((s) => s.show);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  const handlePickAvatar = async () => {
+    if (!profile) return;
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      showToast("Autorisez l'accès aux photos pour changer votre photo de profil.", {
+        title: 'Permission requise',
+        type: 'error',
+      });
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets[0]) return;
+
+    setUploadingAvatar(true);
+    const { url, error } = await uploadAvatar(result.assets[0].uri, profile.id);
+    if (error || !url) {
+      setUploadingAvatar(false);
+      showToast(error ?? 'Échec du téléversement.', { title: 'Erreur', type: 'error' });
+      return;
+    }
+
+    const { error: updateError } = await supabase.from('profiles').update({ avatar_url: url }).eq('id', profile.id);
+    setUploadingAvatar(false);
+    if (updateError) {
+      showToast(updateError.message, { title: 'Erreur', type: 'error' });
+      return;
+    }
+    await refreshProfile();
+    showToast('Votre photo de profil a été mise à jour.', { title: 'Photo mise à jour ✓', type: 'success' });
+  };
 
   if (!isAuthenticated || !profile) {
     return (
@@ -35,9 +80,20 @@ export function AccountScreen() {
     <ScrollView style={styles.screen} contentContainerStyle={{ paddingBottom: 40 }}>
       <Text style={styles.headerTitle}>Mon Compte</Text>
       <View style={styles.profileCard}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{(profile.full_name ?? profile.email)[0]?.toUpperCase()}</Text>
-        </View>
+        <Pressable style={styles.avatar} onPress={handlePickAvatar} disabled={uploadingAvatar}>
+          {profile.avatar_url ? (
+            <Image source={{ uri: profile.avatar_url }} style={styles.avatarImage} contentFit="cover" />
+          ) : (
+            <Text style={styles.avatarText}>{(profile.full_name ?? profile.email)[0]?.toUpperCase()}</Text>
+          )}
+          <View style={styles.avatarEditBadge}>
+            {uploadingAvatar ? (
+              <ActivityIndicator size="small" color={colors.background} />
+            ) : (
+              <Text style={styles.avatarEditIcon}>📷</Text>
+            )}
+          </View>
+        </Pressable>
         <Text style={styles.name}>{profile.full_name ?? 'Client Albasse'}</Text>
         <Text style={styles.email}>{profile.email}</Text>
       </View>
@@ -229,8 +285,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.sm,
+    overflow: 'visible',
   },
+  avatarImage: { width: 64, height: 64, borderRadius: 32 },
   avatarText: { color: colors.goldLight, fontFamily: fonts.displayBold, fontSize: 24 },
+  avatarEditBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.gold,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: colors.panel,
+  },
+  avatarEditIcon: { fontSize: 11 },
   name: { color: colors.cream, fontFamily: fonts.bodySemiBold, fontSize: 16 },
   email: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 12, marginTop: 2 },
   menuItem: {

@@ -49,6 +49,7 @@ export interface Review {
 export interface Profile {
   id: string;
   email: string;
+  avatar_url: string | null;
   full_name: string | null;
   phone: string | null;
   profession: string | null;
