@@ -244,9 +244,10 @@ export function AccountScreen() {
         <Text style={styles.menuIcon}>📦</Text>
         <Text style={styles.menuLabel}>Mes commandes</Text>
       </Pressable>
-      <Pressable style={styles.menuItem} onPress={() => navigation.navigate('Travel')}>
-        <Text style={styles.menuIcon}>🧳</Text>
-        <Text style={styles.menuLabel}>Demander un billet d'avion</Text>
+      <Pressable style={styles.travelMenuItem} onPress={() => navigation.navigate('Travel')}>
+        <Text style={styles.menuIcon}>✈️</Text>
+        <Text style={styles.travelMenuLabel}>Demander un billet d'avion</Text>
+        <Text style={styles.travelMenuArrow}>→</Text>
       </Pressable>
 
       <Pressable style={styles.menuItem} onPress={signOut}>
@@ -369,4 +370,14 @@ const styles = StyleSheet.create({
   },
   menuIcon: { fontSize: 18, marginRight: 12 },
   menuLabel: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 14 },
+  travelMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.gold,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  travelMenuLabel: { flex: 1, color: colors.background, fontFamily: fonts.bodyBold, fontSize: 14 },
+  travelMenuArrow: { color: colors.background, fontFamily: fonts.bodyBold, fontSize: 16 },
 });
