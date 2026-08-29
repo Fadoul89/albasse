@@ -330,9 +330,7 @@ const styles = StyleSheet.create({
   travelBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.panel,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: colors.gold,
     borderRadius: radius.lg,
     padding: spacing.md,
     marginHorizontal: spacing.md,
@@ -340,8 +338,8 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   travelIcon: { fontSize: 26 },
-  travelTitle: { color: colors.cream, fontFamily: fonts.bodySemiBold, fontSize: 15 },
-  travelSubtitle: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 12, marginTop: 2 },
-  travelArrow: { color: colors.gold, fontSize: 18, fontFamily: fonts.bodyBold },
+  travelTitle: { color: colors.background, fontFamily: fonts.bodyBold, fontSize: 15 },
+  travelSubtitle: { color: colors.background, fontFamily: fonts.bodyMedium, fontSize: 12, marginTop: 2, opacity: 0.75 },
+  travelArrow: { color: colors.background, fontSize: 18, fontFamily: fonts.bodyBold },
   loading: { color: colors.creamFaint, fontFamily: fonts.body, textAlign: 'center', marginTop: 12 },
 });
