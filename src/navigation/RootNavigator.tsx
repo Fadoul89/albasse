@@ -10,7 +10,6 @@ import { SocialProofTicker } from '../components/SocialProofTicker';
 import { WhatsAppFab } from '../components/WhatsAppFab';
 import { trackPageView } from '../lib/analytics';
 import { useAuthStore } from '../store/authStore';
-import { AuthGateScreen } from '../screens/auth/AuthGateScreen';
 import { TabNavigator } from './TabNavigator';
 import { CategoryScreen } from '../screens/CategoryScreen';
 import { ProductScreen } from '../screens/ProductScreen';
@@ -159,69 +158,59 @@ export function RootNavigator() {
       linking={linking}
       onStateChange={() => trackPageView()}
     >
-      {isAuthenticated ? (
-        <View style={styles.root}>
-          <SafeAreaView edges={['top']} style={styles.tickerSafeArea}>
-            <SocialProofTicker />
-          </SafeAreaView>
-          <View style={styles.stackWrap}>
-            <Stack.Navigator screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="Tabs" component={TabNavigator} />
-              <Stack.Screen name="Category" component={CategoryScreen} />
-              <Stack.Screen name="Product" component={ProductScreen} />
-              <Stack.Screen name="Checkout" component={CheckoutScreen} />
-              <Stack.Screen name="Orders" component={OrdersScreen} />
-              <Stack.Screen name="Travel" component={TravelScreen} />
-              <Stack.Screen name="AdminProducts" component={AdminProductsScreen} />
-              <Stack.Screen name="AdminProductForm" component={AdminProductFormScreen} />
-              <Stack.Screen name="AdminOrders" component={AdminOrdersScreen} />
-              <Stack.Screen name="AdminTravelRequests" component={AdminTravelRequestsScreen} />
-              <Stack.Screen name="AdminCategories" component={AdminCategoriesScreen} />
-              <Stack.Screen name="AdminPaymentSettings" component={AdminPaymentSettingsScreen} />
-              <Stack.Screen name="AdminCustomers" component={AdminCustomersScreen} />
-              <Stack.Screen name="AdminCustomerDetail" component={AdminCustomerDetailScreen} />
-              <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
-              <Stack.Screen name="AdminSourcePerformance" component={AdminSourcePerformanceScreen} />
-              <Stack.Screen name="AdminAbandonedCarts" component={AdminAbandonedCartsScreen} />
-              <Stack.Screen name="AdminNotifications" component={AdminNotificationsScreen} />
-              <Stack.Screen name="AdminPromotions" component={AdminPromotionsScreen} />
-              <Stack.Screen name="AdminStoreSettings" component={AdminStoreSettingsScreen} />
-              <Stack.Screen name="Contact" component={ContactScreen} />
-              <Stack.Screen name="CustomerNotifications" component={CustomerNotificationsScreen} />
-              <Stack.Screen name="NotificationSettings" component={NotificationSettingsScreen} />
-              <Stack.Screen name="Favorites" component={FavoritesScreen} />
-              <Stack.Screen name="AdminCities" component={AdminCitiesScreen} />
-              <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
-              <Stack.Screen name="Messages" component={MessagesScreen} />
-              <Stack.Screen name="AdminMessages" component={AdminMessagesScreen} />
-              <Stack.Screen name="AffiliateApply" component={AffiliateApplyScreen} />
-              <Stack.Screen name="AffiliateDashboard" component={AffiliateDashboardScreen} />
-              <Stack.Screen name="AffiliateProducts" component={AffiliateProductsScreen} />
-              <Stack.Screen name="OrderConfirmation" component={OrderConfirmationScreen} />
-              <Stack.Screen name="AdminBestLeads" component={AdminBestLeadsScreen} />
-              <Stack.Screen name="Wheel" component={WheelScreen} />
-              <Stack.Screen name="AdminWheel" component={AdminWheelScreen} />
-              <Stack.Screen name="AdminAffiliates" component={AdminAffiliatesScreen} />
-              <Stack.Screen name="AdminAffiliateSettings" component={AdminAffiliateSettingsScreen} />
-              <Stack.Screen name="AdminAffiliateCommissions" component={AdminAffiliateCommissionsScreen} />
-            </Stack.Navigator>
-          </View>
-          <FavoritesSync />
-          <WhatsAppFab />
-          <SmartPromotionPopup />
-          <WheelPopup />
-        </View>
-      ) : (
-        <View style={styles.root}>
+      <View style={styles.root}>
+        <SafeAreaView edges={['top']} style={styles.tickerSafeArea}>
+          <SocialProofTicker />
+        </SafeAreaView>
+        <View style={styles.stackWrap}>
           <Stack.Navigator screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="AuthGate" component={AuthGateScreen} />
+            <Stack.Screen name="Tabs" component={TabNavigator} />
+            <Stack.Screen name="Category" component={CategoryScreen} />
+            <Stack.Screen name="Product" component={ProductScreen} />
+            <Stack.Screen name="Checkout" component={CheckoutScreen} />
+            <Stack.Screen name="Orders" component={OrdersScreen} />
+            <Stack.Screen name="Travel" component={TravelScreen} />
             <Stack.Screen name="Login" component={LoginScreen} options={{ presentation: 'modal' }} />
             <Stack.Screen name="Register" component={RegisterScreen} options={{ presentation: 'modal' }} />
+            <Stack.Screen name="AdminProducts" component={AdminProductsScreen} />
+            <Stack.Screen name="AdminProductForm" component={AdminProductFormScreen} />
+            <Stack.Screen name="AdminOrders" component={AdminOrdersScreen} />
+            <Stack.Screen name="AdminTravelRequests" component={AdminTravelRequestsScreen} />
+            <Stack.Screen name="AdminCategories" component={AdminCategoriesScreen} />
+            <Stack.Screen name="AdminPaymentSettings" component={AdminPaymentSettingsScreen} />
+            <Stack.Screen name="AdminCustomers" component={AdminCustomersScreen} />
+            <Stack.Screen name="AdminCustomerDetail" component={AdminCustomerDetailScreen} />
+            <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
+            <Stack.Screen name="AdminSourcePerformance" component={AdminSourcePerformanceScreen} />
+            <Stack.Screen name="AdminAbandonedCarts" component={AdminAbandonedCartsScreen} />
+            <Stack.Screen name="AdminNotifications" component={AdminNotificationsScreen} />
+            <Stack.Screen name="AdminPromotions" component={AdminPromotionsScreen} />
+            <Stack.Screen name="AdminStoreSettings" component={AdminStoreSettingsScreen} />
+            <Stack.Screen name="Contact" component={ContactScreen} />
+            <Stack.Screen name="CustomerNotifications" component={CustomerNotificationsScreen} />
+            <Stack.Screen name="NotificationSettings" component={NotificationSettingsScreen} />
+            <Stack.Screen name="Favorites" component={FavoritesScreen} />
+            <Stack.Screen name="AdminCities" component={AdminCitiesScreen} />
             <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} options={{ presentation: 'modal' }} />
+            <Stack.Screen name="Messages" component={MessagesScreen} />
+            <Stack.Screen name="AdminMessages" component={AdminMessagesScreen} />
             <Stack.Screen name="AffiliateApply" component={AffiliateApplyScreen} options={{ presentation: 'modal' }} />
+            <Stack.Screen name="AffiliateDashboard" component={AffiliateDashboardScreen} />
+            <Stack.Screen name="AffiliateProducts" component={AffiliateProductsScreen} />
+            <Stack.Screen name="OrderConfirmation" component={OrderConfirmationScreen} />
+            <Stack.Screen name="AdminBestLeads" component={AdminBestLeadsScreen} />
+            <Stack.Screen name="Wheel" component={WheelScreen} />
+            <Stack.Screen name="AdminWheel" component={AdminWheelScreen} />
+            <Stack.Screen name="AdminAffiliates" component={AdminAffiliatesScreen} />
+            <Stack.Screen name="AdminAffiliateSettings" component={AdminAffiliateSettingsScreen} />
+            <Stack.Screen name="AdminAffiliateCommissions" component={AdminAffiliateCommissionsScreen} />
           </Stack.Navigator>
         </View>
-      )}
+        <FavoritesSync />
+        <WhatsAppFab />
+        <SmartPromotionPopup />
+        <WheelPopup />
+      </View>
     </NavigationContainer>
   );
 }

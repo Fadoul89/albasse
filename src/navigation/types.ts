@@ -1,5 +1,4 @@
 export type RootStackParamList = {
-  AuthGate: undefined;
   Tabs: undefined;
   Category: { slug: string };
   Product: { slug: string };
