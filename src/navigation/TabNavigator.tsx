@@ -52,7 +52,7 @@ export function TabNavigator() {
         tabBarLabel: ({ color, focused }) => {
           const isCart = route.name === 'Cart';
           const isAccount = route.name === 'Account';
-          const labelColor = isCart ? '#1e5fd8' : isAccount ? colors.gold : color;
+          const labelColor = isCart ? '#3b9eff' : isAccount ? colors.gold : color;
           return (
             <Text
               style={{
@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gold + '26',
   },
   iconWrapBlue: {
-    backgroundColor: '#1e5fd8',
+    backgroundColor: '#3b9eff',
   },
   iconWrapGold: {
     backgroundColor: colors.gold,
