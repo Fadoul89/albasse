@@ -49,18 +49,23 @@ export function TabNavigator() {
         },
         tabBarActiveTintColor: colors.gold,
         tabBarInactiveTintColor: colors.creamFaint,
-        tabBarLabel: ({ color, focused }) => (
-          <Text
-            style={{
-              color,
-              fontFamily: focused ? fonts.bodySemiBold : fonts.bodyMedium,
-              fontSize: 11.5,
-              marginTop: 2,
-            }}
-          >
-            {LABELS[route.name as keyof TabParamList]}
-          </Text>
-        ),
+        tabBarLabel: ({ color, focused }) => {
+          const isCart = route.name === 'Cart';
+          const isAccount = route.name === 'Account';
+          const labelColor = isCart ? '#1e5fd8' : isAccount ? colors.gold : color;
+          return (
+            <Text
+              style={{
+                color: labelColor,
+                fontFamily: focused || isCart || isAccount ? fonts.bodySemiBold : fonts.bodyMedium,
+                fontSize: 11.5,
+                marginTop: 2,
+              }}
+            >
+              {LABELS[route.name as keyof TabParamList]}
+            </Text>
+          );
+        },
         tabBarIcon: ({ focused }) => {
           const isCart = route.name === 'Cart';
           const isAccount = route.name === 'Account';
