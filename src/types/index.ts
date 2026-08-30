@@ -134,7 +134,7 @@ export interface OrderItem {
 
 export interface Order {
   id: string;
-  user_id: string;
+  user_id: string | null;
   items: OrderItem[];
   total: number;
   status: OrderStatus;

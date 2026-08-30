@@ -10,7 +10,6 @@ import { useToastStore } from '../store/toastStore';
 import { usePaymentSettings } from '../hooks/usePaymentSettings';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { GoldButton } from '../components/GoldButton';
-import { ConfirmDialog } from '../components/ConfirmDialog';
 import { createOrder } from '../lib/orders';
 import { initiatePayment } from '../lib/payments';
 import { CityPicker } from '../components/CityPicker';
@@ -48,7 +47,6 @@ export function CheckoutScreen() {
   const [selectedCity, setSelectedCity] = useState<City | null>(null);
   const [method, setMethod] = useState<PaymentMethod>('airtel_money');
   const [submitting, setSubmitting] = useState(false);
-  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const showToast = useToastStore((s) => s.show);
   const { settings: paymentSettings } = usePaymentSettings();
 
@@ -63,10 +61,6 @@ export function CheckoutScreen() {
       : null;
 
   const handleSubmit = async () => {
-    if (!profile) {
-      setShowLoginPrompt(true);
-      return;
-    }
     if (!name || !phone || !address || !city) {
       showToast('Merci de remplir toutes les informations de livraison.', { title: 'Champs manquants', type: 'error' });
       return;
@@ -75,7 +69,7 @@ export function CheckoutScreen() {
     setSubmitting(true);
     try {
       const { order, error } = await createOrder({
-        userId: profile.id,
+        userId: profile?.id ?? null,
         items,
         total: grandTotal,
         paymentMethod: method,
@@ -205,25 +199,23 @@ export function CheckoutScreen() {
           </View>
         </View>
 
+        {!profile && (
+          <Pressable onPress={() => navigation.navigate('Login')}>
+            <Text style={styles.accountHint}>
+              Vous pouvez commander sans compte. Pour suivre vos commandes et gagner des points de fidélité,{' '}
+              <Text style={styles.accountHintLink}>connectez-vous</Text>.
+            </Text>
+          </Pressable>
+        )}
+
         <GoldButton
           label="Confirmer la commande"
           onPress={handleSubmit}
           loading={submitting}
           disabled={items.length === 0}
-          style={{ marginTop: spacing.lg }}
+          style={{ marginTop: spacing.md }}
         />
       </ScrollView>
-      <ConfirmDialog
-        visible={showLoginPrompt}
-        title="Connexion requise"
-        message="Veuillez vous connecter pour passer commande."
-        confirmLabel="Se connecter"
-        onConfirm={() => {
-          setShowLoginPrompt(false);
-          navigation.navigate('Login');
-        }}
-        onCancel={() => setShowLoginPrompt(false)}
-      />
     </View>
   );
 }
@@ -290,4 +282,13 @@ const styles = StyleSheet.create({
   summaryValue: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 13 },
   totalLabel: { color: colors.cream, fontFamily: fonts.bodySemiBold, fontSize: 15 },
   totalValue: { color: colors.goldLight, fontFamily: fonts.displayBold, fontSize: 18 },
+  accountHint: {
+    color: colors.creamFaint,
+    fontFamily: fonts.body,
+    fontSize: 11.5,
+    lineHeight: 16,
+    marginTop: spacing.md,
+    textAlign: 'center',
+  },
+  accountHintLink: { color: colors.gold, fontFamily: fonts.bodyBold },
 });
