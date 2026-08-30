@@ -23,6 +23,7 @@ export interface LoyaltyStatus {
 }
 
 export function getLoyaltyStatus(points: number): LoyaltyStatus {
+  points = points ?? 0;
   let current = LOYALTY_TIERS[0];
   for (const tier of LOYALTY_TIERS) {
     if (points >= tier.min) current = tier;

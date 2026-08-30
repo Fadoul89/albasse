@@ -95,7 +95,7 @@ export function AccountScreen() {
         <Text style={styles.name}>{profile.full_name ?? 'Client Albasse'}</Text>
         <Text style={styles.email}>{profile.email}</Text>
 
-        <LoyaltyCard points={profile.loyalty_points} />
+        <LoyaltyCard points={profile.loyalty_points ?? 0} />
       </View>
 
       {profile.is_admin && (

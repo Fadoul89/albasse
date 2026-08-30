@@ -219,7 +219,7 @@ function CustomerRow({ customer, onPress }: { customer: CustomerSummary; onPress
         <Text style={styles.rowBadge}>{ACCOUNT_STATUS_LABEL[status]}</Text>
       </View>
       <Text style={styles.rowLoyalty}>
-        {loyalty.current.icon} {loyalty.current.label} · {customer.profile.loyalty_points} pts
+        {loyalty.current.icon} {loyalty.current.label} · {customer.profile.loyalty_points ?? 0} pts
       </Text>
       {status !== 'banned' && (
         <Text style={styles.rowEngagement}>{ENGAGEMENT_LABEL[level]}</Text>
