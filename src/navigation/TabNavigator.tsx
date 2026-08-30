@@ -61,13 +61,22 @@ export function TabNavigator() {
             {LABELS[route.name as keyof TabParamList]}
           </Text>
         ),
-        tabBarIcon: ({ focused }) => (
-          <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
-            <Text style={{ fontSize: focused ? 26 : 23 }}>
-              {ICONS[route.name as keyof TabParamList]}
-            </Text>
-          </View>
-        ),
+        tabBarIcon: ({ focused }) => {
+          const isCart = route.name === 'Cart';
+          const isAccount = route.name === 'Account';
+          return (
+            <View
+              style={[
+                styles.iconWrap,
+                isCart ? styles.iconWrapBlue : isAccount ? styles.iconWrapGold : focused && styles.iconWrapActive,
+              ]}
+            >
+              <Text style={{ fontSize: focused ? 26 : 23 }}>
+                {ICONS[route.name as keyof TabParamList]}
+              </Text>
+            </View>
+          );
+        },
         tabBarBadge:
           route.name === 'Cart' && count > 0 ? count : undefined,
         tabBarBadgeStyle: {
@@ -98,5 +107,11 @@ const styles = StyleSheet.create({
   },
   iconWrapActive: {
     backgroundColor: colors.gold + '26',
+  },
+  iconWrapBlue: {
+    backgroundColor: '#1e5fd8',
+  },
+  iconWrapGold: {
+    backgroundColor: colors.gold,
   },
 });
