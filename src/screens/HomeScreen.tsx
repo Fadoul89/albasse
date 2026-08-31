@@ -68,7 +68,7 @@ export function HomeScreen() {
       <View style={styles.topBar}>
         <View style={styles.topBarLeftGroup}>
           <View style={styles.topBarFrame}>
-            <Text style={styles.welcomeText}>👋 Bienvenue sur Albasse Shopping</Text>
+            <Text style={styles.welcomeText}>👋 Bienvenue</Text>
           </View>
           <View style={styles.topBarFrame}>
             <View style={styles.visitorsRow}>
@@ -79,7 +79,7 @@ export function HomeScreen() {
             </View>
           </View>
         </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <View style={styles.topBarRightGroup}>
           <LanguageSwitcher />
           <CustomerNotificationBell />
         </View>
@@ -208,6 +208,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   topBar: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: spacing.md,
@@ -223,6 +224,13 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     flexShrink: 1,
     gap: spacing.sm,
+  },
+  topBarRightGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    gap: 8,
   },
   topBarFrame: {
     borderWidth: 1,
