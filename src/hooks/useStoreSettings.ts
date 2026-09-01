@@ -14,6 +14,7 @@ const FALLBACK: StoreSettings = {
   email: 'contact@albasseshopping.com',
   hours: 'Lun - Sam : 8h - 19h',
   google_maps_url: null,
+  voiceover_url: null,
   updated_at: new Date().toISOString(),
 };
 

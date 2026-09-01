@@ -314,6 +314,7 @@ export interface StoreSettings {
   email: string | null;
   hours: string | null;
   google_maps_url: string | null;
+  voiceover_url: string | null;
   updated_at: string;
 }
 
