@@ -299,7 +299,7 @@ const styles = StyleSheet.create({
   contactLink: { color: colors.gold, fontFamily: fonts.bodyMedium, fontSize: 13 },
   profileCard: {
     alignItems: 'center',
-    backgroundColor: colors.panel,
+    backgroundColor: '#241a3d',
     borderRadius: radius.lg,
     borderWidth: 1.5,
     borderColor: '#8b5cf6',
