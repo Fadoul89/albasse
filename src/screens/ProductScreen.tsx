@@ -8,6 +8,7 @@ import {
   Pressable,
   Platform,
   Share,
+  Linking,
 } from 'react-native';
 import { Image } from 'expo-image';
 import type { RouteProp } from '@react-navigation/native';
@@ -111,11 +112,24 @@ export function ProductScreen({ route }: Props) {
     navigation.navigate('Checkout');
   };
 
-  const handleShare = async () => {
+  const getShareUrl = () => {
     const isApprovedAffiliate = profile?.is_affiliate && profile.affiliate_status === 'approved' && profile.referral_code;
-    const url = isApprovedAffiliate
+    return isApprovedAffiliate
       ? `${SITE_URL}/produit/${product.slug}?ref=${profile!.referral_code}`
       : `${SITE_URL}/produit/${product.slug}`;
+  };
+
+  const shareToWhatsApp = () => {
+    const text = `${product.name} — ${formatXAF(product.price)}\n${getShareUrl()}`;
+    Linking.openURL(`https://wa.me/?text=${encodeURIComponent(text)}`);
+  };
+
+  const shareToFacebook = () => {
+    Linking.openURL(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(getShareUrl())}`);
+  };
+
+  const handleShare = async () => {
+    const url = getShareUrl();
 
     if (Platform.OS === 'web') {
       const nav = typeof navigator !== 'undefined' ? navigator : null;
@@ -183,6 +197,16 @@ export function ProductScreen({ route }: Props) {
             {product.compare_at_price && (
               <Text style={styles.comparePrice}>{formatXAF(product.compare_at_price)}</Text>
             )}
+          </View>
+
+          <View style={styles.shareRow}>
+            <Text style={styles.shareLabel}>Partager :</Text>
+            <Pressable style={[styles.shareBtn, styles.shareBtnWhatsApp]} onPress={shareToWhatsApp}>
+              <Text style={styles.shareBtnText}>💬 WhatsApp</Text>
+            </Pressable>
+            <Pressable style={[styles.shareBtn, styles.shareBtnFacebook]} onPress={shareToFacebook}>
+              <Text style={styles.shareBtnText}>📘 Facebook</Text>
+            </Pressable>
           </View>
 
           <Text style={styles.description}>{product.description}</Text>
@@ -293,6 +317,12 @@ const styles = StyleSheet.create({
     color: colors.red,
     textDecorationLine: 'line-through',
   },
+  shareRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  shareLabel: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 12 },
+  shareBtn: { borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 6 },
+  shareBtnWhatsApp: { backgroundColor: '#25D366' },
+  shareBtnFacebook: { backgroundColor: '#1877F2' },
+  shareBtnText: { color: '#ffffff', fontFamily: fonts.bodyBold, fontSize: 12 },
   description: {
     fontFamily: fonts.body,
     fontSize: 14,
