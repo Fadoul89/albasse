@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Pressable,
   ActivityIndicator,
   Switch,
+  Platform,
 } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -15,9 +16,11 @@ import { useAuthStore } from '../../store/authStore';
 import { useSmartPromotions } from '../../hooks/useSmartPromotions';
 import { useCategories } from '../../hooks/useCategories';
 import { useProducts } from '../../hooks/useProducts';
+import { useStoreSettings } from '../../hooks/useStoreSettings';
 import { useToastStore } from '../../store/toastStore';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { uploadProductImage } from '../../lib/imageUpload';
+import { pickAndUploadVoiceover } from '../../lib/voiceoverUpload';
 import { colors, fonts, radius, spacing } from '../../theme';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { GoldButton } from '../../components/GoldButton';
@@ -35,7 +38,47 @@ export function AdminPromotionsScreen() {
   const { promotions, isLoading, refresh } = useSmartPromotions();
   const { categories } = useCategories();
   const { products } = useProducts();
+  const { settings: storeSettings, refresh: refreshStoreSettings } = useStoreSettings();
   const showToast = useToastStore((s) => s.show);
+
+  const [voiceoverUrl, setVoiceoverUrl] = useState<string | null>(null);
+  const [uploadingVoiceover, setUploadingVoiceover] = useState(false);
+  const [savingVoiceover, setSavingVoiceover] = useState(false);
+
+  useEffect(() => {
+    setVoiceoverUrl(storeSettings.voiceover_url ?? null);
+  }, [storeSettings]);
+
+  const handlePickVoiceover = async () => {
+    setUploadingVoiceover(true);
+    const { url, error } = await pickAndUploadVoiceover();
+    setUploadingVoiceover(false);
+    if (error) {
+      showToast(error, { title: 'Erreur', type: 'error' });
+      return;
+    }
+    if (url) {
+      setVoiceoverUrl(url);
+      setSavingVoiceover(true);
+      await supabase.from('store_settings').update({ voiceover_url: url }).eq('id', 1);
+      setSavingVoiceover(false);
+      refreshStoreSettings();
+      showToast('Le message vocal a été mis à jour.', { title: 'Enregistré ✓', type: 'success' });
+    }
+  };
+
+  const handleRemoveVoiceover = async () => {
+    setSavingVoiceover(true);
+    await supabase.from('store_settings').update({ voiceover_url: null }).eq('id', 1);
+    setSavingVoiceover(false);
+    setVoiceoverUrl(null);
+    refreshStoreSettings();
+  };
+
+  const handlePreviewVoiceover = () => {
+    if (!voiceoverUrl || Platform.OS !== 'web') return;
+    new (window as any).Audio(voiceoverUrl).play();
+  };
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
@@ -203,6 +246,34 @@ export function AdminPromotionsScreen() {
         contentContainerStyle={{ padding: spacing.md, paddingBottom: 60 }}
         ListHeaderComponent={
           <View style={styles.form}>
+            <View style={styles.voiceoverBox}>
+              <Text style={styles.formTitle}>Message vocal (voix off)</Text>
+              <Text style={styles.helperText}>
+                Ce message audio est joué automatiquement au client, une fois toutes les 24h, dès qu'il touche
+                le site (les navigateurs bloquent le son automatique tant qu'il n'y a pas eu d'interaction).
+              </Text>
+              {voiceoverUrl ? (
+                <View style={styles.voiceoverRow}>
+                  <Text style={styles.voiceoverStatus}>🔊 Fichier audio configuré</Text>
+                  <Pressable onPress={handlePreviewVoiceover}>
+                    <Text style={styles.voiceoverAction}>▶ Écouter</Text>
+                  </Pressable>
+                  <Pressable onPress={handleRemoveVoiceover}>
+                    <Text style={[styles.voiceoverAction, { color: colors.red }]}>Supprimer</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <Text style={styles.voiceoverStatus}>Aucun fichier audio configuré.</Text>
+              )}
+              <GoldButton
+                label={voiceoverUrl ? 'Remplacer le fichier audio' : 'Choisir un fichier audio'}
+                variant="outline"
+                onPress={handlePickVoiceover}
+                loading={uploadingVoiceover || savingVoiceover}
+                style={{ marginTop: spacing.sm }}
+              />
+            </View>
+
             <Text style={styles.formTitle}>{editingId ? 'Modifier la promotion' : 'Nouvelle promotion'}</Text>
 
             <Field label="Nom de la promotion" value={name} onChangeText={setName} placeholder="Ex: Offre parfum du jour" />
@@ -400,6 +471,15 @@ const styles = StyleSheet.create({
   denied: { color: colors.creamFaint, fontFamily: fonts.body, textAlign: 'center', marginTop: 40 },
   form: { marginBottom: spacing.lg },
   formTitle: { color: colors.cream, fontFamily: fonts.display, fontSize: 17, marginBottom: spacing.md },
+  voiceoverBox: {
+    backgroundColor: colors.panel,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.xl,
+  },
+  voiceoverRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: spacing.sm, flexWrap: 'wrap' },
+  voiceoverStatus: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 13, marginBottom: spacing.sm },
+  voiceoverAction: { color: colors.gold, fontFamily: fonts.bodyBold, fontSize: 13 },
   label: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 12, marginBottom: 6 },
   helperText: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11, marginBottom: 6 },
   input: {

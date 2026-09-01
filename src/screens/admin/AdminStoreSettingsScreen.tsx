@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, StyleSheet, ScrollView, Pressable, Platform } from 'react-native';
+import { View, Text, TextInput, StyleSheet, ScrollView } from 'react-native';
 import { useAuthStore } from '../../store/authStore';
 import { useStoreSettings } from '../../hooks/useStoreSettings';
 import { useToastStore } from '../../store/toastStore';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
-import { pickAndUploadVoiceover } from '../../lib/voiceoverUpload';
 import { colors, fonts, radius, spacing } from '../../theme';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { GoldButton } from '../../components/GoldButton';
@@ -24,8 +23,6 @@ export function AdminStoreSettingsScreen() {
   const [email, setEmail] = useState('');
   const [hours, setHours] = useState('');
   const [googleMapsUrl, setGoogleMapsUrl] = useState('');
-  const [voiceoverUrl, setVoiceoverUrl] = useState<string | null>(null);
-  const [uploadingVoiceover, setUploadingVoiceover] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -39,24 +36,7 @@ export function AdminStoreSettingsScreen() {
     setEmail(settings.email ?? '');
     setHours(settings.hours ?? '');
     setGoogleMapsUrl(settings.google_maps_url ?? '');
-    setVoiceoverUrl(settings.voiceover_url ?? null);
   }, [settings]);
-
-  const handlePickVoiceover = async () => {
-    setUploadingVoiceover(true);
-    const { url, error } = await pickAndUploadVoiceover();
-    setUploadingVoiceover(false);
-    if (error) {
-      showToast(error, { title: 'Erreur', type: 'error' });
-      return;
-    }
-    if (url) setVoiceoverUrl(url);
-  };
-
-  const handlePreviewVoiceover = () => {
-    if (!voiceoverUrl || Platform.OS !== 'web') return;
-    new (window as any).Audio(voiceoverUrl).play();
-  };
 
   if (!profile?.is_admin) {
     return (
@@ -86,7 +66,6 @@ export function AdminStoreSettingsScreen() {
         email: email.trim() || null,
         hours: hours.trim() || null,
         google_maps_url: googleMapsUrl.trim() || null,
-        voiceover_url: voiceoverUrl,
         updated_at: new Date().toISOString(),
       })
       .eq('id', 1);
@@ -127,32 +106,6 @@ export function AdminStoreSettingsScreen() {
           placeholder="https://maps.app.goo.gl/..."
         />
 
-        <Text style={styles.sectionTitle}>Message vocal (voix off)</Text>
-        <Text style={styles.intro}>
-          Ce message audio est joué automatiquement au client, une fois toutes les 24h, dès qu'il touche le
-          site (les navigateurs bloquent le son automatique tant qu'il n'y a pas eu d'interaction).
-        </Text>
-        {voiceoverUrl ? (
-          <View style={styles.voiceoverRow}>
-            <Text style={styles.voiceoverStatus}>🔊 Fichier audio configuré</Text>
-            <Pressable onPress={handlePreviewVoiceover}>
-              <Text style={styles.voiceoverAction}>▶ Écouter</Text>
-            </Pressable>
-            <Pressable onPress={() => setVoiceoverUrl(null)}>
-              <Text style={[styles.voiceoverAction, { color: colors.red }]}>Supprimer</Text>
-            </Pressable>
-          </View>
-        ) : (
-          <Text style={styles.voiceoverStatus}>Aucun fichier audio configuré.</Text>
-        )}
-        <GoldButton
-          label={voiceoverUrl ? 'Remplacer le fichier audio' : 'Choisir un fichier audio'}
-          variant="outline"
-          onPress={handlePickVoiceover}
-          loading={uploadingVoiceover}
-          style={{ marginTop: spacing.sm }}
-        />
-
         <GoldButton label="Enregistrer" onPress={handleSave} loading={saving || isLoading} style={{ marginTop: spacing.lg }} />
       </ScrollView>
     </View>
@@ -176,16 +129,6 @@ const styles = StyleSheet.create({
   denied: { color: colors.creamFaint, fontFamily: fonts.body, textAlign: 'center', marginTop: 40 },
   content: { padding: spacing.md, paddingBottom: 60 },
   intro: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 13, lineHeight: 19, marginBottom: spacing.lg },
-  sectionTitle: {
-    fontFamily: fonts.display,
-    fontSize: 17,
-    color: colors.cream,
-    marginTop: spacing.lg,
-    marginBottom: spacing.sm,
-  },
-  voiceoverRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: spacing.sm, flexWrap: 'wrap' },
-  voiceoverStatus: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 13 },
-  voiceoverAction: { color: colors.gold, fontFamily: fonts.bodyBold, fontSize: 13 },
   label: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 12, marginBottom: 6 },
   input: {
     backgroundColor: colors.panel,
