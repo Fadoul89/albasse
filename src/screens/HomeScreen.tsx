@@ -14,6 +14,7 @@ import { StoreFooter } from '../components/StoreFooter';
 import { CartReminderBanner } from '../components/CartReminderBanner';
 import { CustomerNotificationBell } from '../components/CustomerNotificationBell';
 import { LanguageSwitcher } from '../components/LanguageSwitcher';
+import { HomeBanner } from '../components/HomeBanner';
 import { ChadFlag } from '../components/ChadFlag';
 
 const CHAD_BLUE = '#0033A0';
@@ -65,6 +66,7 @@ export function HomeScreen() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={{ paddingBottom: 40 }}>
+      <HomeBanner />
       <View style={styles.topBar}>
         <View style={styles.topBarLeftGroup}>
           <View style={styles.topBarFrame}>
