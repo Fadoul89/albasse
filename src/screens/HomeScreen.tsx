@@ -144,6 +144,39 @@ export function HomeScreen() {
         </View>
       </LinearGradient>
 
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Catégories</Text>
+        <FlatList
+          data={categories}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ paddingHorizontal: spacing.md }}
+          ListHeaderComponent={
+            <Pressable style={styles.allTile} onPress={() => navigation.navigate('Category', { slug: 'tous' })}>
+              <Text style={styles.allTileIcon}>🗂️</Text>
+              <Text style={styles.allTileLabel}>Tous</Text>
+            </Pressable>
+          }
+          renderItem={({ item }) => <CategoryTile category={item} />}
+        />
+      </View>
+
+      {showMobileAds && (
+        <View style={styles.mobileAdsSection}>
+          {settings.left_ad_items.length > 0 && (
+            <View style={{ flex: 1 }}>
+              <SideAdBanner items={settings.left_ad_items} variant="mobile" />
+            </View>
+          )}
+          {settings.right_ad_items.length > 0 && (
+            <View style={{ flex: 1 }}>
+              <SideAdBanner items={settings.right_ad_items} variant="mobile" />
+            </View>
+          )}
+        </View>
+      )}
+
       <CartReminderBanner />
 
       {flashSale.length > 0 && flashEndsAt && (
@@ -180,39 +213,6 @@ export function HomeScreen() {
               </View>
             )}
           />
-        </View>
-      )}
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Catégories</Text>
-        <FlatList
-          data={categories}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={{ paddingHorizontal: spacing.md }}
-          ListHeaderComponent={
-            <Pressable style={styles.allTile} onPress={() => navigation.navigate('Category', { slug: 'tous' })}>
-              <Text style={styles.allTileIcon}>🗂️</Text>
-              <Text style={styles.allTileLabel}>Tous</Text>
-            </Pressable>
-          }
-          renderItem={({ item }) => <CategoryTile category={item} />}
-        />
-      </View>
-
-      {showMobileAds && (
-        <View style={styles.mobileAdsSection}>
-          {settings.left_ad_items.length > 0 && (
-            <View style={{ flex: 1 }}>
-              <SideAdBanner items={settings.left_ad_items} variant="mobile" />
-            </View>
-          )}
-          {settings.right_ad_items.length > 0 && (
-            <View style={{ flex: 1 }}>
-              <SideAdBanner items={settings.right_ad_items} variant="mobile" />
-            </View>
-          )}
         </View>
       )}
 
