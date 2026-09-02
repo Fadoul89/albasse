@@ -36,7 +36,7 @@ export function SideAdBanner({ items, variant = 'side' }: { items: AdItem[]; var
 
   const image = (
     <Animated.View style={{ flex: 1, opacity: fade, transform: [{ translateY: slide }] }}>
-      <Image source={{ uri: current.image_url }} style={styles.image} contentFit="cover" />
+      <Image source={{ uri: current.image_url }} style={styles.image} contentFit="contain" />
     </Animated.View>
   );
 
