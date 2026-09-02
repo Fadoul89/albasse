@@ -153,6 +153,7 @@ export function HomeScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ paddingHorizontal: spacing.md }}
           renderItem={({ item }) => <CategoryTile category={item} />}
+          initialNumToRender={50}
         />
       </View>
 

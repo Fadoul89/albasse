@@ -147,6 +147,7 @@ export function AdminCategoriesScreen() {
         keyExtractor={(item) => item.id}
         refreshing={isLoading}
         onRefresh={refresh}
+        initialNumToRender={50}
         contentContainerStyle={{ padding: spacing.md }}
         ListHeaderComponent={
           <View style={styles.form}>
