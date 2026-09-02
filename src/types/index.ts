@@ -315,11 +315,14 @@ export interface StoreSettings {
   hours: string | null;
   google_maps_url: string | null;
   voiceover_url: string | null;
-  left_ad_image_url: string | null;
-  left_ad_link: string | null;
-  right_ad_image_url: string | null;
-  right_ad_link: string | null;
+  left_ad_items: AdItem[];
+  right_ad_items: AdItem[];
   updated_at: string;
+}
+
+export interface AdItem {
+  image_url: string;
+  link: string | null;
 }
 
 export interface City {

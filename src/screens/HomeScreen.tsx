@@ -35,7 +35,7 @@ export function HomeScreen() {
   const showSideAds =
     Platform.OS === 'web' &&
     width >= SIDE_ADS_MIN_WIDTH &&
-    (settings.left_ad_image_url || settings.right_ad_image_url);
+    (settings.left_ad_items.length > 0 || settings.right_ad_items.length > 0);
 
   const flashSale = products.filter((p) => p.is_flash_sale);
   const flashEndsAt = flashSale[0]?.flash_sale_ends_at;
@@ -76,7 +76,7 @@ export function HomeScreen() {
 
   return (
     <View style={styles.pageRow}>
-      {showSideAds && <SideAdBanner imageUrl={settings.left_ad_image_url} link={settings.left_ad_link} />}
+      {showSideAds && <SideAdBanner items={settings.left_ad_items} />}
       <ScrollView
         style={[styles.screen, showSideAds && styles.screenCentered]}
         contentContainerStyle={{ paddingBottom: 40 }}
@@ -224,7 +224,7 @@ export function HomeScreen() {
 
         <StoreFooter />
       </ScrollView>
-      {showSideAds && <SideAdBanner imageUrl={settings.right_ad_image_url} link={settings.right_ad_link} />}
+      {showSideAds && <SideAdBanner items={settings.right_ad_items} />}
     </View>
   );
 }

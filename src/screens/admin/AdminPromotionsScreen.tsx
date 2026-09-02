@@ -27,7 +27,7 @@ import { GoldButton } from '../../components/GoldButton';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { DateField } from '../../components/DateField';
 import { TimeField } from '../../components/TimeField';
-import type { SmartPromotion } from '../../types';
+import type { SmartPromotion, AdItem } from '../../types';
 
 type TargetType = 'category' | 'product' | 'none';
 
@@ -80,52 +80,60 @@ export function AdminPromotionsScreen() {
     new (window as any).Audio(voiceoverUrl).play();
   };
 
-  const [leftAdImage, setLeftAdImage] = useState<string | null>(null);
-  const [leftAdLink, setLeftAdLink] = useState('');
-  const [rightAdImage, setRightAdImage] = useState<string | null>(null);
-  const [rightAdLink, setRightAdLink] = useState('');
+  const [leftAdItems, setLeftAdItems] = useState<AdItem[]>([]);
+  const [rightAdItems, setRightAdItems] = useState<AdItem[]>([]);
   const [uploadingAd, setUploadingAd] = useState<'left' | 'right' | null>(null);
   const [savingAds, setSavingAds] = useState(false);
 
   useEffect(() => {
-    setLeftAdImage(storeSettings.left_ad_image_url ?? null);
-    setLeftAdLink(storeSettings.left_ad_link ?? '');
-    setRightAdImage(storeSettings.right_ad_image_url ?? null);
-    setRightAdLink(storeSettings.right_ad_link ?? '');
+    setLeftAdItems(storeSettings.left_ad_items ?? []);
+    setRightAdItems(storeSettings.right_ad_items ?? []);
   }, [storeSettings]);
 
-  const handlePickAdImage = async (side: 'left' | 'right') => {
+  const handleAddAdImages = async (side: 'left' | 'right') => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
       showToast("Autorisez l'accès aux photos pour ajouter une image.", { title: 'Permission requise', type: 'error' });
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
-    if (result.canceled || !result.assets[0]) return;
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsMultipleSelection: true,
+      quality: 0.8,
+    });
+    if (result.canceled) return;
 
     setUploadingAd(side);
-    const { url, error } = await uploadProductImage(result.assets[0].uri);
+    const newItems: AdItem[] = [];
+    for (const asset of result.assets) {
+      const { url, error } = await uploadProductImage(asset.uri);
+      if (error) {
+        showToast(error, { title: 'Erreur de téléversement', type: 'error' });
+        continue;
+      }
+      if (url) newItems.push({ image_url: url, link: null });
+    }
     setUploadingAd(null);
-    if (error) {
-      showToast(error, { title: 'Erreur de téléversement', type: 'error' });
-      return;
-    }
-    if (url) {
-      if (side === 'left') setLeftAdImage(url);
-      else setRightAdImage(url);
-    }
+    if (newItems.length === 0) return;
+    if (side === 'left') setLeftAdItems((prev) => [...prev, ...newItems]);
+    else setRightAdItems((prev) => [...prev, ...newItems]);
+  };
+
+  const updateAdLink = (side: 'left' | 'right', index: number, link: string) => {
+    const setter = side === 'left' ? setLeftAdItems : setRightAdItems;
+    setter((prev) => prev.map((it, i) => (i === index ? { ...it, link: link || null } : it)));
+  };
+
+  const removeAdItem = (side: 'left' | 'right', index: number) => {
+    const setter = side === 'left' ? setLeftAdItems : setRightAdItems;
+    setter((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleSaveAds = async () => {
     setSavingAds(true);
     const { error } = await supabase
       .from('store_settings')
-      .update({
-        left_ad_image_url: leftAdImage,
-        left_ad_link: leftAdLink.trim() || null,
-        right_ad_image_url: rightAdImage,
-        right_ad_link: rightAdLink.trim() || null,
-      })
+      .update({ left_ad_items: leftAdItems, right_ad_items: rightAdItems })
       .eq('id', 1);
     setSavingAds(false);
     if (error) {
@@ -333,57 +341,27 @@ export function AdminPromotionsScreen() {
             <View style={styles.voiceoverBox}>
               <Text style={styles.formTitle}>Publicités latérales (accueil, grand écran)</Text>
               <Text style={styles.helperText}>
-                Deux bandeaux publicitaires affichés à gauche et à droite de la page d'accueil, uniquement sur
-                les écrans assez larges (les téléphones n'ont pas la place). Ajoutez un lien pour les rendre
-                cliquables (produit du site ou lien externe comme WhatsApp).
+                Plusieurs images par côté défilent automatiquement toutes les 4-5 secondes. Uniquement sur les
+                écrans assez larges (les téléphones n'ont pas la place). Ajoutez un lien par image pour la
+                rendre cliquable (produit du site ou lien externe comme WhatsApp).
               </Text>
 
-              <Text style={styles.label}>Publicité gauche</Text>
-              <Pressable style={styles.imagePicker} onPress={() => handlePickAdImage('left')} disabled={uploadingAd === 'left'}>
-                {uploadingAd === 'left' ? (
-                  <ActivityIndicator color={colors.gold} />
-                ) : leftAdImage ? (
-                  <Image source={{ uri: leftAdImage }} style={styles.imagePreview} contentFit="cover" />
-                ) : (
-                  <Text style={styles.imagePickerText}>＋ Photo</Text>
-                )}
-              </Pressable>
-              {leftAdImage && (
-                <Pressable onPress={() => setLeftAdImage(null)}>
-                  <Text style={[styles.voiceoverAction, { color: colors.red, marginBottom: spacing.sm }]}>Retirer l'image</Text>
-                </Pressable>
-              )}
-              <TextInput
-                value={leftAdLink}
-                onChangeText={setLeftAdLink}
-                placeholder="Lien (optionnel) : https://..."
-                placeholderTextColor={colors.creamFaint}
-                autoCapitalize="none"
-                style={styles.input}
+              <AdItemsEditor
+                title="Publicité gauche"
+                items={leftAdItems}
+                uploading={uploadingAd === 'left'}
+                onAdd={() => handleAddAdImages('left')}
+                onLinkChange={(i, v) => updateAdLink('left', i, v)}
+                onRemove={(i) => removeAdItem('left', i)}
               />
 
-              <Text style={styles.label}>Publicité droite</Text>
-              <Pressable style={styles.imagePicker} onPress={() => handlePickAdImage('right')} disabled={uploadingAd === 'right'}>
-                {uploadingAd === 'right' ? (
-                  <ActivityIndicator color={colors.gold} />
-                ) : rightAdImage ? (
-                  <Image source={{ uri: rightAdImage }} style={styles.imagePreview} contentFit="cover" />
-                ) : (
-                  <Text style={styles.imagePickerText}>＋ Photo</Text>
-                )}
-              </Pressable>
-              {rightAdImage && (
-                <Pressable onPress={() => setRightAdImage(null)}>
-                  <Text style={[styles.voiceoverAction, { color: colors.red, marginBottom: spacing.sm }]}>Retirer l'image</Text>
-                </Pressable>
-              )}
-              <TextInput
-                value={rightAdLink}
-                onChangeText={setRightAdLink}
-                placeholder="Lien (optionnel) : https://..."
-                placeholderTextColor={colors.creamFaint}
-                autoCapitalize="none"
-                style={styles.input}
+              <AdItemsEditor
+                title="Publicité droite"
+                items={rightAdItems}
+                uploading={uploadingAd === 'right'}
+                onAdd={() => handleAddAdImages('right')}
+                onLinkChange={(i, v) => updateAdLink('right', i, v)}
+                onRemove={(i) => removeAdItem('right', i)}
               />
 
               <GoldButton
@@ -587,6 +565,47 @@ function Field({
   );
 }
 
+function AdItemsEditor({
+  title,
+  items,
+  uploading,
+  onAdd,
+  onLinkChange,
+  onRemove,
+}: {
+  title: string;
+  items: AdItem[];
+  uploading: boolean;
+  onAdd: () => void;
+  onLinkChange: (index: number, value: string) => void;
+  onRemove: (index: number) => void;
+}) {
+  return (
+    <View style={{ marginBottom: spacing.md }}>
+      <Text style={styles.label}>{title}</Text>
+      {items.map((item, index) => (
+        <View key={`${item.image_url}-${index}`} style={styles.adItemRow}>
+          <Image source={{ uri: item.image_url }} style={styles.adItemThumb} contentFit="cover" />
+          <TextInput
+            value={item.link ?? ''}
+            onChangeText={(v) => onLinkChange(index, v)}
+            placeholder="Lien (optionnel) : https://..."
+            placeholderTextColor={colors.creamFaint}
+            autoCapitalize="none"
+            style={[styles.input, { flex: 1, marginBottom: 0 }]}
+          />
+          <Pressable onPress={() => onRemove(index)} hitSlop={8}>
+            <Text style={[styles.voiceoverAction, { color: colors.red }]}>✕</Text>
+          </Pressable>
+        </View>
+      ))}
+      <Pressable style={styles.imagePicker} onPress={onAdd} disabled={uploading}>
+        {uploading ? <ActivityIndicator color={colors.gold} /> : <Text style={styles.imagePickerText}>＋ Ajouter</Text>}
+      </Pressable>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   denied: { color: colors.creamFaint, fontFamily: fonts.body, textAlign: 'center', marginTop: 40 },
@@ -601,6 +620,8 @@ const styles = StyleSheet.create({
   voiceoverRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: spacing.sm, flexWrap: 'wrap' },
   voiceoverStatus: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 13, marginBottom: spacing.sm },
   voiceoverAction: { color: colors.gold, fontFamily: fonts.bodyBold, fontSize: 13 },
+  adItemRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: spacing.sm },
+  adItemThumb: { width: 44, height: 44, borderRadius: radius.sm },
   label: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 12, marginBottom: 6 },
   helperText: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11, marginBottom: 6 },
   input: {

@@ -15,10 +15,8 @@ const FALLBACK: StoreSettings = {
   hours: 'Lun - Sam : 8h - 19h',
   google_maps_url: null,
   voiceover_url: null,
-  left_ad_image_url: null,
-  left_ad_link: null,
-  right_ad_image_url: null,
-  right_ad_link: null,
+  left_ad_items: [],
+  right_ad_items: [],
   updated_at: new Date().toISOString(),
 };
 

@@ -1,19 +1,31 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Pressable, StyleSheet, Linking } from 'react-native';
 import { Image } from 'expo-image';
 import { colors, radius } from '../theme';
+import type { AdItem } from '../types';
 
-export function SideAdBanner({ imageUrl, link }: { imageUrl: string | null; link: string | null }) {
-  if (!imageUrl) return null;
+const ROTATE_MS = 4500;
 
-  const image = <Image source={{ uri: imageUrl }} style={styles.image} contentFit="cover" />;
+export function SideAdBanner({ items }: { items: AdItem[] }) {
+  const [index, setIndex] = useState(0);
 
-  if (!link) {
+  useEffect(() => {
+    if (items.length <= 1) return;
+    const id = setInterval(() => setIndex((i) => (i + 1) % items.length), ROTATE_MS);
+    return () => clearInterval(id);
+  }, [items.length]);
+
+  if (items.length === 0) return null;
+  const current = items[index % items.length];
+
+  const image = <Image source={{ uri: current.image_url }} style={styles.image} contentFit="cover" />;
+
+  if (!current.link) {
     return <View style={styles.wrap}>{image}</View>;
   }
 
   return (
-    <Pressable style={styles.wrap} onPress={() => Linking.openURL(link)}>
+    <Pressable style={styles.wrap} onPress={() => Linking.openURL(current.link!)}>
       {image}
     </Pressable>
   );
