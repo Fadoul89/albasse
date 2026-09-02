@@ -17,7 +17,6 @@ const FALLBACK: StoreSettings = {
   voiceover_url: null,
   left_ad_items: [],
   right_ad_items: [],
-  top_banner_items: [],
   updated_at: new Date().toISOString(),
 };
 

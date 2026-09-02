@@ -15,7 +15,6 @@ import { StoreFooter } from '../components/StoreFooter';
 import { CartReminderBanner } from '../components/CartReminderBanner';
 import { CustomerNotificationBell } from '../components/CustomerNotificationBell';
 import { LanguageSwitcher } from '../components/LanguageSwitcher';
-import { HomeBanner } from '../components/HomeBanner';
 import { SideAdBanner } from '../components/SideAdBanner';
 import { ChadFlag } from '../components/ChadFlag';
 
@@ -82,7 +81,6 @@ export function HomeScreen() {
         style={[styles.screen, showSideAds && styles.screenCentered]}
         contentContainerStyle={{ paddingBottom: 40 }}
       >
-        <HomeBanner />
       <View style={styles.topBar}>
         <View style={styles.topBarLeftGroup}>
           <View style={styles.topBarFrame}>
