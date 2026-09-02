@@ -31,10 +31,9 @@ export function HomeScreen() {
   const { categories } = useCategories();
   const { settings } = useStoreSettings();
   const { width } = useWindowDimensions();
-  const showSideAds =
-    Platform.OS === 'web' &&
-    width >= SIDE_ADS_MIN_WIDTH &&
-    (settings.left_ad_items.length > 0 || settings.right_ad_items.length > 0);
+  const hasAdItems = settings.left_ad_items.length > 0 || settings.right_ad_items.length > 0;
+  const showSideAds = Platform.OS === 'web' && width >= SIDE_ADS_MIN_WIDTH && hasAdItems;
+  const showMobileAds = !showSideAds && hasAdItems;
   const gridColumns = width >= 700 ? 4 : 2;
 
   const flashSale = products.filter((p) => p.is_flash_sale);
@@ -202,6 +201,13 @@ export function HomeScreen() {
         />
       </View>
 
+      {showMobileAds && (
+        <View style={styles.mobileAdsSection}>
+          {settings.left_ad_items.length > 0 && <SideAdBanner items={settings.left_ad_items} variant="mobile" />}
+          {settings.right_ad_items.length > 0 && <SideAdBanner items={settings.right_ad_items} variant="mobile" />}
+        </View>
+      )}
+
       <Pressable style={styles.travelBanner} onPress={() => navigation.navigate('Travel')}>
         <Text style={styles.travelIcon}>✈️</Text>
         <View style={{ flex: 1 }}>
@@ -358,6 +364,7 @@ const styles = StyleSheet.create({
   },
   flashSubtitle: { fontFamily: fonts.body, fontSize: 12, color: colors.creamFaint, marginTop: 6 },
   section: { marginTop: spacing.xl, paddingHorizontal: spacing.md },
+  mobileAdsSection: { marginTop: spacing.xl, paddingHorizontal: spacing.md, gap: spacing.md },
   sectionTitle: {
     fontFamily: fonts.display,
     fontSize: 20,

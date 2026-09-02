@@ -6,7 +6,7 @@ import type { AdItem } from '../types';
 
 const ROTATE_MS = 4500;
 
-export function SideAdBanner({ items }: { items: AdItem[] }) {
+export function SideAdBanner({ items, variant = 'side' }: { items: AdItem[]; variant?: 'side' | 'mobile' }) {
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
@@ -17,15 +17,16 @@ export function SideAdBanner({ items }: { items: AdItem[] }) {
 
   if (items.length === 0) return null;
   const current = items[index % items.length];
+  const wrapStyle = variant === 'mobile' ? styles.wrapMobile : styles.wrap;
 
   const image = <Image source={{ uri: current.image_url }} style={styles.image} contentFit="cover" />;
 
   if (!current.link) {
-    return <View style={styles.wrap}>{image}</View>;
+    return <View style={wrapStyle}>{image}</View>;
   }
 
   return (
-    <Pressable style={styles.wrap} onPress={() => Linking.openURL(current.link!)}>
+    <Pressable style={wrapStyle} onPress={() => Linking.openURL(current.link!)}>
       {image}
     </Pressable>
   );
@@ -39,6 +40,13 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     overflow: 'hidden',
     marginVertical: 12,
+  },
+  wrapMobile: {
+    width: '100%',
+    height: 140,
+    backgroundColor: colors.panel,
+    borderRadius: radius.md,
+    overflow: 'hidden',
   },
   image: { width: '100%', height: '100%' },
 });

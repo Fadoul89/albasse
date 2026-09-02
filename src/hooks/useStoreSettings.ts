@@ -36,7 +36,13 @@ export function useStoreSettings() {
       .eq('id', 1)
       .single()
       .then(({ data }) => {
-        if (data) setSettings(data as StoreSettings);
+        if (data) {
+          setSettings({
+            ...(data as StoreSettings),
+            left_ad_items: (data as StoreSettings).left_ad_items ?? [],
+            right_ad_items: (data as StoreSettings).right_ad_items ?? [],
+          });
+        }
         setIsLoading(false);
       });
   };
