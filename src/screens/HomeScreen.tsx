@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, FlatList, Pressable, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, FlatList, Pressable, Animated, Easing, Platform, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -7,6 +7,7 @@ import type { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing } from '../theme';
 import { useProducts } from '../hooks/useProducts';
 import { useCategories } from '../hooks/useCategories';
+import { useStoreSettings } from '../hooks/useStoreSettings';
 import { CategoryTile } from '../components/CategoryTile';
 import { ProductCard } from '../components/ProductCard';
 import { CountdownTimer } from '../components/CountdownTimer';
@@ -15,7 +16,10 @@ import { CartReminderBanner } from '../components/CartReminderBanner';
 import { CustomerNotificationBell } from '../components/CustomerNotificationBell';
 import { LanguageSwitcher } from '../components/LanguageSwitcher';
 import { HomeBanner } from '../components/HomeBanner';
+import { SideAdBanner } from '../components/SideAdBanner';
 import { ChadFlag } from '../components/ChadFlag';
+
+const SIDE_ADS_MIN_WIDTH = 1100;
 
 const CHAD_BLUE = '#0033A0';
 const CHAD_YELLOW = '#FECB00';
@@ -26,6 +30,12 @@ export function HomeScreen() {
   const { products: allProducts, isLoading } = useProducts();
   const products = allProducts.filter((p) => p.is_active);
   const { categories } = useCategories();
+  const { settings } = useStoreSettings();
+  const { width } = useWindowDimensions();
+  const showSideAds =
+    Platform.OS === 'web' &&
+    width >= SIDE_ADS_MIN_WIDTH &&
+    (settings.left_ad_image_url || settings.right_ad_image_url);
 
   const flashSale = products.filter((p) => p.is_flash_sale);
   const flashEndsAt = flashSale[0]?.flash_sale_ends_at;
@@ -65,8 +75,13 @@ export function HomeScreen() {
   }, []);
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={{ paddingBottom: 40 }}>
-      <HomeBanner />
+    <View style={styles.pageRow}>
+      {showSideAds && <SideAdBanner imageUrl={settings.left_ad_image_url} link={settings.left_ad_link} />}
+      <ScrollView
+        style={[styles.screen, showSideAds && styles.screenCentered]}
+        contentContainerStyle={{ paddingBottom: 40 }}
+      >
+        <HomeBanner />
       <View style={styles.topBar}>
         <View style={styles.topBarLeftGroup}>
           <View style={styles.topBarFrame}>
@@ -207,13 +222,17 @@ export function HomeScreen() {
         {isLoading && <Text style={styles.loading}>Chargement…</Text>}
       </View>
 
-      <StoreFooter />
-    </ScrollView>
+        <StoreFooter />
+      </ScrollView>
+      {showSideAds && <SideAdBanner imageUrl={settings.right_ad_image_url} link={settings.right_ad_link} />}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  pageRow: { flex: 1, flexDirection: 'row', backgroundColor: colors.background, gap: 12 },
   screen: { flex: 1, backgroundColor: colors.background },
+  screenCentered: { maxWidth: 760, width: '100%', alignSelf: 'center' },
   topBar: {
     flexDirection: 'row',
     flexWrap: 'wrap',

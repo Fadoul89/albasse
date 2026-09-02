@@ -80,6 +80,62 @@ export function AdminPromotionsScreen() {
     new (window as any).Audio(voiceoverUrl).play();
   };
 
+  const [leftAdImage, setLeftAdImage] = useState<string | null>(null);
+  const [leftAdLink, setLeftAdLink] = useState('');
+  const [rightAdImage, setRightAdImage] = useState<string | null>(null);
+  const [rightAdLink, setRightAdLink] = useState('');
+  const [uploadingAd, setUploadingAd] = useState<'left' | 'right' | null>(null);
+  const [savingAds, setSavingAds] = useState(false);
+
+  useEffect(() => {
+    setLeftAdImage(storeSettings.left_ad_image_url ?? null);
+    setLeftAdLink(storeSettings.left_ad_link ?? '');
+    setRightAdImage(storeSettings.right_ad_image_url ?? null);
+    setRightAdLink(storeSettings.right_ad_link ?? '');
+  }, [storeSettings]);
+
+  const handlePickAdImage = async (side: 'left' | 'right') => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      showToast("Autorisez l'accès aux photos pour ajouter une image.", { title: 'Permission requise', type: 'error' });
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
+    if (result.canceled || !result.assets[0]) return;
+
+    setUploadingAd(side);
+    const { url, error } = await uploadProductImage(result.assets[0].uri);
+    setUploadingAd(null);
+    if (error) {
+      showToast(error, { title: 'Erreur de téléversement', type: 'error' });
+      return;
+    }
+    if (url) {
+      if (side === 'left') setLeftAdImage(url);
+      else setRightAdImage(url);
+    }
+  };
+
+  const handleSaveAds = async () => {
+    setSavingAds(true);
+    const { error } = await supabase
+      .from('store_settings')
+      .update({
+        left_ad_image_url: leftAdImage,
+        left_ad_link: leftAdLink.trim() || null,
+        right_ad_image_url: rightAdImage,
+        right_ad_link: rightAdLink.trim() || null,
+      })
+      .eq('id', 1);
+    setSavingAds(false);
+    if (error) {
+      showToast(error.message, { title: 'Erreur', type: 'error' });
+      return;
+    }
+    refreshStoreSettings();
+    showToast('Les publicités latérales ont été mises à jour.', { title: 'Enregistré ✓', type: 'success' });
+  };
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [targetType, setTargetType] = useState<TargetType>('none');
@@ -270,6 +326,71 @@ export function AdminPromotionsScreen() {
                 variant="outline"
                 onPress={handlePickVoiceover}
                 loading={uploadingVoiceover || savingVoiceover}
+                style={{ marginTop: spacing.sm }}
+              />
+            </View>
+
+            <View style={styles.voiceoverBox}>
+              <Text style={styles.formTitle}>Publicités latérales (accueil, grand écran)</Text>
+              <Text style={styles.helperText}>
+                Deux bandeaux publicitaires affichés à gauche et à droite de la page d'accueil, uniquement sur
+                les écrans assez larges (les téléphones n'ont pas la place). Ajoutez un lien pour les rendre
+                cliquables (produit du site ou lien externe comme WhatsApp).
+              </Text>
+
+              <Text style={styles.label}>Publicité gauche</Text>
+              <Pressable style={styles.imagePicker} onPress={() => handlePickAdImage('left')} disabled={uploadingAd === 'left'}>
+                {uploadingAd === 'left' ? (
+                  <ActivityIndicator color={colors.gold} />
+                ) : leftAdImage ? (
+                  <Image source={{ uri: leftAdImage }} style={styles.imagePreview} contentFit="cover" />
+                ) : (
+                  <Text style={styles.imagePickerText}>＋ Photo</Text>
+                )}
+              </Pressable>
+              {leftAdImage && (
+                <Pressable onPress={() => setLeftAdImage(null)}>
+                  <Text style={[styles.voiceoverAction, { color: colors.red, marginBottom: spacing.sm }]}>Retirer l'image</Text>
+                </Pressable>
+              )}
+              <TextInput
+                value={leftAdLink}
+                onChangeText={setLeftAdLink}
+                placeholder="Lien (optionnel) : https://..."
+                placeholderTextColor={colors.creamFaint}
+                autoCapitalize="none"
+                style={styles.input}
+              />
+
+              <Text style={styles.label}>Publicité droite</Text>
+              <Pressable style={styles.imagePicker} onPress={() => handlePickAdImage('right')} disabled={uploadingAd === 'right'}>
+                {uploadingAd === 'right' ? (
+                  <ActivityIndicator color={colors.gold} />
+                ) : rightAdImage ? (
+                  <Image source={{ uri: rightAdImage }} style={styles.imagePreview} contentFit="cover" />
+                ) : (
+                  <Text style={styles.imagePickerText}>＋ Photo</Text>
+                )}
+              </Pressable>
+              {rightAdImage && (
+                <Pressable onPress={() => setRightAdImage(null)}>
+                  <Text style={[styles.voiceoverAction, { color: colors.red, marginBottom: spacing.sm }]}>Retirer l'image</Text>
+                </Pressable>
+              )}
+              <TextInput
+                value={rightAdLink}
+                onChangeText={setRightAdLink}
+                placeholder="Lien (optionnel) : https://..."
+                placeholderTextColor={colors.creamFaint}
+                autoCapitalize="none"
+                style={styles.input}
+              />
+
+              <GoldButton
+                label="Enregistrer les publicités"
+                variant="outline"
+                onPress={handleSaveAds}
+                loading={savingAds}
                 style={{ marginTop: spacing.sm }}
               />
             </View>

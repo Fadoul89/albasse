@@ -315,6 +315,10 @@ export interface StoreSettings {
   hours: string | null;
   google_maps_url: string | null;
   voiceover_url: string | null;
+  left_ad_image_url: string | null;
+  left_ad_link: string | null;
+  right_ad_image_url: string | null;
+  right_ad_link: string | null;
   updated_at: string;
 }
 
