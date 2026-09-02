@@ -1,36 +1,35 @@
-import React from 'react';
-import { Pressable, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Pressable, StyleSheet, Linking } from 'react-native';
 import { Image } from 'expo-image';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { RootStackParamList } from '../navigation/types';
-import { useActivePromotion } from '../hooks/useActivePromotion';
-import { useCategories } from '../hooks/useCategories';
-import { useProducts } from '../hooks/useProducts';
+import { useStoreSettings } from '../hooks/useStoreSettings';
 import { radius } from '../theme';
 
-// Grande banniere en haut de l'accueil, alimentee par la promotion active
-// configuree dans Espace Admin > Promotions intelligentes (meme image que
-// le popup). Invisible si aucune promotion active n'a d'image.
+const ROTATE_MS = 5000;
+
+// Grande banniere en haut de l'accueil : plusieurs photos possibles,
+// defilement automatique, chacune avec son propre lien (optionnel).
+// Geree depuis Espace Admin > Promotions intelligentes.
 export function HomeBanner() {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const promotion = useActivePromotion();
-  const { categories } = useCategories();
-  const { products } = useProducts();
+  const { settings } = useStoreSettings();
+  const items = settings.top_banner_items;
+  const [index, setIndex] = useState(0);
 
-  if (!promotion || !promotion.image_url) return null;
+  useEffect(() => {
+    if (items.length <= 1) return;
+    const id = setInterval(() => setIndex((i) => (i + 1) % items.length), ROTATE_MS);
+    return () => clearInterval(id);
+  }, [items.length]);
 
-  const targetCategory = promotion.category_id ? categories.find((c) => c.id === promotion.category_id) : null;
-  const targetProduct = promotion.product_id ? products.find((p) => p.id === promotion.product_id) : null;
+  if (items.length === 0) return null;
+  const current = items[index % items.length];
 
   const handlePress = () => {
-    if (targetProduct) navigation.navigate('Product', { slug: targetProduct.slug });
-    else if (targetCategory) navigation.navigate('Category', { slug: targetCategory.slug });
+    if (current.link) Linking.openURL(current.link);
   };
 
   return (
     <Pressable onPress={handlePress} style={styles.wrap}>
-      <Image source={{ uri: promotion.image_url }} style={styles.image} contentFit="cover" />
+      <Image source={{ uri: current.image_url }} style={styles.image} contentFit="cover" />
     </Pressable>
   );
 }

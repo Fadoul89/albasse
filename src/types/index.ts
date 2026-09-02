@@ -317,6 +317,7 @@ export interface StoreSettings {
   voiceover_url: string | null;
   left_ad_items: AdItem[];
   right_ad_items: AdItem[];
+  top_banner_items: AdItem[];
   updated_at: string;
 }
 

@@ -80,17 +80,26 @@ export function AdminPromotionsScreen() {
     new (window as any).Audio(voiceoverUrl).play();
   };
 
+  type AdSlot = 'top' | 'left' | 'right';
+  const [topBannerItems, setTopBannerItems] = useState<AdItem[]>([]);
   const [leftAdItems, setLeftAdItems] = useState<AdItem[]>([]);
   const [rightAdItems, setRightAdItems] = useState<AdItem[]>([]);
-  const [uploadingAd, setUploadingAd] = useState<'left' | 'right' | null>(null);
+  const [uploadingAd, setUploadingAd] = useState<AdSlot | null>(null);
   const [savingAds, setSavingAds] = useState(false);
 
   useEffect(() => {
+    setTopBannerItems(storeSettings.top_banner_items ?? []);
     setLeftAdItems(storeSettings.left_ad_items ?? []);
     setRightAdItems(storeSettings.right_ad_items ?? []);
   }, [storeSettings]);
 
-  const handleAddAdImages = async (side: 'left' | 'right') => {
+  const SETTERS: Record<AdSlot, React.Dispatch<React.SetStateAction<AdItem[]>>> = {
+    top: setTopBannerItems,
+    left: setLeftAdItems,
+    right: setRightAdItems,
+  };
+
+  const handleAddAdImages = async (slot: AdSlot) => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
       showToast("Autorisez l'accès aux photos pour ajouter une image.", { title: 'Permission requise', type: 'error' });
@@ -103,7 +112,7 @@ export function AdminPromotionsScreen() {
     });
     if (result.canceled) return;
 
-    setUploadingAd(side);
+    setUploadingAd(slot);
     const newItems: AdItem[] = [];
     for (const asset of result.assets) {
       const { url, error } = await uploadProductImage(asset.uri);
@@ -115,25 +124,22 @@ export function AdminPromotionsScreen() {
     }
     setUploadingAd(null);
     if (newItems.length === 0) return;
-    if (side === 'left') setLeftAdItems((prev) => [...prev, ...newItems]);
-    else setRightAdItems((prev) => [...prev, ...newItems]);
+    SETTERS[slot]((prev) => [...prev, ...newItems]);
   };
 
-  const updateAdLink = (side: 'left' | 'right', index: number, link: string) => {
-    const setter = side === 'left' ? setLeftAdItems : setRightAdItems;
-    setter((prev) => prev.map((it, i) => (i === index ? { ...it, link: link || null } : it)));
+  const updateAdLink = (slot: AdSlot, index: number, link: string) => {
+    SETTERS[slot]((prev) => prev.map((it, i) => (i === index ? { ...it, link: link || null } : it)));
   };
 
-  const removeAdItem = (side: 'left' | 'right', index: number) => {
-    const setter = side === 'left' ? setLeftAdItems : setRightAdItems;
-    setter((prev) => prev.filter((_, i) => i !== index));
+  const removeAdItem = (slot: AdSlot, index: number) => {
+    SETTERS[slot]((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleSaveAds = async () => {
     setSavingAds(true);
     const { error } = await supabase
       .from('store_settings')
-      .update({ left_ad_items: leftAdItems, right_ad_items: rightAdItems })
+      .update({ top_banner_items: topBannerItems, left_ad_items: leftAdItems, right_ad_items: rightAdItems })
       .eq('id', 1);
     setSavingAds(false);
     if (error) {
@@ -141,7 +147,7 @@ export function AdminPromotionsScreen() {
       return;
     }
     refreshStoreSettings();
-    showToast('Les publicités latérales ont été mises à jour.', { title: 'Enregistré ✓', type: 'success' });
+    showToast('Les publicités ont été mises à jour.', { title: 'Enregistré ✓', type: 'success' });
   };
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -339,12 +345,21 @@ export function AdminPromotionsScreen() {
             </View>
 
             <View style={styles.voiceoverBox}>
-              <Text style={styles.formTitle}>Publicités latérales (accueil, grand écran)</Text>
+              <Text style={styles.formTitle}>Publicités (accueil)</Text>
               <Text style={styles.helperText}>
-                Plusieurs images par côté défilent automatiquement toutes les 4-5 secondes. Uniquement sur les
-                écrans assez larges (les téléphones n'ont pas la place). Ajoutez un lien par image pour la
-                rendre cliquable (produit du site ou lien externe comme WhatsApp).
+                Plusieurs images par emplacement défilent automatiquement toutes les 4-5 secondes. Ajoutez un
+                lien par image pour la rendre cliquable (produit du site ou lien externe comme WhatsApp). La
+                bannière du haut est visible partout ; les publicités gauche/droite uniquement sur grand écran.
               </Text>
+
+              <AdItemsEditor
+                title="Bannière du haut"
+                items={topBannerItems}
+                uploading={uploadingAd === 'top'}
+                onAdd={() => handleAddAdImages('top')}
+                onLinkChange={(i, v) => updateAdLink('top', i, v)}
+                onRemove={(i) => removeAdItem('top', i)}
+              />
 
               <AdItemsEditor
                 title="Publicité gauche"
