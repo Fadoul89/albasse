@@ -203,8 +203,16 @@ export function HomeScreen() {
 
       {showMobileAds && (
         <View style={styles.mobileAdsSection}>
-          {settings.left_ad_items.length > 0 && <SideAdBanner items={settings.left_ad_items} variant="mobile" />}
-          {settings.right_ad_items.length > 0 && <SideAdBanner items={settings.right_ad_items} variant="mobile" />}
+          {settings.left_ad_items.length > 0 && (
+            <View style={{ flex: 1 }}>
+              <SideAdBanner items={settings.left_ad_items} variant="mobile" />
+            </View>
+          )}
+          {settings.right_ad_items.length > 0 && (
+            <View style={{ flex: 1 }}>
+              <SideAdBanner items={settings.right_ad_items} variant="mobile" />
+            </View>
+          )}
         </View>
       )}
 
@@ -364,7 +372,7 @@ const styles = StyleSheet.create({
   },
   flashSubtitle: { fontFamily: fonts.body, fontSize: 12, color: colors.creamFaint, marginTop: 6 },
   section: { marginTop: spacing.xl, paddingHorizontal: spacing.md },
-  mobileAdsSection: { marginTop: spacing.xl, paddingHorizontal: spacing.md, gap: spacing.md },
+  mobileAdsSection: { flexDirection: 'row', marginTop: spacing.xl, paddingHorizontal: spacing.md, gap: spacing.md },
   sectionTitle: {
     fontFamily: fonts.display,
     fontSize: 20,
