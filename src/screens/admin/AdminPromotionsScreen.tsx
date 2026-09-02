@@ -587,19 +587,23 @@ function AdItemsEditor({
     <View style={{ marginBottom: spacing.md }}>
       <Text style={styles.label}>{title}</Text>
       {items.map((item, index) => (
-        <View key={`${item.image_url}-${index}`} style={styles.adItemRow}>
-          <Image source={{ uri: item.image_url }} style={styles.adItemThumb} contentFit="cover" />
+        <View key={`${item.image_url}-${index}`} style={styles.adItemCard}>
+          <View style={styles.adItemHeader}>
+            <Image source={{ uri: item.image_url }} style={styles.adItemThumb} contentFit="cover" />
+            <Text style={styles.adItemNumber}>Photo {index + 1}</Text>
+            <Pressable onPress={() => onRemove(index)} hitSlop={8} style={{ marginLeft: 'auto' }}>
+              <Text style={[styles.voiceoverAction, { color: colors.red }]}>✕ Retirer</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.adItemLinkLabel}>🔗 URL du lien (optionnel — où aller quand on clique sur cette photo)</Text>
           <TextInput
             value={item.link ?? ''}
             onChangeText={(v) => onLinkChange(index, v)}
-            placeholder="Lien (optionnel) : https://..."
+            placeholder="https://www.albasseshopping.com/produit/..."
             placeholderTextColor={colors.creamFaint}
             autoCapitalize="none"
-            style={[styles.input, { flex: 1, marginBottom: 0 }]}
+            style={styles.input}
           />
-          <Pressable onPress={() => onRemove(index)} hitSlop={8}>
-            <Text style={[styles.voiceoverAction, { color: colors.red }]}>✕</Text>
-          </Pressable>
         </View>
       ))}
       <Pressable style={styles.imagePicker} onPress={onAdd} disabled={uploading}>
@@ -623,8 +627,18 @@ const styles = StyleSheet.create({
   voiceoverRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: spacing.sm, flexWrap: 'wrap' },
   voiceoverStatus: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 13, marginBottom: spacing.sm },
   voiceoverAction: { color: colors.gold, fontFamily: fonts.bodyBold, fontSize: 13 },
-  adItemRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: spacing.sm },
+  adItemCard: {
+    backgroundColor: colors.panelAlt,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  adItemHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: spacing.sm },
   adItemThumb: { width: 44, height: 44, borderRadius: radius.sm },
+  adItemNumber: { color: colors.creamMuted, fontFamily: fonts.bodySemiBold, fontSize: 12 },
+  adItemLinkLabel: { color: colors.goldLight, fontFamily: fonts.bodyMedium, fontSize: 11.5, marginBottom: 6 },
   label: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 12, marginBottom: 6 },
   helperText: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11, marginBottom: 6 },
   input: {
