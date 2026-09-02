@@ -43,7 +43,7 @@ const styles = StyleSheet.create({
   },
   wrapMobile: {
     width: '100%',
-    height: 260,
+    height: 180,
     backgroundColor: colors.panel,
     borderRadius: radius.md,
     overflow: 'hidden',
