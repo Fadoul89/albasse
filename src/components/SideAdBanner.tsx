@@ -54,7 +54,8 @@ export function SideAdBanner({ items, variant = 'side' }: { items: AdItem[]; var
 const styles = StyleSheet.create({
   wrap: {
     width: 160,
-    alignSelf: 'stretch',
+    height: 220,
+    alignSelf: 'flex-start',
     backgroundColor: colors.panel,
     borderRadius: radius.md,
     overflow: 'hidden',
