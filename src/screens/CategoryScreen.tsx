@@ -20,25 +20,26 @@ export function CategoryScreen({ route }: Props) {
   const { width } = useWindowDimensions();
   const columns = width >= 700 ? 4 : 2;
 
-  const category = categories.find((c) => c.slug === slug);
-  const name = category?.name ?? slug;
+  const showAll = slug === 'tous';
+  const category = showAll ? null : categories.find((c) => c.slug === slug);
+  const name = showAll ? 'Tous les articles' : category?.name ?? slug;
 
   useEffect(() => {
-    if (Platform.OS === 'web' && category) {
-      document.title = `${category.name} — Albasse Shopping`;
+    if (Platform.OS === 'web') {
+      document.title = `${name} — Albasse Shopping`;
     }
-  }, [category?.name]);
+  }, [name]);
 
   const filtered = useMemo(() => {
     return products.filter((p) => {
-      const inCategory = category ? p.category_id === category.id : false;
+      const inCategory = showAll ? true : category ? p.category_id === category.id : false;
       if (!p.is_active) return false;
       const matchesQuery = query.trim()
         ? p.name.toLowerCase().includes(query.trim().toLowerCase())
         : true;
       return inCategory && matchesQuery;
     });
-  }, [products, category, query]);
+  }, [products, category, showAll, query]);
 
   return (
     <View style={styles.screen}>

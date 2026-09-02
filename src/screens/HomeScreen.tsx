@@ -178,6 +178,12 @@ export function HomeScreen() {
           showsHorizontalScrollIndicator={false}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ paddingHorizontal: spacing.md }}
+          ListHeaderComponent={
+            <Pressable style={styles.allTile} onPress={() => navigation.navigate('Category', { slug: 'tous' })}>
+              <Text style={styles.allTileIcon}>🗂️</Text>
+              <Text style={styles.allTileLabel}>Tous</Text>
+            </Pressable>
+          }
           renderItem={({ item }) => <CategoryTile category={item} />}
         />
       </View>
@@ -341,6 +347,18 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  allTile: {
+    width: 84,
+    alignItems: 'center',
+    backgroundColor: colors.panelAlt,
+    borderRadius: radius.lg,
+    paddingVertical: 14,
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: colors.gold,
+  },
+  allTileIcon: { fontSize: 24, marginBottom: 6 },
+  allTileLabel: { color: colors.goldLight, fontFamily: fonts.bodyBold, fontSize: 11, textAlign: 'center' },
   travelBanner: {
     flexDirection: 'row',
     alignItems: 'center',
