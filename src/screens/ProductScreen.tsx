@@ -100,6 +100,15 @@ export function ProductScreen({ route }: Props) {
     );
   }
 
+  const relatedProducts = allProducts
+    .filter((p) => p.is_active && p.id !== product.id)
+    .sort((a, b) => {
+      const aSame = a.category_id === product.category_id ? 0 : 1;
+      const bSame = b.category_id === product.category_id ? 0 : 1;
+      return aSame - bSame;
+    })
+    .slice(0, 8);
+
   const handleAddToCart = () => {
     addItem(product, quantity, color, size);
     trackAddToCart(product.id);
@@ -279,6 +288,17 @@ export function ProductScreen({ route }: Props) {
               </View>
             ))}
           </View>
+
+          {relatedProducts.length > 0 && (
+            <View style={styles.selectorSection}>
+              <Text style={styles.selectorLabel}>Vous aimerez peut-être</Text>
+              <View style={styles.suggestionsGrid}>
+                {relatedProducts.map((p) => (
+                  <ProductCard key={p.id} product={p} />
+                ))}
+              </View>
+            </View>
+          )}
         </View>
       </ScrollView>
 
