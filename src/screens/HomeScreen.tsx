@@ -36,6 +36,7 @@ export function HomeScreen() {
     Platform.OS === 'web' &&
     width >= SIDE_ADS_MIN_WIDTH &&
     (settings.left_ad_items.length > 0 || settings.right_ad_items.length > 0);
+  const gridColumns = width >= 700 ? 4 : 2;
 
   const flashSale = products.filter((p) => p.is_flash_sale);
   const flashEndsAt = flashSale[0]?.flash_sale_ends_at;
@@ -216,7 +217,7 @@ export function HomeScreen() {
         <Text style={styles.sectionTitle}>Toute la collection</Text>
         <View style={styles.grid}>
           {products.map((p) => (
-            <ProductCard key={p.id} product={p} />
+            <ProductCard key={p.id} product={p} columns={gridColumns} />
           ))}
         </View>
         {isLoading && <Text style={styles.loading}>Chargement…</Text>}
