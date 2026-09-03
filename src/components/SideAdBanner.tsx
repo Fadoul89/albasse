@@ -7,6 +7,7 @@ import type { AdItem } from '../types';
 const ROTATE_MS = 4500;
 const TRANSITION_MS = 700;
 const SIDE_VISIBLE_COUNT = 3;
+const NEON_PURPLE = '#C400FF';
 
 export function SideAdBanner({ items, variant = 'side' }: { items: AdItem[]; variant?: 'side' | 'mobile' }) {
   const visibleCount = variant === 'side' ? Math.min(SIDE_VISIBLE_COUNT, items.length) : 1;
@@ -93,6 +94,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.panel,
     borderRadius: radius.md,
     overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: NEON_PURPLE,
+    shadowColor: NEON_PURPLE,
+    shadowOpacity: 0.9,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 8,
   },
   wrapMobile: {
     width: '100%',
@@ -100,6 +108,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.panel,
     borderRadius: radius.md,
     overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: NEON_PURPLE,
+    shadowColor: NEON_PURPLE,
+    shadowOpacity: 0.9,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 8,
   },
   image: { width: '100%', height: '100%' },
 });
