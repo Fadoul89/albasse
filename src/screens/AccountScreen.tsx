@@ -14,6 +14,47 @@ import { supabase } from '../lib/supabase';
 import { uploadAvatar } from '../lib/imageUpload';
 import { getLoyaltyStatus, LOYALTY_TIERS } from '../lib/loyalty';
 
+type AdminRoute = Extract<
+  keyof RootStackParamList,
+  | 'AdminDashboard'
+  | 'AdminNotifications'
+  | 'AdminProducts'
+  | 'AdminCategories'
+  | 'AdminOrders'
+  | 'AdminTravelRequests'
+  | 'AdminPaymentSettings'
+  | 'AdminCustomers'
+  | 'AdminPromotions'
+  | 'AdminSourcePerformance'
+  | 'AdminAbandonedCarts'
+  | 'AdminStoreSettings'
+  | 'AdminMessages'
+  | 'AdminCities'
+  | 'AdminAffiliates'
+  | 'AdminBestLeads'
+  | 'AdminWheel'
+>;
+
+const ADMIN_MENU_ITEMS: { icon: string; label: string; route: AdminRoute }[] = [
+  { icon: '📊', label: 'Tableau de bord', route: 'AdminDashboard' },
+  { icon: '🔔', label: 'Notifications', route: 'AdminNotifications' },
+  { icon: '🛠️', label: 'Produits', route: 'AdminProducts' },
+  { icon: '🏷️', label: 'Catégories', route: 'AdminCategories' },
+  { icon: '📦', label: 'Commandes', route: 'AdminOrders' },
+  { icon: '✈️', label: 'Voyage', route: 'AdminTravelRequests' },
+  { icon: '💳', label: 'Paiement', route: 'AdminPaymentSettings' },
+  { icon: '👥', label: 'Clients', route: 'AdminCustomers' },
+  { icon: '🎁', label: 'Promotions intelligentes', route: 'AdminPromotions' },
+  { icon: '📡', label: 'Performance par source', route: 'AdminSourcePerformance' },
+  { icon: '🛒', label: 'Paniers abandonnés', route: 'AdminAbandonedCarts' },
+  { icon: '📍', label: 'Informations de contact', route: 'AdminStoreSettings' },
+  { icon: '✉️', label: 'Message à tous les clients', route: 'AdminMessages' },
+  { icon: '🚚', label: 'Livraison (Villes)', route: 'AdminCities' },
+  { icon: '🤝', label: 'Affiliés', route: 'AdminAffiliates' },
+  { icon: '🎯', label: 'Meilleurs clients potentiels', route: 'AdminBestLeads' },
+  { icon: '🎡', label: 'Roue de la chance', route: 'AdminWheel' },
+];
+
 export function AccountScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const profile = useAuthStore((s) => s.profile);
@@ -23,6 +64,7 @@ export function AccountScreen() {
   const { unreadCount } = useCustomerMessages();
   const showToast = useToastStore((s) => s.show);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [adminExpanded, setAdminExpanded] = useState(false);
 
   const handlePickAvatar = async () => {
     if (!profile) return;
@@ -99,106 +141,24 @@ export function AccountScreen() {
       </View>
 
       {profile.is_admin && (
-        <Pressable style={styles.menuItem} onPress={() => navigation.navigate('AdminDashboard')}>
-          <Text style={styles.menuIcon}>📊</Text>
-          <Text style={styles.menuLabel}>Espace Admin — Tableau de bord</Text>
-        </Pressable>
-      )}
-      {profile.is_admin && (
-        <Pressable style={styles.menuItem} onPress={() => navigation.navigate('AdminNotifications')}>
-          <Text style={styles.menuIcon}>🔔</Text>
-          <Text style={styles.menuLabel}>Espace Admin — Notifications</Text>
-        </Pressable>
-      )}
-      {profile.is_admin && (
-        <Pressable style={styles.menuItem} onPress={() => navigation.navigate('AdminProducts')}>
-          <Text style={styles.menuIcon}>🛠️</Text>
-          <Text style={styles.menuLabel}>Espace Admin — Produits</Text>
-        </Pressable>
-      )}
-      {profile.is_admin && (
-        <Pressable style={styles.menuItem} onPress={() => navigation.navigate('AdminCategories')}>
-          <Text style={styles.menuIcon}>🏷️</Text>
-          <Text style={styles.menuLabel}>Espace Admin — Catégories</Text>
-        </Pressable>
-      )}
-      {profile.is_admin && (
-        <Pressable style={styles.menuItem} onPress={() => navigation.navigate('AdminOrders')}>
-          <Text style={styles.menuIcon}>📦</Text>
-          <Text style={styles.menuLabel}>Espace Admin — Commandes</Text>
-        </Pressable>
-      )}
-      {profile.is_admin && (
-        <Pressable style={styles.menuItem} onPress={() => navigation.navigate('AdminTravelRequests')}>
-          <Text style={styles.menuIcon}>✈️</Text>
-          <Text style={styles.menuLabel}>Espace Admin — Voyage</Text>
-        </Pressable>
-      )}
-      {profile.is_admin && (
-        <Pressable style={styles.menuItem} onPress={() => navigation.navigate('AdminPaymentSettings')}>
-          <Text style={styles.menuIcon}>💳</Text>
-          <Text style={styles.menuLabel}>Espace Admin — Paiement</Text>
-        </Pressable>
-      )}
-      {profile.is_admin && (
-        <Pressable style={styles.menuItem} onPress={() => navigation.navigate('AdminCustomers')}>
-          <Text style={styles.menuIcon}>👥</Text>
-          <Text style={styles.menuLabel}>Espace Admin — Clients</Text>
-        </Pressable>
-      )}
-      {profile.is_admin && (
-        <Pressable style={styles.menuItem} onPress={() => navigation.navigate('AdminPromotions')}>
-          <Text style={styles.menuIcon}>🎁</Text>
-          <Text style={styles.menuLabel}>Espace Admin — Promotions intelligentes</Text>
-        </Pressable>
-      )}
-      {profile.is_admin && (
-        <Pressable style={styles.menuItem} onPress={() => navigation.navigate('AdminSourcePerformance')}>
-          <Text style={styles.menuIcon}>📡</Text>
-          <Text style={styles.menuLabel}>Espace Admin — Performance par source</Text>
-        </Pressable>
-      )}
-      {profile.is_admin && (
-        <Pressable style={styles.menuItem} onPress={() => navigation.navigate('AdminAbandonedCarts')}>
-          <Text style={styles.menuIcon}>🛒</Text>
-          <Text style={styles.menuLabel}>Espace Admin — Paniers abandonnés</Text>
-        </Pressable>
-      )}
-      {profile.is_admin && (
-        <Pressable style={styles.menuItem} onPress={() => navigation.navigate('AdminStoreSettings')}>
-          <Text style={styles.menuIcon}>📍</Text>
-          <Text style={styles.menuLabel}>Espace Admin — Informations de contact</Text>
-        </Pressable>
-      )}
-      {profile.is_admin && (
-        <Pressable style={styles.menuItem} onPress={() => navigation.navigate('AdminMessages')}>
-          <Text style={styles.menuIcon}>✉️</Text>
-          <Text style={styles.menuLabel}>Espace Admin — Message à tous les clients</Text>
-        </Pressable>
-      )}
-      {profile.is_admin && (
-        <Pressable style={styles.menuItem} onPress={() => navigation.navigate('AdminCities')}>
-          <Text style={styles.menuIcon}>🚚</Text>
-          <Text style={styles.menuLabel}>Espace Admin — Livraison (Villes)</Text>
-        </Pressable>
-      )}
-      {profile.is_admin && (
-        <Pressable style={styles.menuItem} onPress={() => navigation.navigate('AdminAffiliates')}>
-          <Text style={styles.menuIcon}>🤝</Text>
-          <Text style={styles.menuLabel}>Espace Admin — Affiliés</Text>
-        </Pressable>
-      )}
-      {profile.is_admin && (
-        <Pressable style={styles.menuItem} onPress={() => navigation.navigate('AdminBestLeads')}>
-          <Text style={styles.menuIcon}>🎯</Text>
-          <Text style={styles.menuLabel}>Espace Admin — Meilleurs clients potentiels</Text>
-        </Pressable>
-      )}
-      {profile.is_admin && (
-        <Pressable style={styles.menuItem} onPress={() => navigation.navigate('AdminWheel')}>
-          <Text style={styles.menuIcon}>🎡</Text>
-          <Text style={styles.menuLabel}>Espace Admin — Roue de la chance</Text>
-        </Pressable>
+        <View style={styles.adminGroup}>
+          <Pressable style={styles.menuItem} onPress={() => setAdminExpanded((v) => !v)}>
+            <Text style={styles.menuIcon}>⚙️</Text>
+            <Text style={styles.menuLabel}>Espace Admin</Text>
+            <Text style={styles.menuChevron}>{adminExpanded ? '▲' : '▼'}</Text>
+          </Pressable>
+          {adminExpanded &&
+            ADMIN_MENU_ITEMS.map((item) => (
+              <Pressable
+                key={item.route}
+                style={styles.subMenuItem}
+                onPress={() => navigation.navigate(item.route)}
+              >
+                <Text style={styles.menuIcon}>{item.icon}</Text>
+                <Text style={styles.menuLabel}>{item.label}</Text>
+              </Pressable>
+            ))}
+        </View>
       )}
       <Pressable style={styles.menuItem} onPress={() => navigation.navigate('Wheel')}>
         <Text style={styles.menuIcon}>🎡</Text>
@@ -380,7 +340,18 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   menuIcon: { fontSize: 18, marginRight: 12 },
-  menuLabel: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 14 },
+  menuLabel: { flex: 1, color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 14 },
+  menuChevron: { color: colors.creamFaint, fontSize: 11 },
+  adminGroup: { marginBottom: spacing.sm },
+  subMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.panelAlt,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginLeft: spacing.lg,
+    marginTop: spacing.xs,
+  },
   travelMenuItem: {
     flexDirection: 'row',
     alignItems: 'center',
