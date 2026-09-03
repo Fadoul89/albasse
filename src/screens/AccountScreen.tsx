@@ -244,6 +244,10 @@ export function AccountScreen() {
         <Text style={styles.menuIcon}>📦</Text>
         <Text style={styles.menuLabel}>Mes commandes</Text>
       </Pressable>
+      <Pressable style={styles.menuItem} onPress={() => navigation.navigate('ReturnPolicy')}>
+        <Text style={styles.menuIcon}>↩️</Text>
+        <Text style={styles.menuLabel}>Conditions de retour</Text>
+      </Pressable>
       <Pressable style={styles.travelMenuItem} onPress={() => navigation.navigate('Travel')}>
         <Text style={styles.menuIcon}>✈️</Text>
         <Text style={styles.travelMenuLabel}>Demander un billet d'avion</Text>
