@@ -156,12 +156,12 @@ export function HomeScreen() {
         <View style={styles.mobileAdsSection}>
           {settings.left_ad_items.length > 0 && (
             <View style={{ flex: 1 }}>
-              <SideAdBanner items={settings.left_ad_items} variant="mobile" />
+              <SideAdBanner items={settings.left_ad_items} />
             </View>
           )}
           {settings.right_ad_items.length > 0 && (
             <View style={{ flex: 1 }}>
-              <SideAdBanner items={settings.right_ad_items} variant="mobile" />
+              <SideAdBanner items={settings.right_ad_items} />
             </View>
           )}
         </View>
