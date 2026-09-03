@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, Pressable } from 'react-native';
+import { View, Text, TextInput, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
@@ -10,12 +10,12 @@ import { GoldButton } from '../../components/GoldButton';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { isSupabaseConfigured } from '../../lib/supabase';
 
-export function LoginScreen() {
+export function ForgotPasswordScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const signIn = useAuthStore((s) => s.signIn);
+  const resetPassword = useAuthStore((s) => s.resetPassword);
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [sent, setSent] = useState(false);
   const showToast = useToastStore((s) => s.show);
 
   const handleSubmit = async () => {
@@ -26,49 +26,52 @@ export function LoginScreen() {
       );
       return;
     }
-    if (!email || !password) {
-      showToast('Entrez votre email et votre mot de passe.', { title: 'Champs manquants', type: 'error' });
+    if (!email) {
+      showToast('Entrez votre email.', { title: 'Champ manquant', type: 'error' });
       return;
     }
     setLoading(true);
-    const { error } = await signIn(email, password);
+    const { error } = await resetPassword(email.trim());
     setLoading(false);
     if (error) {
-      showToast(error, { title: 'Connexion impossible', type: 'error' });
-    } else if (navigation.canGoBack()) {
-      navigation.goBack();
+      showToast(error, { title: 'Envoi impossible', type: 'error' });
+      return;
     }
+    setSent(true);
   };
 
   return (
     <View style={styles.screen}>
-      <ScreenHeader title="Connexion" showBack />
+      <ScreenHeader title="Mot de passe oublié" showBack />
       <View style={styles.content}>
         <Text style={styles.brand}>ALBASSE SHOPPING</Text>
-        <TextInput
-          value={email}
-          onChangeText={setEmail}
-          placeholder="Email"
-          placeholderTextColor={colors.creamFaint}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          style={styles.input}
-        />
-        <TextInput
-          value={password}
-          onChangeText={setPassword}
-          placeholder="Mot de passe"
-          placeholderTextColor={colors.creamFaint}
-          secureTextEntry
-          style={styles.input}
-        />
-        <GoldButton label="Se connecter" onPress={handleSubmit} loading={loading} style={{ marginTop: spacing.md }} />
-        <Pressable onPress={() => navigation.navigate('ForgotPassword')} style={{ marginTop: spacing.md }}>
-          <Text style={styles.link}>Mot de passe oublié ?</Text>
-        </Pressable>
-        <Pressable onPress={() => navigation.navigate('Register')} style={{ marginTop: spacing.lg }}>
-          <Text style={styles.link}>Pas encore de compte ? Créer un compte</Text>
-        </Pressable>
+        {sent ? (
+          <Text style={styles.info}>
+            Si un compte existe avec l'adresse {email.trim()}, un e-mail contenant un lien de réinitialisation vient
+            de lui être envoyé. Pensez à vérifier vos spams.
+          </Text>
+        ) : (
+          <>
+            <Text style={styles.info}>
+              Indiquez l'e-mail de votre compte. Nous vous enverrons un lien pour choisir un nouveau mot de passe.
+            </Text>
+            <TextInput
+              value={email}
+              onChangeText={setEmail}
+              placeholder="Email"
+              placeholderTextColor={colors.creamFaint}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              style={styles.input}
+            />
+            <GoldButton
+              label="Envoyer le lien"
+              onPress={handleSubmit}
+              loading={loading}
+              style={{ marginTop: spacing.md }}
+            />
+          </>
+        )}
       </View>
     </View>
   );
@@ -85,6 +88,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
     letterSpacing: 1,
   },
+  info: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 14, lineHeight: 21, marginBottom: spacing.md },
   input: {
     backgroundColor: colors.panel,
     borderRadius: radius.md,
@@ -96,5 +100,4 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     marginBottom: spacing.sm,
   },
-  link: { color: colors.gold, fontFamily: fonts.bodyMedium, fontSize: 13, textAlign: 'center' },
 });

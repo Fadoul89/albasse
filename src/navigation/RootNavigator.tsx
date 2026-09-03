@@ -18,6 +18,8 @@ import { OrdersScreen } from '../screens/OrdersScreen';
 import { TravelScreen } from '../screens/TravelScreen';
 import { LoginScreen } from '../screens/auth/LoginScreen';
 import { RegisterScreen } from '../screens/auth/RegisterScreen';
+import { ForgotPasswordScreen } from '../screens/auth/ForgotPasswordScreen';
+import { ResetPasswordScreen } from '../screens/auth/ResetPasswordScreen';
 import { AdminProductsScreen } from '../screens/admin/AdminProductsScreen';
 import { AdminProductFormScreen } from '../screens/admin/AdminProductFormScreen';
 import { AdminOrdersScreen } from '../screens/admin/AdminOrdersScreen';
@@ -77,6 +79,8 @@ const linking: LinkingOptions<RootStackParamList> = {
       Travel: 'voyage',
       Login: 'connexion',
       Register: 'inscription',
+      ForgotPassword: 'mot-de-passe-oublie',
+      ResetPassword: 'reinitialiser-mot-de-passe',
       AdminDashboard: 'admin/tableau-de-bord',
       AdminSourcePerformance: 'admin/performance-par-source',
       AdminAbandonedCarts: 'admin/paniers-abandonnes',
@@ -174,6 +178,8 @@ export function RootNavigator() {
             <Stack.Screen name="Travel" component={TravelScreen} />
             <Stack.Screen name="Login" component={LoginScreen} options={{ presentation: 'modal' }} />
             <Stack.Screen name="Register" component={RegisterScreen} options={{ presentation: 'modal' }} />
+            <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ presentation: 'modal' }} />
+            <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} options={{ presentation: 'modal' }} />
             <Stack.Screen name="AdminProducts" component={AdminProductsScreen} />
             <Stack.Screen name="AdminProductForm" component={AdminProductFormScreen} />
             <Stack.Screen name="AdminOrders" component={AdminOrdersScreen} />
