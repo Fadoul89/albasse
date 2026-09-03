@@ -7,6 +7,8 @@ export type RootStackParamList = {
   Travel: undefined;
   Login: undefined;
   Register: undefined;
+  ForgotPassword: undefined;
+  ResetPassword: undefined;
   AdminProducts: undefined;
   AdminProductForm: { productId?: string };
   AdminOrders: undefined;

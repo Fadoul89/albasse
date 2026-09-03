@@ -28,7 +28,11 @@ interface AuthState {
   ) => Promise<{ error: string | null; needsEmailConfirmation?: boolean }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  resetPassword: (email: string) => Promise<{ error: string | null }>;
+  updatePassword: (newPassword: string) => Promise<{ error: string | null }>;
 }
+
+const SITE_URL = 'https://www.albasseshopping.com';
 
 function translateAuthError(message: string): string {
   const m = message.toLowerCase();
@@ -224,5 +228,29 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     await supabase.auth.signOut();
     set({ profile: null, isAuthenticated: false });
     useFavoritesStore.getState().reset();
+  },
+
+  resetPassword: async (email) => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${SITE_URL}/reinitialiser-mot-de-passe`,
+      });
+      if (error) return { error: translateAuthError(error.message) };
+      return { error: null };
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return { error: `Erreur technique inattendue : ${message}` };
+    }
+  },
+
+  updatePassword: async (newPassword) => {
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) return { error: translateAuthError(error.message) };
+      return { error: null };
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return { error: `Erreur technique inattendue : ${message}` };
+    }
   },
 }));
