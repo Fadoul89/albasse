@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, FlatList, Pressable, Animated, Easing, Platform, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, FlatList, Pressable, Animated, Easing, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -18,8 +18,6 @@ import { LanguageSwitcher } from '../components/LanguageSwitcher';
 import { SideAdBanner } from '../components/SideAdBanner';
 import { ChadFlag } from '../components/ChadFlag';
 
-const SIDE_ADS_MIN_WIDTH = 1100;
-
 const CHAD_BLUE = '#0033A0';
 const CHAD_YELLOW = '#FECB00';
 const CHAD_RED = '#D21034';
@@ -32,8 +30,7 @@ export function HomeScreen() {
   const { settings } = useStoreSettings();
   const { width } = useWindowDimensions();
   const hasAdItems = settings.left_ad_items.length > 0 || settings.right_ad_items.length > 0;
-  const showSideAds = Platform.OS === 'web' && width >= SIDE_ADS_MIN_WIDTH && hasAdItems;
-  const showMobileAds = !showSideAds && hasAdItems;
+  const showMobileAds = hasAdItems;
   const gridColumns = width >= 700 ? 4 : 2;
 
   const flashSale = products.filter((p) => p.is_flash_sale);
@@ -74,12 +71,10 @@ export function HomeScreen() {
   }, []);
 
   return (
-    <View style={styles.pageRow}>
-      {showSideAds && <SideAdBanner items={settings.left_ad_items} />}
-      <ScrollView
-        style={[styles.screen, showSideAds && styles.screenCentered]}
-        contentContainerStyle={{ paddingBottom: 40 }}
-      >
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={{ paddingBottom: 40 }}
+    >
       <View style={styles.topBar}>
         <View style={styles.topBarLeftGroup}>
           <View style={styles.topBarFrame}>
@@ -230,17 +225,13 @@ export function HomeScreen() {
         {isLoading && <Text style={styles.loading}>Chargement…</Text>}
       </View>
 
-        <StoreFooter />
-      </ScrollView>
-      {showSideAds && <SideAdBanner items={settings.right_ad_items} />}
-    </View>
+      <StoreFooter />
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  pageRow: { flex: 1, flexDirection: 'row', backgroundColor: colors.background, gap: 12 },
   screen: { flex: 1, backgroundColor: colors.background },
-  screenCentered: { maxWidth: 760, width: '100%', alignSelf: 'center' },
   topBar: {
     flexDirection: 'row',
     flexWrap: 'wrap',
