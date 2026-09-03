@@ -60,7 +60,7 @@ export function SideAdBanner({ items }: { items: AdItem[] }) {
   return (
     <View style={styles.wrap}>
       {slots.map((item, i) => (
-        <React.Fragment key={`${item.image_url}-${i}`}>
+        <React.Fragment key={`slot-${i}`}>
           {i > 0 && <View style={styles.divider} />}
           {renderSlot(item)}
         </React.Fragment>
