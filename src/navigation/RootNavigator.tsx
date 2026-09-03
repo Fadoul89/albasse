@@ -41,6 +41,7 @@ import { FavoritesScreen } from '../screens/FavoritesScreen';
 import { FavoritesSync } from '../components/FavoritesSync';
 import { AdminCitiesScreen } from '../screens/admin/AdminCitiesScreen';
 import { PrivacyPolicyScreen } from '../screens/PrivacyPolicyScreen';
+import { ReturnPolicyScreen } from '../screens/ReturnPolicyScreen';
 import { MessagesScreen } from '../screens/MessagesScreen';
 import { AdminMessagesScreen } from '../screens/admin/AdminMessagesScreen';
 import { AffiliateApplyScreen } from '../screens/AffiliateApplyScreen';
@@ -96,6 +97,7 @@ const linking: LinkingOptions<RootStackParamList> = {
       Favorites: 'mes-favoris',
       AdminCities: 'admin/livraison-villes',
       PrivacyPolicy: 'politique-de-confidentialite',
+      ReturnPolicy: 'conditions-de-retour',
       Messages: 'mes-messages',
       AdminMessages: 'admin/messages',
       AffiliateApply: 'devenir-affilie',
@@ -192,6 +194,7 @@ export function RootNavigator() {
             <Stack.Screen name="Favorites" component={FavoritesScreen} />
             <Stack.Screen name="AdminCities" component={AdminCitiesScreen} />
             <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} options={{ presentation: 'modal' }} />
+            <Stack.Screen name="ReturnPolicy" component={ReturnPolicyScreen} options={{ presentation: 'modal' }} />
             <Stack.Screen name="Messages" component={MessagesScreen} />
             <Stack.Screen name="AdminMessages" component={AdminMessagesScreen} />
             <Stack.Screen name="AffiliateApply" component={AffiliateApplyScreen} options={{ presentation: 'modal' }} />
