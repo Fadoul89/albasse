@@ -38,7 +38,7 @@ export function SideAdBanner({ items, variant = 'side' }: { items: AdItem[]; var
     const current = items[index % items.length];
     const image = (
       <Animated.View style={{ flex: 1, opacity: fade, transform: [{ translateY: slide }] }}>
-        <Image source={{ uri: current.image_url }} style={styles.image} contentFit="contain" />
+        <Image source={{ uri: current.image_url }} style={styles.image} contentFit="cover" />
       </Animated.View>
     );
     if (!current.link) {
@@ -57,7 +57,7 @@ export function SideAdBanner({ items, variant = 'side' }: { items: AdItem[]; var
   const renderHalf = (item: AdItem, style: object) => {
     const image = (
       <Animated.View style={{ flex: 1, opacity: fade, transform: [{ translateY: slide }] }}>
-        <Image source={{ uri: item.image_url }} style={styles.image} contentFit="contain" />
+        <Image source={{ uri: item.image_url }} style={styles.image} contentFit="cover" />
       </Animated.View>
     );
     if (!item.link) {
