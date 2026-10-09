@@ -17,6 +17,7 @@ import { trackTikTokEvent } from '../lib/tiktokPixel';
 import type { PaymentMethod, City } from '../types';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
+const CHAD_PHONE_REGEX = /^[69]\d{7}$/;
 
 const PAYMENT_OPTIONS: { value: PaymentMethod; label: string; icon: string }[] = [
   { value: 'airtel_money', label: 'Airtel Money', icon: '📱' },
@@ -63,6 +64,13 @@ export function CheckoutScreen() {
   const handleSubmit = async () => {
     if (!name || !phone || !address || !city) {
       showToast('Merci de remplir toutes les informations de livraison.', { title: 'Champs manquants', type: 'error' });
+      return;
+    }
+    if (!CHAD_PHONE_REGEX.test(phone)) {
+      showToast(
+        'Le numéro doit contenir 8 chiffres et commencer par 6 ou 9 (ex. 66123456).',
+        { title: 'Numéro invalide', type: 'error' }
+      );
       return;
     }
 
@@ -130,10 +138,11 @@ export function CheckoutScreen() {
         />
         <TextInput
           value={phone}
-          onChangeText={setPhone}
-          placeholder="Numéro de téléphone"
+          onChangeText={(text) => setPhone(text.replace(/\D/g, '').slice(0, 8))}
+          placeholder="Numéro de téléphone (ex. 66123456)"
           placeholderTextColor={colors.creamFaint}
           keyboardType="phone-pad"
+          maxLength={8}
           style={styles.input}
         />
         <TextInput
