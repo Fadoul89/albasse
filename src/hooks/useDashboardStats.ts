@@ -52,7 +52,7 @@ export function useDashboardStats() {
     const [ordersRes, profilesRes, sessionsRes, viewsRes, cartRes, productsRes] = await Promise.all([
       supabase.from('orders').select('id,total,status,created_at,session_id,referrer_source,items'),
       supabase.from('profiles').select('id,created_at').eq('is_admin', false),
-      supabase.from('visitor_sessions').select('id,started_at,referrer_source'),
+      supabase.from('visitor_sessions').select('id,started_at,referrer_source,visitor_id'),
       supabase.from('product_views').select('product_id,session_id'),
       supabase.from('cart_events').select('session_id'),
       supabase.from('products').select('*'),
@@ -60,7 +60,8 @@ export function useDashboardStats() {
 
     const orders = (ordersRes.data as Order[]) ?? [];
     const profiles = (profilesRes.data as { id: string; created_at: string }[]) ?? [];
-    const sessions = (sessionsRes.data as { id: string; started_at: string; referrer_source: string | null }[]) ?? [];
+    const sessions =
+      (sessionsRes.data as { id: string; started_at: string; referrer_source: string | null; visitor_id: string | null }[]) ?? [];
     const views = (viewsRes.data as { product_id: string; session_id: string | null }[]) ?? [];
     const cartAdds = (cartRes.data as { session_id: string | null }[]) ?? [];
     const products = (productsRes.data as Product[]) ?? [];
@@ -70,7 +71,8 @@ export function useDashboardStats() {
       .filter((o) => o.status !== 'cancelled')
       .reduce((sum, o) => sum + Number(o.total), 0);
     const newCustomersToday = profiles.filter((p) => p.created_at >= todayIso).length;
-    const visitorsToday = sessions.filter((s) => s.started_at >= todayIso).length;
+    const sessionsToday = sessions.filter((s) => s.started_at >= todayIso);
+    const visitorsToday = new Set(sessionsToday.map((s) => s.visitor_id ?? s.id)).size;
 
     // Produits les plus consultes
     const viewCounts: Record<string, number> = {};
