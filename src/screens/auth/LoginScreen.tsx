@@ -89,7 +89,7 @@ export function LoginScreen() {
         </View>
         <GoldButton
           label="Continuer avec Google"
-          variant="outline"
+          variant="blue"
           onPress={handleGoogleSignIn}
           loading={googleLoading}
         />

@@ -6,7 +6,7 @@ import { colors, fonts, radius } from '../theme';
 interface Props {
   label: string;
   onPress: () => void;
-  variant?: 'gold' | 'outline' | 'red';
+  variant?: 'gold' | 'outline' | 'red' | 'blue';
   disabled?: boolean;
   loading?: boolean;
   style?: ViewStyle;
@@ -40,6 +40,18 @@ export function GoldButton({ label, onPress, variant = 'gold', disabled, loading
         style={[styles.wrapper, styles.redButton, disabled && { opacity: 0.5 }, style]}
       >
         {loading ? <ActivityIndicator color={colors.cream} /> : <Text style={styles.redText}>{label}</Text>}
+      </Pressable>
+    );
+  }
+
+  if (variant === 'blue') {
+    return (
+      <Pressable
+        onPress={onPress}
+        disabled={disabled || loading}
+        style={[styles.wrapper, styles.blueButton, disabled && { opacity: 0.5 }, style]}
+      >
+        {loading ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.blueText}>{label}</Text>}
       </Pressable>
     );
   }
@@ -81,6 +93,18 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bodyBold,
     fontSize: 15,
     color: colors.cream,
+    letterSpacing: 0.5,
+  },
+  blueButton: {
+    backgroundColor: '#4285F4',
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  blueText: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 15,
+    color: '#ffffff',
     letterSpacing: 0.5,
   },
   outlineButton: {
