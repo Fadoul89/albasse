@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { Platform, Linking } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { attachUserToSession } from '../lib/analytics';
 import { useToastStore } from './toastStore';
@@ -30,6 +31,7 @@ interface AuthState {
   refreshProfile: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: string | null }>;
   updatePassword: (newPassword: string) => Promise<{ error: string | null }>;
+  signInWithGoogle: () => Promise<{ error: string | null }>;
 }
 
 const SITE_URL = 'https://www.albasseshopping.com';
@@ -78,12 +80,57 @@ async function recordLogin(userId: string) {
   attachUserToSession(userId);
 }
 
+// Supabase redirige vers l'app avec les jetons de session dans le hash de
+// l'URL (#access_token=...&refresh_token=...). detectSessionInUrl est
+// desactive (voir lib/supabase.ts) pour ne pas interferer avec le flux de
+// reinitialisation de mot de passe (ResetPasswordScreen gere lui-meme son
+// propre hash sur sa route dediee) : on ignore donc ici tout hash marque
+// type=recovery, et on ne traite que les callbacks de connexion OAuth
+// (Google).
+async function consumeOAuthHashSession(): Promise<void> {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+  const hash = window.location.hash?.startsWith('#') ? window.location.hash.slice(1) : '';
+  if (!hash) return;
+
+  const params = new URLSearchParams(hash);
+  if (params.get('type') === 'recovery') return;
+
+  const accessToken = params.get('access_token');
+  const refreshToken = params.get('refresh_token');
+  if (!accessToken || !refreshToken) return;
+
+  const { data, error } = await supabase.auth.setSession({
+    access_token: accessToken,
+    refresh_token: refreshToken,
+  });
+  window.history.replaceState(null, '', window.location.pathname + window.location.search);
+  if (error || !data.user) return;
+
+  // Premiere connexion Google : pre-remplit le nom depuis le profil Google
+  // si le profil cree par le trigger est encore vide.
+  const meta = data.user.user_metadata as { full_name?: string; name?: string } | undefined;
+  const displayName = meta?.full_name ?? meta?.name;
+  if (displayName) {
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', data.user.id)
+      .single();
+    if (existingProfile && !existingProfile.full_name) {
+      await supabase.from('profiles').update({ full_name: displayName }).eq('id', data.user.id);
+    }
+  }
+
+  await recordLogin(data.user.id);
+}
+
 export const useAuthStore = create<AuthState>()((set, get) => ({
   profile: null,
   isLoading: true,
   isAuthenticated: false,
 
   init: async () => {
+    await consumeOAuthHashSession();
     const { data } = await supabase.auth.getSession();
     if (data.session) {
       await get().refreshProfile();
@@ -247,6 +294,30 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     try {
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) return { error: translateAuthError(error.message) };
+      return { error: null };
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return { error: `Erreur technique inattendue : ${message}` };
+    }
+  },
+
+  signInWithGoogle: async () => {
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${SITE_URL}/`,
+          skipBrowserRedirect: Platform.OS !== 'web',
+        },
+      });
+      if (error) return { error: translateAuthError(error.message) };
+
+      // Sur le web, supabase-js redirige deja la page vers Google. Sur
+      // mobile, il faut ouvrir l'URL nous-memes (pas de redirection
+      // automatique du navigateur).
+      if (Platform.OS !== 'web' && data?.url) {
+        await Linking.openURL(data.url);
+      }
       return { error: null };
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);

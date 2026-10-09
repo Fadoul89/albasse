@@ -13,10 +13,28 @@ import { isSupabaseConfigured } from '../../lib/supabase';
 export function LoginScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const signIn = useAuthStore((s) => s.signIn);
+  const signInWithGoogle = useAuthStore((s) => s.signInWithGoogle);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const showToast = useToastStore((s) => s.show);
+
+  const handleGoogleSignIn = async () => {
+    if (!isSupabaseConfigured) {
+      showToast(
+        "Ajoutez EXPO_PUBLIC_SUPABASE_URL et EXPO_PUBLIC_SUPABASE_ANON_KEY dans .env pour activer les comptes.",
+        { title: 'Supabase non configuré', type: 'error' }
+      );
+      return;
+    }
+    setGoogleLoading(true);
+    const { error } = await signInWithGoogle();
+    setGoogleLoading(false);
+    if (error) {
+      showToast(error, { title: 'Connexion Google impossible', type: 'error' });
+    }
+  };
 
   const handleSubmit = async () => {
     if (!isSupabaseConfigured) {
@@ -63,6 +81,19 @@ export function LoginScreen() {
           style={styles.input}
         />
         <GoldButton label="Se connecter" onPress={handleSubmit} loading={loading} style={{ marginTop: spacing.md }} />
+
+        <View style={styles.dividerRow}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>ou</Text>
+          <View style={styles.dividerLine} />
+        </View>
+        <GoldButton
+          label="Continuer avec Google"
+          variant="outline"
+          onPress={handleGoogleSignIn}
+          loading={googleLoading}
+        />
+
         <Pressable onPress={() => navigation.navigate('ForgotPassword')} style={{ marginTop: spacing.md }}>
           <Text style={styles.link}>Mot de passe oublié ?</Text>
         </Pressable>
@@ -97,4 +128,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   link: { color: colors.gold, fontFamily: fonts.bodyMedium, fontSize: 13, textAlign: 'center' },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: spacing.md, gap: 10 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
+  dividerText: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 12 },
 });
