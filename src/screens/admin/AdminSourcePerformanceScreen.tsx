@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, RefreshControl } from 'react-native';
 import { useAuthStore } from '../../store/authStore';
 import { useSourcePerformance, PERIOD_LABELS, SOURCE_STYLE, type Period } from '../../hooks/useSourcePerformance';
 import { formatDuration } from '../../lib/formatDuration';
@@ -24,6 +24,7 @@ export function AdminSourcePerformanceScreen() {
     campaigns,
     leaderboard,
     isLoading,
+    refresh,
   } = useSourcePerformance();
 
   if (!profile?.is_admin) {
@@ -38,7 +39,10 @@ export function AdminSourcePerformanceScreen() {
   return (
     <View style={styles.screen}>
       <ScreenHeader title="Performance par source" showBack />
-      <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: 60 }}>
+      <ScrollView
+        contentContainerStyle={{ padding: spacing.md, paddingBottom: 60 }}
+        refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refresh} tintColor={colors.gold} />}
+      >
         <Text style={styles.privacyNote}>
           🔒 Ces statistiques proviennent d'outils de mesure d'audience internes (sessions, pages et produits
           consultés). Aucune donnée personnelle sensible n'est collectée ; les visiteurs sont informés de ce suivi

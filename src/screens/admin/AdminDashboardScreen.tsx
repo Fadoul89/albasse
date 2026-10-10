@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, RefreshControl } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
@@ -14,7 +14,7 @@ const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
 export function AdminDashboardScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const profile = useAuthStore((s) => s.profile);
-  const { stats, isLoading } = useDashboardStats();
+  const { stats, isLoading, refresh } = useDashboardStats();
 
   if (!profile?.is_admin) {
     return (
@@ -28,7 +28,10 @@ export function AdminDashboardScreen() {
   return (
     <View style={styles.screen}>
       <ScreenHeader title="Tableau de bord" showBack right={<NotificationBell />} />
-      <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: 60 }} refreshControl={undefined}>
+      <ScrollView
+        contentContainerStyle={{ padding: spacing.md, paddingBottom: 60 }}
+        refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refresh} tintColor={colors.gold} />}
+      >
         {isLoading && !stats ? (
           <Text style={styles.loading}>Chargement…</Text>
         ) : stats ? (
