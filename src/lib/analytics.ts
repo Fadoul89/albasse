@@ -151,24 +151,25 @@ export function initAnalyticsSession(userId: string | null): Promise<void> {
     currentReferrerSource = attribution.source;
     const referralCode = await getOrCaptureReferralCode();
 
-    const { data, error } = await supabase
-      .from('visitor_sessions')
-      .insert({
-        user_id: userId,
-        visitor_id: currentVisitorId,
-        referrer_source: attribution.source,
-        utm_medium: attribution.utmMedium,
-        utm_campaign: attribution.utmCampaign,
-        referral_code: referralCode,
-      })
-      .select('id')
-      .single();
+    // L'id est genere cote client (et non via .select() apres insert) car la
+    // lecture de visitor_sessions est reservee aux admins par RLS : une
+    // visiteuse normale ne pourrait pas relire la ligne qu'elle vient de creer.
+    const newSessionId = generateUUID();
+    const { error } = await supabase.from('visitor_sessions').insert({
+      id: newSessionId,
+      user_id: userId,
+      visitor_id: currentVisitorId,
+      referrer_source: attribution.source,
+      utm_medium: attribution.utmMedium,
+      utm_campaign: attribution.utmCampaign,
+      referral_code: referralCode,
+    });
 
-    if (error || !data) {
+    if (error) {
       console.error('Erreur creation session visiteur:', error);
       return;
     }
-    sessionId = data.id;
+    sessionId = newSessionId;
     elapsedSeconds = 0;
     pageViews = 1;
 
