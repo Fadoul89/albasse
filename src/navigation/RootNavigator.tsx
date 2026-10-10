@@ -100,7 +100,7 @@ const linking: LinkingOptions<RootStackParamList> = {
       NotificationSettings: 'compte/notifications',
       Favorites: 'mes-favoris',
       AdminCities: 'admin/livraison-villes',
-      PrivacyPolicy: 'politique-de-confidentialite',
+      PrivacyPolicy: 'confidentialite',
       ReturnPolicy: 'conditions-de-retour',
       Messages: 'mes-messages',
       AdminMessages: 'admin/messages',
