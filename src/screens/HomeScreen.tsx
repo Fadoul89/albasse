@@ -98,7 +98,7 @@ export function HomeScreen() {
       <View style={styles.independenceBanner}>
         <ChadFlag width={26} height={18} />
         <Text style={styles.independenceText}>
-          🎉 66ᵉ Anniversaire de l'Indépendance du Tchad — 11 Août
+          🛍️ Première plateforme de vente en ligne au Tchad
         </Text>
         <ChadFlag width={26} height={18} />
       </View>
