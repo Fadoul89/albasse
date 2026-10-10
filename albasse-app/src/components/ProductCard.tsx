@@ -1,91 +1,55 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { colors, fonts, radius, spacing } from '../theme';
-import { discountPercent, formatXAF } from '../lib/format';
+import { formatXAF } from '../lib/format';
+import { StarRating } from './StarRating';
 import type { Product } from '../data';
 
-export function ProductCard({ product }: { product: Product }) {
-  const discount = discountPercent(product.price, product.compareAtPrice);
+const { width } = Dimensions.get('window');
+
+function cardWidth(columns: number) {
+  return Math.min((width - spacing.md * (columns + 1)) / columns, 220);
+}
+
+export function ProductCard({ product, columns = 2 }: { product: Product; columns?: number }) {
+  const CARD_WIDTH = cardWidth(columns);
+  const discount =
+    product.compareAtPrice && product.compareAtPrice > product.price
+      ? Math.round((1 - product.price / product.compareAtPrice) * 100)
+      : null;
 
   return (
-    <Pressable style={styles.card} onPress={() => router.push(`/product/${product.slug}`)}>
+    <Pressable style={[styles.card, { width: CARD_WIDTH }]} onPress={() => router.push(`/product/${product.slug}`)}>
       <View style={styles.imageWrap}>
         <Image source={{ uri: product.images[0] }} style={styles.image} contentFit="cover" transition={150} />
-        {product.isFlashSale && (
-          <View style={styles.flashBadge}>
-            <Text style={styles.flashBadgeText}>⚡ VENTE FLASH</Text>
-          </View>
-        )}
-        {discount && !product.isFlashSale && (
-          <View style={styles.discountBadge}>
-            <Text style={styles.discountText}>-{discount}%</Text>
+        {discount && (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>-{discount}%</Text>
           </View>
         )}
       </View>
-      <View style={styles.info}>
-        <Text style={styles.name} numberOfLines={2}>
-          {product.name}
-        </Text>
-        <View style={styles.priceRow}>
-          <Text style={styles.price}>{formatXAF(product.price)}</Text>
-          {product.compareAtPrice && (
-            <Text style={styles.comparePrice}>{formatXAF(product.compareAtPrice)}</Text>
-          )}
-        </View>
-        <View style={styles.ratingRow}>
-          <Text style={styles.rating}>★ {product.rating.toFixed(1)}</Text>
-          <Text style={styles.reviewCount}>({product.reviewCount})</Text>
-        </View>
+      <Text style={styles.name} numberOfLines={1}>
+        {product.name}
+      </Text>
+      <View style={styles.priceRow}>
+        <Text style={styles.price}>{formatXAF(product.price)}</Text>
+        {product.compareAtPrice && <Text style={styles.comparePrice}>{formatXAF(product.compareAtPrice)}</Text>}
       </View>
+      <StarRating rating={product.rating} size={11} reviewCount={product.reviewCount} />
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    width: '48%',
-    backgroundColor: colors.panel,
-    borderRadius: radius.md,
-    overflow: 'hidden',
-    marginBottom: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  imageWrap: { width: '100%', aspectRatio: 0.85, backgroundColor: colors.panelAlt },
+  card: { marginBottom: spacing.lg },
+  imageWrap: { borderRadius: radius.md, overflow: 'hidden', backgroundColor: colors.panel, aspectRatio: 0.8, marginBottom: spacing.sm },
   image: { width: '100%', height: '100%' },
-  flashBadge: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    backgroundColor: colors.red,
-    borderRadius: radius.sm,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-  },
-  flashBadgeText: { color: colors.cream, fontFamily: fonts.bodyBold, fontSize: 9, letterSpacing: 0.3 },
-  discountBadge: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    backgroundColor: colors.gold,
-    borderRadius: radius.sm,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-  },
-  discountText: { color: colors.background, fontFamily: fonts.bodyBold, fontSize: 10 },
-  info: { padding: spacing.sm },
-  name: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 12.5, lineHeight: 17, minHeight: 34 },
-  priceRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6, marginTop: 6, flexWrap: 'wrap' },
-  price: { color: colors.goldLight, fontFamily: fonts.bodyBold, fontSize: 14 },
-  comparePrice: {
-    color: colors.creamFaint,
-    fontFamily: fonts.body,
-    fontSize: 11,
-    textDecorationLine: 'line-through',
-  },
-  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
-  rating: { color: colors.gold, fontFamily: fonts.bodySemiBold, fontSize: 11 },
-  reviewCount: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11 },
+  badge: { position: 'absolute', top: 8, left: 8, backgroundColor: colors.red, borderRadius: radius.sm, paddingHorizontal: 6, paddingVertical: 3 },
+  badgeText: { color: colors.cream, fontFamily: fonts.bodyBold, fontSize: 11 },
+  name: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 13, marginBottom: 4 },
+  priceRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+  price: { color: colors.success, fontFamily: fonts.bodyBold, fontSize: 14 },
+  comparePrice: { color: colors.red, fontFamily: fonts.body, fontSize: 12, textDecorationLine: 'line-through' },
 });

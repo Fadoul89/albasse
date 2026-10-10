@@ -11,6 +11,12 @@ const CHAD_PHONE_REGEX = /^[69]\d{7}$/;
 
 type PaymentMethod = 'airtel_money' | 'moov_money' | 'cash_on_delivery';
 
+const PAYMENT_OPTIONS: { value: PaymentMethod; label: string; icon: string; soon?: boolean }[] = [
+  { value: 'airtel_money', label: 'Airtel Money', icon: '📱', soon: true },
+  { value: 'moov_money', label: 'Moov Money', icon: '📲', soon: true },
+  { value: 'cash_on_delivery', label: 'Paiement à la livraison', icon: '💵' },
+];
+
 export default function CheckoutScreen() {
   const items = useCartStore((s) => s.items);
   const clear = useCartStore((s) => s.clear);
@@ -57,7 +63,7 @@ export default function CheckoutScreen() {
     <View style={styles.screen}>
       <ScreenHeader title="Commande" showBack />
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.sectionTitle}>Informations de livraison</Text>
+        <Text style={styles.sectionTitle}>Livraison</Text>
         <TextInput
           value={name}
           onChangeText={setName}
@@ -67,10 +73,11 @@ export default function CheckoutScreen() {
         />
         <TextInput
           value={phone}
-          onChangeText={setPhone}
+          onChangeText={(text) => setPhone(text.replace(/\D/g, '').slice(0, 8))}
           placeholder="Numéro de téléphone (ex. 66123456)"
           placeholderTextColor={colors.creamFaint}
           keyboardType="phone-pad"
+          maxLength={8}
           style={styles.input}
         />
         <TextInput
@@ -81,110 +88,80 @@ export default function CheckoutScreen() {
           style={styles.input}
         />
 
-        <Text style={styles.sectionTitle}>Mode de paiement</Text>
-        <PaymentOption
-          label="Paiement à la livraison"
-          icon="💵"
-          active={method === 'cash_on_delivery'}
-          onPress={() => setMethod('cash_on_delivery')}
-        />
-        <PaymentOption
-          label="Airtel Money"
-          icon="📱"
-          active={method === 'airtel_money'}
-          onPress={() => setMethod('airtel_money')}
-          badge="Bientôt disponible"
-        />
-        <PaymentOption
-          label="Moov Money"
-          icon="📱"
-          active={method === 'moov_money'}
-          onPress={() => setMethod('moov_money')}
-          badge="Bientôt disponible"
-        />
+        <Text style={styles.sectionTitle}>Paiement</Text>
+        {PAYMENT_OPTIONS.map((opt) => (
+          <Pressable
+            key={opt.value}
+            style={[styles.paymentOption, method === opt.value && styles.paymentOptionActive]}
+            onPress={() => setMethod(opt.value)}
+          >
+            <Text style={styles.paymentIcon}>{opt.icon}</Text>
+            <Text style={styles.paymentLabel}>
+              {opt.label}
+              {opt.soon && <Text style={styles.paymentSoon}>  ·  bientôt disponible</Text>}
+            </Text>
+            <View style={[styles.radio, method === opt.value && styles.radioActive]} />
+          </Pressable>
+        ))}
 
         <View style={styles.summary}>
-          <Text style={styles.summaryLabel}>{items.length} article(s)</Text>
-          <Text style={styles.summaryTotal}>{formatXAF(total)}</Text>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Sous-total</Text>
+            <Text style={styles.summaryValue}>{formatXAF(total)}</Text>
+          </View>
+          <View style={[styles.summaryRow, { marginTop: 8 }]}>
+            <Text style={styles.totalLabel}>Total</Text>
+            <Text style={styles.totalValue}>{formatXAF(total)}</Text>
+          </View>
         </View>
-      </ScrollView>
-      <View style={styles.footer}>
-        <GoldButton label="Confirmer la commande" onPress={handleSubmit} loading={submitting} />
-      </View>
-    </View>
-  );
-}
 
-function PaymentOption({
-  label,
-  icon,
-  active,
-  onPress,
-  badge,
-}: {
-  label: string;
-  icon: string;
-  active: boolean;
-  onPress: () => void;
-  badge?: string;
-}) {
-  return (
-    <Pressable style={[styles.paymentOption, active && styles.paymentOptionActive]} onPress={onPress}>
-      <Text style={styles.paymentIcon}>{icon}</Text>
-      <Text style={styles.paymentLabel}>{label}</Text>
-      {badge && (
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>{badge}</Text>
-        </View>
-      )}
-      <View style={[styles.radio, active && styles.radioActive]} />
-    </Pressable>
+        <GoldButton
+          label="Confirmer la commande"
+          onPress={handleSubmit}
+          loading={submitting}
+          disabled={items.length === 0}
+          style={{ marginTop: spacing.md }}
+        />
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.md, paddingBottom: 40 },
-  sectionTitle: { color: colors.cream, fontFamily: fonts.display, fontSize: 15, marginTop: spacing.sm, marginBottom: spacing.sm },
+  content: { paddingHorizontal: spacing.md, paddingBottom: 60 },
+  sectionTitle: { fontFamily: fonts.display, fontSize: 17, color: colors.cream, marginTop: spacing.lg, marginBottom: spacing.md },
   input: {
     backgroundColor: colors.panel,
     borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
     paddingHorizontal: 14,
     paddingVertical: 12,
     color: colors.cream,
     fontFamily: fonts.body,
+    borderWidth: 1,
+    borderColor: colors.border,
     marginBottom: spacing.sm,
   },
   paymentOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    backgroundColor: colors.panel,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  paymentOptionActive: { borderColor: colors.gold },
-  paymentIcon: { fontSize: 18 },
-  paymentLabel: { flex: 1, color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 13 },
-  badge: { backgroundColor: colors.panelAlt, borderRadius: radius.sm, paddingHorizontal: 6, paddingVertical: 3 },
-  badgeText: { color: colors.creamFaint, fontFamily: fonts.bodySemiBold, fontSize: 9.5 },
-  radio: { width: 18, height: 18, borderRadius: 9, borderWidth: 2, borderColor: colors.border },
-  radioActive: { borderColor: colors.gold, backgroundColor: colors.gold },
-  summary: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-    marginTop: spacing.md,
     backgroundColor: colors.panel,
     borderRadius: radius.md,
     padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: spacing.sm,
   },
+  paymentOptionActive: { borderColor: colors.gold },
+  paymentIcon: { fontSize: 20, marginRight: 10 },
+  paymentLabel: { flex: 1, color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 14 },
+  paymentSoon: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11.5 },
+  radio: { width: 18, height: 18, borderRadius: 9, borderWidth: 2, borderColor: colors.creamFaint },
+  radioActive: { borderColor: colors.gold, backgroundColor: colors.gold },
+  summary: { backgroundColor: colors.panel, borderRadius: radius.md, padding: spacing.md, marginTop: spacing.lg },
+  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
   summaryLabel: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 13 },
-  summaryTotal: { color: colors.goldLight, fontFamily: fonts.displayBold, fontSize: 18 },
-  footer: { padding: spacing.md, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.panel },
+  summaryValue: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 13 },
+  totalLabel: { color: colors.cream, fontFamily: fonts.bodySemiBold, fontSize: 15 },
+  totalValue: { color: colors.goldLight, fontFamily: fonts.displayBold, fontSize: 18 },
 });

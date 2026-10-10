@@ -1,57 +1,69 @@
+import { Text, View } from 'react-native';
 import { Tabs } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { colors, fonts } from '../../theme';
+import { colors, fonts, radius } from '../../theme';
 import { useCartTotalItems } from '../../store/cartStore';
+
+const ICONS: Record<string, string> = { index: '🏠', search: '🔍', cart: '🛒', profile: '👤' };
+const LABELS: Record<string, string> = { index: 'Accueil', search: 'Recherche', cart: 'Panier', profile: 'Compte' };
 
 export default function TabsLayout() {
   const cartCount = useCartTotalItems();
 
   return (
     <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: colors.gold,
-        tabBarInactiveTintColor: colors.creamFaint,
-        tabBarStyle: {
-          backgroundColor: colors.panel,
-          borderTopColor: colors.border,
-          height: 58,
-          paddingBottom: 8,
-          paddingTop: 6,
-        },
-        tabBarLabelStyle: { fontFamily: fonts.bodySemiBold, fontSize: 11 },
-        tabBarBadgeStyle: { backgroundColor: colors.red, color: colors.cream, fontFamily: fonts.bodyBold },
+      screenOptions={({ route }) => {
+        const isCart = route.name === 'cart';
+        const isAccount = route.name === 'profile';
+        return {
+          headerShown: false,
+          tabBarActiveTintColor: colors.gold,
+          tabBarInactiveTintColor: colors.creamFaint,
+          tabBarStyle: {
+            backgroundColor: colors.panelAlt,
+            borderWidth: 1.5,
+            borderColor: colors.border,
+            borderTopLeftRadius: radius.xl,
+            borderTopRightRadius: radius.xl,
+            height: 78,
+            paddingBottom: 12,
+            paddingTop: 10,
+            shadowColor: '#000',
+            shadowOpacity: 0.25,
+            shadowRadius: 10,
+            shadowOffset: { width: 0, height: -3 },
+            elevation: 10,
+          },
+          tabBarLabel: ({ focused }) => (
+            <Text
+              style={{
+                color: isCart ? '#3b9eff' : isAccount ? colors.gold : focused ? colors.gold : colors.creamFaint,
+                fontFamily: focused || isCart || isAccount ? fonts.bodySemiBold : fonts.bodyMedium,
+                fontSize: 11.5,
+                marginTop: 2,
+              }}
+            >
+              {LABELS[route.name]}
+            </Text>
+          ),
+          tabBarIcon: ({ focused }) => (
+            <View
+              style={[
+                { width: 44, height: 34, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
+                isCart ? { backgroundColor: '#3b9eff' } : isAccount ? { backgroundColor: colors.gold } : focused && { backgroundColor: colors.gold + '26' },
+              ]}
+            >
+              <Text style={{ fontSize: focused ? 26 : 23 }}>{ICONS[route.name]}</Text>
+            </View>
+          ),
+          tabBarBadge: isCart && cartCount > 0 ? cartCount : undefined,
+          tabBarBadgeStyle: { backgroundColor: colors.red, color: colors.cream, fontSize: 11, minWidth: 18, height: 18, borderRadius: 9 },
+        };
       }}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Accueil',
-          tabBarIcon: ({ color, size }) => <Ionicons name="home" color={color} size={size} />,
-        }}
-      />
-      <Tabs.Screen
-        name="categories"
-        options={{
-          title: 'Catégories',
-          tabBarIcon: ({ color, size }) => <Ionicons name="grid" color={color} size={size} />,
-        }}
-      />
-      <Tabs.Screen
-        name="cart"
-        options={{
-          title: 'Panier',
-          tabBarBadge: cartCount > 0 ? cartCount : undefined,
-          tabBarIcon: ({ color, size }) => <Ionicons name="cart" color={color} size={size} />,
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profil',
-          tabBarIcon: ({ color, size }) => <Ionicons name="person" color={color} size={size} />,
-        }}
-      />
+      <Tabs.Screen name="index" />
+      <Tabs.Screen name="search" />
+      <Tabs.Screen name="cart" />
+      <Tabs.Screen name="profile" />
     </Tabs>
   );
 }

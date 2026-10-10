@@ -4,7 +4,7 @@ import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { colors, fonts, radius, spacing } from '../../theme';
 import { formatXAF } from '../../lib/format';
-import { useCartStore, useCartTotalPrice } from '../../store/cartStore';
+import { useCartStore, useCartTotalPrice, type CartItem } from '../../store/cartStore';
 import { GoldButton } from '../../components/GoldButton';
 
 export default function CartScreen() {
@@ -16,15 +16,10 @@ export default function CartScreen() {
   if (items.length === 0) {
     return (
       <View style={styles.screen}>
-        <Text style={styles.header}>Panier</Text>
+        <Text style={styles.headerTitle}>Mon Panier</Text>
         <View style={styles.emptyWrap}>
           <Text style={styles.emptyIcon}>🛍️</Text>
-          <Text style={styles.emptyText}>Votre panier est vide.</Text>
-          <GoldButton
-            label="Découvrir les produits"
-            onPress={() => router.push('/(tabs)/categories')}
-            style={{ marginTop: spacing.lg, width: 220 }}
-          />
+          <Text style={styles.emptyText}>Votre panier est vide</Text>
         </View>
       </View>
     );
@@ -32,105 +27,77 @@ export default function CartScreen() {
 
   return (
     <View style={styles.screen}>
-      <Text style={styles.header}>Panier</Text>
+      <Text style={styles.headerTitle}>Mon Panier</Text>
       <FlatList
         data={items}
         keyExtractor={(item) => `${item.productId}-${item.color}-${item.size}`}
-        contentContainerStyle={styles.list}
-        renderItem={({ item }) => (
-          <View style={styles.row}>
-            <Image source={{ uri: item.image }} style={styles.image} contentFit="cover" />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.name} numberOfLines={2}>
-                {item.name}
-              </Text>
-              {(item.color || item.size) && (
-                <Text style={styles.variant}>
-                  {[item.color, item.size].filter(Boolean).join(' · ')}
-                </Text>
-              )}
-              <Text style={styles.price}>{formatXAF(item.price)}</Text>
-              <View style={styles.stepperRow}>
-                <Pressable
-                  style={styles.stepperBtn}
-                  onPress={() => updateQuantity(item.productId, item.color, item.size, item.quantity - 1)}
-                >
-                  <Text style={styles.stepperBtnText}>−</Text>
-                </Pressable>
-                <Text style={styles.quantity}>{item.quantity}</Text>
-                <Pressable
-                  style={styles.stepperBtn}
-                  onPress={() => updateQuantity(item.productId, item.color, item.size, item.quantity + 1)}
-                >
-                  <Text style={styles.stepperBtnText}>+</Text>
-                </Pressable>
-                <Pressable onPress={() => removeItem(item.productId, item.color, item.size)} style={{ marginLeft: 'auto' }}>
-                  <Text style={styles.remove}>Retirer</Text>
-                </Pressable>
-              </View>
-            </View>
-          </View>
-        )}
+        contentContainerStyle={{ paddingHorizontal: spacing.md, paddingBottom: 20 }}
+        renderItem={({ item }) => <CartRow item={item} onUpdateQuantity={updateQuantity} onRemove={removeItem} />}
       />
       <View style={styles.footer}>
         <View style={styles.totalRow}>
           <Text style={styles.totalLabel}>Total</Text>
           <Text style={styles.totalValue}>{formatXAF(total)}</Text>
         </View>
-        <GoldButton label="Commander" onPress={() => router.push('/checkout')} />
+        <GoldButton label="Passer la commande" onPress={() => router.push('/checkout')} />
+      </View>
+    </View>
+  );
+}
+
+function CartRow({
+  item,
+  onUpdateQuantity,
+  onRemove,
+}: {
+  item: CartItem;
+  onUpdateQuantity: (productId: string, color: string | null, size: string | null, quantity: number) => void;
+  onRemove: (productId: string, color: string | null, size: string | null) => void;
+}) {
+  return (
+    <View style={styles.row}>
+      <Image source={{ uri: item.image }} style={styles.thumb} contentFit="cover" />
+      <View style={{ flex: 1 }}>
+        <Text style={styles.name} numberOfLines={1}>
+          {item.name}
+        </Text>
+        <Text style={styles.variant}>{[item.color, item.size].filter(Boolean).join(' · ') || 'Standard'}</Text>
+        <Text style={styles.price}>{formatXAF(item.price)}</Text>
+        <View style={styles.qtyRow}>
+          <Pressable style={styles.qtyBtn} onPress={() => onUpdateQuantity(item.productId, item.color, item.size, item.quantity - 1)}>
+            <Text style={styles.qtyBtnText}>−</Text>
+          </Pressable>
+          <Text style={styles.qtyValue}>{item.quantity}</Text>
+          <Pressable style={styles.qtyBtn} onPress={() => onUpdateQuantity(item.productId, item.color, item.size, item.quantity + 1)}>
+            <Text style={styles.qtyBtnText}>+</Text>
+          </Pressable>
+          <Pressable onPress={() => onRemove(item.productId, item.color, item.size)} style={{ marginLeft: 'auto' }}>
+            <Text style={styles.remove}>Retirer</Text>
+          </Pressable>
+        </View>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.background },
-  header: {
-    color: colors.cream,
-    fontFamily: fonts.display,
-    fontSize: 20,
-    textAlign: 'center',
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
-  },
-  emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: 80 },
-  emptyIcon: { fontSize: 44, marginBottom: 12 },
-  emptyText: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 14 },
-  list: { paddingHorizontal: spacing.md, paddingBottom: 12, gap: spacing.sm },
-  row: {
-    flexDirection: 'row',
-    gap: 10,
-    backgroundColor: colors.panel,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.sm,
-  },
-  image: { width: 72, height: 90, borderRadius: radius.sm, backgroundColor: colors.panelAlt },
-  name: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 13 },
-  variant: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11, marginTop: 2 },
-  price: { color: colors.goldLight, fontFamily: fonts.bodyBold, fontSize: 13, marginTop: 4 },
-  stepperRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8 },
-  stepperBtn: {
-    width: 26,
-    height: 26,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepperBtnText: { color: colors.gold, fontFamily: fonts.bodyBold, fontSize: 15 },
-  quantity: { color: colors.cream, fontFamily: fonts.bodySemiBold, fontSize: 13, minWidth: 18, textAlign: 'center' },
-  remove: { color: colors.red, fontFamily: fonts.bodySemiBold, fontSize: 11.5 },
-  footer: {
-    padding: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.panel,
-    gap: spacing.sm,
-  },
-  totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
-  totalLabel: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 13 },
+  screen: { flex: 1, backgroundColor: colors.background, paddingTop: 50 },
+  headerTitle: { fontFamily: fonts.display, fontSize: 22, color: colors.cream, textAlign: 'center', marginBottom: spacing.md },
+  emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  emptyIcon: { fontSize: 48, marginBottom: 12 },
+  emptyText: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 15 },
+  row: { flexDirection: 'row', gap: 12, backgroundColor: colors.panel, borderRadius: radius.md, padding: spacing.sm, marginBottom: spacing.sm },
+  thumb: { width: 76, height: 90, borderRadius: radius.sm },
+  name: { color: colors.cream, fontFamily: fonts.bodySemiBold, fontSize: 14 },
+  variant: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 12, marginTop: 2 },
+  price: { color: colors.goldLight, fontFamily: fonts.bodyBold, fontSize: 14, marginTop: 4 },
+  qtyRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8 },
+  qtyBtn: { width: 26, height: 26, borderRadius: 13, backgroundColor: colors.panelAlt, alignItems: 'center', justifyContent: 'center' },
+  qtyBtnText: { color: colors.gold, fontFamily: fonts.bodyBold },
+  qtyValue: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 13 },
+  remove: { color: colors.red, fontFamily: fonts.bodyMedium, fontSize: 12 },
+  footer: { padding: spacing.md, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.panelAlt },
+  totalRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.md },
+  totalLabel: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 15 },
   totalValue: { color: colors.goldLight, fontFamily: fonts.displayBold, fontSize: 20 },
 });
