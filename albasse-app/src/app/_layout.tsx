@@ -12,6 +12,7 @@ import {
   Manrope_700Bold,
 } from '@expo-google-fonts/manrope';
 import { colors } from '../theme';
+import { useAuthStore } from '../store/authStore';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -26,11 +27,20 @@ export default function RootLayout() {
     Manrope_700Bold,
   });
 
-  useEffect(() => {
-    if (fontsLoaded) SplashScreen.hideAsync();
-  }, [fontsLoaded]);
+  const initAuth = useAuthStore((s) => s.init);
+  const authLoading = useAuthStore((s) => s.isLoading);
 
-  if (!fontsLoaded) {
+  useEffect(() => {
+    initAuth();
+  }, []);
+
+  const ready = fontsLoaded && !authLoading;
+
+  useEffect(() => {
+    if (ready) SplashScreen.hideAsync();
+  }, [ready]);
+
+  if (!ready) {
     return <View style={{ flex: 1, backgroundColor: colors.background }} />;
   }
 
@@ -42,6 +52,9 @@ export default function RootLayout() {
         <Stack.Screen name="category/[slug]" />
         <Stack.Screen name="product/[slug]" />
         <Stack.Screen name="checkout" options={{ presentation: 'card' }} />
+        <Stack.Screen name="login" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="register" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="orders" />
       </Stack>
     </View>
   );

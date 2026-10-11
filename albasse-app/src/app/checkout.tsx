@@ -4,12 +4,13 @@ import { router } from 'expo-router';
 import { colors, fonts, radius, spacing } from '../theme';
 import { formatXAF } from '../lib/format';
 import { useCartStore, useCartTotalPrice } from '../store/cartStore';
+import { useAuthStore } from '../store/authStore';
+import { createOrder } from '../lib/orders';
+import type { PaymentMethod } from '../types/order';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { GoldButton } from '../components/GoldButton';
 
 const CHAD_PHONE_REGEX = /^[69]\d{7}$/;
-
-type PaymentMethod = 'airtel_money' | 'moov_money' | 'cash_on_delivery';
 
 const PAYMENT_OPTIONS: { value: PaymentMethod; label: string; icon: string; soon?: boolean }[] = [
   { value: 'airtel_money', label: 'Airtel Money', icon: '📱', soon: true },
@@ -21,14 +22,15 @@ export default function CheckoutScreen() {
   const items = useCartStore((s) => s.items);
   const clear = useCartStore((s) => s.clear);
   const total = useCartTotalPrice();
+  const profile = useAuthStore((s) => s.profile);
 
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
+  const [name, setName] = useState(profile?.full_name ?? '');
+  const [phone, setPhone] = useState(profile?.phone ?? '');
   const [address, setAddress] = useState('');
   const [method, setMethod] = useState<PaymentMethod>('cash_on_delivery');
   const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!name.trim() || !phone.trim() || !address.trim()) {
       Alert.alert('Champs manquants', 'Merci de remplir toutes les informations de livraison.');
       return;
@@ -46,17 +48,29 @@ export default function CheckoutScreen() {
     }
 
     setSubmitting(true);
-    // TODO : quand Supabase sera branché ici, remplacer ce bloc par un insert
-    // dans la table `orders` (même format que sur le site).
-    setTimeout(() => {
-      setSubmitting(false);
-      clear();
-      Alert.alert(
-        'Commande enregistrée ✓',
-        'Notre équipe vous contactera très vite par téléphone pour confirmer la livraison.',
-        [{ text: 'OK', onPress: () => router.replace('/') }]
-      );
-    }, 600);
+    const { order, error } = await createOrder({
+      userId: profile?.id ?? null,
+      items,
+      total,
+      paymentMethod: method,
+      shippingName: name.trim(),
+      shippingPhone: phone.trim(),
+      shippingAddress: address.trim(),
+      shippingCity: address.trim(),
+    });
+    setSubmitting(false);
+
+    if (error || !order) {
+      Alert.alert('Erreur', error ?? 'Impossible de créer la commande. Merci de réessayer.');
+      return;
+    }
+
+    clear();
+    Alert.alert(
+      'Commande enregistrée ✓',
+      'Notre équipe vous contactera très vite par téléphone pour confirmer la livraison.',
+      [{ text: 'OK', onPress: () => router.replace('/') }]
+    );
   };
 
   return (

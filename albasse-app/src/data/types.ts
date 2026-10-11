@@ -1,6 +1,5 @@
-// Mêmes formes que les tables Supabase du site (products, categories) : quand on
-// branchera Supabase ici, ces types n'ont pas besoin de changer, seule data/index.ts
-// sera réécrite pour interroger la base au lieu des tableaux locaux.
+// Memes formes que les tables Supabase du site (products, categories) —
+// alimentees par de vraies requetes dans data/index.ts.
 
 export interface Category {
   id: string;
@@ -11,7 +10,7 @@ export interface Category {
 
 export interface Product {
   id: string;
-  categoryId: string;
+  categoryId: string | null;
   categorySlug: string;
   name: string;
   slug: string;
