@@ -67,10 +67,13 @@ export async function createOrder(input: CreateOrderInput): Promise<{ order: Ord
   return { order, error: null };
 }
 
+const ORDER_COLUMNS =
+  'id, user_id, items, total, status, payment_method, shipping_name, shipping_phone, shipping_address, shipping_city, created_at';
+
 export async function getMyOrders(userId: string): Promise<Order[]> {
   const { data, error } = await supabase
     .from('orders')
-    .select('id, user_id, items, total, status, payment_method, shipping_name, shipping_phone, shipping_address, shipping_city, created_at')
+    .select(ORDER_COLUMNS)
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
 
@@ -79,4 +82,22 @@ export async function getMyOrders(userId: string): Promise<Order[]> {
     return [];
   }
   return (data ?? []) as Order[];
+}
+
+// Reserve aux admins (policy RLS `orders_own_read` : auth.uid() = user_id OR
+// is_admin()) — renvoie toutes les commandes, pas seulement celles de
+// l'utilisateur connecte.
+export async function getAllOrders(): Promise<Order[]> {
+  const { data, error } = await supabase.from('orders').select(ORDER_COLUMNS).order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Erreur chargement commandes (admin):', error.message);
+    return [];
+  }
+  return (data ?? []) as Order[];
+}
+
+export async function updateOrderStatus(orderId: string, status: Order['status']): Promise<{ error: string | null }> {
+  const { error } = await supabase.from('orders').update({ status }).eq('id', orderId);
+  return { error: error?.message ?? null };
 }

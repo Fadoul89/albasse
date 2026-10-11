@@ -55,6 +55,7 @@ export default function RootLayout() {
         <Stack.Screen name="login" options={{ presentation: 'modal' }} />
         <Stack.Screen name="register" options={{ presentation: 'modal' }} />
         <Stack.Screen name="orders" />
+        <Stack.Screen name="admin-orders" />
       </Stack>
     </View>
   );

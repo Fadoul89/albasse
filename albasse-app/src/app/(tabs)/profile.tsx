@@ -24,6 +24,11 @@ export default function ProfileScreen() {
           </View>
           <Text style={styles.name}>{profile.full_name ?? 'Client Albasse'}</Text>
           <Text style={styles.email}>{profile.email}</Text>
+          {profile.is_admin && (
+            <View style={styles.adminBadge}>
+              <Text style={styles.adminBadgeText}>⚙️ Administrateur</Text>
+            </View>
+          )}
         </View>
       ) : (
         <View style={styles.guestWrap}>
@@ -44,6 +49,13 @@ export default function ProfileScreen() {
         <Pressable style={styles.menuItem} onPress={() => router.push('/orders')}>
           <Text style={styles.menuIcon}>📦</Text>
           <Text style={styles.menuLabel}>Mes commandes</Text>
+        </Pressable>
+      )}
+      {profile?.is_admin && (
+        <Pressable style={styles.adminMenuItem} onPress={() => router.push('/admin-orders')}>
+          <Text style={styles.menuIcon}>⚙️</Text>
+          <Text style={styles.adminMenuLabel}>Espace Admin — Commandes</Text>
+          <Text style={styles.adminMenuArrow}>→</Text>
         </Pressable>
       )}
       <Pressable style={styles.menuItem} onPress={() => Linking.openURL(`${SITE_URL}/conditions-de-retour`)}>
@@ -114,6 +126,16 @@ const styles = StyleSheet.create({
   avatarText: { color: colors.goldLight, fontFamily: fonts.displayBold, fontSize: 24 },
   name: { color: colors.cream, fontFamily: fonts.bodySemiBold, fontSize: 16 },
   email: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 12, marginTop: 2 },
+  adminBadge: {
+    marginTop: spacing.sm,
+    backgroundColor: colors.panelAlt,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.gold,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  adminBadgeText: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 11 },
   guestWrap: { alignItems: 'center', justifyContent: 'center', paddingVertical: 32, marginBottom: spacing.lg, paddingHorizontal: spacing.md },
   guestIcon: { fontSize: 48, marginBottom: 12 },
   guestText: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 14, textAlign: 'center', paddingHorizontal: 40 },
@@ -129,5 +151,16 @@ const styles = StyleSheet.create({
   },
   menuIcon: { fontSize: 18, marginRight: 12 },
   menuLabel: { flex: 1, color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 14 },
+  adminMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.gold,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    marginHorizontal: spacing.md,
+  },
+  adminMenuLabel: { flex: 1, color: colors.background, fontFamily: fonts.bodyBold, fontSize: 14 },
+  adminMenuArrow: { color: colors.background, fontFamily: fonts.bodyBold, fontSize: 16 },
   version: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11, textAlign: 'center', marginTop: spacing.md },
 });

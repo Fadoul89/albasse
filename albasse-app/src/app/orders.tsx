@@ -1,56 +1,43 @@
 import React, { useEffect, useState } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { colors, fonts, radius, spacing } from '../theme';
 import { formatXAF } from '../lib/format';
 import { getMyOrders } from '../lib/orders';
 import { useAuthStore } from '../store/authStore';
 import { ScreenHeader } from '../components/ScreenHeader';
-import type { Order, OrderStatus } from '../types/order';
-
-const STATUS_LABELS: Record<OrderStatus, string> = {
-  pending: 'En attente',
-  paid: 'Payée',
-  processing: 'En préparation',
-  shipped: 'Expédiée',
-  delivered: 'Livrée',
-  cancelled: 'Annulée',
-};
-
-const STATUS_COLORS: Record<OrderStatus, string> = {
-  pending: colors.gold,
-  paid: colors.success,
-  processing: colors.gold,
-  shipped: colors.goldLight,
-  delivered: colors.success,
-  cancelled: colors.red,
-};
+import { STATUS_COLORS, STATUS_LABELS } from '../constants/orderStatus';
+import type { Order } from '../types/order';
 
 export default function OrdersScreen() {
   const profile = useAuthStore((s) => s.profile);
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
+  const load = () => {
     if (!profile) {
       setIsLoading(false);
       return;
     }
+    setIsLoading(true);
     getMyOrders(profile.id).then((data) => {
       setOrders(data);
       setIsLoading(false);
     });
-  }, [profile?.id]);
+  };
+
+  useEffect(load, [profile?.id]);
 
   return (
     <View style={styles.screen}>
       <ScreenHeader title="Mes commandes" showBack />
-      {isLoading ? (
+      {isLoading && orders.length === 0 ? (
         <Text style={styles.loading}>Chargement…</Text>
       ) : (
         <FlatList
           data={orders}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
+          refreshControl={<RefreshControl refreshing={isLoading} onRefresh={load} tintColor={colors.gold} />}
           ListEmptyComponent={<Text style={styles.empty}>Vous n'avez pas encore de commande.</Text>}
           renderItem={({ item }) => (
             <View style={styles.card}>

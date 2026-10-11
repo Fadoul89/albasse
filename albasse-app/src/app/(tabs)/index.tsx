@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, FlatList, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Animated, Easing, FlatList, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
 import { colors, fonts, radius, spacing } from '../../theme';
 import { useCategories, useFlashSaleProducts, useProducts } from '../../hooks/useCatalog';
 import { CategoryTile } from '../../components/CategoryTile';
@@ -8,6 +9,12 @@ import { ProductCard } from '../../components/ProductCard';
 import { CountdownTimer } from '../../components/CountdownTimer';
 import { StoreFooter } from '../../components/StoreFooter';
 import { ChadFlag } from '../../components/ChadFlag';
+
+// Le catalogue complet peut depasser 300 articles : les afficher tous d'un
+// coup sur l'accueil (hors FlatList virtualisee) fait ramer la navigation
+// sur telephone. On affiche un apercu et on renvoie vers Recherche (qui,
+// elle, est virtualisee) pour voir tout le reste.
+const HOME_COLLECTION_PREVIEW = 16;
 
 const CHAD_BLUE = '#0033A0';
 const CHAD_YELLOW = '#FECB00';
@@ -160,11 +167,17 @@ export default function HomeScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Toute la collection</Text>
             <View style={styles.grid}>
-              {products.map((p) => (
+              {products.slice(0, HOME_COLLECTION_PREVIEW).map((p) => (
                 <ProductCard key={p.id} product={p} columns={gridColumns} />
               ))}
             </View>
             {isLoading && <Text style={styles.loading}>Chargement…</Text>}
+            {products.length > HOME_COLLECTION_PREVIEW && (
+              <Pressable style={styles.seeAllBtn} onPress={() => router.push('/(tabs)/search')}>
+                <Text style={styles.seeAllText}>Voir toute la collection ({products.length})</Text>
+                <Text style={styles.seeAllArrow}>→</Text>
+              </Pressable>
+            )}
           </View>
 
           <StoreFooter />
@@ -239,4 +252,17 @@ const styles = StyleSheet.create({
   sectionTitle: { fontFamily: fonts.display, fontSize: 20, color: colors.cream, marginBottom: spacing.md },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   loading: { color: colors.creamFaint, fontFamily: fonts.body, textAlign: 'center', marginTop: 12 },
+  seeAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1.5,
+    borderColor: colors.gold,
+    borderRadius: radius.pill,
+    paddingVertical: 12,
+    marginTop: spacing.sm,
+  },
+  seeAllText: { color: colors.gold, fontFamily: fonts.bodyBold, fontSize: 13 },
+  seeAllArrow: { color: colors.gold, fontSize: 15, fontFamily: fonts.bodyBold },
 });
