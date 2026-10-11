@@ -36,6 +36,7 @@ import { AdminNotificationsScreen } from '../screens/admin/AdminNotificationsScr
 import { AdminPromotionsScreen } from '../screens/admin/AdminPromotionsScreen';
 import { SmartPromotionPopup } from '../components/SmartPromotionPopup';
 import { WheelPopup } from '../components/WheelPopup';
+import { AppDownloadPopup } from '../components/AppDownloadPopup';
 import { AdminStoreSettingsScreen } from '../screens/admin/AdminStoreSettingsScreen';
 import { ContactScreen } from '../screens/ContactScreen';
 import { CustomerNotificationsScreen } from '../screens/CustomerNotificationsScreen';
@@ -221,6 +222,7 @@ export function RootNavigator() {
         <WhatsAppFab />
         <SmartPromotionPopup />
         <WheelPopup />
+        <AppDownloadPopup />
       </View>
     </NavigationContainer>
   );

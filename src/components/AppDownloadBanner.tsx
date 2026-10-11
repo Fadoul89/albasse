@@ -2,11 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, Platform, Linking, Image } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, fonts, radius, spacing } from '../theme';
-
-// Lien de telechargement direct du .apk (build EAS interne — pas de compte
-// Google Play requis). A remplacer par le lien de la fiche Play Store une
-// fois l'app publiee.
-const APP_DOWNLOAD_URL = 'https://expo.dev/artifacts/eas/du3_bXq2s1bt-ZIs4HWcWCLpHyoiemhffmMmfp4S9K4.apk';
+import { APP_DOWNLOAD_URL } from '../constants/appDownload';
 
 const DISMISS_KEY = 'albasse_app_banner_dismissed';
 
