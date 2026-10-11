@@ -52,10 +52,14 @@ export default function RootLayout() {
         <Stack.Screen name="category/[slug]" />
         <Stack.Screen name="product/[slug]" />
         <Stack.Screen name="checkout" options={{ presentation: 'card' }} />
+        <Stack.Screen name="order-confirmation" options={{ gestureEnabled: false }} />
         <Stack.Screen name="login" options={{ presentation: 'modal' }} />
         <Stack.Screen name="register" options={{ presentation: 'modal' }} />
         <Stack.Screen name="orders" />
         <Stack.Screen name="admin-orders" />
+        <Stack.Screen name="admin-dashboard" />
+        <Stack.Screen name="admin-products" />
+        <Stack.Screen name="admin-product-form" />
       </Stack>
     </View>
   );

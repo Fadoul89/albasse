@@ -52,9 +52,9 @@ export default function ProfileScreen() {
         </Pressable>
       )}
       {profile?.is_admin && (
-        <Pressable style={styles.adminMenuItem} onPress={() => router.push('/admin-orders')}>
+        <Pressable style={styles.adminMenuItem} onPress={() => router.push('/admin-dashboard')}>
           <Text style={styles.menuIcon}>⚙️</Text>
-          <Text style={styles.adminMenuLabel}>Espace Admin — Commandes</Text>
+          <Text style={styles.adminMenuLabel}>Espace Admin</Text>
           <Text style={styles.adminMenuArrow}>→</Text>
         </Pressable>
       )}
