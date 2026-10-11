@@ -3,6 +3,7 @@ import { View, Text, Pressable, StyleSheet, Platform, Linking, Image } from 'rea
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, fonts, radius, spacing } from '../theme';
 import { APP_DOWNLOAD_URL } from '../constants/appDownload';
+import { trackAppDownloadClick } from '../lib/appDownloadTracking';
 
 const DISMISS_KEY = 'albasse_app_banner_dismissed';
 
@@ -29,6 +30,7 @@ export function AppDownloadBanner() {
   };
 
   const download = () => {
+    trackAppDownloadClick('banner');
     Linking.openURL(APP_DOWNLOAD_URL);
   };
 
