@@ -6,7 +6,7 @@ import { colors, fonts, radius, spacing } from '../theme';
 // Lien de telechargement direct du .apk (build EAS interne — pas de compte
 // Google Play requis). A remplacer par le lien de la fiche Play Store une
 // fois l'app publiee.
-const APP_DOWNLOAD_URL = 'https://expo.dev/artifacts/eas/G-fY_APdKmG_Q0KGvXZKvLx7bP39yRMoq9GmLgxj_gY.apk';
+const APP_DOWNLOAD_URL = 'https://expo.dev/artifacts/eas/P9PrTTsFzcUhVW8j6V412uHt9acQCWNFDtqxcOK9KBo.apk';
 
 const DISMISS_KEY = 'albasse_app_banner_dismissed';
 
@@ -38,7 +38,7 @@ export function AppDownloadBanner() {
 
   return (
     <View style={styles.banner}>
-      <Image source={require('../../assets/icon.png')} style={styles.icon} />
+      <Image source={require('../../assets/logo.jpg')} style={styles.icon} />
       <View style={{ flex: 1 }}>
         <Text style={styles.title}>Albasse Shopping, l'app</Text>
         <Text style={styles.subtitle}>Commandez plus vite depuis votre téléphone</Text>
