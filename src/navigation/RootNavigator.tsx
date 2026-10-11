@@ -8,6 +8,7 @@ import type { RootStackParamList } from './types';
 import { colors } from '../theme';
 import { SocialProofTicker } from '../components/SocialProofTicker';
 import { WhatsAppFab } from '../components/WhatsAppFab';
+import { AppDownloadBanner } from '../components/AppDownloadBanner';
 import { trackPageView } from '../lib/analytics';
 import { useAuthStore } from '../store/authStore';
 import { TabNavigator } from './TabNavigator';
@@ -166,6 +167,7 @@ export function RootNavigator() {
     >
       <View style={styles.root}>
         <SafeAreaView edges={['top']} style={styles.tickerSafeArea}>
+          <AppDownloadBanner />
           <SocialProofTicker />
         </SafeAreaView>
         <View style={styles.stackWrap}>
