@@ -8,6 +8,7 @@ import type { RootStackParamList } from './types';
 import { colors } from '../theme';
 import { SocialProofTicker } from '../components/SocialProofTicker';
 import { WhatsAppFab } from '../components/WhatsAppFab';
+import { AppDownloadBanner } from '../components/AppDownloadBanner';
 import { trackPageView } from '../lib/analytics';
 import { useAuthStore } from '../store/authStore';
 import { TabNavigator } from './TabNavigator';
@@ -35,6 +36,7 @@ import { AdminNotificationsScreen } from '../screens/admin/AdminNotificationsScr
 import { AdminPromotionsScreen } from '../screens/admin/AdminPromotionsScreen';
 import { SmartPromotionPopup } from '../components/SmartPromotionPopup';
 import { WheelPopup } from '../components/WheelPopup';
+import { AppDownloadPopup } from '../components/AppDownloadPopup';
 import { AdminStoreSettingsScreen } from '../screens/admin/AdminStoreSettingsScreen';
 import { ContactScreen } from '../screens/ContactScreen';
 import { CustomerNotificationsScreen } from '../screens/CustomerNotificationsScreen';
@@ -100,7 +102,7 @@ const linking: LinkingOptions<RootStackParamList> = {
       NotificationSettings: 'compte/notifications',
       Favorites: 'mes-favoris',
       AdminCities: 'admin/livraison-villes',
-      PrivacyPolicy: 'politique-de-confidentialite',
+      PrivacyPolicy: 'confidentialite',
       ReturnPolicy: 'conditions-de-retour',
       Messages: 'mes-messages',
       AdminMessages: 'admin/messages',
@@ -166,6 +168,7 @@ export function RootNavigator() {
     >
       <View style={styles.root}>
         <SafeAreaView edges={['top']} style={styles.tickerSafeArea}>
+          <AppDownloadBanner />
           <SocialProofTicker />
         </SafeAreaView>
         <View style={styles.stackWrap}>
@@ -219,6 +222,7 @@ export function RootNavigator() {
         <WhatsAppFab />
         <SmartPromotionPopup />
         <WheelPopup />
+        <AppDownloadPopup />
       </View>
     </NavigationContainer>
   );

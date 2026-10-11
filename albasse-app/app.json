@@ -1,0 +1,49 @@
+{
+  "expo": {
+    "name": "Albasse Shopping",
+    "slug": "albasse-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "albasseapp",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0c0c0f",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.albasseshopping.app"
+    },
+    "android": {
+      "package": "com.albasseshopping.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#0c0c0f",
+        "foregroundImage": "./assets/images/android-icon-foreground.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "single",
+      "favicon": "./assets/images/icon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0c0c0f",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 160
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "426d26a1-af07-4cb8-beb8-66441b68deb5"
+      }
+    },
+    "owner": "fadoul89"
+  }
+}

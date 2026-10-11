@@ -208,6 +208,10 @@ export function AccountScreen() {
         <Text style={styles.menuIcon}>↩️</Text>
         <Text style={styles.menuLabel}>Conditions de retour</Text>
       </Pressable>
+      <Pressable style={styles.menuItem} onPress={() => navigation.navigate('PrivacyPolicy')}>
+        <Text style={styles.menuIcon}>🔒</Text>
+        <Text style={styles.menuLabel}>Politique de confidentialité</Text>
+      </Pressable>
       <Pressable style={styles.travelMenuItem} onPress={() => navigation.navigate('Travel')}>
         <Text style={styles.menuIcon}>✈️</Text>
         <Text style={styles.travelMenuLabel}>Demander un billet d'avion</Text>
