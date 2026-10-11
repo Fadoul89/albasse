@@ -6,7 +6,7 @@ import { colors, fonts, radius, spacing } from '../theme';
 // Lien de telechargement direct du .apk (build EAS interne — pas de compte
 // Google Play requis). A remplacer par le lien de la fiche Play Store une
 // fois l'app publiee.
-const APP_DOWNLOAD_URL = 'https://expo.dev/artifacts/eas/P9PrTTsFzcUhVW8j6V412uHt9acQCWNFDtqxcOK9KBo.apk';
+const APP_DOWNLOAD_URL = 'https://expo.dev/artifacts/eas/vcKjLMZ2RsMrNgbRIWdyMohKUANpdfxdGUJssmTn-DA.apk';
 
 const DISMISS_KEY = 'albasse_app_banner_dismissed';
 
