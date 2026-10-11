@@ -3,10 +3,10 @@ import { View, Text, Pressable, StyleSheet, Platform, Linking, Image } from 'rea
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, fonts, radius, spacing } from '../theme';
 
-// Lien d'installation de l'app Android (build EAS interne — pas de compte
+// Lien de telechargement direct du .apk (build EAS interne — pas de compte
 // Google Play requis). A remplacer par le lien de la fiche Play Store une
 // fois l'app publiee.
-const APP_DOWNLOAD_URL = 'https://expo.dev/accounts/fadoul89/projects/albasse-app/builds/b01f7b23-4ba9-41ea-ad10-d99cdd47887f';
+const APP_DOWNLOAD_URL = 'https://expo.dev/artifacts/eas/G-fY_APdKmG_Q0KGvXZKvLx7bP39yRMoq9GmLgxj_gY.apk';
 
 const DISMISS_KEY = 'albasse_app_banner_dismissed';
 
