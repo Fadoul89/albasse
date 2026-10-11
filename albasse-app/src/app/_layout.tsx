@@ -13,6 +13,7 @@ import {
 } from '@expo-google-fonts/manrope';
 import { colors } from '../theme';
 import { useAuthStore } from '../store/authStore';
+import { trackAppInstall } from '../lib/installTracking';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -32,6 +33,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     initAuth();
+    trackAppInstall();
   }, []);
 
   const ready = fontsLoaded && !authLoading;

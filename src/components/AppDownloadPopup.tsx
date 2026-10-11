@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, fonts, radius, spacing } from '../theme';
 import { APP_DOWNLOAD_URL } from '../constants/appDownload';
+import { trackAppDownloadClick } from '../lib/appDownloadTracking';
 
 const SHOW_DELAY_MS = 2500;
 
@@ -41,6 +42,7 @@ export function AppDownloadPopup() {
   };
 
   const install = async () => {
+    trackAppDownloadClick('popup');
     Linking.openURL(APP_DOWNLOAD_URL);
     await dismiss();
   };

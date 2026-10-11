@@ -16,6 +16,10 @@ export interface DashboardStats {
   mostViewedProducts: TopProduct[];
   bestSellingProducts: TopProduct[];
   lowStockProducts: { id: string; name: string; stock: number }[];
+  appDownloadClicksTotal: number;
+  appDownloadClicksToday: number;
+  appInstallsTotal: number;
+  appInstallsToday: number;
 }
 
 const LOW_STOCK_THRESHOLD = 5;
@@ -34,11 +38,24 @@ export function useDashboardStats() {
     setIsLoading(true);
     const todayIso = startOfToday();
 
-    const [ordersRes, profilesRes, viewsRes, productsRes] = await Promise.all([
+    const [
+      ordersRes,
+      profilesRes,
+      viewsRes,
+      productsRes,
+      downloadsTotalRes,
+      downloadsTodayRes,
+      installsTotalRes,
+      installsTodayRes,
+    ] = await Promise.all([
       supabase.from('orders').select('id,total,status,created_at,items'),
       supabase.from('profiles').select('id,created_at').eq('is_admin', false),
       supabase.from('product_views').select('product_id'),
       supabase.from('products').select('id,name,stock').eq('is_active', true),
+      supabase.from('app_download_clicks').select('id', { count: 'exact', head: true }),
+      supabase.from('app_download_clicks').select('id', { count: 'exact', head: true }).gte('created_at', todayIso),
+      supabase.from('app_installs').select('id', { count: 'exact', head: true }),
+      supabase.from('app_installs').select('id', { count: 'exact', head: true }).gte('created_at', todayIso),
     ]);
 
     const orders = (ordersRes.data as Order[]) ?? [];
@@ -78,7 +95,18 @@ export function useDashboardStats() {
       .sort((a, b) => a.stock - b.stock)
       .slice(0, 10);
 
-    setStats({ revenueToday, ordersToday: ordersToday.length, newCustomersToday, mostViewedProducts, bestSellingProducts, lowStockProducts });
+    setStats({
+      revenueToday,
+      ordersToday: ordersToday.length,
+      newCustomersToday,
+      mostViewedProducts,
+      bestSellingProducts,
+      lowStockProducts,
+      appDownloadClicksTotal: downloadsTotalRes.count ?? 0,
+      appDownloadClicksToday: downloadsTodayRes.count ?? 0,
+      appInstallsTotal: installsTotalRes.count ?? 0,
+      appInstallsToday: installsTodayRes.count ?? 0,
+    });
     setIsLoading(false);
   };
 

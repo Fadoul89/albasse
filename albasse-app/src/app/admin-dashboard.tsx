@@ -35,7 +35,11 @@ export default function AdminDashboardScreen() {
               <StatCard icon="💰" label="CA aujourd'hui" value={formatXAF(stats.revenueToday)} />
               <StatCard icon="🛒" label="Commandes aujourd'hui" value={String(stats.ordersToday)} />
               <StatCard icon="👥" label="Nouveaux clients" value={String(stats.newCustomersToday)} />
+              <StatCard icon="📱" label="Installations app (total)" value={String(stats.appInstallsTotal)} />
             </View>
+            <Text style={styles.downloadsToday}>
+              dont {stats.appInstallsToday} aujourd'hui · {stats.appDownloadClicksTotal} clic(s) de téléchargement
+            </Text>
 
             <Pressable style={styles.linkCard} onPress={() => router.push('/admin-orders')}>
               <Text style={styles.linkCardText}>📦 Voir toutes les commandes →</Text>
@@ -123,6 +127,7 @@ const styles = StyleSheet.create({
   statIcon: { fontSize: 20, marginBottom: 6 },
   statValue: { color: colors.goldLight, fontFamily: fonts.displayBold, fontSize: 18 },
   statLabel: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11, textAlign: 'center', marginTop: 4 },
+  downloadsToday: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11, marginTop: -4, marginBottom: spacing.md },
   linkCard: { backgroundColor: colors.gold, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.sm },
   linkCardText: { color: colors.background, fontFamily: fonts.bodyBold, fontSize: 13, textAlign: 'center' },
   section: { marginBottom: spacing.lg, marginTop: spacing.sm },
