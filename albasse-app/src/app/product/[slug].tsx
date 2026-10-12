@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Dimensions, Linking, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { Alert, Dimensions, Linking, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { colors, fonts, radius, spacing } from '../../theme';
 import { formatXAF } from '../../lib/format';
 import { useProductBySlug, useProducts } from '../../hooks/useCatalog';
 import { useCartStore } from '../../store/cartStore';
+import { useAuthStore } from '../../store/authStore';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { GoldButton } from '../../components/GoldButton';
 import { StarRating } from '../../components/StarRating';
@@ -19,6 +20,7 @@ export default function ProductScreen() {
   const { product, isLoading } = useProductBySlug(slug);
   const { products: allProducts } = useProducts();
   const addItem = useCartStore((s) => s.addItem);
+  const profile = useAuthStore((s) => s.profile);
 
   const [activeImage, setActiveImage] = useState(0);
   const [color, setColor] = useState<string | null>(null);
@@ -63,6 +65,11 @@ export default function ProductScreen() {
 
   const handleBuyNow = () => {
     addItem(product, { color, size, quantity });
+    if (!profile) {
+      Alert.alert('Compte requis', 'Créez un compte ou connectez-vous pour passer une commande.');
+      router.push('/login');
+      return;
+    }
     router.push('/checkout');
   };
 

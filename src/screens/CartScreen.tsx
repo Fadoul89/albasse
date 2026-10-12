@@ -6,6 +6,8 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing } from '../theme';
 import { useCartStore } from '../store/cartStore';
+import { useAuthStore } from '../store/authStore';
+import { useToastStore } from '../store/toastStore';
 import { GoldButton } from '../components/GoldButton';
 import type { CartItem } from '../types';
 
@@ -17,6 +19,20 @@ export function CartScreen() {
   const updateQuantity = useCartStore((s) => s.updateQuantity);
   const removeItem = useCartStore((s) => s.removeItem);
   const total = useCartStore((s) => s.total());
+  const profile = useAuthStore((s) => s.profile);
+  const showToast = useToastStore((s) => s.show);
+
+  const handleOrder = () => {
+    if (!profile) {
+      showToast('Créez un compte ou connectez-vous pour passer une commande.', {
+        title: 'Compte requis',
+        type: 'info',
+      });
+      navigation.navigate('Login');
+      return;
+    }
+    navigation.navigate('Checkout');
+  };
 
   if (items.length === 0) {
     return (
@@ -46,7 +62,7 @@ export function CartScreen() {
           <Text style={styles.totalLabel}>Total</Text>
           <Text style={styles.totalValue}>{formatXAF(total)}</Text>
         </View>
-        <GoldButton label="Passer la commande" onPress={() => navigation.navigate('Checkout')} />
+        <GoldButton label="Passer la commande" onPress={handleOrder} />
       </View>
     </View>
   );

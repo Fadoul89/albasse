@@ -118,6 +118,14 @@ export function ProductScreen({ route }: Props) {
   const handleBuyNow = () => {
     addItem(product, quantity, color, size);
     trackAddToCart(product.id);
+    if (!profile) {
+      showToast('Créez un compte ou connectez-vous pour passer une commande.', {
+        title: 'Compte requis',
+        type: 'info',
+      });
+      navigation.navigate('Login');
+      return;
+    }
     navigation.navigate('Checkout');
   };
 

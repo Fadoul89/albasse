@@ -33,6 +33,12 @@ export function CheckoutScreen() {
   const profile = useAuthStore((s) => s.profile);
 
   useEffect(() => {
+    if (!profile) {
+      navigation.replace('Login');
+    }
+  }, [profile]);
+
+  useEffect(() => {
     trackTikTokEvent('InitiateCheckout', {
       value: total,
       currency: 'XAF',
@@ -62,6 +68,10 @@ export function CheckoutScreen() {
       : null;
 
   const handleSubmit = async () => {
+    if (!profile) {
+      navigation.replace('Login');
+      return;
+    }
     if (!name || !phone || !address || !city) {
       showToast('Merci de remplir toutes les informations de livraison.', { title: 'Champs manquants', type: 'error' });
       return;
@@ -77,7 +87,7 @@ export function CheckoutScreen() {
     setSubmitting(true);
     try {
       const { order, error } = await createOrder({
-        userId: profile?.id ?? null,
+        userId: profile.id,
         items,
         total: grandTotal,
         paymentMethod: method,
@@ -123,6 +133,8 @@ export function CheckoutScreen() {
       setSubmitting(false);
     }
   };
+
+  if (!profile) return null;
 
   return (
     <View style={styles.screen}>
@@ -208,15 +220,6 @@ export function CheckoutScreen() {
           </View>
         </View>
 
-        {!profile && (
-          <Pressable onPress={() => navigation.navigate('Login')}>
-            <Text style={styles.accountHint}>
-              Vous pouvez commander sans compte. Pour suivre vos commandes et gagner des points de fidélité,{' '}
-              <Text style={styles.accountHintLink}>connectez-vous</Text>.
-            </Text>
-          </Pressable>
-        )}
-
         <GoldButton
           label="Confirmer la commande"
           onPress={handleSubmit}
@@ -291,13 +294,4 @@ const styles = StyleSheet.create({
   summaryValue: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 13 },
   totalLabel: { color: colors.cream, fontFamily: fonts.bodySemiBold, fontSize: 15 },
   totalValue: { color: colors.goldLight, fontFamily: fonts.displayBold, fontSize: 18 },
-  accountHint: {
-    color: colors.creamFaint,
-    fontFamily: fonts.body,
-    fontSize: 11.5,
-    lineHeight: 16,
-    marginTop: spacing.md,
-    textAlign: 'center',
-  },
-  accountHintLink: { color: colors.gold, fontFamily: fonts.bodyBold },
 });
