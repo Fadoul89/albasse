@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { colors, fonts, radius, spacing } from '../theme';
@@ -35,6 +35,12 @@ export default function CheckoutScreen() {
   const profile = useAuthStore((s) => s.profile);
   const { settings: paymentSettings } = usePaymentSettings();
 
+  useEffect(() => {
+    if (!profile) {
+      router.replace('/login');
+    }
+  }, [profile]);
+
   const [name, setName] = useState(profile?.full_name ?? '');
   const [phone, setPhone] = useState(profile?.phone ?? '');
   const [address, setAddress] = useState('');
@@ -54,6 +60,10 @@ export default function CheckoutScreen() {
       : null;
 
   const handleSubmit = async () => {
+    if (!profile) {
+      router.replace('/login');
+      return;
+    }
     if (!name.trim() || !phone.trim() || !address.trim() || !city) {
       Alert.alert('Champs manquants', 'Merci de remplir toutes les informations de livraison, y compris la ville.');
       return;
@@ -65,7 +75,7 @@ export default function CheckoutScreen() {
 
     setSubmitting(true);
     const { order, error } = await createOrder({
-      userId: profile?.id ?? null,
+      userId: profile.id,
       items,
       total: grandTotal,
       paymentMethod: method,
@@ -100,6 +110,8 @@ export default function CheckoutScreen() {
       params: { orderId: order.id, total: String(grandTotal), instructions: instructions ?? '' },
     });
   };
+
+  if (!profile) return null;
 
   return (
     <View style={styles.screen}>

@@ -1,10 +1,11 @@
 import React from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { colors, fonts, radius, spacing } from '../../theme';
 import { formatXAF } from '../../lib/format';
 import { useCartStore, useCartTotalPrice, type CartItem } from '../../store/cartStore';
+import { useAuthStore } from '../../store/authStore';
 import { GoldButton } from '../../components/GoldButton';
 
 export default function CartScreen() {
@@ -12,6 +13,16 @@ export default function CartScreen() {
   const updateQuantity = useCartStore((s) => s.updateQuantity);
   const removeItem = useCartStore((s) => s.removeItem);
   const total = useCartTotalPrice();
+  const profile = useAuthStore((s) => s.profile);
+
+  const handleOrder = () => {
+    if (!profile) {
+      Alert.alert('Compte requis', 'Créez un compte ou connectez-vous pour passer une commande.');
+      router.push('/login');
+      return;
+    }
+    router.push('/checkout');
+  };
 
   if (items.length === 0) {
     return (
@@ -39,7 +50,7 @@ export default function CartScreen() {
           <Text style={styles.totalLabel}>Total</Text>
           <Text style={styles.totalValue}>{formatXAF(total)}</Text>
         </View>
-        <GoldButton label="Passer la commande" onPress={() => router.push('/checkout')} />
+        <GoldButton label="Passer la commande" onPress={handleOrder} />
       </View>
     </View>
   );
