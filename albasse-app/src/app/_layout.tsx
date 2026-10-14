@@ -58,10 +58,12 @@ export default function RootLayout() {
         <Stack.Screen name="login" options={{ presentation: 'modal' }} />
         <Stack.Screen name="register" options={{ presentation: 'modal' }} />
         <Stack.Screen name="orders" />
+        <Stack.Screen name="messages" />
         <Stack.Screen name="admin-orders" />
         <Stack.Screen name="admin-dashboard" />
         <Stack.Screen name="admin-products" />
         <Stack.Screen name="admin-product-form" />
+        <Stack.Screen name="admin-messages" />
       </Stack>
     </View>
   );

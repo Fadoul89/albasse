@@ -5,6 +5,7 @@ import { colors, fonts, radius, spacing } from '../../theme';
 import { GoldButton } from '../../components/GoldButton';
 import { STORE_SETTINGS } from '../../data/storeSettings';
 import { useAuthStore } from '../../store/authStore';
+import { useCustomerMessages } from '../../hooks/useCustomerMessages';
 
 const SITE_URL = 'https://www.albasseshopping.com';
 
@@ -12,6 +13,7 @@ export default function ProfileScreen() {
   const profile = useAuthStore((s) => s.profile);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const signOut = useAuthStore((s) => s.signOut);
+  const { unreadCount } = useCustomerMessages();
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={{ paddingBottom: 40 }}>
@@ -49,6 +51,17 @@ export default function ProfileScreen() {
         <Pressable style={styles.menuItem} onPress={() => router.push('/orders')}>
           <Text style={styles.menuIcon}>📦</Text>
           <Text style={styles.menuLabel}>Mes commandes</Text>
+        </Pressable>
+      )}
+      {isAuthenticated && (
+        <Pressable style={styles.menuItem} onPress={() => router.push('/messages')}>
+          <Text style={styles.menuIcon}>✉️</Text>
+          <Text style={styles.menuLabel}>Messages</Text>
+          {unreadCount > 0 && (
+            <View style={styles.unreadBadge}>
+              <Text style={styles.unreadBadgeText}>{unreadCount}</Text>
+            </View>
+          )}
         </Pressable>
       )}
       {profile?.is_admin && (
@@ -151,6 +164,16 @@ const styles = StyleSheet.create({
   },
   menuIcon: { fontSize: 18, marginRight: 12 },
   menuLabel: { flex: 1, color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 14 },
+  unreadBadge: {
+    backgroundColor: colors.gold,
+    borderRadius: radius.pill,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unreadBadgeText: { color: colors.background, fontFamily: fonts.bodyBold, fontSize: 11 },
   adminMenuItem: {
     flexDirection: 'row',
     alignItems: 'center',

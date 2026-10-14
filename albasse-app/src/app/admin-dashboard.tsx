@@ -47,6 +47,9 @@ export default function AdminDashboardScreen() {
             <Pressable style={styles.linkCard} onPress={() => router.push('/admin-products')}>
               <Text style={styles.linkCardText}>🛠️ Gérer les produits →</Text>
             </Pressable>
+            <Pressable style={styles.linkCard} onPress={() => router.push('/admin-messages')}>
+              <Text style={styles.linkCardText}>✉️ Message à tous les clients →</Text>
+            </Pressable>
 
             <Section title="🔥 Produits les plus consultés">
               {stats.mostViewedProducts.length === 0 ? (
