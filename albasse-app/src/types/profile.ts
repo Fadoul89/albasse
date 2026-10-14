@@ -3,6 +3,7 @@ export interface Profile {
   email: string;
   full_name: string | null;
   phone: string | null;
+  whatsapp_number: string | null;
   is_admin: boolean;
   banned: boolean;
   loyalty_points: number;
