@@ -12,14 +12,15 @@ export default function RegisterScreen() {
   const signUp = useAuthStore((s) => s.signUp);
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
+  const [whatsappNumber, setWhatsappNumber] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [acceptsTerms, setAcceptsTerms] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
-    if (!fullName || !phone || !email || !password) {
-      Alert.alert('Champs manquants', 'Nom, téléphone, email et mot de passe sont obligatoires.');
+    if (!fullName || !phone || !whatsappNumber || !email || !password) {
+      Alert.alert('Champs manquants', 'Nom, téléphone, numéro WhatsApp, email et mot de passe sont obligatoires.');
       return;
     }
     if (!EMAIL_REGEX.test(email.trim())) {
@@ -36,7 +37,7 @@ export default function RegisterScreen() {
     }
 
     setLoading(true);
-    const { error, needsEmailConfirmation } = await signUp(email.trim(), password, { fullName, phone });
+    const { error, needsEmailConfirmation } = await signUp(email.trim(), password, { fullName, phone, whatsappNumber });
     setLoading(false);
 
     if (error) {
@@ -73,6 +74,19 @@ export default function RegisterScreen() {
           keyboardType="phone-pad"
           style={styles.input}
         />
+        <TextInput
+          value={whatsappNumber}
+          onChangeText={setWhatsappNumber}
+          placeholder="Numéro WhatsApp *"
+          placeholderTextColor={colors.creamFaint}
+          keyboardType="phone-pad"
+          style={styles.input}
+        />
+        {!whatsappNumber && phone && (
+          <Pressable onPress={() => setWhatsappNumber(phone)} style={{ marginBottom: spacing.sm, marginTop: -4 }}>
+            <Text style={styles.link}>Même numéro que mon téléphone</Text>
+          </Pressable>
+        )}
         <TextInput
           value={email}
           onChangeText={setEmail}
@@ -134,4 +148,5 @@ const styles = StyleSheet.create({
   checkboxChecked: { backgroundColor: colors.gold },
   checkboxMark: { color: colors.background, fontFamily: fonts.bodyBold, fontSize: 13 },
   checkboxLabel: { flex: 1, color: colors.cream, fontFamily: fonts.body, fontSize: 12, lineHeight: 17 },
+  link: { color: colors.gold, fontFamily: fonts.bodyMedium, fontSize: 12 },
 });

@@ -9,6 +9,7 @@ import type { Profile } from '../types';
 export interface SignUpDetails {
   fullName: string;
   phone: string;
+  whatsappNumber: string;
   profession: string;
   region?: string;
   country?: string;
@@ -246,6 +247,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
           .update({
             full_name: details.fullName,
             phone: details.phone,
+            whatsapp_number: details.whatsappNumber,
             profession: details.profession,
             region: details.region || null,
             country: details.country || null,

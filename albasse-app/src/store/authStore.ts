@@ -5,6 +5,7 @@ import type { Profile } from '../types/profile';
 export interface SignUpDetails {
   fullName: string;
   phone: string;
+  whatsappNumber: string;
 }
 
 interface AuthState {
@@ -76,7 +77,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
-          .select('id, email, full_name, phone, is_admin, banned, loyalty_points, telegram_chat_id, created_at')
+          .select('id, email, full_name, phone, whatsapp_number, is_admin, banned, loyalty_points, telegram_chat_id, created_at')
           .eq('id', userData.user.id)
           .single();
         if (profileError) throw profileError;
@@ -131,7 +132,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       if (data.user) {
         await supabase
           .from('profiles')
-          .update({ full_name: details.fullName, phone: details.phone })
+          .update({ full_name: details.fullName, phone: details.phone, whatsapp_number: details.whatsappNumber })
           .eq('id', data.user.id);
       }
 

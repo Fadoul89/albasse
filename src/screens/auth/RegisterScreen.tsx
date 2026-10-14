@@ -19,6 +19,7 @@ export function RegisterScreen() {
   const signUp = useAuthStore((s) => s.signUp);
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
+  const [whatsappNumber, setWhatsappNumber] = useState('');
   const [profession, setProfession] = useState('');
   const [region, setRegion] = useState('');
   const [country, setCountry] = useState('Tchad');
@@ -38,9 +39,9 @@ export function RegisterScreen() {
       );
       return;
     }
-    if (!fullName || !phone || !profession || !email || !password) {
+    if (!fullName || !phone || !whatsappNumber || !profession || !email || !password) {
       showToast(
-        'Nom, téléphone, profession, email et mot de passe sont obligatoires.',
+        'Nom, téléphone, numéro WhatsApp, profession, email et mot de passe sont obligatoires.',
         { title: 'Champs manquants', type: 'error' }
       );
       return;
@@ -52,6 +53,13 @@ export function RegisterScreen() {
     if (!PHONE_REGEX.test(phone.trim())) {
       showToast('Merci de saisir un numéro de téléphone valide (8 à 15 chiffres).', {
         title: 'Téléphone invalide',
+        type: 'error',
+      });
+      return;
+    }
+    if (!PHONE_REGEX.test(whatsappNumber.trim())) {
+      showToast('Merci de saisir un numéro WhatsApp valide (8 à 15 chiffres).', {
+        title: 'Numéro WhatsApp invalide',
         type: 'error',
       });
       return;
@@ -71,6 +79,7 @@ export function RegisterScreen() {
     const { error, needsEmailConfirmation } = await signUp(email, password, {
       fullName,
       phone,
+      whatsappNumber,
       profession,
       region,
       country,
@@ -111,6 +120,19 @@ export function RegisterScreen() {
           keyboardType="phone-pad"
           style={styles.input}
         />
+        <TextInput
+          value={whatsappNumber}
+          onChangeText={setWhatsappNumber}
+          placeholder="Numéro WhatsApp *"
+          placeholderTextColor={colors.creamFaint}
+          keyboardType="phone-pad"
+          style={styles.input}
+        />
+        {!whatsappNumber && phone && (
+          <Pressable onPress={() => setWhatsappNumber(phone)} style={{ marginBottom: spacing.sm, marginTop: -4 }}>
+            <Text style={styles.link}>Même numéro que mon téléphone</Text>
+          </Pressable>
+        )}
         <TextInput
           value={profession}
           onChangeText={setProfession}
@@ -241,6 +263,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   privacyLink: { color: colors.gold, fontFamily: fonts.bodyMedium, fontSize: 12, marginTop: spacing.sm },
+  link: { color: colors.gold, fontFamily: fonts.bodyMedium, fontSize: 12 },
   termsBox: {
     backgroundColor: colors.panel,
     borderRadius: radius.md,

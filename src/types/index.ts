@@ -52,6 +52,7 @@ export interface Profile {
   avatar_url: string | null;
   full_name: string | null;
   phone: string | null;
+  whatsapp_number: string | null;
   profession: string | null;
   region: string | null;
   country: string | null;
