@@ -76,7 +76,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
-          .select('id, email, full_name, phone, is_admin, banned, loyalty_points, created_at')
+          .select('id, email, full_name, phone, is_admin, banned, loyalty_points, telegram_chat_id, created_at')
           .eq('id', userData.user.id)
           .single();
         if (profileError) throw profileError;

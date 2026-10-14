@@ -45,7 +45,17 @@ export default function AdminMessagesScreen() {
       const { error } = await supabase.from('customer_messages').insert(rows);
       if (error) throw error;
 
-      Alert.alert('Envoyé ✓', `Message envoyé à ${rows.length} client(s).`);
+      let telegramNote = '';
+      try {
+        const { data: tgData } = await supabase.functions.invoke('telegram-broadcast', {
+          body: { title: title.trim(), message: message.trim() },
+        });
+        if (tgData?.sent) telegramNote = ` (+ ${tgData.sent} via Telegram)`;
+      } catch (tgError) {
+        console.error('Erreur diffusion Telegram:', tgError);
+      }
+
+      Alert.alert('Envoyé ✓', `Message envoyé à ${rows.length} client(s)${telegramNote}.`);
       setTitle('');
       setMessage('');
     } catch (e) {

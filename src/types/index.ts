@@ -72,6 +72,7 @@ export interface Profile {
   notify_promotions: boolean;
   notify_flash_sale: boolean;
   notifications_last_seen_at: string | null;
+  telegram_chat_id: number | null;
   created_at: string;
 }
 
