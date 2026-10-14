@@ -6,5 +6,6 @@ export interface Profile {
   is_admin: boolean;
   banned: boolean;
   loyalty_points: number;
+  telegram_chat_id: number | null;
   created_at: string;
 }

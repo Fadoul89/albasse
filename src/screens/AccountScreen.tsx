@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, Linking } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useNavigation } from '@react-navigation/native';
@@ -188,6 +188,17 @@ export function AccountScreen() {
         <Text style={styles.menuIcon}>✉️</Text>
         <Text style={styles.menuLabel}>Messages{unreadCount > 0 ? ` (${unreadCount})` : ''}</Text>
       </Pressable>
+      {profile && (
+        <Pressable
+          style={styles.menuItem}
+          onPress={() => Linking.openURL(`https://t.me/AlbasseShoppingBot?start=${profile.id}`)}
+        >
+          <Text style={styles.menuIcon}>✈️</Text>
+          <Text style={styles.menuLabel}>
+            {profile.telegram_chat_id ? 'Telegram connecté ✓' : 'Lier Telegram'}
+          </Text>
+        </Pressable>
+      )}
       <Pressable style={styles.menuItem} onPress={() => navigation.navigate('Favorites')}>
         <Text style={styles.menuIcon}>❤️</Text>
         <Text style={styles.menuLabel}>Mes favoris</Text>

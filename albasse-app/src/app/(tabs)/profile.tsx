@@ -64,6 +64,17 @@ export default function ProfileScreen() {
           )}
         </Pressable>
       )}
+      {isAuthenticated && profile && (
+        <Pressable
+          style={styles.menuItem}
+          onPress={() => Linking.openURL(`https://t.me/AlbasseShoppingBot?start=${profile.id}`)}
+        >
+          <Text style={styles.menuIcon}>✈️</Text>
+          <Text style={styles.menuLabel}>
+            {profile.telegram_chat_id ? 'Telegram connecté ✓' : 'Lier Telegram'}
+          </Text>
+        </Pressable>
+      )}
       {profile?.is_admin && (
         <Pressable style={styles.adminMenuItem} onPress={() => router.push('/admin-dashboard')}>
           <Text style={styles.menuIcon}>⚙️</Text>
