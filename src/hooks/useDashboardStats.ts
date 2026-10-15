@@ -27,6 +27,10 @@ export interface DashboardStats {
   bestSellingProducts: TopProduct[];
   lowStockProducts: Product[];
   sourcePerformance: SourcePerformance[];
+  appDownloadClicksTotal: number;
+  appDownloadClicksToday: number;
+  appInstallsTotal: number;
+  appInstallsToday: number;
 }
 
 const LOW_STOCK_THRESHOLD = 5;
@@ -49,13 +53,28 @@ export function useDashboardStats() {
     setIsLoading(true);
     const todayIso = startOfToday();
 
-    const [ordersRes, profilesRes, sessionsRes, viewsRes, cartRes, productsRes] = await Promise.all([
+    const [
+      ordersRes,
+      profilesRes,
+      sessionsRes,
+      viewsRes,
+      cartRes,
+      productsRes,
+      downloadsTotalRes,
+      downloadsTodayRes,
+      installsTotalRes,
+      installsTodayRes,
+    ] = await Promise.all([
       supabase.from('orders').select('id,total,status,created_at,session_id,referrer_source,items'),
       supabase.from('profiles').select('id,created_at').eq('is_admin', false),
       supabase.from('visitor_sessions').select('id,started_at,referrer_source,visitor_id'),
       supabase.from('product_views').select('product_id,session_id'),
       supabase.from('cart_events').select('session_id'),
       supabase.from('products').select('*'),
+      supabase.from('app_download_clicks').select('id', { count: 'exact', head: true }),
+      supabase.from('app_download_clicks').select('id', { count: 'exact', head: true }).gte('created_at', todayIso),
+      supabase.from('app_installs').select('id', { count: 'exact', head: true }),
+      supabase.from('app_installs').select('id', { count: 'exact', head: true }).gte('created_at', todayIso),
     ]);
 
     const orders = (ordersRes.data as Order[]) ?? [];
@@ -146,6 +165,10 @@ export function useDashboardStats() {
       bestSellingProducts,
       lowStockProducts,
       sourcePerformance,
+      appDownloadClicksTotal: downloadsTotalRes.count ?? 0,
+      appDownloadClicksToday: downloadsTodayRes.count ?? 0,
+      appInstallsTotal: installsTotalRes.count ?? 0,
+      appInstallsToday: installsTodayRes.count ?? 0,
     });
     setIsLoading(false);
   };

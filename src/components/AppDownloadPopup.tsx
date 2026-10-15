@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, fonts, radius, spacing } from '../theme';
 import { APP_DOWNLOAD_URL } from '../constants/appDownload';
 import { trackAppDownloadClick } from '../lib/appDownloadTracking';
+import { isRunningInsideApp } from '../lib/runningInApp';
 
 const SHOW_DELAY_MS = 2500;
 
@@ -17,6 +18,7 @@ function seenKey() {
 
 function isAndroidWeb() {
   if (Platform.OS !== 'web' || typeof navigator === 'undefined') return false;
+  if (isRunningInsideApp()) return false;
   return /Android/i.test(navigator.userAgent);
 }
 

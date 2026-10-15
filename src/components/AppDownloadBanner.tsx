@@ -4,11 +4,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, fonts, radius, spacing } from '../theme';
 import { APP_DOWNLOAD_URL } from '../constants/appDownload';
 import { trackAppDownloadClick } from '../lib/appDownloadTracking';
+import { isRunningInsideApp } from '../lib/runningInApp';
 
 const DISMISS_KEY = 'albasse_app_banner_dismissed';
 
 function isAndroidWeb() {
   if (Platform.OS !== 'web' || typeof navigator === 'undefined') return false;
+  if (isRunningInsideApp()) return false;
   return /Android/i.test(navigator.userAgent);
 }
 

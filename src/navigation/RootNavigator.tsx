@@ -10,6 +10,7 @@ import { SocialProofTicker } from '../components/SocialProofTicker';
 import { WhatsAppFab } from '../components/WhatsAppFab';
 import { AppDownloadBanner } from '../components/AppDownloadBanner';
 import { trackPageView } from '../lib/analytics';
+import { trackAppInstallIfNeeded } from '../lib/appInstallTracking';
 import { useAuthStore } from '../store/authStore';
 import { TabNavigator } from './TabNavigator';
 import { CategoryScreen } from '../screens/CategoryScreen';
@@ -143,6 +144,10 @@ const IGNORED_REDIRECT_PATHS = ['/', '/connexion', '/inscription'];
 export function RootNavigator() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const wasAuthenticated = useRef(isAuthenticated);
+
+  useEffect(() => {
+    trackAppInstallIfNeeded();
+  }, []);
 
   useEffect(() => {
     if (
