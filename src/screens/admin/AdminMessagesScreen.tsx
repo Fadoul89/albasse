@@ -68,17 +68,7 @@ export function AdminMessagesScreen() {
         console.error('Erreur diffusion Telegram:', tgError);
       }
 
-      let pushNote = '';
-      try {
-        const { data: pushData } = await supabase.functions.invoke('send-broadcast-push', {
-          body: { title: title.trim(), message: message.trim() },
-        });
-        if (pushData?.sent) pushNote = ` (+ ${pushData.sent} notification(s) app)`;
-      } catch (pushError) {
-        console.error('Erreur notification push:', pushError);
-      }
-
-      showToast(`Message envoyé à ${rows.length} client(s)${telegramNote}${pushNote}.`, { title: 'Envoyé ✓', type: 'success' });
+      showToast(`Message envoyé à ${rows.length} client(s)${telegramNote}.`, { title: 'Envoyé ✓', type: 'success' });
       setTitle('');
       setMessage('');
     } catch (e) {
