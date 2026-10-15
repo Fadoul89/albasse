@@ -123,7 +123,8 @@ export function useSourcePerformance() {
   const [period, setPeriod] = useState<Period>('7d');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
-  const [allSessions, setAllSessions] = useState<SessionRow[]>([]);
+  const [sessions, setSessions] = useState<SessionRow[]>([]);
+  const [firstSeen, setFirstSeen] = useState<Record<string, string>>({});
   const [views, setViews] = useState<{ product_id: string; session_id: string | null }[]>([]);
   const [cartAdds, setCartAdds] = useState<{ session_id: string | null }[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -135,16 +136,52 @@ export function useSourcePerformance() {
       return;
     }
     setIsLoading(true);
-    const [sessionsRes, viewsRes, cartRes, ordersRes] = await Promise.all([
+    const { start, end } = getPeriodRange(period, customStart, customEnd);
+    const startIso = start.toISOString();
+    const endIso = end.toISOString();
+
+    const sessionsRes = await supabase
+      .from('visitor_sessions')
+      .select('id,visitor_id,user_id,started_at,duration_seconds,page_views,referrer_source,utm_medium,utm_campaign')
+      .gte('started_at', startIso)
+      .lte('started_at', endIso);
+
+    const periodSessions = (sessionsRes.data as SessionRow[]) ?? [];
+    setSessions(periodSessions);
+
+    // "Nouveau vs recurrent" a besoin de la toute premiere visite de chaque
+    // visiteur de la periode : une agregation cote base (RPC), bornee aux
+    // visiteurs concernes, plutot que de rapatrier l'historique complet des
+    // sessions qui depasse la limite de lignes renvoyees par defaut.
+    const visitorKeysInPeriod = Array.from(new Set(periodSessions.map(visitorKey)));
+    const firstSeenMap: Record<string, string> = {};
+    if (visitorKeysInPeriod.length > 0) {
+      const firstSeenRes = await supabase.rpc('get_visitor_first_seen', { keys: visitorKeysInPeriod });
+      ((firstSeenRes.data as { visitor_key: string; first_seen_at: string }[]) ?? []).forEach((row) => {
+        firstSeenMap[row.visitor_key] = row.first_seen_at;
+      });
+    }
+    setFirstSeen(firstSeenMap);
+
+    const sessionIds = periodSessions.map((s) => s.id);
+    if (sessionIds.length === 0) {
+      setViews([]);
+      setCartAdds([]);
+      setOrders([]);
+      setIsLoading(false);
+      return;
+    }
+
+    const [viewsRes, cartRes, ordersRes] = await Promise.all([
+      supabase.from('product_views').select('product_id,session_id').in('session_id', sessionIds),
+      supabase.from('cart_events').select('session_id').in('session_id', sessionIds),
       supabase
-        .from('visitor_sessions')
-        .select('id,visitor_id,user_id,started_at,duration_seconds,page_views,referrer_source,utm_medium,utm_campaign'),
-      supabase.from('product_views').select('product_id,session_id'),
-      supabase.from('cart_events').select('session_id'),
-      supabase.from('orders').select('id,total,status,created_at,session_id,referrer_source,items'),
+        .from('orders')
+        .select('id,total,status,created_at,session_id,referrer_source,items')
+        .gte('created_at', startIso)
+        .lte('created_at', endIso),
     ]);
 
-    setAllSessions((sessionsRes.data as SessionRow[]) ?? []);
     setViews((viewsRes.data as { product_id: string; session_id: string | null }[]) ?? []);
     setCartAdds((cartRes.data as { session_id: string | null }[]) ?? []);
     setOrders((ordersRes.data as Order[]) ?? []);
@@ -153,21 +190,16 @@ export function useSourcePerformance() {
 
   useEffect(() => {
     refresh();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [period, customStart, customEnd]);
 
   const { rows, campaigns, leaderboard } = useMemo(() => {
     const { start, end } = getPeriodRange(period, customStart, customEnd);
     const startIso = start.toISOString();
     const endIso = end.toISOString();
 
-    // Premiere session jamais enregistree pour chaque visiteur (tous historiques confondus)
-    const firstSeen: Record<string, string> = {};
-    allSessions.forEach((s) => {
-      const key = visitorKey(s);
-      if (!firstSeen[key] || s.started_at < firstSeen[key]) firstSeen[key] = s.started_at;
-    });
-
-    const inPeriod = allSessions.filter((s) => s.started_at >= startIso && s.started_at <= endIso);
+    // sessions est deja filtre sur la periode selectionnee cote serveur.
+    const inPeriod = sessions;
 
     const rows: SourceRow[] = TRAFFIC_SOURCES.map((source) => {
       const sourceSessions = inPeriod.filter((s) => (s.referrer_source ?? 'Autre') === source);
@@ -240,7 +272,7 @@ export function useSourcePerformance() {
     };
 
     return { rows, campaigns, leaderboard };
-  }, [allSessions, views, cartAdds, orders, period, customStart, customEnd]);
+  }, [sessions, firstSeen, views, cartAdds, orders, period, customStart, customEnd]);
 
   return {
     period,

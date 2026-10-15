@@ -34,9 +34,22 @@ export interface DashboardStats {
 }
 
 const LOW_STOCK_THRESHOLD = 5;
+// Les classements (produits vus/vendus, performance par source) portent sur
+// une fenetre recente plutot que l'historique complet : au-dela de 1000
+// lignes, Supabase ne renvoie qu'une page arbitraire de resultats, donc
+// charger des tables d'evenements non bornees finit par rendre les stats
+// fausses (ex. "0 visiteur aujourd'hui" alors que des visites existent).
+const RECENT_WINDOW_DAYS = 30;
 
 function startOfToday(): string {
   const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString();
+}
+
+function recentWindowStart(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - RECENT_WINDOW_DAYS);
   d.setHours(0, 0, 0, 0);
   return d.toISOString();
 }
@@ -52,24 +65,38 @@ export function useDashboardStats() {
     }
     setIsLoading(true);
     const todayIso = startOfToday();
+    const windowStartIso = recentWindowStart();
 
     const [
-      ordersRes,
-      profilesRes,
-      sessionsRes,
-      viewsRes,
-      cartRes,
+      ordersTodayRes,
+      ordersWindowRes,
+      profilesTodayRes,
+      sessionsTodayRes,
+      sessionsWindowRes,
+      viewsWindowRes,
+      cartWindowRes,
       productsRes,
       downloadsTotalRes,
       downloadsTodayRes,
       installsTotalRes,
       installsTodayRes,
     ] = await Promise.all([
-      supabase.from('orders').select('id,total,status,created_at,session_id,referrer_source,items'),
-      supabase.from('profiles').select('id,created_at').eq('is_admin', false),
-      supabase.from('visitor_sessions').select('id,started_at,referrer_source,visitor_id'),
-      supabase.from('product_views').select('product_id,session_id'),
-      supabase.from('cart_events').select('session_id'),
+      supabase.from('orders').select('id,total,status,created_at,session_id,referrer_source,items').gte('created_at', todayIso),
+      supabase
+        .from('orders')
+        .select('id,total,status,created_at,session_id,referrer_source,items')
+        .gte('created_at', windowStartIso),
+      supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('is_admin', false).gte('created_at', todayIso),
+      supabase
+        .from('visitor_sessions')
+        .select('id,started_at,referrer_source,visitor_id')
+        .gte('started_at', todayIso),
+      supabase
+        .from('visitor_sessions')
+        .select('id,started_at,referrer_source,visitor_id')
+        .gte('started_at', windowStartIso),
+      supabase.from('product_views').select('product_id,session_id,created_at').gte('created_at', windowStartIso),
+      supabase.from('cart_events').select('session_id,created_at').gte('created_at', windowStartIso),
       supabase.from('products').select('*'),
       supabase.from('app_download_clicks').select('id', { count: 'exact', head: true }),
       supabase.from('app_download_clicks').select('id', { count: 'exact', head: true }).gte('created_at', todayIso),
@@ -77,23 +104,23 @@ export function useDashboardStats() {
       supabase.from('app_installs').select('id', { count: 'exact', head: true }).gte('created_at', todayIso),
     ]);
 
-    const orders = (ordersRes.data as Order[]) ?? [];
-    const profiles = (profilesRes.data as { id: string; created_at: string }[]) ?? [];
-    const sessions =
-      (sessionsRes.data as { id: string; started_at: string; referrer_source: string | null; visitor_id: string | null }[]) ?? [];
-    const views = (viewsRes.data as { product_id: string; session_id: string | null }[]) ?? [];
-    const cartAdds = (cartRes.data as { session_id: string | null }[]) ?? [];
+    const ordersToday = (ordersTodayRes.data as Order[]) ?? [];
+    const ordersWindow = (ordersWindowRes.data as Order[]) ?? [];
+    const sessionsToday =
+      (sessionsTodayRes.data as { id: string; started_at: string; referrer_source: string | null; visitor_id: string | null }[]) ?? [];
+    const sessionsWindow =
+      (sessionsWindowRes.data as { id: string; started_at: string; referrer_source: string | null; visitor_id: string | null }[]) ?? [];
+    const views = (viewsWindowRes.data as { product_id: string; session_id: string | null }[]) ?? [];
+    const cartAdds = (cartWindowRes.data as { session_id: string | null }[]) ?? [];
     const products = (productsRes.data as Product[]) ?? [];
 
-    const ordersToday = orders.filter((o) => o.created_at >= todayIso);
     const revenueToday = ordersToday
       .filter((o) => o.status !== 'cancelled')
       .reduce((sum, o) => sum + Number(o.total), 0);
-    const newCustomersToday = profiles.filter((p) => p.created_at >= todayIso).length;
-    const sessionsToday = sessions.filter((s) => s.started_at >= todayIso);
+    const newCustomersToday = profilesTodayRes.count ?? 0;
     const visitorsToday = new Set(sessionsToday.map((s) => s.visitor_id ?? s.id)).size;
 
-    // Produits les plus consultes
+    // Produits les plus consultes (30 derniers jours)
     const viewCounts: Record<string, number> = {};
     views.forEach((v) => {
       viewCounts[v.product_id] = (viewCounts[v.product_id] ?? 0) + 1;
@@ -107,9 +134,9 @@ export function useDashboardStats() {
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
 
-    // Produits les plus vendus (depuis les items des commandes non annulees)
+    // Produits les plus vendus (depuis les items des commandes non annulees, 30 derniers jours)
     const salesCounts: Record<string, { name: string; count: number }> = {};
-    orders
+    ordersWindow
       .filter((o) => o.status !== 'cancelled')
       .forEach((o) => {
         (o.items ?? []).forEach((it) => {
@@ -124,22 +151,17 @@ export function useDashboardStats() {
 
     const lowStockProducts = products.filter((p) => p.stock <= LOW_STOCK_THRESHOLD).sort((a, b) => a.stock - b.stock);
 
-    // Performance par source marketing
-    const sessionSource: Record<string, string> = {};
-    sessions.forEach((s) => {
-      sessionSource[s.id] = s.referrer_source ?? 'Inconnue';
-    });
-
+    // Performance par source marketing (30 derniers jours)
     const sourceKeys = new Set<string>();
-    sessions.forEach((s) => sourceKeys.add(s.referrer_source ?? 'Inconnue'));
+    sessionsWindow.forEach((s) => sourceKeys.add(s.referrer_source ?? 'Inconnue'));
 
     const sourcePerformance: SourcePerformance[] = Array.from(sourceKeys).map((source) => {
-      const sourceSessions = sessions.filter((s) => (s.referrer_source ?? 'Inconnue') === source);
+      const sourceSessions = sessionsWindow.filter((s) => (s.referrer_source ?? 'Inconnue') === source);
       const sessionIds = new Set(sourceSessions.map((s) => s.id));
 
       const sourceViews = views.filter((v) => v.session_id && sessionIds.has(v.session_id)).length;
       const sourceCartAdds = cartAdds.filter((c) => c.session_id && sessionIds.has(c.session_id)).length;
-      const sourceOrders = orders.filter((o) => o.session_id && sessionIds.has(o.session_id));
+      const sourceOrders = ordersWindow.filter((o) => o.session_id && sessionIds.has(o.session_id));
       const sourceRevenue = sourceOrders
         .filter((o) => o.status !== 'cancelled')
         .reduce((sum, o) => sum + Number(o.total), 0);
