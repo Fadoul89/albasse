@@ -31,6 +31,8 @@ import { FavoriteButton } from '../components/FavoriteButton';
 const { width } = Dimensions.get('window');
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
 const SITE_URL = 'https://www.albasseshopping.com';
+// Numéro WhatsApp qui reçoit les commandes (format international, chiffres uniquement)
+const ORDER_WHATSAPP = '23599221017';
 
 interface Props {
   route: RouteProp<RootStackParamList, 'Product'>;
@@ -50,6 +52,8 @@ export function ProductScreen({ route }: Props) {
   const [color, setColor] = useState<string | null>(product?.colors[0] ?? null);
   const [size, setSize] = useState<string | null>(product?.sizes[0] ?? null);
   const [quantity, setQuantity] = useState(1);
+  const [colorChosen, setColorChosen] = useState(false);
+  const [sizeChosen, setSizeChosen] = useState(false);
 
   useEffect(() => {
     if (product) trackProductView(product.id);
@@ -141,6 +145,24 @@ export function ProductScreen({ route }: Props) {
     Linking.openURL(`https://wa.me/?text=${encodeURIComponent(text)}`);
   };
 
+  const orderOnWhatsApp = () => {
+    trackAddToCart(product.id);
+    const lines = [
+      'Bonjour Albasse Shopping, je veux commander :',
+      `🛍️ ${product.name.trim()}`,
+      `💰 Prix : ${formatXAF(product.price)}`,
+    ];
+    if (product.colors.length > 0) {
+      lines.push(`🎨 Couleur : ${colorChosen && color ? color : 'à préciser'}`);
+    }
+    if (product.sizes.length > 0) {
+      lines.push(`📏 Taille : ${sizeChosen && size ? size : 'à préciser'}`);
+    }
+    lines.push(`🔢 Quantité : ${quantity}`);
+    lines.push(`🔗 ${SITE_URL}/produit/${product.slug}`);
+    Linking.openURL(`https://wa.me/${ORDER_WHATSAPP}?text=${encodeURIComponent(lines.join('\n'))}`);
+  };
+
   const shareToFacebook = () => {
     Linking.openURL(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(getShareUrl())}`);
   };
@@ -216,6 +238,11 @@ export function ProductScreen({ route }: Props) {
             )}
           </View>
 
+          <Pressable style={styles.waOrderBtn} onPress={orderOnWhatsApp}>
+            <Text style={styles.waOrderText}>💬 Commander sur WhatsApp</Text>
+          </Pressable>
+          <Text style={styles.waOrderHint}>Sans créer de compte · 💵 Paiement à la livraison possible</Text>
+
           <View style={styles.shareRow}>
             <Text style={styles.shareLabel}>Partager :</Text>
             <Pressable style={[styles.shareBtn, styles.shareBtnWhatsApp]} onPress={shareToWhatsApp}>
@@ -236,7 +263,10 @@ export function ProductScreen({ route }: Props) {
                   <Pressable
                     key={c}
                     style={[styles.optionChip, color === c && styles.optionChipActive]}
-                    onPress={() => setColor(c)}
+                    onPress={() => {
+                      setColor(c);
+                      setColorChosen(true);
+                    }}
                   >
                     <Text style={[styles.optionText, color === c && styles.optionTextActive]}>{c}</Text>
                   </Pressable>
@@ -253,7 +283,10 @@ export function ProductScreen({ route }: Props) {
                   <Pressable
                     key={s}
                     style={[styles.optionChip, size === s && styles.optionChipActive]}
-                    onPress={() => setSize(s)}
+                    onPress={() => {
+                      setSize(s);
+                      setSizeChosen(true);
+                    }}
                   >
                     <Text style={[styles.optionText, size === s && styles.optionTextActive]}>{s}</Text>
                   </Pressable>
@@ -344,6 +377,21 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.red,
     textDecorationLine: 'line-through',
+  },
+  waOrderBtn: {
+    backgroundColor: '#25D366',
+    borderRadius: radius.md,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: spacing.md,
+  },
+  waOrderText: { color: '#ffffff', fontFamily: fonts.bodyBold, fontSize: 16 },
+  waOrderHint: {
+    color: colors.creamMuted,
+    fontFamily: fonts.body,
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 6,
   },
   shareRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginTop: 12 },
   shareLabel: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 12 },
