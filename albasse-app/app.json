@@ -42,6 +42,13 @@
             "enableShrinkResourcesInReleaseBuilds": true
           }
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/android-icon-foreground.png",
+          "color": "#d4af37"
+        }
       ]
     ],
     "experiments": {
