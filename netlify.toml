@@ -2,6 +2,13 @@
   command = "npx expo export -p web && node scripts/generate-sitemap.js"
   publish = "dist"
 
+[build.environment]
+  # La cle Firebase dans albasse-app/google-services.json n'est pas un secret
+  # (elle est faite pour etre publique, cf. doc Firebase) mais le scanner de
+  # secrets de Netlify la detecte quand meme et bloquait tous les deploiements
+  # depuis son ajout.
+  SECRETS_SCAN_OMIT_PATHS = "albasse-app/google-services.json"
+
 [[edge_functions]]
   path = "/produit/*"
   function = "og-preview"
