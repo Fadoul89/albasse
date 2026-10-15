@@ -1,0 +1,49 @@
+{
+  "project_info": {
+    "project_number": "291272888170",
+    "firebase_url": "https://albasse-shopping.firebaseio.com",
+    "project_id": "albasse-shopping",
+    "storage_bucket": "albasse-shopping.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:291272888170:android:bcb5bd6be693ce2d259f13",
+        "android_client_info": {
+          "package_name": "albasseshopping.com"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCgddQbiIJxZ1tleBXvN2DQEyOSeq7xGgw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:291272888170:android:cad140bec51ae989259f13",
+        "android_client_info": {
+          "package_name": "com.albasseshopping.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCgddQbiIJxZ1tleBXvN2DQEyOSeq7xGgw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
