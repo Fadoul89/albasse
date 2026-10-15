@@ -1,16 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, Platform, Linking, Image } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Platform, Image } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, fonts, radius, spacing } from '../theme';
-import { APP_DOWNLOAD_URL } from '../constants/appDownload';
 import { trackAppDownloadClick } from '../lib/appDownloadTracking';
 import { isRunningInsideApp } from '../lib/runningInApp';
+import { isRunningAsInstalledPwa, triggerPwaInstallPrompt } from '../lib/pwaInstallPrompt';
 
 const DISMISS_KEY = 'albasse_app_banner_dismissed';
 
 function isAndroidWeb() {
   if (Platform.OS !== 'web' || typeof navigator === 'undefined') return false;
-  if (isRunningInsideApp()) return false;
+  if (isRunningInsideApp() || isRunningAsInstalledPwa()) return false;
   return /Android/i.test(navigator.userAgent);
 }
 
@@ -31,9 +31,14 @@ export function AppDownloadBanner() {
     AsyncStorage.setItem(DISMISS_KEY, '1');
   };
 
-  const download = () => {
+  const install = async () => {
     trackAppDownloadClick('banner');
-    Linking.openURL(APP_DOWNLOAD_URL);
+    const outcome = await triggerPwaInstallPrompt();
+    if (outcome === 'unavailable') {
+      window.alert(
+        "Pour installer : appuyez sur les trois points (⋮) en haut de Chrome, puis « Ajouter à l'écran d'accueil »."
+      );
+    }
   };
 
   return (
@@ -43,7 +48,7 @@ export function AppDownloadBanner() {
         <Text style={styles.title}>Albasse Shopping, l'app</Text>
         <Text style={styles.subtitle}>Commandez plus vite depuis votre téléphone</Text>
       </View>
-      <Pressable style={styles.downloadBtn} onPress={download}>
+      <Pressable style={styles.downloadBtn} onPress={install}>
         <Text style={styles.downloadBtnText}>Installer</Text>
       </Pressable>
       <Pressable onPress={dismiss} hitSlop={10} style={styles.closeBtn}>
