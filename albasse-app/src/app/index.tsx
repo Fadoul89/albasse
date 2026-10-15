@@ -3,7 +3,7 @@ import { ActivityIndicator, BackHandler, Linking, StyleSheet, View } from 'react
 import { useFocusEffect } from 'expo-router';
 import WebView, { type WebViewNavigation } from 'react-native-webview';
 
-const SITE_URL = 'https://www.albasseshopping.com';
+const SITE_URL = 'https://www.albasseshopping.com/?albasse_app=1';
 const SITE_HOST = 'albasseshopping.com';
 // Ajoute une marque dans le user-agent pour que le site sache qu'il tourne
 // dans l'app (et n'affiche pas sa propre bannière "Telechargez l'app").
