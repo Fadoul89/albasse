@@ -41,7 +41,11 @@ export function AdminDashboardScreen() {
               <StatCard icon="🛒" label="Commandes aujourd'hui" value={String(stats.ordersToday)} />
               <StatCard icon="👥" label="Nouveaux clients" value={String(stats.newCustomersToday)} />
               <StatCard icon="👀" label="Visiteurs aujourd'hui" value={String(stats.visitorsToday)} />
+              <StatCard icon="📱" label="Installations app (total)" value={String(stats.appInstallsTotal)} />
             </View>
+            <Text style={styles.downloadsToday}>
+              dont {stats.appInstallsToday} aujourd'hui · {stats.appDownloadClicksTotal} clic(s) de téléchargement
+            </Text>
 
             <Section title="🔥 Produits les plus consultés">
               {stats.mostViewedProducts.length === 0 ? (
@@ -177,6 +181,7 @@ const styles = StyleSheet.create({
   statIcon: { fontSize: 20, marginBottom: 6 },
   statValue: { color: colors.goldLight, fontFamily: fonts.displayBold, fontSize: 18 },
   statLabel: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11, textAlign: 'center', marginTop: 4 },
+  downloadsToday: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11, marginTop: -4, marginBottom: spacing.lg },
   section: { marginBottom: spacing.lg },
   sectionTitle: { color: colors.cream, fontFamily: fonts.display, fontSize: 16, marginBottom: spacing.sm },
   sectionBody: { backgroundColor: colors.panel, borderRadius: radius.md, padding: spacing.sm },
