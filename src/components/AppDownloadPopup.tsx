@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, Modal, Platform, Linking } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Modal, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, fonts, radius, spacing } from '../theme';
-import { APP_DOWNLOAD_URL } from '../constants/appDownload';
 import { trackAppDownloadClick } from '../lib/appDownloadTracking';
 import { isRunningInsideApp } from '../lib/runningInApp';
+import { isRunningAsInstalledPwa, triggerPwaInstallPrompt } from '../lib/pwaInstallPrompt';
 
 const SHOW_DELAY_MS = 2500;
 
@@ -18,7 +18,7 @@ function seenKey() {
 
 function isAndroidWeb() {
   if (Platform.OS !== 'web' || typeof navigator === 'undefined') return false;
-  if (isRunningInsideApp()) return false;
+  if (isRunningInsideApp() || isRunningAsInstalledPwa()) return false;
   return /Android/i.test(navigator.userAgent);
 }
 
@@ -45,7 +45,12 @@ export function AppDownloadPopup() {
 
   const install = async () => {
     trackAppDownloadClick('popup');
-    Linking.openURL(APP_DOWNLOAD_URL);
+    const outcome = await triggerPwaInstallPrompt();
+    if (outcome === 'unavailable') {
+      window.alert(
+        "Pour installer : appuyez sur les trois points (⋮) en haut de Chrome, puis « Ajouter à l'écran d'accueil »."
+      );
+    }
     await dismiss();
   };
 
