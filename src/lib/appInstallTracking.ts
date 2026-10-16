@@ -43,9 +43,18 @@ function detectBrowser(): string {
   return 'Autre';
 }
 
+function detectDeviceType(): string {
+  if (typeof navigator === 'undefined') return 'PC';
+  const ua = navigator.userAgent;
+  if (/iPad/i.test(ua)) return 'Tablette';
+  if (/iPhone|iPod/i.test(ua)) return 'iPhone';
+  if (/Android/i.test(ua)) return /Mobile/i.test(ua) ? 'Android' : 'Tablette';
+  return 'PC';
+}
+
 // Compte une installation quand le visiteur accepte la boite de dialogue
-// native d'installation du raccourci PWA. Enregistre le navigateur pour
-// permettre une repartition par navigateur dans le dashboard admin.
+// native d'installation du raccourci PWA. Enregistre le navigateur et le
+// type d'appareil pour la repartition dans le dashboard admin.
 export function trackShortcutInstallIfNeeded() {
   if (typeof window === 'undefined' || !isSupabaseConfigured) return;
   try {
@@ -54,7 +63,12 @@ export function trackShortcutInstallIfNeeded() {
     window.localStorage.setItem(SHORTCUT_FLAG_KEY, deviceId);
     supabase
       .from('app_installs')
-      .insert({ device_id: deviceId, install_type: 'shortcut', browser: detectBrowser() })
+      .insert({
+        device_id: deviceId,
+        install_type: 'shortcut',
+        browser: detectBrowser(),
+        device_type: detectDeviceType(),
+      })
       .then(({ error }) => {
         if (error) console.error('Erreur suivi installation raccourci:', error.message);
       });

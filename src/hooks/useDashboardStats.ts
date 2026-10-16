@@ -37,6 +37,7 @@ export interface DashboardStats {
   appInstallsTotal: number;
   appInstallsToday: number;
   shortcutsByBrowser: BrowserStat[];
+  shortcutsByDevice: BrowserStat[];
 }
 
 const LOW_STOCK_THRESHOLD = 5;
@@ -109,7 +110,7 @@ export function useDashboardStats() {
       supabase.from('app_download_clicks').select('id', { count: 'exact', head: true }).gte('created_at', todayIso),
       supabase.from('app_installs').select('id', { count: 'exact', head: true }),
       supabase.from('app_installs').select('id', { count: 'exact', head: true }).gte('created_at', todayIso),
-      supabase.from('app_installs').select('browser').eq('install_type', 'shortcut'),
+      supabase.from('app_installs').select('browser,device_type').eq('install_type', 'shortcut'),
     ]);
 
     const ordersToday = (ordersTodayRes.data as Order[]) ?? [];
@@ -187,11 +188,19 @@ export function useDashboardStats() {
     sourcePerformance.sort((a, b) => b.sessions - a.sessions);
 
     const browserCounts: Record<string, number> = {};
-    ((shortcutsBrowserRes.data ?? []) as { browser: string | null }[]).forEach(({ browser }) => {
-      const key = browser ?? 'Autre';
-      browserCounts[key] = (browserCounts[key] ?? 0) + 1;
-    });
+    const deviceCounts: Record<string, number> = {};
+    ((shortcutsBrowserRes.data ?? []) as { browser: string | null; device_type: string | null }[]).forEach(
+      ({ browser, device_type }) => {
+        const bKey = browser ?? 'Autre';
+        browserCounts[bKey] = (browserCounts[bKey] ?? 0) + 1;
+        const dKey = device_type ?? 'PC';
+        deviceCounts[dKey] = (deviceCounts[dKey] ?? 0) + 1;
+      }
+    );
     const shortcutsByBrowser: BrowserStat[] = Object.entries(browserCounts)
+      .map(([browser, count]) => ({ browser, count }))
+      .sort((a, b) => b.count - a.count);
+    const shortcutsByDevice: BrowserStat[] = Object.entries(deviceCounts)
       .map(([browser, count]) => ({ browser, count }))
       .sort((a, b) => b.count - a.count);
 
@@ -209,6 +218,7 @@ export function useDashboardStats() {
       appInstallsTotal: installsTotalRes.count ?? 0,
       appInstallsToday: installsTodayRes.count ?? 0,
       shortcutsByBrowser,
+      shortcutsByDevice,
     });
     setIsLoading(false);
   };
