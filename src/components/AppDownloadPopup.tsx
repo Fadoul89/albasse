@@ -5,7 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, fonts, radius, spacing } from '../theme';
 import { trackAppDownloadClick } from '../lib/appDownloadTracking';
 import { isRunningInsideApp } from '../lib/runningInApp';
-import { isRunningAsInstalledPwa, triggerPwaInstallPrompt } from '../lib/pwaInstallPrompt';
+import { isAndroidDevice, isIosDevice, isRunningAsInstalledPwa, triggerPwaInstallPrompt } from '../lib/pwaInstallPrompt';
 import { subscribeToWebPush } from '../lib/webPushSubscription';
 import { trackShortcutInstallIfNeeded } from '../lib/appInstallTracking';
 
@@ -18,17 +18,17 @@ function seenKey() {
   return `albasse_app_popup_seen_${new Date().toISOString().slice(0, 10)}`;
 }
 
-function isAndroidWeb() {
+function isEligibleWeb() {
   if (Platform.OS !== 'web' || typeof navigator === 'undefined') return false;
   if (isRunningInsideApp() || isRunningAsInstalledPwa()) return false;
-  return /Android/i.test(navigator.userAgent);
+  return true;
 }
 
 export function AppDownloadPopup() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    if (!isAndroidWeb()) return;
+    if (!isEligibleWeb()) return;
     let cancelled = false;
     AsyncStorage.getItem(seenKey()).then((seen) => {
       if (cancelled || seen) return;
@@ -47,10 +47,19 @@ export function AppDownloadPopup() {
 
   const install = async () => {
     trackAppDownloadClick('popup');
+    if (isIosDevice()) {
+      window.alert(
+        "Pour installer : appuyez sur le bouton Partager (le carré avec une flèche) en bas de Safari, puis « Sur l'écran d'accueil »."
+      );
+      await dismiss();
+      return;
+    }
     const outcome = await triggerPwaInstallPrompt();
     if (outcome === 'unavailable') {
       window.alert(
-        "Pour installer : appuyez sur les trois points (⋮) en haut de Chrome, puis « Ajouter à l'écran d'accueil »."
+        isAndroidDevice()
+          ? "Pour installer : appuyez sur les trois points (⋮) en haut de Chrome, puis « Ajouter à l'écran d'accueil »."
+          : "Pour installer : cliquez sur l'icône d'installation ⊕ dans la barre d'adresse de Chrome, ou sur les trois points (⋮) en haut à droite puis « Installer Albasse Shopping »."
       );
     } else if (outcome === 'accepted') {
       trackShortcutInstallIfNeeded();
@@ -71,7 +80,7 @@ export function AppDownloadPopup() {
 
           <Text style={styles.title}>📲 Télécharge l'app Albasse Shopping</Text>
           <Text style={styles.message}>
-            Commandez plus vite, suivez vos commandes et profitez des ventes flash directement depuis votre téléphone.
+            Commandez plus vite, suivez vos commandes et profitez des ventes flash directement depuis votre appareil.
           </Text>
 
           <View style={styles.buttonsRow}>
