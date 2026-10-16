@@ -4,23 +4,23 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, fonts, radius, spacing } from '../theme';
 import { trackAppDownloadClick } from '../lib/appDownloadTracking';
 import { isRunningInsideApp } from '../lib/runningInApp';
-import { isRunningAsInstalledPwa, triggerPwaInstallPrompt } from '../lib/pwaInstallPrompt';
+import { isIosDevice, isRunningAsInstalledPwa, triggerPwaInstallPrompt } from '../lib/pwaInstallPrompt';
 import { subscribeToWebPush } from '../lib/webPushSubscription';
 import { trackShortcutInstallIfNeeded } from '../lib/appInstallTracking';
 
 const DISMISS_KEY = 'albasse_app_banner_dismissed';
 
-function isAndroidWeb() {
+function isEligibleWeb() {
   if (Platform.OS !== 'web' || typeof navigator === 'undefined') return false;
   if (isRunningInsideApp() || isRunningAsInstalledPwa()) return false;
-  return /Android/i.test(navigator.userAgent);
+  return /Android/i.test(navigator.userAgent) || isIosDevice();
 }
 
 export function AppDownloadBanner() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    if (!isAndroidWeb()) return;
+    if (!isEligibleWeb()) return;
     AsyncStorage.getItem(DISMISS_KEY).then((dismissed) => {
       if (!dismissed) setVisible(true);
     });
@@ -35,6 +35,12 @@ export function AppDownloadBanner() {
 
   const install = async () => {
     trackAppDownloadClick('banner');
+    if (isIosDevice()) {
+      window.alert(
+        "Pour installer : appuyez sur le bouton Partager (le carré avec une flèche) en bas de Safari, puis « Sur l'écran d'accueil »."
+      );
+      return;
+    }
     const outcome = await triggerPwaInstallPrompt();
     if (outcome === 'unavailable') {
       window.alert(
