@@ -38,5 +38,12 @@
     </noscript>
     <!-- The root element for your Expo app. -->
     <div id="root"></div>
+    <script>
+      // Capture l'evenement Chrome avant que le bundle React soit charge.
+      window.addEventListener('beforeinstallprompt', function(e) {
+        e.preventDefault();
+        window.__pwaInstallPrompt__ = e;
+      });
+    </script>
   </body>
 </html>

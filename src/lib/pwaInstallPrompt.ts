@@ -1,14 +1,17 @@
-// Capture l'evenement Chrome "beforeinstallprompt" des le chargement de la
-// page (il ne se redeclenche pas si on l'ecoute trop tard) pour pouvoir
-// declencher la vraie boite de dialogue d'installation native de Chrome
-// depuis notre propre bouton "Installer".
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 };
 
-let deferredPrompt: BeforeInstallPromptEvent | null = null;
+declare global {
+  interface Window {
+    __pwaInstallPrompt__?: BeforeInstallPromptEvent;
+  }
+}
 
+// Fallback listener pour les cas où le module est chargé avant l'événement.
+// La capture principale est dans public/index.html (avant React).
+let deferredPrompt: BeforeInstallPromptEvent | null = null;
 if (typeof window !== 'undefined') {
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
@@ -16,13 +19,20 @@ if (typeof window !== 'undefined') {
   });
 }
 
+function getPrompt(): BeforeInstallPromptEvent | null {
+  if (typeof window === 'undefined') return null;
+  return window.__pwaInstallPrompt__ ?? deferredPrompt ?? null;
+}
+
 export function isPwaInstallPromptAvailable(): boolean {
-  return deferredPrompt !== null;
+  return getPrompt() !== null;
 }
 
 export async function triggerPwaInstallPrompt(): Promise<'accepted' | 'dismissed' | 'unavailable'> {
-  if (!deferredPrompt) return 'unavailable';
-  const promptEvent = deferredPrompt;
+  const promptEvent = getPrompt();
+  if (!promptEvent) return 'unavailable';
+  // Effacer pour ne pas redéclencher deux fois
+  if (typeof window !== 'undefined') window.__pwaInstallPrompt__ = undefined;
   deferredPrompt = null;
   try {
     await promptEvent.prompt();
