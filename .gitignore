@@ -43,3 +43,7 @@ yarn-error.*
 
 # Local Netlify folder
 .netlify
+
+# Extensions agent IA (sorties locales)
+strix_runs/
+graphify-out/
