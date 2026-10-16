@@ -27,6 +27,7 @@ import { StarRating } from '../components/StarRating';
 import { GoldButton } from '../components/GoldButton';
 import { ProductCard } from '../components/ProductCard';
 import { FavoriteButton } from '../components/FavoriteButton';
+import { WebPushBanner } from '../components/WebPushBanner';
 
 const { width } = Dimensions.get('window');
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
@@ -172,6 +173,7 @@ export function ProductScreen({ route }: Props) {
 
   return (
     <View style={styles.screen}>
+      <WebPushBanner />
       <ScreenHeader
         title={product.name}
         showBack
