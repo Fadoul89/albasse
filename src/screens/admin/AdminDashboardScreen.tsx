@@ -41,10 +41,10 @@ export function AdminDashboardScreen() {
               <StatCard icon="🛒" label="Commandes aujourd'hui" value={String(stats.ordersToday)} />
               <StatCard icon="👥" label="Nouveaux clients" value={String(stats.newCustomersToday)} />
               <StatCard icon="👀" label="Visiteurs aujourd'hui" value={String(stats.visitorsToday)} />
-              <StatCard icon="📱" label="Installations app (total)" value={String(stats.appInstallsTotal)} />
+              <StatCard icon="📱" label="Raccourcis installés (total)" value={String(stats.appInstallsTotal)} />
             </View>
             <Text style={styles.downloadsToday}>
-              dont {stats.appInstallsToday} aujourd'hui · {stats.appDownloadClicksTotal} clic(s) de téléchargement
+              dont {stats.appInstallsToday} aujourd'hui · {stats.appDownloadClicksTotal} clic(s) sur "Installer"
             </Text>
 
             <Section title="🔥 Produits les plus consultés">
