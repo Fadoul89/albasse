@@ -6,6 +6,7 @@ import { trackAppDownloadClick } from '../lib/appDownloadTracking';
 import { isRunningInsideApp } from '../lib/runningInApp';
 import { isRunningAsInstalledPwa, triggerPwaInstallPrompt } from '../lib/pwaInstallPrompt';
 import { subscribeToWebPush } from '../lib/webPushSubscription';
+import { trackShortcutInstallIfNeeded } from '../lib/appInstallTracking';
 
 const DISMISS_KEY = 'albasse_app_banner_dismissed';
 
@@ -40,6 +41,7 @@ export function AppDownloadBanner() {
         "Pour installer : appuyez sur les trois points (⋮) en haut de Chrome, puis « Ajouter à l'écran d'accueil »."
       );
     } else if (outcome === 'accepted') {
+      trackShortcutInstallIfNeeded();
       subscribeToWebPush();
     }
   };

@@ -7,6 +7,7 @@ import { trackAppDownloadClick } from '../lib/appDownloadTracking';
 import { isRunningInsideApp } from '../lib/runningInApp';
 import { isRunningAsInstalledPwa, triggerPwaInstallPrompt } from '../lib/pwaInstallPrompt';
 import { subscribeToWebPush } from '../lib/webPushSubscription';
+import { trackShortcutInstallIfNeeded } from '../lib/appInstallTracking';
 
 const SHOW_DELAY_MS = 2500;
 
@@ -52,6 +53,7 @@ export function AppDownloadPopup() {
         "Pour installer : appuyez sur les trois points (⋮) en haut de Chrome, puis « Ajouter à l'écran d'accueil »."
       );
     } else if (outcome === 'accepted') {
+      trackShortcutInstallIfNeeded();
       subscribeToWebPush();
     }
     await dismiss();
