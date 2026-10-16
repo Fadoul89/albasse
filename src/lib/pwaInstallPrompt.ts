@@ -28,8 +28,25 @@ export function isPwaInstallPromptAvailable(): boolean {
   return getPrompt() !== null;
 }
 
+// Chrome peut declencher l'evenement quelques instants apres le tap : on
+// patiente un peu (le tap reste valide ~5 s) avant de basculer sur les
+// instructions manuelles. Navigateurs sans l'evenement (Firefox, Safari) :
+// pas d'attente inutile.
+function waitForPrompt(timeoutMs: number): Promise<BeforeInstallPromptEvent | null> {
+  if (typeof window === 'undefined' || !('onbeforeinstallprompt' in window)) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const finish = () => {
+      clearTimeout(timer);
+      window.removeEventListener('beforeinstallprompt', finish);
+      resolve(getPrompt());
+    };
+    const timer = setTimeout(finish, timeoutMs);
+    window.addEventListener('beforeinstallprompt', finish);
+  });
+}
+
 export async function triggerPwaInstallPrompt(): Promise<'accepted' | 'dismissed' | 'unavailable'> {
-  const promptEvent = getPrompt();
+  const promptEvent = getPrompt() ?? (await waitForPrompt(2000));
   if (!promptEvent) return 'unavailable';
   // Effacer pour ne pas redéclencher deux fois
   if (typeof window !== 'undefined') window.__pwaInstallPrompt__ = undefined;
@@ -58,6 +75,18 @@ export function isIosDevice(): boolean {
 export function isAndroidDevice(): boolean {
   if (typeof navigator === 'undefined') return false;
   return /Android/i.test(navigator.userAgent);
+}
+
+// Instructions manuelles quand la boite d'installation automatique n'est pas
+// disponible. Le libelle du menu Chrome Android varie selon la version.
+export function manualInstallInstructions(): string {
+  if (isIosDevice()) {
+    return "Pour installer : appuyez sur le bouton Partager (le carré avec une flèche) en bas de Safari, puis « Sur l'écran d'accueil ».";
+  }
+  if (isAndroidDevice()) {
+    return "Pour installer : appuyez sur les trois points (⋮) en haut à droite de Chrome, puis sur « Installer et créer un raccourci » (ou « Installer l'application » / « Ajouter à l'écran d'accueil » selon votre version).";
+  }
+  return "Pour installer : cliquez sur l'icône d'installation ⊕ dans la barre d'adresse de Chrome, ou sur les trois points (⋮) en haut à droite puis « Installer Albasse Shopping ».";
 }
 
 export function isRunningAsInstalledPwa(): boolean {
