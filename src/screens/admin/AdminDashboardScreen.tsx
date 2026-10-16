@@ -47,6 +47,17 @@ export function AdminDashboardScreen() {
               dont {stats.appInstallsToday} aujourd'hui · {stats.appDownloadClicksTotal} clic(s) sur "Installer"
             </Text>
 
+            {stats.shortcutsByBrowser.length > 0 && (
+              <Section title="🌐 Raccourcis par navigateur">
+                {stats.shortcutsByBrowser.map((b) => (
+                  <View key={b.browser} style={styles.stockRow}>
+                    <Text style={styles.stockName}>{b.browser}</Text>
+                    <Text style={styles.rankValue}>{b.count} install{b.count > 1 ? 's' : ''}</Text>
+                  </View>
+                ))}
+              </Section>
+            )}
+
             <Section title="🔥 Produits les plus consultés">
               {stats.mostViewedProducts.length === 0 ? (
                 <Text style={styles.emptyText}>Pas encore de données.</Text>
