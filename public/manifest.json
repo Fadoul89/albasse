@@ -1,6 +1,6 @@
 {
   "name": "Albasse Shopping",
-  "short_name": "Albasse",
+  "short_name": "Albasse Shopping 🛍",
   "description": "Commandez vos articles préférés chez Albasse Shopping",
   "start_url": "/?source=pwa",
   "display": "standalone",
