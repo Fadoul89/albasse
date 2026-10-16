@@ -42,6 +42,19 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'statusBanned', label: '🔴 Bannis' },
 ];
 
+function isTestEmail(email: string | null | undefined): boolean {
+  if (!email) return false;
+  const lower = email.toLowerCase();
+  return (
+    lower.includes('test') ||
+    lower.includes('@mailinator.') ||
+    lower.includes('@yopmail.') ||
+    lower.includes('@guerrillamail.') ||
+    lower.includes('@example.') ||
+    lower.includes('@fake.')
+  );
+}
+
 export function AdminCustomersScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const profile = useAuthStore((s) => s.profile);
@@ -50,6 +63,7 @@ export function AdminCustomersScreen() {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<FilterKey>('all');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [hideTestAccounts, setHideTestAccounts] = useState(true);
 
   if (!profile?.is_admin) {
     return (
@@ -76,8 +90,13 @@ export function AdminCustomersScreen() {
     [customers]
   );
 
+  const testAccountCount = useMemo(
+    () => customers.filter((c) => isTestEmail(c.profile.email)).length,
+    [customers]
+  );
+
   const filtered = useMemo(() => {
-    let list = customers;
+    let list = hideTestAccounts ? customers.filter((c) => !isTestEmail(c.profile.email)) : customers;
     const q = query.trim().toLowerCase();
     if (q) {
       list = list.filter((c) => {
@@ -109,7 +128,7 @@ export function AdminCustomersScreen() {
       default:
         return list;
     }
-  }, [customers, query, filter]);
+  }, [customers, query, filter, hideTestAccounts]);
 
   const visible = filtered.slice(0, visibleCount);
 
@@ -152,6 +171,19 @@ export function AdminCustomersScreen() {
                   </Pressable>
                 ))}
               </View>
+            )}
+
+            {testAccountCount > 0 && (
+              <Pressable
+                style={[styles.testToggle, !hideTestAccounts && styles.testToggleActive]}
+                onPress={() => setHideTestAccounts((v) => !v)}
+              >
+                <Text style={styles.testToggleText}>
+                  {hideTestAccounts
+                    ? `🧪 ${testAccountCount} compte(s) test masqué(s) — Afficher`
+                    : `🧪 Comptes test visibles — Masquer`}
+                </Text>
+              </Pressable>
             )}
 
             <TextInput
@@ -269,6 +301,19 @@ const styles = StyleSheet.create({
   topRank: { color: colors.gold, fontFamily: fonts.bodyBold, fontSize: 12, width: 24 },
   topName: { flex: 1, color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 13 },
   topDuration: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 12 },
+  testToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.panel,
+    borderRadius: radius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  testToggleActive: { borderColor: colors.gold },
+  testToggleText: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 12 },
   search: {
     backgroundColor: colors.panel,
     borderRadius: radius.md,
