@@ -1,14 +1,14 @@
 # Extensions de l'agent IA (Claude Code)
 
-Ce projet utilise quatre extensions pour l'agent de code. Une seule est déjà
-active via la config du dépôt (Context7) ; les trois autres s'installent une
+Ce projet utilise quatre extensions pour l'agent de code. Context7 et Graphify
+(Cloud) sont déclarés dans `.mcp.json` ; Agent Skills et Strix s'installent une
 fois sur ta machine avec les commandes ci-dessous (PowerShell ou terminal).
 
 | Extension     | Rôle                                                        | Statut dans le dépôt          |
 |---------------|-------------------------------------------------------------|-------------------------------|
 | Context7      | Doc à jour des librairies (Expo 57, Supabase, React Native) | ✅ `.mcp.json` (auto)          |
 | Agent Skills  | Compétences officielles Expo + Supabase pour l'agent        | ⏳ à installer (`.claude/skills/`) |
-| Graphify      | Graphe de connaissances du code (`/graphify`)               | ⏳ à installer (`.claude/`)    |
+| Graphify      | Graphe de connaissances du code                             | ✅ `.mcp.json` (connexion OAuth) |
 | Strix         | Agent de tests de sécurité (pentest) sur l'app              | ⏳ CLI locale (Docker)         |
 
 ## 1. Context7 — déjà configuré
@@ -42,16 +42,28 @@ pour que toutes les sessions (y compris cloud) en profitent.
 
 ## 3. Graphify
 
-Nécessite Python 3.10+ et `uv` (ou `pipx`).
+### Graphify Cloud (compte graphify.com) — configuré
+
+`.mcp.json` déclare le serveur MCP hébergé `https://api.graphify.com/mcp`
+(pas de clé API : connexion OAuth avec ton compte).
+
+1. Sur https://app.graphify.com, connecte GitHub et ajoute le dépôt
+   `Fadoul89/albasse`. Attends le statut **Indexed**.
+2. Dans Claude Code (sur ton PC), ouvre le projet, tape `/mcp`, choisis
+   **graphify** puis **Authenticate** : le navigateur s'ouvre pour te
+   connecter à ton compte Graphify.
+3. Ensuite tu peux demander par exemple : « avec graphify, montre-moi tout ce
+   qui dépend du panier ».
+
+### Variante locale (sans compte)
 
 ```bash
 uv tool install graphifyy        # paquet avec deux « y », commande « graphify »
 graphify install --project       # écrit le skill + hooks dans .claude/ du dépôt
 ```
 
-Puis dans Claude Code : `/graphify .` pour construire le graphe.
-Committer les fichiers ajoutés sous `.claude/` (le dossier `graphify-out/` est
-ignoré par git).
+Puis dans Claude Code : `/graphify .` (le dossier `graphify-out/` est ignoré
+par git).
 
 ## 4. Strix (tests de sécurité)
 
