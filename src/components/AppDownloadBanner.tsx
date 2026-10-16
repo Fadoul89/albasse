@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, fonts, radius, spacing } from '../theme';
 import { trackAppDownloadClick } from '../lib/appDownloadTracking';
 import { isRunningInsideApp } from '../lib/runningInApp';
-import { isIosDevice, isRunningAsInstalledPwa, triggerPwaInstallPrompt } from '../lib/pwaInstallPrompt';
+import { isAndroidDevice, isIosDevice, isRunningAsInstalledPwa, triggerPwaInstallPrompt } from '../lib/pwaInstallPrompt';
 import { subscribeToWebPush } from '../lib/webPushSubscription';
 import { trackShortcutInstallIfNeeded } from '../lib/appInstallTracking';
 
@@ -13,7 +13,7 @@ const DISMISS_KEY = 'albasse_app_banner_dismissed';
 function isEligibleWeb() {
   if (Platform.OS !== 'web' || typeof navigator === 'undefined') return false;
   if (isRunningInsideApp() || isRunningAsInstalledPwa()) return false;
-  return /Android/i.test(navigator.userAgent) || isIosDevice();
+  return true;
 }
 
 export function AppDownloadBanner() {
@@ -44,7 +44,9 @@ export function AppDownloadBanner() {
     const outcome = await triggerPwaInstallPrompt();
     if (outcome === 'unavailable') {
       window.alert(
-        "Pour installer : appuyez sur les trois points (⋮) en haut de Chrome, puis « Ajouter à l'écran d'accueil »."
+        isAndroidDevice()
+          ? "Pour installer : appuyez sur les trois points (⋮) en haut de Chrome, puis « Ajouter à l'écran d'accueil »."
+          : "Pour installer : cliquez sur l'icône d'installation ⊕ dans la barre d'adresse de Chrome, ou sur les trois points (⋮) en haut à droite puis « Installer Albasse Shopping »."
       );
     } else if (outcome === 'accepted') {
       trackShortcutInstallIfNeeded();
@@ -57,7 +59,7 @@ export function AppDownloadBanner() {
       <Image source={require('../../assets/logo.jpg')} style={styles.icon} />
       <View style={{ flex: 1 }}>
         <Text style={styles.title}>Albasse Shopping, l'app</Text>
-        <Text style={styles.subtitle}>Commandez plus vite depuis votre téléphone</Text>
+        <Text style={styles.subtitle}>Commandez plus vite depuis votre appareil</Text>
       </View>
       <Pressable style={styles.downloadBtn} onPress={install}>
         <Text style={styles.downloadBtnText}>Installer</Text>

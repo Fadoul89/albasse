@@ -42,6 +42,14 @@ export function isIosDevice(): boolean {
   return /iPad|iPhone|iPod/i.test(navigator.userAgent);
 }
 
+// Distingue Android d'un PC (Windows/Mac/Linux) quand la boite de dialogue
+// automatique n'est pas disponible : les instructions manuelles different
+// ("ecran d'accueil" sur mobile vs barre d'adresse sur ordinateur).
+export function isAndroidDevice(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /Android/i.test(navigator.userAgent);
+}
+
 export function isRunningAsInstalledPwa(): boolean {
   if (typeof window === 'undefined') return false;
   try {
