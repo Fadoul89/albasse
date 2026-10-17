@@ -12,6 +12,7 @@ export interface CreateOrderInput {
   shippingPhone: string;
   shippingAddress: string;
   shippingCity: string;
+  giftWrap?: boolean;
 }
 
 function generateOrderId(): string {
@@ -52,6 +53,7 @@ export async function createOrder(input: CreateOrderInput): Promise<{ order: Ord
     session_id: sessionId,
     referrer_source: getCurrentReferrerSource(),
     is_flagged_fake: false,
+    gift_wrap: !!input.giftWrap,
     created_at: new Date().toISOString(),
   };
 
@@ -77,6 +79,8 @@ export async function createOrder(input: CreateOrderInput): Promise<{ order: Ord
     shipping_city: order.shipping_city,
     session_id: order.session_id,
     referrer_source: order.referrer_source,
+    // le champ n'est envoye que si le service est choisi : les commandes normales ne changent pas
+    ...(order.gift_wrap ? { gift_wrap: true } : {}),
   });
 
   if (error) return { order: null, error: error.message };

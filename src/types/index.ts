@@ -149,6 +149,7 @@ export interface Order {
   session_id: string | null;
   referrer_source: string | null;
   is_flagged_fake: boolean;
+  gift_wrap?: boolean;
   created_at: string;
 }
 

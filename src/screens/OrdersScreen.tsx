@@ -9,6 +9,9 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { GoldButton } from '../components/GoldButton';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { OrderStatusStepper } from '../components/OrderStatusStepper';
+import { GIFT_IMAGE } from '../components/GiftWrapOption';
+import { GIFT_WRAP_FEE } from '../constants/shopRules';
+import { useToastStore } from '../store/toastStore';
 import { CountdownTimer } from '../components/CountdownTimer';
 import { formatOrderDate, getOrderDay } from '../lib/formatDuration';
 import type { Order, OrderStatus } from '../types';
@@ -41,6 +44,9 @@ export function OrdersScreen() {
   const [confirming, setConfirming] = useState(false);
   const [pendingRemove, setPendingRemove] = useState<{ order: Order; index: number } | null>(null);
   const [removing, setRemoving] = useState(false);
+  const [pendingGift, setPendingGift] = useState<{ order: Order; action: 'add' | 'remove' } | null>(null);
+  const [giftBusy, setGiftBusy] = useState(false);
+  const showToast = useToastStore((st) => st.show);
 
   if (!profile) {
     return (
@@ -68,7 +74,7 @@ export function OrdersScreen() {
     if (!pendingRemove) return;
     const { order, index } = pendingRemove;
     const newItems = order.items.filter((_, i) => i !== index);
-    const newTotal = newItems.reduce((sum, oi) => sum + oi.unit_price * oi.quantity, 0);
+    const newTotal = newItems.reduce((sum, oi) => sum + oi.unit_price * oi.quantity, 0) + (order.gift_wrap ? GIFT_WRAP_FEE : 0);
     setRemoving(true);
     const { error } = await supabase
       .from('orders')
@@ -80,6 +86,27 @@ export function OrdersScreen() {
       return;
     }
     setPendingRemove(null);
+    refresh();
+  };
+
+  // Emballage cadeau : 2 000 FCFA ajoutes (ou retires) au total, tant que la commande est en attente.
+  const confirmGift = async () => {
+    if (!pendingGift) return;
+    const { order, action } = pendingGift;
+    const adding = action === 'add';
+    const total = Number(order.total);
+    setGiftBusy(true);
+    const { error } = await supabase
+      .from('orders')
+      .update({ gift_wrap: adding, total: adding ? total + GIFT_WRAP_FEE : Math.max(0, total - GIFT_WRAP_FEE) })
+      .eq('id', order.id);
+    setGiftBusy(false);
+    if (error) {
+      console.error('Erreur emballage cadeau:', error);
+      showToast("Impossible de modifier l'emballage cadeau. Réessayez dans un instant.", { title: 'Emballage cadeau', type: 'error' });
+      return;
+    }
+    setPendingGift(null);
     refresh();
   };
 
@@ -98,6 +125,7 @@ export function OrdersScreen() {
             onConfirmDelivery={() => setPendingConfirm(item)}
             confirming={false}
             onRemoveItem={(index) => setPendingRemove({ order: item, index })}
+            onGift={(action) => setPendingGift({ order: item, action })}
           />
         )}
         ListEmptyComponent={
@@ -112,6 +140,22 @@ export function OrdersScreen() {
         loading={confirming}
         onConfirm={confirmDelivery}
         onCancel={() => setPendingConfirm(null)}
+      />
+      <ConfirmDialog
+        visible={!!pendingGift}
+        title={pendingGift?.action === 'remove' ? "Retirer l'emballage cadeau ?" : "Ajouter l'emballage cadeau ?"}
+        message={
+          pendingGift
+            ? pendingGift.action === 'remove'
+              ? `Le total de votre commande passera à ${formatXAF(Math.max(0, Number(pendingGift.order.total) - GIFT_WRAP_FEE))}.`
+              : `Votre commande sera emballée pour ${formatXAF(GIFT_WRAP_FEE)}. Le total passera à ${formatXAF(Number(pendingGift.order.total) + GIFT_WRAP_FEE)}.`
+            : ''
+        }
+        confirmLabel={pendingGift?.action === 'remove' ? 'Retirer' : 'Ajouter'}
+        destructive={pendingGift?.action === 'remove'}
+        loading={giftBusy}
+        onConfirm={confirmGift}
+        onCancel={() => setPendingGift(null)}
       />
       <ConfirmDialog
         visible={!!pendingRemove}
@@ -132,13 +176,16 @@ function OrderCard({
   onConfirmDelivery,
   confirming,
   onRemoveItem,
+  onGift,
 }: {
   order: Order;
   onConfirmDelivery: () => void;
   confirming: boolean;
   onRemoveItem: (index: number) => void;
+  onGift: (action: 'add' | 'remove') => void;
 }) {
   const canEditItems = order.status === 'pending' && order.items.length > 1;
+  const canEditGift = order.status === 'pending';
 
   return (
     <View style={styles.card}>
@@ -190,6 +237,36 @@ function OrderCard({
       {canEditItems && (
         <Text style={styles.editHint}>Touchez ✕ pour retirer un article tant que la commande est en attente.</Text>
       )}
+
+      {order.gift_wrap ? (
+        <View style={[styles.giftRow, styles.giftRowOn]} testID="order-gift-on">
+          <Image source={GIFT_IMAGE} style={styles.giftImage} contentFit="contain" />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.giftTitle}>🎁 Emballage cadeau ajouté</Text>
+            <Text style={styles.giftSub}>{`${formatXAF(GIFT_WRAP_FEE)} inclus dans le total`}</Text>
+          </View>
+          {canEditGift ? (
+            <Pressable onPress={() => onGift('remove')} hitSlop={8} accessibilityRole="button" accessibilityLabel="Retirer l'emballage cadeau">
+              <Text style={styles.giftLink}>Retirer</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : canEditGift ? (
+        <Pressable
+          style={styles.giftRow}
+          onPress={() => onGift('add')}
+          accessibilityRole="button"
+          accessibilityLabel={`Ajouter l'emballage cadeau, ${formatXAF(GIFT_WRAP_FEE)}`}
+          testID="order-gift-add"
+        >
+          <Image source={GIFT_IMAGE} style={styles.giftImage} contentFit="contain" />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.giftTitle}>Ajouter l'emballage cadeau</Text>
+            <Text style={styles.giftSub}>{`Touchez l'image cadeau · + ${formatXAF(GIFT_WRAP_FEE)}`}</Text>
+          </View>
+          <Text style={styles.giftPlus}>+</Text>
+        </Pressable>
+      ) : null}
 
       <View style={styles.footer}>
         <Text style={styles.paymentMethod}>{PAYMENT_LABELS[order.payment_method] ?? order.payment_method}</Text>
@@ -297,6 +374,24 @@ const styles = StyleSheet.create({
   },
   removeItemText: { color: colors.cream, fontFamily: fonts.bodyBold, fontSize: 12 },
   editHint: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 10, marginTop: -4, marginBottom: spacing.sm },
+  giftRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: colors.panelAlt,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderStyle: 'dashed',
+    padding: 8,
+    marginBottom: spacing.sm,
+  },
+  giftRowOn: { borderStyle: 'solid', borderColor: colors.gold },
+  giftImage: { width: 46, height: 46 },
+  giftTitle: { color: colors.cream, fontFamily: fonts.bodySemiBold, fontSize: 13 },
+  giftSub: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 11, marginTop: 2 },
+  giftPlus: { color: colors.gold, fontFamily: fonts.bodyBold, fontSize: 24, paddingHorizontal: 6 },
+  giftLink: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 12, textDecorationLine: 'underline' },
   footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   paymentMethod: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 12 },
   total: { color: colors.goldLight, fontFamily: fonts.displayBold, fontSize: 17 },

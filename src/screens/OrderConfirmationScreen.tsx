@@ -6,6 +6,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing } from '../theme';
 import { GoldButton } from '../components/GoldButton';
+import { DELIVERY_HOURS, GIFT_WRAP_FEE, ORDER_VALIDITY_HOURS } from '../constants/shopRules';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
 
@@ -14,7 +15,7 @@ interface Props {
 }
 
 export function OrderConfirmationScreen({ route }: Props) {
-  const { orderId, total, instructions } = route.params;
+  const { orderId, total, instructions, giftWrap } = route.params;
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   return (
@@ -31,11 +32,17 @@ export function OrderConfirmationScreen({ route }: Props) {
           <Text style={styles.cardValue}>{formatXAF(total)}</Text>
         </View>
 
+        {giftWrap ? <Text style={styles.gift}>{`🎁 Emballage cadeau inclus (${formatXAF(GIFT_WRAP_FEE)})`}</Text> : null}
+
         {instructions ? (
           <View style={styles.instructionsBox}>
             <Text style={styles.instructionsText}>{instructions}</Text>
           </View>
         ) : null}
+
+        <Text style={styles.note}>
+          {`⏳ Pour éviter les fausses commandes, chaque commande est valable ${ORDER_VALIDITY_HOURS} h.\n🕗 Nos services de livraison sont ouverts de ${DELIVERY_HOURS}.`}
+        </Text>
 
         <GoldButton
           label="Voir mes commandes"
@@ -90,4 +97,6 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   instructionsText: { color: colors.cream, fontFamily: fonts.body, fontSize: 13, lineHeight: 19, textAlign: 'center' },
+  gift: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 14, textAlign: 'center', marginBottom: spacing.md },
+  note: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 12.5, lineHeight: 19, textAlign: 'center', marginTop: spacing.md },
 });
