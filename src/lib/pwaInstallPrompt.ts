@@ -29,9 +29,8 @@ export function isPwaInstallPromptAvailable(): boolean {
 }
 
 // Chrome peut declencher l'evenement quelques instants apres le tap : on
-// patiente un peu (le tap reste valide ~5 s) avant de basculer sur les
-// instructions manuelles. Navigateurs sans l'evenement (Firefox, Safari) :
-// pas d'attente inutile.
+// patiente (le tap reste valide ~5 s) avant de dire que ce n'est pas encore
+// pret. Navigateurs sans l'evenement (Firefox, Safari) : pas d'attente inutile.
 function waitForPrompt(timeoutMs: number): Promise<BeforeInstallPromptEvent | null> {
   if (typeof window === 'undefined' || !('onbeforeinstallprompt' in window)) return Promise.resolve(null);
   return new Promise((resolve) => {
@@ -46,7 +45,7 @@ function waitForPrompt(timeoutMs: number): Promise<BeforeInstallPromptEvent | nu
 }
 
 export async function triggerPwaInstallPrompt(): Promise<'accepted' | 'dismissed' | 'unavailable'> {
-  const promptEvent = getPrompt() ?? (await waitForPrompt(2000));
+  const promptEvent = getPrompt() ?? (await waitForPrompt(4500));
   if (!promptEvent) return 'unavailable';
   // Effacer pour ne pas redéclencher deux fois
   if (typeof window !== 'undefined') window.__pwaInstallPrompt__ = undefined;
@@ -87,6 +86,24 @@ export function manualInstallInstructions(): string {
     return "Pour installer : appuyez sur les trois points (⋮) en haut à droite de Chrome, puis sur « Installer et créer un raccourci » (ou « Installer l'application » / « Ajouter à l'écran d'accueil » selon votre version).";
   }
   return "Pour installer : cliquez sur l'icône d'installation ⊕ dans la barre d'adresse de Chrome, ou sur les trois points (⋮) en haut à droite puis « Installer Albasse Shopping ».";
+}
+
+// Message affiche quand l'installation en un tap n'est pas disponible. Sur
+// Chrome, l'evenement arrive seulement une fois le service worker actif et le
+// site utilise un moment : le plus souvent il suffit d'attendre et de
+// retoucher « Installer ». Les instructions manuelles restent en secours, et
+// on rappelle que l'icone peut deja etre installee (Chrome ne propose alors
+// plus rien).
+export function installNotReadyMessage(): string {
+  const manual = manualInstallInstructions();
+  if (isIosDevice() || typeof window === 'undefined' || !('onbeforeinstallprompt' in window)) return manual;
+  return (
+    "Chrome prépare l'installation : patientez quelques secondes sur le site (jusqu'à 30 secondes), puis touchez « Installer » de nouveau." +
+    '\n\nSinon, ' +
+    manual.charAt(0).toLowerCase() +
+    manual.slice(1) +
+    "\n\nSi Albasse est déjà installé, ouvrez-le depuis votre écran d'accueil ou votre liste d'applications."
+  );
 }
 
 export function isRunningAsInstalledPwa(): boolean {

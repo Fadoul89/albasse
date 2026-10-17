@@ -5,7 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, fonts, radius, spacing } from '../theme';
 import { trackAppDownloadClick } from '../lib/appDownloadTracking';
 import { isRunningInsideApp } from '../lib/runningInApp';
-import { isIosDevice, isRunningAsInstalledPwa, manualInstallInstructions, triggerPwaInstallPrompt } from '../lib/pwaInstallPrompt';
+import { installNotReadyMessage, isIosDevice, isRunningAsInstalledPwa, manualInstallInstructions, triggerPwaInstallPrompt } from '../lib/pwaInstallPrompt';
 import { subscribeToWebPush } from '../lib/webPushSubscription';
 import { trackShortcutInstallIfNeeded } from '../lib/appInstallTracking';
 
@@ -54,8 +54,11 @@ export function AppDownloadPopup() {
     }
     const outcome = await triggerPwaInstallPrompt();
     if (outcome === 'unavailable') {
-      window.alert(manualInstallInstructions());
-    } else if (outcome === 'accepted') {
+      // La fenetre reste ouverte : le visiteur peut reessayer dans un instant.
+      window.alert(installNotReadyMessage());
+      return;
+    }
+    if (outcome === 'accepted') {
       trackShortcutInstallIfNeeded();
       subscribeToWebPush();
     }

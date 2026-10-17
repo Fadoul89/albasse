@@ -44,6 +44,26 @@
         e.preventDefault();
         window.__pwaInstallPrompt__ = e;
       });
+
+      // Chrome n'envoie cet evenement que si un service worker avec gestionnaire
+      // « fetch » est actif (voir public/sw.js) : on l'enregistre des l'arrivee
+      // sur le site, pas seulement apres l'activation des notifications.
+      // Uniquement sur les navigateurs qui proposent l'installation en un tap,
+      // et jamais dans la coquille de l'app Android.
+      (function () {
+        try {
+          var inApp =
+            /AlbasseShoppingApp/i.test(navigator.userAgent) ||
+            /[?&]albasse_app=1/.test(window.location.search) ||
+            window.localStorage.getItem('albasse_app_shell') === '1';
+          if (inApp || !('serviceWorker' in navigator) || !('onbeforeinstallprompt' in window)) return;
+          window.addEventListener('load', function () {
+            navigator.serviceWorker.register('/sw.js').catch(function () {});
+          });
+        } catch (e) {
+          // silencieux : l'enregistrement ne doit jamais bloquer le site
+        }
+      })();
     </script>
   </body>
 </html>
