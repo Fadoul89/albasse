@@ -99,7 +99,7 @@ export function isAndroidDevice(): boolean {
 // disponible. Le libelle du menu Chrome Android varie selon la version.
 export function manualInstallInstructions(): string {
   if (isIosDevice()) {
-    return "Pour installer : appuyez sur le bouton Partager (le carré avec une flèche) en bas de Safari, puis « Sur l'écran d'accueil ».";
+    return "Pour installer : appuyez sur le bouton Partager (le carré avec une flèche) en bas de Safari, puis « Sur l'écran d'accueil ». Ouvrez ensuite l'icône Albasse et touchez « Activer » dans le bandeau vert pour recevoir les alertes.";
   }
   if (isAndroidDevice()) {
     return "Pour installer : appuyez sur les trois points (⋮) en haut à droite de Chrome, puis sur « Installer et créer un raccourci » (ou « Installer l'application » / « Ajouter à l'écran d'accueil » selon votre version).";
