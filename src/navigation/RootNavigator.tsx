@@ -7,7 +7,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { RootStackParamList } from './types';
 import { colors } from '../theme';
 import { SocialProofTicker } from '../components/SocialProofTicker';
-import { WhatsAppFab } from '../components/WhatsAppFab';
+import { Assistant } from '../components/Assistant';
 import { AppDownloadBanner } from '../components/AppDownloadBanner';
 import { trackPageView } from '../lib/analytics';
 import { startShortcutInstallTracking, trackAppInstallIfNeeded } from '../lib/appInstallTracking';
@@ -239,7 +239,7 @@ export function RootNavigator() {
           </Stack.Navigator>
         </View>
         <FavoritesSync />
-        <WhatsAppFab />
+        <Assistant />
         <SmartPromotionPopup />
         <WheelPopup />
         <AppDownloadPopup />
