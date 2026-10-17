@@ -71,6 +71,79 @@
         }
       })();
 
+      // Apple ne verifie pas toujours seul si le service worker a change : on le demande
+      // a chaque ouverture et a chaque retour au premier plan, pour que les nouveautes
+      // (notifications) arrivent tout de suite.
+      (function () {
+        try {
+          if (!('serviceWorker' in navigator)) return;
+          function refresh() {
+            navigator.serviceWorker.getRegistration().then(function (reg) {
+              if (reg) return reg.update();
+            }).catch(function () { /* silencieux */ });
+          }
+          refresh();
+          document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'visible') refresh();
+          });
+        } catch (e) {
+          // silencieux : cela ne doit jamais bloquer le site
+        }
+      })();
+
+      // Toucher d'une notification : le service worker (public/sw.js) note la page a ouvrir
+      // dans un cache. Sur iPhone, Apple lance parfois l'appli sur l'accueil sans suivre
+      // l'adresse demandee : c'est donc la page qui va sur la bonne fiche, a son ouverture
+      // (le service worker peut ecrire quelques secondes apres) et a son retour au premier plan.
+      (function () {
+        try {
+          if (!('caches' in window)) return;
+          var KEY = '/__ouverture-notification';
+          function alreadyDone(at) {
+            try {
+              if (window.sessionStorage.getItem('albasse_notif_done') === String(at)) return true;
+              window.sessionStorage.setItem('albasse_notif_done', String(at));
+            } catch (e) {
+              // silencieux
+            }
+            return false;
+          }
+          function check() {
+            // Un onglet cache n'est pas celui que la personne regarde : il attend son retour au premier plan.
+            if (document.visibilityState === 'hidden') return;
+            caches.open('albasse-notification').then(function (cache) {
+              return cache.match(KEY).then(function (res) {
+                if (!res) return;
+                return res.json().then(function (rec) {
+                  return cache.delete(KEY).then(function () {
+                    if (!rec || typeof rec.url !== 'string' || Date.now() - rec.at > 120000 || alreadyDone(rec.at)) return;
+                    var target = new URL(rec.url, window.location.origin);
+                    if (target.origin !== window.location.origin) return;
+                    if (target.pathname + target.search !== window.location.pathname + window.location.search) {
+                      window.location.assign(target.href);
+                    }
+                  });
+                });
+              });
+            }).catch(function () { /* silencieux */ });
+          }
+          function checkSoon() {
+            [0, 400, 1000, 2000, 3500, 6000].forEach(function (ms) { setTimeout(check, ms); });
+          }
+          checkSoon();
+          document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'visible') checkSoon();
+          });
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.addEventListener('message', function (e) {
+              if (e.data && e.data.type === 'albasse-notification') check();
+            });
+          }
+        } catch (e) {
+          // silencieux : cela ne doit jamais bloquer le site
+        }
+      })();
+
       // Diagnostic de l'installation : ajouter ?diag=1 a l'adresse du site affiche
       // en bas de l'ecran ce que le navigateur sait faire (service worker,
       // evenement d'installation, temps passe sur la page). Rien n'est envoye.
