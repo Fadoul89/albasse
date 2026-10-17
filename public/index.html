@@ -78,11 +78,38 @@
         try {
           if (!/[?&]diag=1/.test(window.location.search)) return;
           var t0 = performance.now();
+          var wrap = document.createElement('div');
+          wrap.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:2147483647;pointer-events:none';
+          var testBtn = document.createElement('button');
+          testBtn.type = 'button';
+          testBtn.textContent = "TESTER L'INSTALLATION DE CHROME";
+          testBtn.style.cssText =
+            'display:block;margin:0 8px 6px auto;padding:10px 14px;border:0;border-radius:8px;background:#c79a3e;color:#000;' +
+            'font:700 13px sans-serif;pointer-events:auto';
           var box = document.createElement('pre');
           box.style.cssText =
-            'position:fixed;left:0;right:0;bottom:0;z-index:2147483647;margin:0;padding:6px 8px;background:rgba(0,0,0,.9);' +
-            'color:#9fe870;font:11px/1.35 monospace;white-space:pre-wrap;word-break:break-all;pointer-events:none';
-          document.body.appendChild(box);
+            'margin:0;padding:6px 8px;background:rgba(0,0,0,.9);color:#9fe870;font:11px/1.35 monospace;' +
+            'white-space:pre-wrap;word-break:break-all;pointer-events:none';
+          wrap.appendChild(testBtn);
+          wrap.appendChild(box);
+          document.body.appendChild(wrap);
+          // Test direct, sans passer par le code du site : appelle prompt() sur l'evenement de Chrome
+          // dans le geste du toucher et affiche le resultat ou l'erreur exacte.
+          var testResult = 'pas encore lance';
+          testBtn.addEventListener('click', function () {
+            var ev = window.__pwaInstallPrompt__;
+            if (!ev) { testResult = "aucun evenement disponible (deja utilise ? rechargez la page)"; return; }
+            window.__pwaInstallPrompt__ = undefined;
+            testResult = 'prompt() appele (activation=' + (navigator.userActivation ? navigator.userActivation.isActive : '?') + ')...';
+            try {
+              ev.prompt().then(function () { return ev.userChoice; }).then(
+                function (c) { testResult = 'choix : ' + c.outcome; },
+                function (err) { testResult = 'ERREUR ' + err.name + ' : ' + err.message; }
+              );
+            } catch (err) {
+              testResult = 'EXCEPTION ' + err.name + ' : ' + err.message;
+            }
+          });
           var actions = 0;
           ['touchstart', 'click', 'scroll'].forEach(function (n) {
             window.addEventListener(n, function () { actions++; }, { passive: true, capture: true });
@@ -129,7 +156,9 @@
               'DIAG installation | ' + Math.round((performance.now() - t0) / 1000) + ' s sur la page | actions : ' + actions,
               'Navigateur : ' + browser + (/; wv\)/.test(ua) ? ' (WebView)' : '') + ' | mobile=' + (navigator.userAgentData ? navigator.userAgentData.mobile : '?') + ' | mode : ' + (modes[0] || '?'),
               'HTTPS=' + window.isSecureContext + ' | stockage=' + quota + ' | evenement gere=' + ('onbeforeinstallprompt' in window),
-              'EVENEMENT D\'INSTALLATION : ' + (at !== undefined ? 'RECU a ' + (at / 1000).toFixed(1) + ' s' : 'jamais recu'),
+              'EVENEMENT D\'INSTALLATION : ' + (at !== undefined ? 'RECU a ' + (at / 1000).toFixed(1) + ' s' : 'jamais recu') + ' | disponible=' + (window.__pwaInstallPrompt__ ? 'oui' : 'non'),
+              'Dernier essai du bouton du site : ' + (window.__pwaInstallIssue__ || 'aucun'),
+              'Test direct de Chrome : ' + testResult,
               'Service worker : ' + swInfo + ' | controle la page=' + (navigator.serviceWorker && navigator.serviceWorker.controller ? 'oui' : 'non'),
               'Enregistrement : ' + (window.__swReg__ || 'en attente'),
               'Manifest : ' + manifestInfo,
