@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { buildProduct, type CatalogProduct, type City } from './assistantBrain';
+import type { Product } from '../types';
 
 // Donnees publiques lues pour Zara (catalogue, villes, categories, infos de la boutique), gardees
 // 5 minutes en memoire. Lecture seule avec la cle publique : rien n'est ecrit.
@@ -95,7 +96,7 @@ export const getCatalog = cached<CatalogProduct[]>(async () => {
     supabase.from('categories').select('id,name,slug'),
     supabase
       .from('products')
-      .select('id,name,slug,price,compare_at_price,stock,category_id,colors,description,images,created_at')
+      .select('id,name,slug,price,compare_at_price,stock,category_id,colors,sizes,description,images,created_at')
       .eq('is_active', true)
       .order('created_at', { ascending: false })
       .limit(1000),
@@ -116,6 +117,7 @@ export const getCatalog = cached<CatalogProduct[]>(async () => {
       category: categories.get(p.category_id)?.name ?? '',
       category_slug: categories.get(p.category_id)?.slug ?? '',
       colors: p.colors,
+      sizes: p.sizes,
       description: p.description,
       image: Array.isArray(p.images) && p.images.length ? p.images[0] : null,
       created_at: p.created_at,
@@ -148,3 +150,43 @@ export const getStoreInfo = cached<StoreInfo>(async () => {
     mapsUrl: data?.google_maps_url ?? null,
   };
 });
+
+// ---------------------------------------------------------------------------------------------
+// Panier : le prix, le stock et les variantes viennent de la base AU MOMENT de l'ajout (jamais du cache de Zara).
+// Lecture seule avec la cle publique ; la commande, elle, passe par le parcours officiel du site.
+// ---------------------------------------------------------------------------------------------
+
+export async function fetchProductForCart(slug: string): Promise<Product | null> {
+  const { data, error } = await withTimeout(
+    Promise.resolve(supabase.from('products').select('*').eq('slug', slug).eq('is_active', true).maybeSingle()),
+    TIMEOUT_MS
+  );
+  if (error) throw error;
+  if (!data) return null;
+  const p = data as Product;
+  return { ...p, images: p.images ?? [], colors: p.colors ?? [], sizes: p.sizes ?? [], price: Number(p.price), stock: Number(p.stock ?? 0) };
+}
+
+export interface CartProductStatus {
+  id: string;
+  price: number;
+  compare_at_price: number | null;
+  stock: number;
+  is_active: boolean;
+}
+
+// Prix, ancien prix et stock actuels des produits du panier.
+export async function fetchCartStatus(ids: string[]): Promise<CartProductStatus[]> {
+  const { data, error } = await withTimeout(
+    Promise.resolve(supabase.from('products').select('id,price,compare_at_price,stock,is_active').in('id', ids)),
+    TIMEOUT_MS
+  );
+  if (error) throw error;
+  return ((data ?? []) as CartProductStatus[]).map((r) => ({
+    id: r.id,
+    price: Number(r.price),
+    compare_at_price: r.compare_at_price == null ? null : Number(r.compare_at_price),
+    stock: Number(r.stock ?? 0),
+    is_active: !!r.is_active,
+  }));
+}

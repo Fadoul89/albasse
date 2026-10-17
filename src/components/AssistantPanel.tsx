@@ -20,13 +20,19 @@ import { colors, fonts, radius, spacing } from '../theme';
 import { navigationRef } from '../navigation/navigationRef';
 import { useAssistantStore, type ChatAction, type ChatMessage } from '../store/assistantStore';
 import type { AssistantProduct } from '../lib/assistantData';
-import { ASSISTANT_NAME, ASSISTANT_ROLE, WHATSAPP_URL } from '../constants/assistant';
+import { hasArabic, type Lang } from '../lib/assistantLang';
+import { CartBar, ChatCart } from './AssistantCart';
+import { texts } from '../lib/assistantText';
+import { ASSISTANT_NAME, WHATSAPP_URL } from '../constants/assistant';
 
 const AVATAR = require('../../assets/assistante-avatar.jpg');
 const DESKTOP_WIDTH = 640;
+const COMPACT_WIDTH = 430;
 
 const formatXAF = (n: number) => `${Math.round(n).toLocaleString('fr-FR')} FCFA`;
-const isArabic = (text: string) => /[؀-ۿ]/.test(text);
+
+// Texte arabe : écrit de droite à gauche.
+const rtlStyle = (rtl: boolean): TextStyle | null => (rtl ? { writingDirection: 'rtl', textAlign: 'right' } : null);
 
 // Zone visible du navigateur : sur telephone, le clavier la reduit. La fenetre de chat la suit
 // pour que la zone de saisie reste toujours au-dessus du clavier.
@@ -48,7 +54,7 @@ function useVisibleArea(enabled: boolean) {
   return area;
 }
 
-function TypingDots() {
+function TypingDots({ label }: { label: string }) {
   const dots = useRef([new Animated.Value(0.3), new Animated.Value(0.3), new Animated.Value(0.3)]).current;
   useEffect(() => {
     const loops = dots.map((v, i) =>
@@ -65,21 +71,26 @@ function TypingDots() {
     return () => loops.forEach((l) => l.stop());
   }, [dots]);
   return (
-    <View style={styles.typingRow} accessibilityLabel={`${ASSISTANT_NAME} écrit…`}>
-      {dots.map((v, i) => (
-        <Animated.View key={i} style={[styles.typingDot, { opacity: v }]} />
-      ))}
+    <View style={styles.typingRow} accessibilityLabel={label} accessibilityLiveRegion="polite" testID="assistant-typing">
+      <View style={styles.typingDots}>
+        {dots.map((v, i) => (
+          <Animated.View key={i} style={[styles.typingDot, { opacity: v }]} />
+        ))}
+      </View>
+      <Text style={styles.typingText}>{label}</Text>
     </View>
   );
 }
 
-function ProductCards({ products, onOpen }: { products: AssistantProduct[]; onOpen: (slug: string) => void }) {
+function ProductCards({ products, lang, onOpen, onAdd }: { products: AssistantProduct[]; lang: Lang; onOpen: (slug: string) => void; onAdd: (slug: string) => void }) {
+  const t = texts(lang);
+  const rtl = rtlStyle(lang === 'ar');
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cards} style={styles.cardsScroll}>
       {products.map((p) => {
         const discount = p.compare_at_price && p.compare_at_price > p.price ? Math.round((1 - p.price / p.compare_at_price) * 100) : null;
         return (
-          <Pressable key={p.slug} testID="assistant-card" style={styles.card} onPress={() => onOpen(p.slug)} accessibilityRole="link" accessibilityLabel={`Voir ${p.name}`}>
+          <Pressable key={p.slug} testID="assistant-card" style={styles.card} onPress={() => onOpen(p.slug)} accessibilityRole="link" accessibilityLabel={`${t.card.see} ${p.name}`}>
             <View style={styles.cardImageWrap}>
               {p.image ? (
                 <Image source={{ uri: p.image }} style={styles.cardImage} contentFit="cover" transition={150} />
@@ -97,12 +108,28 @@ function ProductCards({ products, onOpen }: { products: AssistantProduct[]; onOp
             <Text style={styles.cardName} numberOfLines={2}>
               {p.name}
             </Text>
-            <Text style={styles.cardPrice}>{formatXAF(p.price)}</Text>
-            {discount && p.compare_at_price ? <Text style={styles.cardOldPrice}>{formatXAF(p.compare_at_price)}</Text> : null}
+            <View style={styles.cardPriceRow}>
+              <View style={styles.cardPriceCol}>
+                <Text style={styles.cardPrice}>{formatXAF(p.price)}</Text>
+                {discount && p.compare_at_price ? <Text style={styles.cardOldPrice}>{formatXAF(p.compare_at_price)}</Text> : null}
+              </View>
+              {p.in_stock ? (
+                <Pressable
+                  testID="assistant-card-add"
+                  onPress={() => onAdd(p.slug)}
+                  style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel={t.card.addLabel(p.name)}
+                  hitSlop={6}
+                >
+                  <Text style={styles.addPlus}>+</Text>
+                </Pressable>
+              ) : null}
+            </View>
             {p.in_stock && typeof p.stock === 'number' && p.stock >= 1 && p.stock <= 5 ? (
-              <Text style={styles.cardLow}>🔥 {p.stock === 1 ? 'Dernier en stock' : `Plus que ${p.stock} en stock`}</Text>
+              <Text style={[styles.cardLow, rtl]}>🔥 {p.stock === 1 ? t.card.last : t.card.only(p.stock)}</Text>
             ) : null}
-            {!p.in_stock ? <Text style={styles.cardOut}>Épuisé</Text> : <Text style={styles.cardSee}>Voir le produit ›</Text>}
+            {!p.in_stock ? <Text style={[styles.cardOut, rtl]}>{t.card.soldOut}</Text> : <Text style={[styles.cardSee, rtl]}>{t.card.see}</Text>}
           </Pressable>
         );
       })}
@@ -125,7 +152,7 @@ function ActionChips({ actions, onChoose }: { actions: ChatAction[]; onChoose: (
             accessibilityRole="button"
             accessibilityLabel={a.label}
           >
-            <Text style={[styles.chipText, ghost && styles.chipTextGhost, a.highlight && styles.chipTextHighlight, whatsapp && styles.chipTextWhatsapp]}>{a.label}</Text>
+            <Text style={[styles.chipText, ghost && styles.chipTextGhost, a.highlight && styles.chipTextHighlight, whatsapp && styles.chipTextWhatsapp, rtlStyle(hasArabic(a.label))]}>{a.label}</Text>
           </Pressable>
         );
       })}
@@ -136,18 +163,27 @@ function ActionChips({ actions, onChoose }: { actions: ChatAction[]; onChoose: (
 function Bubble({
   message,
   showActions,
+  city,
   onOpenProduct,
+  onAdd,
   onChoose,
+  onCheckout,
+  onOpenFull,
 }: {
   message: ChatMessage;
   showActions: boolean;
+  city: { name: string; fee: number | null } | null;
   onOpenProduct: (slug: string) => void;
+  onAdd: (slug: string) => void;
   onChoose: (action: ChatAction) => void;
+  onCheckout: () => void;
+  onOpenFull: () => void;
 }) {
   const mine = message.role === 'user';
-  const rtl = isArabic(message.text);
-  const textStyle: TextStyle[] = [styles.bubbleText, mine ? styles.bubbleTextMine : styles.bubbleTextBot];
-  if (rtl) textStyle.push({ writingDirection: 'rtl', textAlign: 'right' });
+  // Zara écrit de droite à gauche quand elle parle arabe ; ce que tape le visiteur suit ses propres lettres.
+  const lang: Lang = message.lang === 'ar' ? 'ar' : 'fr';
+  const rtl = mine ? hasArabic(message.text) : lang === 'ar';
+  const textStyle: (TextStyle | null)[] = [styles.bubbleText, mine ? styles.bubbleTextMine : styles.bubbleTextBot, rtlStyle(rtl)];
   return (
     <View style={styles.group}>
       <View style={[styles.row, mine ? styles.rowMine : styles.rowBot]}>
@@ -166,7 +202,8 @@ function Bubble({
               </Text>
             </View>
           )}
-          {!mine && message.products && message.products.length > 0 ? <ProductCards products={message.products} onOpen={onOpenProduct} /> : null}
+          {!mine && message.products && message.products.length > 0 ? <ProductCards products={message.products} lang={lang} onOpen={onOpenProduct} onAdd={onAdd} /> : null}
+          {!mine && message.cart ? <ChatCart lang={lang} city={city} onCheckout={onCheckout} onOpenFull={onOpenFull} /> : null}
         </View>
       </View>
       {!mine && showActions && message.actions && message.actions.length > 0 ? <ActionChips actions={message.actions} onChoose={onChoose} /> : null}
@@ -180,16 +217,35 @@ export function AssistantPanel() {
   const messages = useAssistantStore((s) => s.messages);
   const loading = useAssistantStore((s) => s.loading);
   const step = useAssistantStore((s) => s.step);
+  const lang = useAssistantStore((s) => s.lang);
   const send = useAssistantStore((s) => s.send);
   const choose = useAssistantStore((s) => s.choose);
   const closeChat = useAssistantStore((s) => s.closeChat);
   const reset = useAssistantStore((s) => s.reset);
+  const toggleLang = useAssistantStore((s) => s.toggleLang);
+  const deliveryCity = useAssistantStore((s) => s.deliveryCity);
+  const addToCart = useAssistantStore((s) => s.addToCart);
+  const openCart = useAssistantStore((s) => s.openCart);
+  const prepareCheckout = useAssistantStore((s) => s.prepareCheckout);
 
+  const t = texts(lang);
   const desktop = width >= DESKTOP_WIDTH;
+  const compact = !desktop && width < COMPACT_WIDTH;
   const area = useVisibleArea(!desktop);
   const [draft, setDraft] = useState('');
   const scrollRef = useRef<ScrollView>(null);
+  const panelRef = useRef<View>(null);
   const appear = useRef(new Animated.Value(0)).current;
+
+  // Le traducteur automatique de Google ne doit pas traduire Zara : elle parle déjà français et arabe.
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const el = panelRef.current as unknown as HTMLElement | null;
+    if (!el?.setAttribute) return;
+    el.setAttribute('translate', 'no');
+    el.classList.add('notranslate');
+    el.setAttribute('lang', lang);
+  }, [lang]);
 
   useEffect(() => {
     Animated.timing(appear, { toValue: 1, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
@@ -216,6 +272,13 @@ export function AssistantPanel() {
 
   const openProduct = (slug: string) => go(() => navigationRef.navigate('Product', { slug }));
 
+  // « Commander » : Zara vérifie le panier (prix, stock, compte) puis on ouvre la page de commande officielle, panier gardé.
+  const checkout = async () => {
+    const result = await prepareCheckout();
+    if (result === 'ok') go(() => navigationRef.navigate('Checkout'));
+  };
+  const openFullCart = () => go(() => navigationRef.navigate('Tabs', { screen: 'Cart' } as never));
+
   const onChoose = (action: ChatAction) => {
     switch (action.kind) {
       case 'whatsapp':
@@ -234,10 +297,16 @@ export function AssistantPanel() {
         if (action.payload) go(() => navigationRef.navigate('Category', { slug: action.payload as string }));
         return;
       case 'cart':
-        go(() => navigationRef.navigate('Tabs', { screen: 'Cart' } as never));
+        openCart();
+        return;
+      case 'checkout':
+        void checkout();
         return;
       case 'link':
         if (action.payload) Linking.openURL(action.payload);
+        return;
+      case 'policy':
+        go(() => navigationRef.navigate('ReturnPolicy'));
         return;
       default:
         choose(action);
@@ -249,11 +318,13 @@ export function AssistantPanel() {
     : { left: 0, right: 0, top: area?.top ?? 0, height: area?.height ?? height };
 
   const placeholder =
-    step === 'ask_name' ? 'Écrivez votre prénom…' : step === 'ask_city' ? 'Écrivez votre ville…' : step === 'ask_budget' ? 'Écrivez un montant…' : 'Écrivez votre message…';
+    step === 'ask_name' ? t.placeholder.name : step === 'ask_city' ? t.placeholder.city : step === 'ask_budget' ? t.placeholder.amount : t.placeholder.message;
   const lastIndex = messages.length - 1;
+  const rtl = lang === 'ar';
 
   return (
     <Animated.View
+      ref={panelRef}
       style={[
         styles.panel,
         desktop ? styles.panelDesktop : null,
@@ -263,44 +334,75 @@ export function AssistantPanel() {
       accessibilityViewIsModal
       testID="assistant-panel"
     >
-      <LinearGradient colors={[colors.panelAlt, colors.panel]} style={[styles.header, !desktop ? { paddingTop: spacing.sm + insets.top } : null]}>
-        <View style={styles.avatarRing}>
+      <LinearGradient colors={[colors.panelAlt, colors.panel]} style={[styles.header, compact && styles.headerCompact, !desktop ? { paddingTop: spacing.sm + insets.top } : null]}>
+        <View style={[styles.avatarRing, compact && styles.avatarRingCompact]}>
           <Image source={AVATAR} style={styles.headerAvatar} contentFit="cover" />
           <View style={styles.onlineDot} />
         </View>
         <View style={styles.headerText}>
-          <Text style={styles.headerName}>{ASSISTANT_NAME}</Text>
-          <Text style={styles.headerRole} numberOfLines={1}>
-            {ASSISTANT_ROLE.charAt(0).toUpperCase() + ASSISTANT_ROLE.slice(1)}
+          <Text style={[styles.headerName, compact && styles.headerNameCompact]} numberOfLines={1}>
+            {ASSISTANT_NAME}
+          </Text>
+          <Text style={[styles.headerRole, rtlStyle(rtl)]} numberOfLines={1}>
+            {t.roleTitle}
           </Text>
         </View>
+        <Pressable
+          onPress={toggleLang}
+          disabled={loading}
+          hitSlop={6}
+          style={[styles.langButton, loading && styles.langButtonDisabled]}
+          accessibilityRole="button"
+          accessibilityLabel={t.ui.otherLang}
+          testID="assistant-lang"
+        >
+          <Text style={[styles.langText, rtlStyle(!rtl)]}>{t.ui.otherLang}</Text>
+        </Pressable>
         {messages.length > 0 && !loading ? (
-          <Pressable onPress={reset} hitSlop={8} style={styles.trashButton} accessibilityRole="button" accessibilityLabel="Recommencer la conversation">
+          <Pressable onPress={reset} hitSlop={8} style={[styles.trashButton, compact && styles.roundCompact]} accessibilityRole="button" accessibilityLabel={t.ui.reset}>
             <Text style={styles.trashText}>🗑</Text>
           </Pressable>
         ) : null}
-        <Pressable onPress={() => Linking.openURL(WHATSAPP_URL)} hitSlop={8} style={styles.headerWhatsapp} accessibilityRole="link" accessibilityLabel="Parler à l'équipe sur WhatsApp">
-          <Text style={styles.headerWhatsappText}>WhatsApp</Text>
+        <Pressable
+          onPress={() => Linking.openURL(WHATSAPP_URL)}
+          hitSlop={8}
+          style={compact ? [styles.headerWhatsappRound, styles.roundCompact] : styles.headerWhatsapp}
+          accessibilityRole="link"
+          accessibilityLabel={t.ui.whatsappAria}
+        >
+          <Text style={compact ? styles.headerWhatsappEmoji : styles.headerWhatsappText}>{compact ? '💬' : t.ui.whatsappPill}</Text>
         </Pressable>
-        <Pressable onPress={closeChat} hitSlop={10} style={styles.closeButton} accessibilityRole="button" accessibilityLabel="Fermer">
+        <Pressable onPress={closeChat} hitSlop={10} style={[styles.closeButton, compact && styles.roundCompact]} accessibilityRole="button" accessibilityLabel={t.ui.close}>
           <Text style={styles.closeText}>✕</Text>
         </Pressable>
       </LinearGradient>
 
       <ScrollView ref={scrollRef} style={styles.messages} contentContainerStyle={styles.messagesContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {messages.map((m, i) => (
-          <Bubble key={m.id} message={m} showActions={i === lastIndex && !loading} onOpenProduct={openProduct} onChoose={onChoose} />
+          <Bubble
+            key={m.id}
+            message={m}
+            showActions={i === lastIndex && !loading}
+            city={deliveryCity}
+            onOpenProduct={openProduct}
+            onAdd={addToCart}
+            onChoose={onChoose}
+            onCheckout={checkout}
+            onOpenFull={openFullCart}
+          />
         ))}
 
         {loading ? (
           <View style={[styles.row, styles.rowBot]}>
             <Image source={AVATAR} style={styles.smallAvatar} contentFit="cover" />
             <View style={[styles.bubble, styles.bubbleBot]}>
-              <TypingDots />
+              <TypingDots label={t.ui.writing} />
             </View>
           </View>
         ) : null}
       </ScrollView>
+
+      <CartBar lang={lang} onOpen={openCart} />
 
       <View style={[styles.inputBar, !desktop ? { paddingBottom: spacing.sm + (area ? 0 : insets.bottom) } : null]}>
         <TextInput
@@ -308,24 +410,24 @@ export function AssistantPanel() {
           onChangeText={setDraft}
           placeholder={placeholder}
           placeholderTextColor={colors.creamFaint}
-          style={styles.input}
+          style={[styles.input, rtlStyle(rtl)]}
           maxLength={300}
           returnKeyType="send"
           blurOnSubmit={false}
           onSubmitEditing={() => submit(draft)}
-          accessibilityLabel="Votre message"
+          accessibilityLabel={t.ui.input}
         />
         <Pressable
           onPress={() => submit(draft)}
           disabled={!draft.trim() || loading}
           style={[styles.sendButton, (!draft.trim() || loading) && styles.sendButtonDisabled]}
           accessibilityRole="button"
-          accessibilityLabel="Envoyer"
+          accessibilityLabel={t.ui.send}
         >
           <Text style={styles.sendIcon}>➤</Text>
         </Pressable>
       </View>
-      <Text style={styles.note}>{ASSISTANT_NAME} est une assistante automatique. Pour une commande ou un souci, écrivez-nous sur WhatsApp.</Text>
+      <Text style={[styles.note, rtlStyle(rtl) && { writingDirection: 'rtl' }]}>{t.footer}</Text>
     </Animated.View>
   );
 }
@@ -356,6 +458,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
+  headerCompact: { gap: 6, paddingHorizontal: 12 },
+  avatarRingCompact: { width: 40, height: 40, borderRadius: 20 },
+  headerNameCompact: { fontSize: 17 },
+  roundCompact: { width: 32, height: 32, borderRadius: 16 },
   avatarRing: {
     width: 46,
     height: 46,
@@ -381,8 +487,13 @@ const styles = StyleSheet.create({
   headerRole: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 11.5, marginTop: 1 },
   trashButton: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.10)' },
   trashText: { fontSize: 15 },
+  langButton: { borderWidth: 1, borderColor: colors.gold, borderRadius: radius.pill, paddingHorizontal: 11, paddingVertical: 6, backgroundColor: 'rgba(199,154,62,0.12)' },
+  langButtonDisabled: { opacity: 0.5 },
+  langText: { color: colors.goldLight, fontFamily: fonts.bodyBold, fontSize: 12.5 },
   headerWhatsapp: { backgroundColor: '#25d366', borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 6 },
   headerWhatsappText: { color: '#06240f', fontFamily: fonts.bodyBold, fontSize: 12 },
+  headerWhatsappRound: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: '#25d366' },
+  headerWhatsappEmoji: { fontSize: 16 },
   closeButton: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.10)' },
   closeText: { color: colors.cream, fontSize: 15 },
 
@@ -411,12 +522,14 @@ const styles = StyleSheet.create({
   chipTextHighlight: { color: '#1b1405', fontFamily: fonts.bodyBold },
   chipTextWhatsapp: { color: '#06240f', fontFamily: fonts.bodyBold },
 
-  typingRow: { flexDirection: 'row', gap: 5, paddingVertical: 6, paddingHorizontal: 2 },
+  typingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4, paddingHorizontal: 2 },
+  typingDots: { flexDirection: 'row', gap: 5 },
+  typingText: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 13 },
   typingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.goldLight },
 
   cardsScroll: { marginTop: 2 },
   cards: { gap: 10, paddingRight: spacing.md },
-  card: { width: 150, backgroundColor: colors.panel, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, overflow: 'hidden', paddingBottom: 10 },
+  card: { width: 158, backgroundColor: colors.panel, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, overflow: 'hidden', paddingBottom: 10 },
   cardImageWrap: { width: '100%', height: 130, backgroundColor: '#fff' },
   cardImage: { width: '100%', height: '100%' },
   cardNoImage: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.panelAlt },
@@ -424,8 +537,25 @@ const styles = StyleSheet.create({
   discountBadge: { position: 'absolute', top: 6, left: 6, backgroundColor: colors.red, borderRadius: radius.sm, paddingHorizontal: 6, paddingVertical: 2 },
   discountText: { color: '#fff', fontFamily: fonts.bodyBold, fontSize: 11 },
   cardName: { color: colors.cream, fontFamily: fonts.bodySemiBold, fontSize: 13, lineHeight: 17, paddingHorizontal: 9, marginTop: 8, minHeight: 34 },
-  cardPrice: { color: colors.goldLight, fontFamily: fonts.bodyBold, fontSize: 14, paddingHorizontal: 9, marginTop: 4 },
-  cardOldPrice: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11.5, textDecorationLine: 'line-through', paddingHorizontal: 9 },
+  cardPriceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6, paddingHorizontal: 9, marginTop: 4 },
+  cardPriceCol: { flex: 1, minWidth: 0 },
+  cardPrice: { color: colors.goldLight, fontFamily: fonts.bodyBold, fontSize: 14 },
+  cardOldPrice: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11.5, textDecorationLine: 'line-through' },
+  addButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.gold,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  addButtonPressed: { opacity: 0.7, transform: [{ scale: 0.92 }] },
+  addPlus: { color: '#1b1405', fontFamily: fonts.bodyBold, fontSize: 24, lineHeight: 26 },
   cardSee: { color: colors.gold, fontFamily: fonts.bodySemiBold, fontSize: 12, paddingHorizontal: 9, marginTop: 6 },
   cardOut: { color: colors.error, fontFamily: fonts.bodySemiBold, fontSize: 12, paddingHorizontal: 9, marginTop: 6 },
   cardLow: { color: '#ffb347', fontFamily: fonts.bodySemiBold, fontSize: 11.5, paddingHorizontal: 9, marginTop: 5 },
