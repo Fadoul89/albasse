@@ -2,10 +2,20 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, fonts, radius, spacing } from '../theme';
-import { isWebPushSupported, hasWebPushPermission, isWebPushBlocked, subscribeToWebPush } from '../lib/webPushSubscription';
+import {
+  isWebPushSupported,
+  hasWebPushPermission,
+  isWebPushBlocked,
+  subscribeToWebPush,
+  getWebPushIssue,
+  PUSH_PERMISSION_NOT_GRANTED,
+} from '../lib/webPushSubscription';
 import { isRunningAsInstalledPwa } from '../lib/pwaInstallPrompt';
 
-const DISMISS_KEY = 'albasse_push_banner_dismissed';
+// « _v2 » : l'ancien bandeau se refermait pour toujours apres un echec
+// d'enregistrement (erreur 403 pour les clients connectes). Cette nouvelle cle
+// le fait reapparaitre une fois chez ceux qui l'avaient perdu.
+const DISMISS_KEY = 'albasse_push_banner_dismissed_v2';
 
 function isDismissed(): Promise<boolean> {
   return AsyncStorage.getItem(DISMISS_KEY).then((v) => v === '1');
@@ -56,9 +66,16 @@ export function WebPushBanner({ style, whenInstalled }: Props) {
     const ok = await subscribeToWebPush();
     if (ok) {
       setVisible(false);
-    } else {
-      dismiss();
+      return;
     }
+    const issue = getWebPushIssue();
+    if (issue === PUSH_PERMISSION_NOT_GRANTED) {
+      // Le visiteur a refuse : on ne le sollicite plus.
+      dismiss();
+      return;
+    }
+    // Vrai probleme : on le dit et on garde le bandeau pour pouvoir reessayer.
+    window.alert(`Les notifications n'ont pas pu être activées. Réessayez dans un instant.\n\n(Détail technique : ${issue})`);
   };
 
   return (
