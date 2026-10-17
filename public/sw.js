@@ -41,15 +41,16 @@ self.addEventListener('push', (event) => {
   } catch {
     // ignore, on garde les valeurs par defaut
   }
-  event.waitUntil(
-    self.registration.showNotification(data.title || 'Albasse Shopping', {
-      body: data.message || '',
-      icon: '/icon-192.png',
-      badge: '/icon-192.png',
-      // Page a ouvrir au toucher : la fiche du produit (envoyee par le serveur).
-      data: { url: data.url || '/' },
-    })
-  );
+  const options = {
+    body: data.message || '',
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
+    // Page a ouvrir au toucher : la fiche du produit (envoyee par le serveur).
+    data: { url: data.url || '/' },
+  };
+  // Photo du produit sous le texte (Android ; Apple ne l'affiche pas) : adresse https seulement.
+  if (typeof data.image === 'string' && data.image.startsWith('https://')) options.image = data.image;
+  event.waitUntil(self.registration.showNotification(data.title || 'Albasse Shopping', options));
 });
 
 // Adresse a ouvrir au toucher de la notification : celle envoyee avec elle, sinon
