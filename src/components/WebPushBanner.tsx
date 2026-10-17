@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, fonts, radius, spacing } from '../theme';
-import { isWebPushSupported, hasWebPushPermission, subscribeToWebPush } from '../lib/webPushSubscription';
+import { isWebPushSupported, hasWebPushPermission, isWebPushBlocked, subscribeToWebPush } from '../lib/webPushSubscription';
+import { isRunningAsInstalledPwa } from '../lib/pwaInstallPrompt';
 
 const DISMISS_KEY = 'albasse_push_banner_dismissed';
 
@@ -24,16 +25,20 @@ function isExternalArrival(): boolean {
 
 interface Props {
   style?: object;
+  // Page d'accueil de l'application installee : le visiteur ouvre l'icone, pas
+  // un lien partage. Sur iPhone, c'est le seul endroit ou l'autorisation peut
+  // etre demandee (Apple exige un toucher, pas un affichage automatique).
+  whenInstalled?: boolean;
 }
 
-export function WebPushBanner({ style }: Props) {
+export function WebPushBanner({ style, whenInstalled }: Props) {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
     if (Platform.OS !== 'web') return;
     if (!isWebPushSupported()) return;
-    if (hasWebPushPermission()) return;
-    if (!isExternalArrival()) return;
+    if (hasWebPushPermission() || isWebPushBlocked()) return;
+    if (whenInstalled ? !isRunningAsInstalledPwa() : !isExternalArrival()) return;
 
     isDismissed().then((dismissed) => {
       if (!dismissed) setVisible(true);

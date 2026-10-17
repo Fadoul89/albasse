@@ -23,6 +23,14 @@ export function hasWebPushPermission(): boolean {
   return Notification.permission === 'granted';
 }
 
+// Le visiteur a refuse (ou bloque) les notifications : inutile de reproposer
+// un bouton « Activer », seul un changement dans les reglages du navigateur
+// peut les reactiver.
+export function isWebPushBlocked(): boolean {
+  if (!isWebPushSupported()) return false;
+  return Notification.permission === 'denied';
+}
+
 export async function subscribeToWebPush(): Promise<boolean> {
   if (!isWebPushSupported() || !isSupabaseConfigured) return false;
 

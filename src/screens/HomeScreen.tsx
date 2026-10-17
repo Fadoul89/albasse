@@ -17,6 +17,7 @@ import { CustomerNotificationBell } from '../components/CustomerNotificationBell
 import { LanguageSwitcher } from '../components/LanguageSwitcher';
 import { SideAdBanner } from '../components/SideAdBanner';
 import { ChadFlag } from '../components/ChadFlag';
+import { WebPushBanner } from '../components/WebPushBanner';
 
 const CHAD_BLUE = '#0033A0';
 const CHAD_YELLOW = '#FECB00';
@@ -75,6 +76,7 @@ export function HomeScreen() {
       style={styles.screen}
       contentContainerStyle={{ paddingBottom: 40 }}
     >
+      <WebPushBanner whenInstalled />
       <View style={styles.topBar}>
         <View style={styles.topBarLeftGroup}>
           <View style={styles.topBarFrame}>

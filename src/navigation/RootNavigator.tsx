@@ -11,7 +11,7 @@ import { WhatsAppFab } from '../components/WhatsAppFab';
 import { AppDownloadBanner } from '../components/AppDownloadBanner';
 import { trackPageView } from '../lib/analytics';
 import { startShortcutInstallTracking, trackAppInstallIfNeeded } from '../lib/appInstallTracking';
-import { isRunningAsInstalledPwa } from '../lib/pwaInstallPrompt';
+import { isIosDevice, isRunningAsInstalledPwa } from '../lib/pwaInstallPrompt';
 import { hasWebPushPermission, isWebPushSupported, subscribeToWebPush } from '../lib/webPushSubscription';
 import { useAuthStore } from '../store/authStore';
 import { TabNavigator } from './TabNavigator';
@@ -153,7 +153,9 @@ export function RootNavigator() {
     // Pour les visiteurs qui ont deja installe le raccourci (PWA) : on
     // propose l'activation des notifications a l'ouverture plutot que
     // d'attendre qu'ils reinstallent.
-    if (isRunningAsInstalledPwa() && isWebPushSupported() && !hasWebPushPermission()) {
+    // Pas sur iPhone : Apple refuse la demande sans toucher du visiteur, c'est
+    // le bandeau « Activer » de la page d'accueil qui s'en charge.
+    if (isRunningAsInstalledPwa() && !isIosDevice() && isWebPushSupported() && !hasWebPushPermission()) {
       subscribeToWebPush();
     }
   }, []);
