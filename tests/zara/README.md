@@ -17,4 +17,4 @@ SUPABASE_ANON_KEY=... node --import ./tests/zara/register.mjs tests/zara/zara-br
 npx expo export --platform web
 SUPABASE_ANON_KEY=... node tests/zara/zara-ui.test.js dist 4333
 ```
-`PARTS=KP` lance seulement certaines parties : A conseil, L langues, K bouton « + » / panier / commande, P installation du raccourci, B C D E reste du site (panier, client connecté, panne, clavier, ordinateur).
+`PARTS=MTOF` lance seulement certaines parties : A conseil, L langues, K bouton « + » / panier / commande, P installation du raccourci, M client avec compte reconnu et salué par son prénom (dont la connexion depuis Zara), T personnalité (politesse, compliments, adresse et numéro personnels), O Zara finalise l'achat dans le chat (fausse base : aucune vraie commande), F programme de fidélité (grade, points, comment gagner), B C D E reste du site (panier, client connecté, panne, clavier, ordinateur).

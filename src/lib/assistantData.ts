@@ -167,6 +167,47 @@ export async function fetchProductForCart(slug: string): Promise<Product | null>
   return { ...p, images: p.images ?? [], colors: p.colors ?? [], sizes: p.sizes ?? [], price: Number(p.price), stock: Number(p.stock ?? 0) };
 }
 
+// « Vous êtes mon Nᵉ client aujourd'hui » : la fonction `assistant_chat_start` (add-assistant-client-counter.sql) note une
+// nouvelle conversation et renvoie son rang du jour. Tant qu'elle n'est pas installée, ou en cas de panne : null, et Zara
+// ne dit AUCUN nombre (jamais de nombre inventé).
+export async function startChatToday(): Promise<number | null> {
+  try {
+    const { data, error } = await withTimeout(Promise.resolve(supabase.rpc('assistant_chat_start')), 3000);
+    const n = Number(data);
+    return !error && Number.isInteger(n) && n > 0 ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+// Points de fidélité du client connecté, relus dans son compte au moment de la question (jamais une valeur gardée en mémoire).
+// null : on n'a pas pu les lire.
+export async function fetchLoyaltyPoints(userId: string): Promise<number | null> {
+  try {
+    const { data, error } = await withTimeout(Promise.resolve(supabase.from('profiles').select('loyalty_points').eq('id', userId).maybeSingle()), TIMEOUT_MS);
+    if (error || !data) return null;
+    const n = Number((data as { loyalty_points?: number | null }).loyalty_points ?? 0);
+    return Number.isFinite(n) && n >= 0 ? Math.floor(n) : null;
+  } catch {
+    return null;
+  }
+}
+
+// Numéros et liens de paiement Mobile Money réglés par la boutique (les mêmes que sur la page de commande).
+export interface PaymentNumbers {
+  airtelNumber: string | null;
+  airtelUrl: string | null;
+  moovNumber: string | null;
+  moovUrl: string | null;
+}
+
+export async function fetchPaymentNumbers(): Promise<PaymentNumbers | null> {
+  const { data, error } = await withTimeout(Promise.resolve(supabase.from('payment_settings').select('*').eq('id', 1).maybeSingle()), TIMEOUT_MS);
+  if (error || !data) return null;
+  const row = data as { airtel_number?: string | null; airtel_payment_url?: string | null; moov_number?: string | null; moov_payment_url?: string | null };
+  return { airtelNumber: row.airtel_number ?? null, airtelUrl: row.airtel_payment_url ?? null, moovNumber: row.moov_number ?? null, moovUrl: row.moov_payment_url ?? null };
+}
+
 export interface CartProductStatus {
   id: string;
   price: number;

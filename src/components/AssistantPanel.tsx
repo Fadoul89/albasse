@@ -226,7 +226,7 @@ export function AssistantPanel() {
   const deliveryCity = useAssistantStore((s) => s.deliveryCity);
   const addToCart = useAssistantStore((s) => s.addToCart);
   const openCart = useAssistantStore((s) => s.openCart);
-  const prepareCheckout = useAssistantStore((s) => s.prepareCheckout);
+  const startCheckout = useAssistantStore((s) => s.startCheckout);
 
   const t = texts(lang);
   const desktop = width >= DESKTOP_WIDTH;
@@ -272,10 +272,9 @@ export function AssistantPanel() {
 
   const openProduct = (slug: string) => go(() => navigationRef.navigate('Product', { slug }));
 
-  // « Commander » : Zara vérifie le panier (prix, stock, compte) puis on ouvre la page de commande officielle, panier gardé.
-  const checkout = async () => {
-    const result = await prepareCheckout();
-    if (result === 'ok') go(() => navigationRef.navigate('Checkout'));
+  // « Commander » : Zara vérifie le panier (prix, stock, compte) puis finalise la commande avec le client, dans la conversation.
+  const checkout = () => {
+    void startCheckout();
   };
   const openFullCart = () => go(() => navigationRef.navigate('Tabs', { screen: 'Cart' } as never));
 
@@ -293,6 +292,9 @@ export function AssistantPanel() {
       case 'orders':
         go(() => navigationRef.navigate('Orders'));
         return;
+      case 'account':
+        go(() => navigationRef.navigate('Tabs', { screen: 'Account' } as never));
+        return;
       case 'category':
         if (action.payload) go(() => navigationRef.navigate('Category', { slug: action.payload as string }));
         return;
@@ -300,7 +302,10 @@ export function AssistantPanel() {
         openCart();
         return;
       case 'checkout':
-        void checkout();
+        checkout();
+        return;
+      case 'orderPage':
+        go(() => navigationRef.navigate('Checkout')); // la page de commande du site, si le client préfère (panier gardé)
         return;
       case 'link':
         if (action.payload) Linking.openURL(action.payload);
@@ -318,7 +323,19 @@ export function AssistantPanel() {
     : { left: 0, right: 0, top: area?.top ?? 0, height: area?.height ?? height };
 
   const placeholder =
-    step === 'ask_name' ? t.placeholder.name : step === 'ask_city' ? t.placeholder.city : step === 'ask_budget' ? t.placeholder.amount : t.placeholder.message;
+    step === 'ask_name'
+      ? t.placeholder.name
+      : step === 'ask_city' || step === 'co_city'
+      ? t.placeholder.city
+      : step === 'ask_budget'
+      ? t.placeholder.amount
+      : step === 'co_name'
+      ? t.placeholder.fullName
+      : step === 'co_phone'
+      ? t.placeholder.phone
+      : step === 'co_address'
+      ? t.placeholder.address
+      : t.placeholder.message;
   const lastIndex = messages.length - 1;
   const rtl = lang === 'ar';
 
@@ -413,6 +430,7 @@ export function AssistantPanel() {
           style={[styles.input, rtlStyle(rtl)]}
           maxLength={300}
           returnKeyType="send"
+          keyboardType={step === 'co_phone' ? 'phone-pad' : 'default'}
           blurOnSubmit={false}
           onSubmitEditing={() => submit(draft)}
           accessibilityLabel={t.ui.input}

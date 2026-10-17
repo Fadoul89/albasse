@@ -13,9 +13,11 @@ export interface CreateOrderInput {
   shippingAddress: string;
   shippingCity: string;
   giftWrap?: boolean;
+  // Numéro de commande choisi à l'avance : si on réessaie après une coupure de réseau, la même commande n'est pas enregistrée deux fois.
+  id?: string;
 }
 
-function generateOrderId(): string {
+export function generateOrderId(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;
     const v = c === 'x' ? r : (r & 0x3) | 0x8;
@@ -39,7 +41,7 @@ export async function createOrder(input: CreateOrderInput): Promise<{ order: Ord
   const contentIds = orderItems.map((i) => i.product_id);
 
   const order: Order = {
-    id: generateOrderId(),
+    id: input.id ?? generateOrderId(),
     user_id: input.userId,
     items: orderItems,
     total: input.total,
@@ -83,7 +85,9 @@ export async function createOrder(input: CreateOrderInput): Promise<{ order: Ord
     ...(order.gift_wrap ? { gift_wrap: true } : {}),
   });
 
-  if (error) return { order: null, error: error.message };
+  // Numéro déjà enregistré par un essai précédent (réponse perdue) : la commande existe bien, on ne la refait pas.
+  const alreadySaved = !!input.id && (error as { code?: string } | null)?.code === '23505';
+  if (error && !alreadySaved) return { order: null, error: error.message };
   trackTikTokEvent('PlaceAnOrder', { value: input.total, currency: 'XAF', content_id: contentIds, contents });
   trackTikTokEvent('CompletePayment', { value: input.total, currency: 'XAF', content_id: contentIds, contents });
   return { order, error: null };

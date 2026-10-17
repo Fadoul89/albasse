@@ -11,8 +11,11 @@ import { AssistantPanel } from './AssistantPanel';
 
 const AVATAR = require('../../assets/assistante-avatar.jpg');
 const TEASER_DELAY_MS = 5000;
+// Le client connecté est salué par son prénom 10 secondes après sa connexion (et non 5).
+const MEMBER_TEASER_DELAY_MS = 10000;
 const TEASER_DURATION_MS = 10000;
 const TEASER_SEEN_KEY = 'albasse_assistant_teaser_seen';
+const MEMBER_TEASER_SEEN_KEY = 'albasse_assistant_teaser_member_seen';
 const SIZE = 62;
 const PRODUCT_BAR_LIFT = 62;
 
@@ -37,10 +40,10 @@ function useCurrentRouteName() {
   return name;
 }
 
-function teaserAlreadySeen() {
+function teaserAlreadySeen(key: string) {
   if (Platform.OS !== 'web') return false;
   try {
-    return window.sessionStorage.getItem(TEASER_SEEN_KEY) === '1';
+    return window.sessionStorage.getItem(key) === '1';
   } catch {
     return false;
   }
@@ -55,8 +58,9 @@ export function Assistant() {
   const dismissTeaser = useAssistantStore((s) => s.dismissTeaser);
   const savedName = useAssistantStore((s) => s.name);
   const lang = useAssistantStore((s) => s.lang);
-  const profileName = useAuthStore((s) => s.profile?.full_name);
-  const name = firstNameOfFullName(profileName) ?? savedName;
+  // Client connecté : reconnu à son prénom, il est reçu avec honneur dès la bulle de bienvenue.
+  const memberName = useAuthStore((s) => (s.isAuthenticated ? firstNameOfFullName(s.profile?.full_name) : null));
+  const name = memberName ?? savedName;
   const routeName = useCurrentRouteName();
   const [teaserVisible, setTeaserVisible] = useState(false);
   const t = texts(lang);
@@ -72,24 +76,28 @@ export function Assistant() {
     el.classList.add('notranslate');
   });
 
+  // Un client qui se connecte pendant la visite a droit à sa propre salutation (par son prénom), même si la bulle des visiteurs est déjà passée.
+  const isMember = !!memberName;
   useEffect(() => {
-    if (open || teaserDismissed || teaserAlreadySeen()) return;
+    const seenKey = isMember ? MEMBER_TEASER_SEEN_KEY : TEASER_SEEN_KEY;
+    if (open || teaserDismissed || teaserAlreadySeen(seenKey)) return;
+    const delay = isMember ? MEMBER_TEASER_DELAY_MS : TEASER_DELAY_MS;
     const show = setTimeout(() => {
       setTeaserVisible(true);
       if (Platform.OS === 'web') {
         try {
-          window.sessionStorage.setItem(TEASER_SEEN_KEY, '1');
+          window.sessionStorage.setItem(seenKey, '1');
         } catch {
           // ignore : la bulle pourra revenir a la prochaine visite
         }
       }
-    }, TEASER_DELAY_MS);
-    const hide = setTimeout(() => setTeaserVisible(false), TEASER_DELAY_MS + TEASER_DURATION_MS);
+    }, delay);
+    const hide = setTimeout(() => setTeaserVisible(false), delay + TEASER_DURATION_MS);
     return () => {
       clearTimeout(show);
       clearTimeout(hide);
     };
-  }, [open, teaserDismissed]);
+  }, [open, teaserDismissed, isMember]);
 
   if (routeName?.startsWith('Admin')) return null;
 
@@ -104,7 +112,7 @@ export function Assistant() {
         <>
           {showTeaser ? (
             <Pressable ref={teaserRef} style={[styles.teaser, { bottom: 92 + lift }]} onPress={openChat} accessibilityRole="button" accessibilityLabel={t.openLabel}>
-              <Text style={[styles.teaserText, rtl && styles.teaserTextRtl]}>{t.teaser(name)}</Text>
+              <Text style={[styles.teaserText, rtl && styles.teaserTextRtl]}>{memberName ? t.teaserMember(memberName) : t.teaser(name)}</Text>
               <Pressable onPress={dismissTeaser} hitSlop={10} style={styles.teaserClose} accessibilityRole="button" accessibilityLabel={t.ui.closeTeaser}>
                 <Text style={styles.teaserCloseText}>✕</Text>
               </Pressable>

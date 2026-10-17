@@ -22,8 +22,17 @@ async function main() {
     ['Bonjour, je suis Mahamat', 'Mahamat'], ['Mon nom est Saleh', 'Saleh'], ['Jean-Pierre', 'Jean-Pierre'], ['Mahamat Saleh Idriss', 'Mahamat'],
     ['non', null], ['Passer', null], ['plus tard', null], ['je cherche des chaussures pour homme', null], ['12345', null], ['A', null], ['https://x.com', null], ['', null],
     ['فاطمة', 'فاطمة'], ['اسمي محمد', 'محمد'], ['أنا علي', 'علي'], ['مرحبا اسمي صالح', 'صالح'], ['لا', null], ['تخطي', null], ['لاحقا', null],
+    ['MAHAMAT', 'Mahamat'], ['FATIMÉ', 'Fatimé'], ['JEAN-PIERRE', 'Jean-Pierre'], ['AL', 'Al'],
   ];
   for (const [input, expected] of names) ok(`« ${input} » -> ${expected}`, b.firstNameFrom(input) === expected, b.firstNameFrom(input));
+
+  console.log('\n== client avec compte : prenom tire du nom complet du profil');
+  const fullNames: [string | null | undefined, string | null][] = [
+    ['Ahmed Hassan', 'Ahmed'], ['MAHAMAT ABDERAMAN', 'Mahamat'], ['JEAN-PIERRE Dupont', 'Jean-Pierre'], ['  Fatimé   Ali ', 'Fatimé'], ['Mr Ali Hassan', 'Ali'],
+    ['Mme Fatimé Ali', 'Fatimé'], ['M. Saleh', 'Saleh'], ['Dr Idriss', 'Idriss'], ['Madame Aïcha Moussa', 'Aïcha'], ['الدكتور محمد علي', 'محمد'],
+    ['السيدة فاطمة', 'فاطمة'], ['محمد علي', 'محمد'], ['Dr', null], ['Mr.', null], ['12345', null], ['', null], ['   ', null], [null, null], [undefined, null], ['A. Saleh', null],
+  ];
+  for (const [input, expected] of fullNames) ok(`compte « ${input} » -> ${expected}`, b.firstNameOfFullName(input) === expected, b.firstNameOfFullName(input));
 
   console.log('\n== ce que veut le visiteur (francais)');
   const intents: [string, b.Intent][] = [
@@ -45,6 +54,7 @@ async function main() {
     ['emballage cadeau', 'wrap'], ['je veux emballer le colis', 'wrap'], ['vous faites emballage ?', 'wrap'],
     ['je veux retourner un article', 'returns'], ['remboursement', 'returns'], ['conditions de retour', 'returns'], ['échanger la taille', 'returns'], ['article défectueux', 'returns'],
     ['qui êtes-vous', 'about'], ['depuis quand existez-vous', 'about'], ['vous êtes là depuis 2013', 'about'], ['votre histoire', 'about'],
+    ['quelle est l’adresse du site ?', 'about'], ['lien du site', 'about'], ['site officiel', 'about'], ['رابط الموقع', 'about'], ['comment commander sur votre site', 'order'],
   ];
   for (const [input, expected] of intents) ok(`« ${input} » -> ${expected}`, b.detectIntent(input) === expected, b.detectIntent(input));
 
@@ -60,6 +70,110 @@ async function main() {
     ['عطر رجالي', 'search'], ['حذاء', 'search'],
   ];
   for (const [input, expected] of arIntents) ok(`« ${input} » -> ${expected}`, b.detectIntent(input) === expected, b.detectIntent(input));
+
+  console.log('\n== politesse et conversation (francais)');
+  const talkFr: [string, b.Intent][] = [
+    ['Bonjour !', 'greeting'], ['Salut Zara !', 'greeting'], ['Bonsoir', 'greeting'], ['salam', 'greeting'], ['coucou', 'greeting'], ['hello', 'greeting'], ['Bonjour Zara Kings', 'greeting'],
+    ['Merci.', 'thanks'], ['Merci beaucoup', 'thanks'], ['merci Zara', 'thanks'], ['ok merci', 'thanks'], ['merci pour votre aide', 'thanks'], ['merci infiniment', 'thanks'],
+    ['merci je cherche une montre', 'search'], ['merci, et la livraison à Moundou ?', 'delivery'], ['merci mais je veux un parfum', 'search'],
+    ['Ça va ?', 'smalltalk'], ['ça va bien ?', 'smalltalk'], ['Bonjour ça va ?', 'smalltalk'], ['Comment allez-vous ?', 'smalltalk'], ['comment vas-tu Zara', 'smalltalk'], ['Salut, comment ça va ?', 'smalltalk'],
+    ['Bonne nuit', 'goodbye'], ['Au revoir', 'goodbye'], ['à bientôt', 'goodbye'], ['bonne journée', 'goodbye'], ['bonne soirée', 'goodbye'], ['À plus', 'goodbye'], ['à plus tard', 'goodbye'], ['ciao', 'goodbye'], ['merci, bonne journée', 'goodbye'],
+    ['Tu es belle 😍', 'compliment'], ['t’es magnifique', 'compliment'], ['bravo', 'compliment'], ['je t’aime', 'compliment'], ['vous êtes adorable', 'compliment'], ['tu es très gentille', 'compliment'],
+    ['Zara, quelle est ton adresse ?', 'personal'], ['Tu habites où ?', 'personal'], ['où habites-tu', 'personal'], ['Zara, donne-moi ton numéro', 'personal'], ['Je veux ton WhatsApp personnel', 'personal'],
+    ['Je veux t’appeler', 'personal'], ['quel âge as-tu ?', 'personal'], ['tu es mariée ?', 'personal'], ['tu as des enfants ?', 'personal'], ['comment te contacter', 'personal'],
+    // la boutique, elle, répond normalement (adresse, numéro, horaires)
+    ['adresse de la boutique', 'contact'], ['numéro whatsapp', 'contact'], ['votre numéro', 'contact'], ['où est la boutique', 'contact'], ['horaires', 'contact'],
+    // des phrases de vente restent des phrases de vente
+    ['à plus de 10 000 FCFA', 'search'], ['une belle robe', 'search'], ['vous êtes fiables ?', 'trust'], ['je vais réfléchir', 'later'], ['plus tard', 'later'], ['merci', 'thanks'],
+  ];
+  for (const [input, expected] of talkFr) ok(`« ${input} » -> ${expected}`, b.detectIntent(input) === expected, b.detectIntent(input));
+
+  console.log('\n== politesse et conversation (arabe)');
+  const talkAr: [string, b.Intent][] = [
+    ['صباح الخير', 'greeting'], ['السلام عليكم', 'greeting'], ['مساء الخير', 'greeting'], ['مرحبا زارا', 'greeting'],
+    ['شكرا جزيلا', 'thanks'], ['جزاك الله خيرا', 'thanks'], ['شكرا', 'thanks'], ['شكرا اريد عطر رجالي', 'search'],
+    ['كيف حالك', 'smalltalk'], ['السلام عليكم كيف حالك', 'smalltalk'], ['كيفك يا زارا', 'smalltalk'],
+    ['تصبح على خير', 'goodbye'], ['مع السلامة', 'goodbye'], ['إلى اللقاء', 'goodbye'],
+    ['انت جميلة', 'compliment'], ['ماشاء الله عليك', 'compliment'], ['احبك', 'compliment'],
+    ['ما هو عنوانك', 'personal'], ['اين تسكنين', 'personal'], ['اعطني رقمك', 'personal'], ['اريد ان اتصل بك', 'personal'], ['واتسابك', 'personal'], ['كم عمرك', 'personal'], ['هل انت متزوجة', 'personal'],
+    ['عنوان المتجر', 'contact'], ['رقم الواتساب', 'contact'], ['ساعات العمل', 'contact'],
+  ];
+  for (const [input, expected] of talkAr) ok(`« ${input} » -> ${expected}`, b.detectIntent(input) === expected, b.detectIntent(input));
+
+  console.log('\n== commande dans le chat : nom complet, telephone, adresse, oui / non, paiement');
+  const fullNameCases: [string, string | null][] = [
+    ['ahmed hassan', 'Ahmed Hassan'], ['MAHAMAT SALEH IDRISS', 'Mahamat Saleh Idriss'], ['Mahamat Saleh Idriss Abakar', 'Mahamat Saleh Idriss Abakar'], ['je m’appelle Fatimé Ali', 'Fatimé Ali'],
+    ['محمد علي', 'محمد علي'], ['Jean-Pierre Dupont', 'Jean-Pierre Dupont'], ['A. Saleh', 'A. Saleh'], ['Ali', 'Ali'],
+    ['12345', null], ['merci beaucoup', null], ['non', null], ['je veux commander', null], ['quel est le prix ?', null], ['A', null], ['Mahamat Saleh Idriss Abakar Ali Hassan', null],
+    ['https://x.com', null], ['tu es belle', null], ['bonjour', null], ['', null],
+  ];
+  for (const [input, expected] of fullNameCases) ok(`nom complet « ${input} » -> ${expected}`, b.fullNameFrom(input) === expected, b.fullNameFrom(input));
+  const phoneCases: [string, string | null][] = [
+    ['66123456', '66123456'], ['+235 66 12 34 56', '66123456'], ['00235 66123456', '66123456'], ['٦٦١٢٣٤٥٦', '66123456'], ['91234567', '91234567'], ['66 12 34 56', '66123456'], ['mon numéro est 66123456', '66123456'],
+    ['55123456', null], ['1234', null], ['6612345', null], ['661234567', null], ['abc', null], ['', null],
+  ];
+  for (const [input, expected] of phoneCases) ok(`telephone « ${input} » -> ${expected}`, b.phoneFrom(input) === expected, b.phoneFrom(input));
+  const addressCases: [string, string | null][] = [
+    ['Quartier Farcha, rue 12', 'Quartier Farcha, rue 12'], ['  Farcha   près du marché ', 'Farcha près du marché'], ['حي فرشا قرب الصيدلية', 'حي فرشا قرب الصيدلية'],
+    ['Quartier Moursal près de la boutique Albasse', 'Quartier Moursal près de la boutique Albasse'], ['Farcha, face à la livraison de gaz', 'Farcha, face à la livraison de gaz'],
+    ['ab', null], ['1234', null], ['https://x.com/adresse', null], ['x'.repeat(151), null], ['merci', null], ['bonjour', null], ['oui', null], ['non merci', null], ['ok merci', null], ['شكرا', null],
+  ];
+  for (const [input, expected] of addressCases) ok(`adresse « ${input.slice(0, 30)} » -> ${expected && expected.slice(0, 30)}`, b.addressFrom(input) === expected, b.addressFrom(input));
+  const yesNoCases: [string, string | null][] = [['oui', 'yes'], ['Oui merci', 'yes'], ['ok', 'yes'], ["d'accord", 'yes'], ['non', 'no'], ['non merci', 'no'], ['pas du tout', 'no'], ['نعم', 'yes'], ['لا', 'no'], ['peut-être', null], ['oui mais non', null]];
+  for (const [input, expected] of yesNoCases) ok(`oui / non « ${input} » -> ${expected}`, b.yesNo(input) === expected, b.yesNo(input));
+  const payCases: [string, string | null][] = [['airtel', 'airtel_money'], ['Airtel Money', 'airtel_money'], ['moov', 'moov_money'], ['je paie à la livraison', 'cash_on_delivery'], ['cash', 'cash_on_delivery'], ['كاش', 'cash_on_delivery'], ['عند الاستلام', 'cash_on_delivery'], ['ايرتل', 'airtel_money'], ['bonjour', null]];
+  for (const [input, expected] of payCases) ok(`paiement « ${input} » -> ${expected}`, b.paymentFrom(input) === expected, b.paymentFrom(input));
+  ok('annuler la commande : « annuler », « stop », « laisse tomber », « الغاء » (mais pas « oui »)', ['annuler', 'annule la commande', 'stop', 'laisse tomber', 'الغاء'].every((x) => b.wantsCancelOrder(x)) && !b.wantsCancelOrder('oui') && !b.wantsCancelOrder('je veux commander'));
+  ok('confirmer : « oui », « je confirme », « ok », « اكد » (mais pas « non » ni « modifier »)', ['oui', 'je confirme', 'confirmer', 'ok', 'اكد'].every((x) => b.wantsConfirmOrder(x)) && !b.wantsConfirmOrder('non') && !b.wantsConfirmOrder('modifier'));
+  ok('modifier : « modifier », « changer l\'adresse », « erreur » (mais pas « oui »)', ['modifier', 'je veux changer l’adresse', 'erreur'].every((x) => b.wantsEditOrder(x)) && !b.wantsEditOrder('oui'));
+
+  console.log('\n== commande dans le chat : textes (fr et ar)');
+  const recapSample: tx.RecapData = { lines: [{ name: 'Rolex', variant: ' (Taille 41 · Blanc)', qty: 2, subtotal: 25000 }, { name: 'Parfum', variant: '', qty: 1, subtotal: 8000 }], city: 'Moundou', fee: 2500, gift: true, total: 37500, name: 'Ahmed Hassan', phone: '66123456', address: 'Quartier Farcha', method: 'airtel_money' };
+  const fr2 = tx.texts('fr').checkout;
+  const ar2 = tx.texts('ar').checkout;
+  const recapFr = fr2.recap(recapSample);
+  ok('recapitulatif (fr) : articles, livraison, emballage cadeau, total, coordonnees, paiement a l\'avance', recapFr.includes('• Rolex (Taille 41 · Blanc) × 2 : 25 000 FCFA') && recapFr.includes('🚚 Livraison à Moundou : 2 500 FCFA') && recapFr.includes('🎁 Emballage cadeau : 2 000 FCFA') && recapFr.includes('💰 Total : 37 500 FCFA') && recapFr.includes('👤 Ahmed Hassan · 📞 66123456') && recapFr.includes('📍 Quartier Farcha, Moundou') && recapFr.includes('📱 Paiement à l’avance par Airtel Money') && recapFr.endsWith('👇'), recapFr);
+  ok('recapitulatif : frais « a confirmer » si inconnus, « gratuite » si 0, pas de ligne cadeau sans emballage, paiement a la livraison', fr2.recap({ ...recapSample, fee: null, gift: false, method: 'cash_on_delivery' }).includes('à confirmer par l’équipe') && !fr2.recap({ ...recapSample, fee: null, gift: false }).includes('Emballage') && fr2.recap({ ...recapSample, fee: 0 }).includes('gratuite') && fr2.recap({ ...recapSample, method: 'cash_on_delivery' }).includes('💵 Paiement à la livraison, en espèces'));
+  const arSample: tx.RecapData = { ...recapSample, lines: [{ name: 'ساعة', variant: '', qty: 2, subtotal: 25000 }], city: 'موندو', name: 'علي', address: 'حي فرشا' };
+  const recapAr = ar2.recap(arSample);
+  ok('recapitulatif (ar) : articles, livraison, emballage, total, coordonnees, paiement', recapAr.includes('• ساعة × 2: 25 000 FCFA') && recapAr.includes('🚚 التوصيل إلى موندو: 2 500 FCFA') && recapAr.includes('🎁 تغليف الهدية') && recapAr.includes('💰 المجموع: 37 500 FCFA') && recapAr.includes('👤 علي · 📞 66123456') && recapAr.includes('📍 حي فرشا، موندو') && recapAr.includes('الدفع مسبقاً عبر Airtel Money'), recapAr);
+  ok('paiement a la livraison seulement a N\'Djamena : la question change selon la ville (fr et ar)', /À la livraison \(N'Djamena\)/.test(fr2.askPay(true)) && !/À la livraison/.test(fr2.askPay(false)) && /عند الاستلام \(إنجامينا\)/.test(ar2.askPay(true)) && !/عند الاستلام/.test(ar2.askPay(false)) && /seulement à N'Djamena/.test(fr2.codOnlyHome) && /فقط في إنجامينا/.test(ar2.codOnlyHome));
+  ok('confirmation : « enregistree » (jamais « payee » ni « confirmee »), numero, total ; instructions de paiement', fr2.placed('Ahmed', 'ABCD1234') === '🎉 Merci Ahmed ! Votre commande #ABCD1234 a bien été enregistrée.' && /تم تسجيل طلبك رقم #ABCD1234/.test(ar2.placed('علي', 'ABCD1234')) && fr2.payNumber(5000, '60 60 51 51', 'Airtel Money') === '📱 Envoyez 5 000 FCFA au 60 60 51 51 (Airtel Money).' && fr2.payUrl('https://pay.example.com') === '📱 Payez ici : https://pay.example.com' && fr2.payCash.includes('espèces') && ![fr2.placed('A', 'B'), fr2.failed, fr2.payCash, fr2.payNumber(1, '2', 'x')].some((t) => /payée|paiement reçu|confirmée/i.test(t)), [fr2.placed('Ahmed', 'ABCD1234'), fr2.payNumber(5000, '60 60 51 51', 'Airtel Money')]);
+  ok('echec : Zara dit que la commande n\'est PAS enregistree et que le panier est garde (fr et ar)', /pas pu enregistrer votre commande/.test(fr2.failed) && /panier est gardé/.test(fr2.failed) && /لم أستطع تسجيل طلبك/.test(ar2.failed) && /سلتك محفوظة/.test(ar2.failed));
+
+  console.log('\n== programme de fidelite : grade, points, comment gagner (fr et ar)');
+  const loyIntents: [string, b.Intent][] = [
+    ['quel est mon grade', 'loyalty'], ['mes points de fidélité', 'loyalty'], ['comment gagner des points', 'loyalty'], ['quels sont les grades', 'loyalty'], ['programme de fidélité', 'loyalty'],
+    ['combien de points j’ai', 'loyalty'], ['je suis au niveau Bronze ?', 'loyalty'], ['mon grade', 'loyalty'], ['ما هي درجتي', 'loyalty'], ['كيف اكسب نقاط', 'loyalty'], ['نقاطي', 'loyalty'], ['برنامج الولاء', 'loyalty'],
+    ['montre en or', 'search'], ['ساعة ذهبية', 'search'], ['payer en argent liquide', 'delivery'], ['point de vente', 'search'], ['bijou en argent', 'search'], ['bague en argent', 'search'], ['payer en argent', 'delivery'], ['mes commandes', 'orders'], ['mon compte', 'account'],
+  ];
+  for (const [input, expected] of loyIntents) ok(`« ${input} » -> ${expected}`, b.detectIntent(input) === expected, b.detectIntent(input));
+  const loyKinds: [string, string][] = [['comment gagner des points', 'earn'], ['كيف اكسب نقاط', 'earn'], ['comment avoir des points', 'earn'], ['quels sont les grades', 'tiers'], ['les paliers', 'tiers'], ['الدرجات', 'tiers'], ['quel est mon grade', 'mine'], ['mes points', 'mine'], ['نقاطي', 'mine'], ['comment connaître mon grade', 'mine']];
+  for (const [input, expected] of loyKinds) ok(`fidelite « ${input} » -> ${expected}`, b.loyaltyKind(input) === expected, b.loyaltyKind(input));
+  const lo = tx.texts('fr').loyalty;
+  const loAr = tx.texts('ar').loyalty;
+  ok('0 point : Bronze, « bienvenue dans le programme », il manque 25 points pour Argent (vrai palier)', lo.mine({ points: 0, tier: 'bronze', next: { key: 'argent', missing: 25 } }) === 'Bienvenue dans notre programme de fidélité ! 🥉 Vous êtes actuellement au grade Bronze. Chaque achat éligible sur albasseshopping.com vous permet de gagner des points. Continuez vos achats pour vous rapprocher du grade Argent ! 🎁\n⭐ Vos points : 0\nIl vous manque 25 points pour atteindre le grade Argent 🥈.', lo.mine({ points: 0, tier: 'bronze', next: { key: 'argent', missing: 25 } }));
+  ok('proche du grade suivant (13 points) : exactement l\'exemple du patron + les points', lo.mine({ points: 37, tier: 'argent', next: { key: 'or', missing: 13 } }).startsWith('Bonne nouvelle ! 😍 Vous êtes au grade Argent 🥈 et il ne vous manque que 13 points pour atteindre le grade Or 🥇 ! Continuez à profiter de nos articles sur albasseshopping.com. Chaque achat éligible vous rapproche de votre objectif ! 🎁') && lo.mine({ points: 37, tier: 'argent', next: { key: 'or', missing: 13 } }).includes('⭐ Vos points : 37'));
+  ok('grade avec 20 points a gagner : « Félicitations ! 🎉 ... Argent 🥈 », le nombre exact, puis l\'invitation a continuer', lo.mine({ points: 30, tier: 'argent', next: { key: 'or', missing: 20 } }) === 'Félicitations ! 🎉 Votre grade actuel chez Albasse Shopping est Argent 🥈.\n⭐ Vos points : 30\nIl vous manque 20 points pour atteindre le grade Or 🥇.\nContinuez à acheter sur albasseshopping.com pour gagner des points de fidélité et progresser vers le grade supérieur ! 🛍️❤️');
+  ok('1 point restant : « 1 point » (singulier) ; grade Platine -> Diamond 👑', /il ne vous manque que 1 point pour atteindre le grade Diamond 👑/.test(lo.mine({ points: 99, tier: 'platine', next: { key: 'diamond', missing: 1 } })) && !/1 points/.test(lo.mine({ points: 99, tier: 'platine', next: { key: 'diamond', missing: 1 } })));
+  ok('grade le plus haut (Diamond 👑) : pas de « points manquants », felicitations', /Diamond 👑 : c’est le plus haut grade du programme/.test(lo.mine({ points: 120, tier: 'diamond', next: null })) && !/manque/.test(lo.mine({ points: 120, tier: 'diamond', next: null })));
+  const loyNums = (t: string) => (t.replace(/[\s  ]/g, '').match(/\d+/g) ?? []).sort().join(',');
+  ok('aucun nombre invente : seuls les points du client et les points manquants apparaissent dans la reponse', loyNums(lo.mine({ points: 30, tier: 'argent', next: { key: 'or', missing: 20 } })) === '20,30' && loyNums(lo.mine({ points: 37, tier: 'argent', next: { key: 'or', missing: 13 } })) === '13,37' && loyNums(loAr.mine({ points: 30, tier: 'argent', next: { key: 'or', missing: 20 } })) === '20,30' && loyNums(lo.mine({ points: 120, tier: 'diamond', next: null })) === '120');
+  const tiersTxt = lo.earn;
+  ok('comment gagner : phrase du patron, adresse officielle, regle reelle (1 point / 5 000 FCFA livres), les 5 grades et leurs vrais paliers', tiersTxt.startsWith('C’est simple ! 😊 Achetez vos articles sur https://albasseshopping.com et gagnez des points de fidélité selon les règles du programme. Plus vous progressez, plus vous vous rapprochez des grades supérieurs ! 🛍️💎') && /1 point pour chaque tranche de 5 000 FCFA du total d’une commande livrée/.test(tiersTxt) && tiersTxt.includes('🥉 Bronze (au départ) · 🥈 Argent (25 points) · 🥇 Or (50 points) · 💎 Platine (75 points) · 👑 Diamond (100 points)'), tiersTxt);
+  ok('liste des grades (fr et ar) : les 5 grades, pas de promesse de recompense', lo.tiers.includes('👑 Diamond (100 points)') && loAr.tiers.includes('🥈 الفضية (25 نقطة)') && loAr.tiers.includes('👑 الماسية (100 نقطة)') && ![lo.earn, lo.tiers, loAr.earn, loAr.tiers].some((t) => /cadeau offert|gratuit|remise|réduction|bon d’achat|تخفيض|هدية مجانية/i.test(t)));
+  ok('sans compte connecte ou si les points ne se lisent pas : jamais de grade ni de nombre, on invite a consulter le compte sur albasseshopping.com (fr et ar)', /albasseshopping\.com/.test(lo.needLogin) && !/\d/.test(lo.needLogin) && /albasseshopping\.com/.test(lo.unavailable) && !/\d/.test(lo.unavailable) && /albasseshopping\.com/.test(loAr.needLogin) && !/\d/.test(loAr.needLogin) && !/\d/.test(loAr.unavailable));
+  ok('points gagnes par une commande : « 5 points » / « 1 point » (regle de la base) ; en arabe : نقطة واحدة, نقطتان, 5 نقاط', lo.orderPoints(5) === '🎁 Fidélité : cette commande vous rapportera 5 points une fois livrée.' && lo.orderPoints(1).includes('1 point une') && loAr.orderPoints(1).includes('نقطة واحدة') && loAr.orderPoints(2).includes('نقطتان') && loAr.orderPoints(5).includes('5 نقاط'));
+  ok('arabe : grade, points restants, enthousiasme', /بشرى سارة/.test(loAr.mine({ points: 37, tier: 'argent', next: { key: 'or', missing: 13 } })) && /الدرجة الفضية/.test(loAr.mine({ points: 37, tier: 'argent', next: { key: 'or', missing: 13 } })) && /13 نقطة/.test(loAr.mine({ points: 37, tier: 'argent', next: { key: 'or', missing: 13 } })), loAr.mine({ points: 37, tier: 'argent', next: { key: 'or', missing: 13 } }));
+
+  console.log('\n== politesse : sur quel ton Zara repond');
+  const gk: [string, string | null][] = [['Bonjour', 'hello'], ['bonsoir Zara', 'evening'], ['Salut', 'hi'], ['salam', 'salam'], ['السلام عليكم', 'salam'], ['صباح الخير', 'morning'], ['مساء الخير', 'evening'], ['مرحبا', 'hello'], ['merci', null]];
+  for (const [input, expected] of gk) ok(`salutation « ${input} » -> ${expected}`, b.greetingKind(input) === expected, b.greetingKind(input));
+  const bk: [string, string | null][] = [['bonne nuit', 'night'], ['تصبح على خير', 'night'], ['bonne soirée', 'evening'], ['bonne journée', 'day'], ['au revoir', 'plain'], ['مع السلامة', 'plain'], ['bonjour', null]];
+  for (const [input, expected] of bk) ok(`au revoir « ${input} » -> ${expected}`, b.goodbyeKind(input) === expected, b.goodbyeKind(input));
+  ok('merci beaucoup / infiniment / جزيلا -> « beaucoup » ; merci / شكرا -> simple', b.thanksKind('merci beaucoup') === 'much' && b.thanksKind('merci infiniment') === 'much' && b.thanksKind('شكرا جزيلا') === 'much' && b.thanksKind('merci') === 'plain' && b.thanksKind('شكرا') === 'plain');
+  const pk: [string, string | null][] = [['quelle est ton adresse', 'address'], ['tu habites où', 'live'], ['donne moi ton numéro', 'phone'], ['ton whatsapp', 'whatsapp'], ['je veux t’appeler', 'call'], ['tu es mariée', 'life'], ['ما هو عنوانك', 'address'], ['اين تسكنين', 'live'], ['رقمك', 'phone'], ['واتسابك', 'whatsapp'], ['اريد ان اتصل بك', 'call'], ['كم عمرك', 'life'], ['adresse de la boutique', null], ['merci', null]];
+  for (const [input, expected] of pk) ok(`question perso « ${input} » -> ${expected}`, b.personalKind(input) === expected, b.personalKind(input));
 
   console.log('\n== langue : arabe detecte, chiffres arabes, villes en arabe');
   ok('arabe detecte, francais non', l.hasArabic('مرحبا') && !l.hasArabic('bonjour') && l.hasArabic('parfum عطر') && l.detectLang('عطر') === 'ar' && l.detectLang('parfum') === null);
@@ -343,18 +457,56 @@ async function main() {
   console.log('\n== noms et ponctuation selon la langue');
   ok('{nom} -> « , Ali » en francais et « ، Ali » en arabe', tx.withName('fr', 'Bonjour{nom} !', 'Ali') === 'Bonjour, Ali !' && tx.withName('ar', 'مرحبا{nom}!', 'علي') === 'مرحبا، علي!' && tx.withName('fr', 'Bonjour{nom} !', null) === 'Bonjour !' && tx.withName('ar', 'مرحبا{nom}!', null) === 'مرحبا!');
   ok('nom de categorie selon la langue', tx.categoryLabel('ar', 'parfum', 'Parfum') === 'عطور' && tx.categoryLabel('fr', 'parfum', 'Parfum') === 'Parfum' && tx.categoryLabel('ar', 'inconnue', 'Divers') === 'Divers');
-  ok('bienvenue : nom et role seulement (fr et ar)', tx.texts('fr').welcome('Ali') === "Bonjour Ali ! Je suis Zara Kings, l'assistante marketing d'Albasse Shopping." && /^مرحبا علي! أنا زارا كينغز/.test(tx.texts('ar').welcome('علي')), [tx.texts('fr').welcome(null), tx.texts('ar').welcome(null)]);
+  ok('accueil : meme texte que l\'exemple du patron (fr), avec le prenom, le rang du jour et l\'invitation', tx.texts('fr').welcome('Moussa', 3, false) === 'Salut Moussa ! 😍👋 Bienvenue chez Albasse Shopping ! Vous êtes mon 3ᵉ client aujourd’hui, ça me fait plaisir de vous accueillir ! 🥰🛍️\nDites-moi, qu’est-ce qui vous ferait plaisir aujourd’hui ? Je suis là pour vous aider à trouver les meilleurs articles ! ❤️', tx.texts('fr').welcome('Moussa', 3, false));
+  ok('accueil sans rang connu : aucune phrase sur le nombre de clients (jamais de nombre invente)', !/client aujourd/.test(tx.texts('fr').welcome('Moussa', null, false)) && /^Salut Moussa ! 😍👋 Bienvenue chez Albasse Shopping ! Ça me fait plaisir de vous accueillir ! 🥰🛍️/.test(tx.texts('fr').welcome('Moussa', null, false)) && !/\d/.test(tx.texts('ar').welcome('علي', null, false)) && !/\d/.test(tx.texts('fr').welcome(null, null, false)), [tx.texts('fr').welcome('Moussa', null, false), tx.texts('ar').welcome('علي', null, false)]);
+  ok('accueil : 1ᵉʳ, 2ᵉ, 3ᵉ, 12ᵉ, 237ᵉ client ; sans prenom : « Salut ! »', tx.ordinalFr(1) === '1ᵉʳ' && tx.ordinalFr(2) === '2ᵉ' && tx.ordinalFr(12) === '12ᵉ' && tx.texts('fr').welcome(null, 1, false).includes('mon 1ᵉʳ client aujourd’hui') && tx.texts('fr').welcome(null, 237, false).includes('mon 237ᵉ client aujourd’hui') && tx.texts('fr').welcome(null, 3, false).startsWith('Salut ! 😍👋'));
+  ok('accueil (ar) : prenom, rang du jour, invitation', tx.texts('ar').welcome('علي', 3, false) === 'مرحباً علي! 😍👋 أهلاً بك في Albasse Shopping! أنت رقم 3 بين عملائي اليوم، ويسعدني استقبالك! 🥰🛍️\nما الذي يسعدك اليوم؟ أنا هنا لمساعدتك في إيجاد أفضل المنتجات! ❤️', tx.texts('ar').welcome('علي', 3, false));
+  ok('si le prenom a deja ete dit dans le 1er message : pas de second « Salut » ni de second prenom', !/Salut|Moussa/.test(tx.texts('fr').welcome('Moussa', 3, true)) && tx.texts('fr').welcome('Moussa', 3, true).startsWith('Bienvenue chez Albasse Shopping ! Vous êtes mon 3ᵉ client') && !/مرحباً|علي/.test(tx.texts('ar').welcome('علي', 3, true)) && tx.texts('ar').welcome('علي', 3, true).startsWith('أهلاً بك في Albasse Shopping!'));
   ok('chaque langue a son sens d\'ecriture', tx.texts('fr').dir === 'ltr' && tx.texts('ar').dir === 'rtl');
   ok('inconnue -> francais', tx.texts('xx' as l.Lang).dir === 'ltr');
+
+  console.log('\n== client avec compte : salutation par le prenom (fr et ar)');
+  const fr = tx.texts('fr');
+  const ar = tx.texts('ar');
+  ok('1er message (avant le choix de la langue) : « Salut Ahmed ! 😍👋 » et « مرحباً Ahmed! 😍👋 »', fr.hello('Ahmed') === 'Salut Ahmed ! 😍👋' && ar.hello('Ahmed') === 'مرحباً Ahmed! 😍👋', [fr.hello('Ahmed'), ar.hello('Ahmed')]);
+  ok('client qui se connecte pendant la conversation : accueilli par son prenom (fr et ar)', fr.memberBack('Ahmed') === 'Salut Ahmed ! 😍👋 Vous êtes bien connecté(e), ça me fait plaisir de vous retrouver ! 🥰' && /Ahmed/.test(ar.memberBack('Ahmed')) && l.hasArabic(ar.memberBack('Ahmed')) && /يسعدني/.test(ar.memberBack('Ahmed')), [fr.memberBack('Ahmed'), ar.memberBack('Ahmed')]);
+  ok('bulle du bouton pour le client avec compte (fr et ar)', fr.teaserMember('Ahmed') === 'Salut Ahmed ! 😍👋 Zara Kings est à votre service 🛍️' && /Ahmed/.test(ar.teaserMember('Ahmed')) && l.hasArabic(ar.teaserMember('Ahmed')), [fr.teaserMember('Ahmed'), ar.teaserMember('Ahmed')]);
+  ok('visiteur sans compte : on lui propose aussi de se connecter pour etre reconnu (fr et ar)', /déjà un compte/.test(fr.askNameGuest) && /reconnaîtrai/.test(fr.askNameGuest) && l.hasArabic(ar.askNameGuest) && !l.hasArabic(fr.askNameGuest) && fr.askName === 'Comment puis-je vous appeler ?', [fr.askNameGuest, ar.askNameGuest]);
+  ok('aucune fausse promesse dans les salutations (ni prix, ni stock, ni pourcentage, ni « commande confirmee »)', [fr.hello('Ahmed'), fr.memberBack('Ahmed'), fr.teaserMember('Ahmed'), ar.memberBack('Ahmed'), ar.teaserMember('Ahmed')].every((s) => !/%|FCFA|stock|remise|confirm|-\s?\d/i.test(s)));
+
+  console.log('\n== personnalite : variantes, honnetete, pas de faux numero');
+  const frKinds = { hello: ['hello', 'evening', 'hi', 'salam', 'morning'] as const, goodbye: ['night', 'evening', 'day', 'plain'] as const, personal: ['address', 'live', 'phone', 'whatsapp', 'call', 'life'] as const };
+  for (const lang of ['fr', 'ar'] as const) {
+    const T = tx.texts(lang);
+    const groups: [string, string[]][] = [
+      ...frKinds.hello.flatMap((k) => [[`salutation ${k} (${lang})`, T.talk.hello(k, true)], [`salutation ${k} inconnu (${lang})`, T.talk.hello(k, false)]] as [string, string[]][]),
+      ...frKinds.goodbye.map((k) => [`au revoir ${k} (${lang})`, T.talk.goodbye(k)] as [string, string[]]),
+      ...frKinds.personal.map((k) => [`vie perso ${k} (${lang})`, T.talk.personal(k)] as [string, string[]]),
+      [`ca va (${lang})`, T.talk.fine], [`merci (${lang})`, T.talk.thanks], [`merci beaucoup (${lang})`, T.talk.thanksMuch], [`apres un compliment (${lang})`, T.talk.afterCompliment], [`compliment (${lang})`, T.talk.compliment],
+    ];
+    ok(`${lang} : chaque situation a au moins 2 phrases differentes (Zara ne se repete pas)`, groups.every(([, lines]) => lines.length >= 2 && new Set(lines).size === lines.length), groups.filter(([, lines]) => lines.length < 2 || new Set(lines).size !== lines.length).map(([k]) => k));
+    ok(`${lang} : aucune phrase ne cite de numero, de prix ou de pourcentage (rien d'invente)`, groups.every(([, lines]) => lines.every((l) => !/\d{3,}|\+\d|%|FCFA/.test(l))), groups.filter(([, lines]) => lines.some((l) => /\d{3,}|\+\d|%|FCFA/.test(l))).map(([k]) => k));
+    const personal = frKinds.personal.flatMap((k) => T.talk.personal(k));
+    ok(`${lang} : Zara ne pretend jamais avoir un domicile, un numero, un mari ou des enfants`, personal.every((l) => !/j['’]habite|ma maison|mon (mari|numéro|whatsapp|adresse|domicile)|mes enfants|ma famille|أسكن في|(^|\s)(منزلي|زوجي|أولادي|رقمي|عنواني)(\s|$)/.test(l)), personal);
+    ok(`${lang} : Zara dit qu'elle est une assistante virtuelle quand on lui parle de sa vie`, frKinds.personal.every((k) => T.talk.personal(k).every((l) => (lang === 'fr' ? /assistante virtuelle/ : /مساعدتك الافتراضية|مساعدة افتراضية/).test(l))), frKinds.personal.map((k) => T.talk.personal(k)[0]));
+    ok(`${lang} : adresse -> renvoie vers le bouton de la boutique ; numero -> vers le bouton WhatsApp officiel`, T.talk.personal('address').every((l) => /\n/.test(l)) && ['phone', 'whatsapp', 'call'].every((k) => T.talk.personal(k as 'phone').every((l) => /\n/.test(l))));
+  }
+  ok('salut a quelqu\'un deja connu : « retrouver » ; a un inconnu : pas de « retrouver » (on ne pretend pas le connaitre)', tx.texts('fr').talk.hello('hi', true).every((l) => /retrouver|revoir/.test(l)) && tx.texts('fr').talk.hello('hi', false).every((l) => !/retrouver|revoir/.test(l)));
+  ok('bonsoir -> bonsoir ; salam -> salam ; bonjour -> bonjour (meme ton que le client)', tx.texts('fr').talk.hello('evening', false).every((l) => /^Bonsoir/.test(l)) && tx.texts('fr').talk.hello('salam', false).every((l) => /salam/i.test(l)) && tx.texts('fr').talk.hello('hello', false).every((l) => /^Bonjour/.test(l)));
+  ok('mots d\'accueil : « Bonsoir ! », « Salut ! », « Salam ! », « Bonjour ! » (et en arabe)', tx.texts('fr').talk.helloWord('evening') === 'Bonsoir !' && tx.texts('fr').talk.helloWord('hi') === 'Salut !' && tx.texts('fr').talk.helloWord('salam') === 'Salam !' && tx.texts('fr').talk.helloWord('hello') === 'Bonjour !' && tx.texts('ar').talk.helloWord('salam') === 'وعليكم السلام!' && tx.texts('ar').talk.helloWord('evening') === 'مساء الخير!');
+  ok('les phrases d\'exemple du patron sont la (compliment, adresse, numero)', tx.texts('fr').talk.compliment[0] === 'Oh, merci beaucoup ! 🥰 Vous êtes adorable ! Je suis votre assistante virtuelle Zara, toujours là pour vous aider avec le sourire ❤️🛍️' && tx.texts('fr').talk.afterCompliment[0].startsWith('Avec grand plaisir ! 😊❤️ Je suis toujours là pour vous aider.') && tx.texts('fr').talk.personal('address')[0].startsWith('😊 Je suis votre assistante virtuelle, disponible en ligne pour vous aider ! Vous pouvez me retrouver ici sur Albasse Shopping.') && tx.texts('fr').talk.personal('phone')[0].startsWith('😊 Je n’ai pas de numéro personnel. Je travaille en ligne comme assistante virtuelle de marketing digital chez Albasse Shopping. Je suis là pour vous aider directement ici !') && tx.texts('fr').talk.personal('whatsapp')[0].startsWith('Haha 😊 Je n’ai pas de WhatsApp personnel.') && tx.texts('fr').talk.personal('live')[0].startsWith('Haha 😊 Je n’ai pas de domicile comme une personne.'));
 
   console.log('\n== textes arabes : tout en arabe (sauf les noms propres et les boutons du site)');
   const ALLOWED = /Albasse|Shopping|Airtel|Moov|Money|FCFA|Acheter|Ajouter|panier|Voir|produit|le\b|au|N'Djamena|Mongo|Rolex|dorée|Test|STTL|Sud|Voyage|Abou|Aziza|Liberté|Abéché|Français|Chrome|Safari|albasseshopping\.com/g;
   const sampleArgs: Record<string, unknown[]> = {
-    welcome: ['علي'], teaser: ['علي'], nice: ['علي'], 'card.only': [3], 'chip.withCategory': ['عطور'], promoIntro: [50], foundFor: ['عطر', 'بأقل من 10 000 FCFA'], fallbackFor: ['عطر', 'بأقل من 10 000 FCFA'],
+    welcome: ['علي', 3, false], teaser: ['علي'], hello: ['علي'], nice: ['علي'], 'card.only': [3], 'chip.withCategory': ['عطور'], promoIntro: [50], foundFor: ['عطر', 'بأقل من 10 000 FCFA'], fallbackFor: ['عطر', 'بأقل من 10 000 FCFA'],
     nothingFor: ['عطر'], askWho: [true], askType: ['lui', true], giftIntro: ['lui'], pairIntro: ['عطور'], rangeText: [{ min: 0, max: 10000 }], lowStock: ['ساعة', 3], pitch: ['ساعة', '10 000 FCFA', 3],
     cartReminder: [2, 25000], priceReply: [50], trust: ['السوق المركزي', '+235 60 60 51 51'], whyAdvice: ['ساعة', ['سبب']], 'why.discount': [50, 12500, 25000], 'why.lowStock': [3],
     'why.colors': ['أسود'], 'why.sizes': ['40'], cityNotFound: ['سار'], cityFee: ['موندو', '2 500 FCFA', null], cityNoFee: ['موندو', null], serviceNote: [true], 'contact.hours': ['8:00'],
     budgetBest: ['بأقل من 10 000 FCFA'], budgetFallback: ['بأقل من 10 000 FCFA'],
+    'loyalty.mine': [{ points: 30, tier: 'argent', next: { key: 'or', missing: 20 } }], 'loyalty.orderPoints': [5],
+    'checkout.askPay': [true], 'checkout.methodLabel': ['airtel_money'], 'checkout.recap': [{ lines: [{ name: 'ساعة', variant: '', qty: 2, subtotal: 25000 }], city: 'موندو', fee: 2500, gift: true, total: 37500, name: 'علي', phone: '66123456', address: 'حي فرشا', method: 'airtel_money' }],
+    'checkout.placed': ['علي', '12345678'], 'checkout.totalToPay': [37500], 'checkout.payInitiated': ['Airtel Money', 'تم'], 'checkout.payUrl': ['https://pay.example.com'], 'checkout.payNumber': [37500, '60 60 51 51', 'Airtel Money'], 'checkout.payTeam': ['66123456', 'Airtel Money'], 'chip.useAddress': ['حي فرشا'],
     'cart.added': ['ساعة', ' (المقاس 41)', 2, 25000], 'cart.priceChanged': ['ساعة', '10 000 FCFA', '12 000 FCFA'], 'install.iosSteps': [false],
   };
   const leaks: string[] = [];
@@ -363,7 +515,7 @@ async function main() {
     if (typeof node === 'string') {
       if (path === 'dir') return;
       count++;
-      const rest = node.replace(/\{nom\}/g, '').replace(ALLOWED, '').replace(/https?:\/\/\S+/g, '');
+      const rest = node.replace(/\{nom\}/g, '').replace(/https?:\/\/\S+/g, '').replace(ALLOWED, '');
       const latin = rest.match(/[A-Za-zÀ-ÿ]{3,}/g);
       if (latin) leaks.push(`${path}: ${latin.join(',')}`);
     } else if (Array.isArray(node)) node.forEach((x, i) => walk(x, `${path}[${i}]`));
@@ -371,6 +523,12 @@ async function main() {
     else if (node && typeof node === 'object') for (const [k, v] of Object.entries(node)) walk(v, path ? `${path}.${k}` : k);
   };
   walk(tx.texts('ar'), '');
+  for (const d of [{ points: 0, tier: 'bronze', next: { key: 'argent', missing: 25 } }, { points: 37, tier: 'argent', next: { key: 'or', missing: 13 } }, { points: 120, tier: 'diamond', next: null }] as const) walk(tx.texts('ar').loyalty.mine({ ...d, next: d.next ? { ...d.next } : null } as never), `loyalty.mine(${d.points})`);
+  // toutes les variantes de la conversation (la visite ci-dessus ne voit que la variante par defaut de chaque texte)
+  const arTalk = tx.texts('ar').talk;
+  for (const k of ['hello', 'evening', 'hi', 'salam', 'morning'] as const) { walk(arTalk.hello(k, true), `talk.hello(${k},known)`); walk(arTalk.hello(k, false), `talk.hello(${k})`); }
+  for (const k of ['night', 'evening', 'day', 'plain'] as const) walk(arTalk.goodbye(k), `talk.goodbye(${k})`);
+  for (const k of ['address', 'live', 'phone', 'whatsapp', 'call', 'life'] as const) walk(arTalk.personal(k), `talk.personal(${k})`);
   ok(`aucun mot francais oublie dans les ${count} textes arabes`, leaks.length === 0, leaks);
   let frCount = 0;
   const frArabic: string[] = [];
@@ -381,15 +539,23 @@ async function main() {
     else if (node && typeof node === 'object') for (const [k, v] of Object.entries(node)) walkFr(v, path ? `${path}.${k}` : k);
   };
   const frSample: Record<string, unknown[]> = {
-    welcome: ['Ali'], teaser: ['Ali'], nice: ['Ali'], 'card.only': [3], 'chip.withCategory': ['Parfum'], promoIntro: [50], foundFor: ['parfum', 'à moins de 10 000 FCFA'], fallbackFor: ['parfum', 'à moins de 10 000 FCFA'],
+    welcome: ['Ali', 3, false], teaser: ['Ali'], hello: ['Ali'], nice: ['Ali'], 'card.only': [3], 'chip.withCategory': ['Parfum'], promoIntro: [50], foundFor: ['parfum', 'à moins de 10 000 FCFA'], fallbackFor: ['parfum', 'à moins de 10 000 FCFA'],
     nothingFor: ['parfum'], askWho: [true], askType: ['lui', true], giftIntro: ['lui'], pairIntro: ['Parfum'], rangeText: [{ min: 0, max: 10000 }], lowStock: ['Montre', 3], pitch: ['Montre', '10 000 FCFA', 3],
     cartReminder: [2, 25000], priceReply: [50], trust: ['Marché Central', '+235 60 60 51 51'], whyAdvice: ['Montre', ['raison']], 'why.discount': [50, 12500, 25000], 'why.lowStock': [3],
     'why.colors': ['noir'], 'why.sizes': ['40'], cityNotFound: ['Sarh'], cityFee: ['Moundou', '2 500 FCFA', null], cityNoFee: ['Moundou', null], serviceNote: [true], 'contact.hours': ['8h'],
     budgetBest: ['à moins de 10 000 FCFA'], budgetFallback: ['à moins de 10 000 FCFA'],
+    'loyalty.mine': [{ points: 30, tier: 'argent', next: { key: 'or', missing: 20 } }], 'loyalty.orderPoints': [5],
+    'checkout.askPay': [true], 'checkout.methodLabel': ['airtel_money'], 'checkout.recap': [{ lines: [{ name: 'Montre', variant: '', qty: 2, subtotal: 25000 }], city: 'Moundou', fee: 2500, gift: true, total: 37500, name: 'Ali', phone: '66123456', address: 'Farcha', method: 'airtel_money' }],
+    'checkout.placed': ['Ali', 'ABCD1234'], 'checkout.totalToPay': [37500], 'checkout.payInitiated': ['Airtel Money', 'ok'], 'checkout.payUrl': ['https://pay.example.com'], 'checkout.payNumber': [37500, '60 60 51 51', 'Airtel Money'], 'checkout.payTeam': ['66123456', 'Airtel Money'], 'chip.useAddress': ['Farcha'],
   };
   for (const k of Object.keys(sampleArgs)) delete sampleArgs[k];
   Object.assign(sampleArgs, frSample);
   walkFr(tx.texts('fr'), '');
+  for (const d of [{ points: 0, tier: 'bronze', next: { key: 'argent', missing: 25 } }, { points: 37, tier: 'argent', next: { key: 'or', missing: 13 } }, { points: 120, tier: 'diamond', next: null }] as const) walkFr(tx.texts('fr').loyalty.mine({ ...d, next: d.next ? { ...d.next } : null } as never), `loyalty.mine(${d.points})`);
+  const frTalk = tx.texts('fr').talk;
+  for (const k of ['hello', 'evening', 'hi', 'salam', 'morning'] as const) { walkFr(frTalk.hello(k, true), `talk.hello(${k},known)`); walkFr(frTalk.hello(k, false), `talk.hello(${k})`); }
+  for (const k of ['night', 'evening', 'day', 'plain'] as const) walkFr(frTalk.goodbye(k), `talk.goodbye(${k})`);
+  for (const k of ['address', 'live', 'phone', 'whatsapp', 'call', 'life'] as const) walkFr(frTalk.personal(k), `talk.personal(${k})`);
   ok(`aucune lettre arabe dans les ${frCount} textes francais (sauf le bouton de langue)`, frArabic.length === 0, frArabic);
   ok('chaque texte arabe contient bien de l\'arabe (sauf chiffres et noms)', (() => { const bad: string[] = []; const w = (node: unknown, path: string) => { if (typeof node === 'string') { if (node.length > 6 && !l.hasArabic(node)) bad.push(path); } else if (Array.isArray(node)) node.forEach((x, i) => w(x, `${path}[${i}]`)); else if (node && typeof node === 'object') for (const [k, v] of Object.entries(node)) if (typeof v !== 'function') w(v, path ? `${path}.${k}` : k); }; w(tx.texts('ar'), ''); return bad.length === 0 ? true : bad; })());
   ok('textes importants : le francais et l\'arabe disent la meme chose (chiffres identiques)', ['info', 'rules', 'howToOrder', 'wrapReply', 'returns'].every((k) => { const nums = (s: string) => (s.replace(/[\s  ]/g, '').match(/\d+/g) ?? []).filter((n) => n !== '00').sort().join(','); const f = nums((tx.texts('fr') as any)[k]); const a = nums((tx.texts('ar') as any)[k]); return f === a; }), ['info', 'rules', 'howToOrder', 'wrapReply', 'returns'].map((k) => [k, (tx.texts('fr') as any)[k].replace(/[\s  ]/g, '').match(/\d+/g)?.sort().join(','), (tx.texts('ar') as any)[k].replace(/[\s  ]/g, '').match(/\d+/g)?.sort().join(',')]));
