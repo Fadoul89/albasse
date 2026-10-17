@@ -41,6 +41,7 @@ import { SmartPromotionPopup } from '../components/SmartPromotionPopup';
 import { WheelPopup } from '../components/WheelPopup';
 import { AppDownloadPopup } from '../components/AppDownloadPopup';
 import { IosInstallGuide } from '../components/IosInstallGuide';
+import { GlowBorder } from '../components/GlowBorder';
 import { AdminStoreSettingsScreen } from '../screens/admin/AdminStoreSettingsScreen';
 import { ContactScreen } from '../screens/ContactScreen';
 import { CustomerNotificationsScreen } from '../screens/CustomerNotificationsScreen';
@@ -243,6 +244,7 @@ export function RootNavigator() {
         <WheelPopup />
         <AppDownloadPopup />
         <IosInstallGuide />
+        <GlowBorder />
       </View>
     </NavigationContainer>
   );
