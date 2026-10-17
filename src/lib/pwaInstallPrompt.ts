@@ -6,7 +6,19 @@ type BeforeInstallPromptEvent = Event & {
 declare global {
   interface Window {
     __pwaInstallPrompt__?: BeforeInstallPromptEvent;
+    __pwaInstallIssue__?: string;
   }
+}
+
+// Dernier resultat du bouton « Installer » : affiche par le diagnostic (?diag=1)
+// et dans le message quand la boite d'installation n'a pas pu s'ouvrir.
+let lastOutcome: 'accepted' | 'dismissed' | 'unavailable' | null = null;
+function note(text: string) {
+  if (typeof window !== 'undefined') window.__pwaInstallIssue__ = text;
+}
+function describeError(e: unknown): string {
+  const err = e as { name?: string; message?: string } | null;
+  return `${err?.name ?? 'Erreur'} : ${String(err?.message ?? e).slice(0, 90)}`;
 }
 
 // Fallback listener pour les cas où le module est chargé avant l'événement.
@@ -46,15 +58,22 @@ function waitForPrompt(timeoutMs: number): Promise<BeforeInstallPromptEvent | nu
 
 export async function triggerPwaInstallPrompt(): Promise<'accepted' | 'dismissed' | 'unavailable'> {
   const promptEvent = getPrompt() ?? (await waitForPrompt(4500));
-  if (!promptEvent) return 'unavailable';
+  if (!promptEvent) {
+    note("aucun évènement de Chrome au moment du toucher");
+    return 'unavailable';
+  }
   // Effacer pour ne pas redéclencher deux fois
   if (typeof window !== 'undefined') window.__pwaInstallPrompt__ = undefined;
   deferredPrompt = null;
   try {
     await promptEvent.prompt();
     const { outcome } = await promptEvent.userChoice;
+    note(`choix dans la boîte de Chrome : ${outcome}`);
+    lastOutcome = outcome;
     return outcome;
-  } catch {
+  } catch (e) {
+    note(`prompt() a échoué : ${describeError(e)}`);
+    lastOutcome = 'unavailable';
     return 'unavailable';
   }
 }
@@ -97,12 +116,21 @@ export function manualInstallInstructions(): string {
 export function installNotReadyMessage(): string {
   const manual = manualInstallInstructions();
   if (isIosDevice() || typeof window === 'undefined' || !('onbeforeinstallprompt' in window)) return manual;
+  const detail = window.__pwaInstallIssue__ ? `\n\n(Détail technique : ${window.__pwaInstallIssue__})` : '';
+  // Chrome ne renvoie pas l'evenement apres un refus dans la meme page : il faut recharger.
+  if (lastOutcome === 'dismissed') {
+    return (
+      "Vous avez fermé la boîte d'installation de Chrome. Pour la rouvrir : rechargez la page (tirez vers le bas), attendez quelques secondes, puis touchez « Installer » de nouveau." +
+      detail
+    );
+  }
   return (
     "Chrome prépare l'installation : patientez quelques secondes sur le site (jusqu'à 30 secondes), puis touchez « Installer » de nouveau." +
     '\n\nSinon, ' +
     manual.charAt(0).toLowerCase() +
     manual.slice(1) +
-    "\n\nSi Albasse est déjà installé, ouvrez-le depuis votre écran d'accueil ou votre liste d'applications."
+    "\n\nSi Albasse est déjà installé, ouvrez-le depuis votre écran d'accueil ou votre liste d'applications." +
+    detail
   );
 }
 
