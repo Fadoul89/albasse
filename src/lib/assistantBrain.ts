@@ -1,7 +1,8 @@
-import { DEFAULT_AGENCIES, DELIVERY_HOURS, HOME_CITY, ORDER_VALIDITY_HOURS, PAYMENT } from '../constants/shopRules';
 import { isHomeCity } from './deliveryRules';
+import { arabicCityToLatin, foldArabic, hasArabic, type Lang } from './assistantLang';
+import { fcfa, texts } from './assistantText';
 
-export { isHomeCity };
+export { isHomeCity, fcfa };
 
 // Cerveau de Zara : fonctions simples (sans IA) qui comprennent quelques mots-cles et preparent
 // les reponses. Aucune dependance a l'ecran ni a la base : facile a tester.
@@ -16,16 +17,19 @@ const STOP_WORDS = new Set([
   's', 'il', 'elle', 'vous', 'plait', 'quel', 'quels', 'quelle', 'quelles', 'que', 'qui', 'est', 'sont', 'y', 'avez', 'avoir',
   'vendez', 'vend', 'tu', 'as', 'moi', 'mon', 'ma', 'mes', 'ce', 'cette', 'ces', 'bonjour', 'salut', 'merci',
   'moins', 'plus', 'entre', 'max', 'maximum', 'minimum', 'fcfa', 'cfa', 'franc', 'francs', 'budget', 'mille',
+  'faire', 'fais', 'fait', 'besoin', 'quelque', 'chose', 'voir', 'trouver', 'donner', 'envie', 'aimerais', 'souhaite', 'souhaiterais',
+  'pouvez', 'pourriez', 'ton', 'ta', 'son', 'sa', 'notre', 'votre', 'leur',
 ]);
 
 // Mots qui precisent un produit sans dire de quoi il s'agit : ils comptent moins dans le classement.
 const MODIFIERS = new Set(['homme', 'femme', 'enfant', 'bebe', 'fille', 'garcon', 'mixte', 'unisexe', 'adulte', 'dame', 'monsieur']);
 
 export function normalize(text: string): string {
-  return text
+  return foldArabic(text)
     .toLowerCase()
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
+    .normalize('NFC') // « ئ » (décomposée par NFD) redevient une seule lettre, comme dans les mots de la liste
     .replace(/[^a-z0-9؀-ۿ\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -59,6 +63,7 @@ export interface RawProduct {
   category: string;
   category_slug?: string | null;
   colors: string[] | null;
+  sizes?: string[] | null;
   description: string | null;
   image: string | null;
   created_at: string;
@@ -73,6 +78,8 @@ export interface CatalogProduct {
   stock: number;
   category: string;
   categorySlug: string;
+  colors: string[];
+  sizes: string[];
   image: string | null;
   createdAt: number;
   nameTokens: string[];
@@ -95,6 +102,8 @@ export function buildProduct(p: RawProduct): CatalogProduct {
     stock: Number(p.stock ?? 0),
     category: p.category,
     categorySlug: p.category_slug ?? '',
+    colors: colors.map((c) => String(c).trim()).filter(Boolean),
+    sizes: (p.sizes ?? []).map((z) => String(z).trim()).filter(Boolean),
     image: p.image,
     createdAt: Date.parse(p.created_at) || 0,
     nameTokens: tokenize(p.name),
@@ -163,7 +172,7 @@ export function newest(products: CatalogProduct[], limit = 4): CatalogProduct[] 
 // Prenom du visiteur
 // ---------------------------------------------------------------------------------------------
 
-const NO_NAME = /^(non|no|passer|plus tard|rien|aucun|skip|pas maintenant|jamais|merci)$/;
+const NO_NAME = /^(non|no|passer|plus tard|rien|aucun|skip|pas maintenant|jamais|merci|لا|تخطي|لاحقا|بعدين|شكرا|ليس الان)$/;
 
 // « Fatimé », « je m'appelle Fatimé Ali », « moi c'est Ali » -> « Fatimé » / « Ali ». Renvoie null si ce
 // n'est pas un prenom (phrase, chiffres, refus).
@@ -172,9 +181,10 @@ export function firstNameFrom(text: string): string | null {
   if (!t || t.length > 40) return null;
   if (NO_NAME.test(normalize(t))) return null;
   let s = t
-    .replace(/^(bonjour|bonsoir|salut|salam)[ ,!]*/i, '')
+    .replace(/^(bonjour|bonsoir|salut|salam|مرحبا|مرحباً|أهلا|اهلا|السلام عليكم|سلام)[ ,!،]*/i, '')
+    .replace(/^(اسمي|أنا|انا|ناديني|نادني|يسمونني)\s+/, '')
     .replace(/^(je m'appelle|je m’appelle|je me nomme|mon nom est|mon prénom est|mon prenom est|moi c'est|moi c’est|c'est|c’est|je suis|appelez[- ]moi|appelle[- ]moi|moi)\s+/i, '')
-    .replace(/[.!?,;:]+$/g, '')
+    .replace(/[.!?,;:،؛؟]+$/g, '')
     .trim();
   if (!s || /\d/.test(s)) return null;
   const words = s.split(' ').filter(Boolean);
@@ -215,33 +225,51 @@ export type Intent =
   | 'later'
   | 'rules'
   | 'info'
+  | 'returns'
+  | 'about'
+  | 'cart'
+  | 'add'
+  | 'install'
   | 'search';
 
 const has = (tokens: string[], words: string[]) => words.some((w) => tokens.includes(w));
 
+// « الهدية » -> « هديه » : on enleve l'article et les petits prefixes pour retrouver le mot de la liste.
+const stemAr = (token: string) => (hasArabic(token) ? token.replace(/^(وال|بال|فال|كال|لل|ال)/, (m) => (m === 'لل' ? 'ل' : '')) : token);
+
 export function detectIntent(text: string): Intent {
-  const tokens = normalize(text).split(' ').filter(Boolean);
-  if (tokens.length === 0) return 'search';
-  if (has(tokens, ['robot', 'bot', 'ia', 'intelligence', 'artificielle', 'humain', 'humaine', 'machine', 'automatique']) || /vraie? personne|vrai humain|une personne/.test(normalize(text))) return 'bot';
-  if (has(tokens, ['merci', 'shukran', 'thanks'])) return 'thanks';
-  if (has(tokens, ['bonjour', 'bonsoir', 'salut', 'salam', 'coucou', 'hello', 'slt', 'hi']) && tokens.length <= 3) return 'greeting';
-  if (has(tokens, ['compte', 'inscription', 'inscrire', 'inscris', 'connexion', 'connecter'])) return 'account';
-  if (has(tokens, ['suivre', 'suivi']) || /mes commandes/.test(normalize(text))) return 'orders';
-  if (tokens.includes('48') || tokens.includes('48h') || has(tokens, ['valable', 'validite', 'expire', 'expiree', 'expiration', 'fausse', 'fausses'])) return 'rules';
-  if (has(tokens, ['infos', 'info', 'informations', 'important', 'importante', 'importantes', 'conditions', 'regles'])) return 'info';
-  if (has(tokens, ['emballage', 'emballer', 'emballe', 'emballee', 'empaqueter'])) return 'wrap';
-  if (has(tokens, ['cadeau', 'cadeaux', 'offrir', 'anniversaire', 'mariage', 'tabaski', 'ramadan', 'eid'])) return 'gift';
-  if (has(tokens, ['arnaque', 'arnaques', 'confiance', 'fiable', 'fiables', 'serieux', 'serieuse', 'securise', 'securisee', 'securite', 'garantie', 'escroquerie', 'escroc', 'peur', 'risque'])) return 'trust';
-  if (has(tokens, ['cher', 'chere', 'chers', 'cheres', 'couteux', 'couteuse', 'negocier', 'marchander', 'baisser', 'diminuer'])) return 'price';
-  if (/plus tard|reflechi|je verrai|on verra|pas maintenant|je reviendrai|je reviens/.test(normalize(text))) return 'later';
-  if (has(tokens, ['livraison', 'livrer', 'livre', 'livrez', 'frais', 'expedition', 'delai', 'agence', 'paiement', 'payer', 'paye', 'payez', 'airtel', 'moov', 'cash', 'espece', 'especes', 'mobile', 'argent'])) return 'delivery';
-  if (has(tokens, ['promo', 'promos', 'promotion', 'promotions', 'solde', 'soldes', 'reduction', 'reductions', 'remise', 'remises', 'offre', 'offres', 'flash', 'rabais'])) return 'promo';
-  if (has(tokens, ['nouveaute', 'nouveautes', 'nouveau', 'nouveaux', 'recent', 'recents', 'derniere', 'dernieres'])) return 'new';
-  if (has(tokens, ['categorie', 'categories', 'catalogue', 'rayon', 'rayons'])) return 'categories';
-  if (has(tokens, ['commande', 'commander', 'panier', 'passer'])) return 'order';
-  if (has(tokens, ['conseil', 'conseils', 'conseille', 'recommande', 'recommandez', 'suggere', 'choisir', 'idee', 'idees'])) return 'advice';
-  if (has(tokens, ['budget'])) return 'budget';
-  if (has(tokens, ['whatsapp', 'contact', 'contacter', 'appeler', 'telephone', 'numero', 'joindre', 'equipe', 'conseiller', 'horaire', 'horaires', 'adresse', 'boutique', 'magasin'])) return 'contact';
+  const n = normalize(text);
+  const base = n.split(' ').filter(Boolean);
+  if (base.length === 0) return 'search';
+  const tokens = [...base, ...base.map(stemAr).filter((t, i) => t !== base[i])];
+  if (has(tokens, ['robot', 'bot', 'ia', 'intelligence', 'artificielle', 'humain', 'humaine', 'machine', 'automatique', 'روبوت', 'بوت', 'ذكاء', 'اصطناعي', 'اله']) || /vraie? personne|vrai humain|une personne|شخص حقيقي|انسان حقيقي/.test(n)) return 'bot';
+  if (has(tokens, ['merci', 'shukran', 'thanks', 'شكرا', 'مشكور', 'مشكوره', 'جزاك'])) return 'thanks';
+  if (has(tokens, ['bonjour', 'bonsoir', 'salut', 'salam', 'coucou', 'hello', 'slt', 'hi', 'مرحبا', 'اهلا', 'سلام', 'صباح', 'مساء', 'هلا', 'هاي']) && base.length <= 3) return 'greeting';
+  // installer l'application / ajouter à l'écran d'accueil
+  if (has(tokens, ['installer', 'installe', 'installation', 'telecharger', 'raccourci', 'pwa', 'appli', 'application', 'تثبيت', 'ثبت', 'تحميل', 'تطبيق']) || /ecran d accueil|ecran accueil|الشاشه الرئيسيه/.test(n)) return 'install';
+  // panier : ajouter un article, voir le panier ou le total (« comment ... » reste une question d'aide)
+  const how = has(tokens, ['comment', 'كيف']);
+  if (!how && has(tokens, ['ajoute', 'ajouter', 'ajoutez', 'rajoute', 'rajouter', 'mets', 'mettre', 'prends', 'prend', 'prendre', 'اضف', 'اضيفي', 'ضيف', 'ضع', 'خذ'])) return 'add';
+  if (!how && (has(tokens, ['panier', 'سلتي', 'سله']) || /combien (ca|cela) fait|montant total|le total|mon total|combien je dois|المجموع|الاجمالي/.test(n))) return 'cart';
+  if (has(tokens, ['compte', 'inscription', 'inscrire', 'inscris', 'connexion', 'connecter', 'حساب', 'حسابي', 'تسجيل', 'اشتراك', 'سجل', 'اسجل', 'دخول'])) return 'account';
+  if (has(tokens, ['suivre', 'suivi', 'طلباتي', 'تتبع', 'متابعه']) || /mes commandes/.test(n)) return 'orders';
+  if (has(tokens, ['retour', 'retourner', 'retourne', 'rembourse', 'remboursement', 'rembourser', 'echange', 'echanger', 'defectueux', 'defectueuse', 'abime', 'abimee', 'ارجاع', 'استرجاع', 'ارجع', 'استبدال', 'تبديل', 'معيب', 'تالف', 'استرداد'])) return 'returns';
+  if (tokens.includes('48') || tokens.includes('48h') || has(tokens, ['valable', 'validite', 'expire', 'expiree', 'expiration', 'fausse', 'fausses', 'صالح', 'صلاحيه', 'وهميه', 'وهمي'])) return 'rules';
+  if (has(tokens, ['infos', 'info', 'informations', 'important', 'importante', 'importantes', 'conditions', 'regles', 'معلومات', 'شروط', 'قواعد'])) return 'info';
+  if (/qui etes vous|a propos|presentation|votre histoire|votre experience|depuis quand|2013|من انتم|عن الشركه|عنكم/.test(n)) return 'about';
+  if (has(tokens, ['emballage', 'emballer', 'emballe', 'emballee', 'empaqueter', 'تغليف', 'غلاف', 'تغلف', 'مغلف', 'اغلف'])) return 'wrap';
+  if (has(tokens, ['cadeau', 'cadeaux', 'offrir', 'anniversaire', 'mariage', 'tabaski', 'ramadan', 'eid', 'هديه', 'هدايا', 'هديتي', 'اهداء', 'اهدي', 'ميلاد', 'زواج', 'عرس', 'رمضان', 'عيد', 'مناسبه'])) return 'gift';
+  if (has(tokens, ['arnaque', 'arnaques', 'confiance', 'fiable', 'fiables', 'serieux', 'serieuse', 'securise', 'securisee', 'securite', 'garantie', 'escroquerie', 'escroc', 'peur', 'risque', 'نصب', 'احتيال', 'ثقه', 'موثوق', 'موثوقين', 'موثوقون', 'موثوقه', 'ضمان', 'خوف', 'خايف', 'مصداقيه', 'امان'])) return 'trust';
+  if (has(tokens, ['cher', 'chere', 'chers', 'cheres', 'couteux', 'couteuse', 'negocier', 'marchander', 'baisser', 'diminuer', 'غالي', 'غال', 'غاليه', 'باهظ', 'مكلف', 'مساومه', 'تفاوض', 'ارخص'])) return 'price';
+  if (/plus tard|reflechi|je verrai|on verra|pas maintenant|je reviendrai|je reviens|لاحقا|بعدين|سافكر|افكر|ليس الان/.test(n)) return 'later';
+  if (has(tokens, ['livraison', 'livrer', 'livre', 'livrez', 'frais', 'expedition', 'delai', 'agence', 'paiement', 'payer', 'paye', 'payez', 'airtel', 'moov', 'cash', 'espece', 'especes', 'mobile', 'argent', 'توصيل', 'شحن', 'دفع', 'ادفع', 'تسليم', 'رسوم', 'وكاله', 'ايرتل', 'موف', 'كاش', 'نقدا', 'تكلفه', 'مصاريف'])) return 'delivery';
+  if (has(tokens, ['promo', 'promos', 'promotion', 'promotions', 'solde', 'soldes', 'reduction', 'reductions', 'remise', 'remises', 'offre', 'offres', 'flash', 'rabais', 'عروض', 'عرض', 'تخفيضات', 'تخفيض', 'خصم', 'خصومات', 'تنزيلات', 'تنزيل'])) return 'promo';
+  if (has(tokens, ['nouveaute', 'nouveautes', 'nouveau', 'nouveaux', 'recent', 'recents', 'derniere', 'dernieres', 'جديد', 'جديده', 'احدث', 'حديثا'])) return 'new';
+  if (has(tokens, ['categorie', 'categories', 'catalogue', 'rayon', 'rayons', 'فئات', 'اقسام', 'تصنيفات', 'كتالوج', 'فئه', 'قسم'])) return 'categories';
+  if (has(tokens, ['commande', 'commander', 'panier', 'passer', 'طلب', 'اطلب', 'شراء', 'اشتري', 'سله', 'سلتي'])) return 'order';
+  if (has(tokens, ['conseil', 'conseils', 'conseille', 'recommande', 'recommandez', 'suggere', 'choisir', 'idee', 'idees', 'نصيحه', 'انصحني', 'انصح', 'اقتراح', 'اقترح', 'ساعدني', 'مساعده', 'اختيار', 'اختار'])) return 'advice';
+  if (has(tokens, ['budget', 'ميزانيه', 'ميزانيتي', 'ميزانتي'])) return 'budget';
+  if (has(tokens, ['whatsapp', 'contact', 'contacter', 'appeler', 'telephone', 'numero', 'joindre', 'equipe', 'conseiller', 'horaire', 'horaires', 'adresse', 'boutique', 'magasin', 'واتساب', 'واتس', 'اتصال', 'اتصل', 'تواصل', 'هاتف', 'رقم', 'عنوان', 'متجر', 'محل', 'فريق']) || /ساعات العمل|اوقات العمل|مواعيد/.test(n)) return 'contact';
   return 'search';
 }
 
@@ -258,7 +286,8 @@ export interface City {
 // Retrouve la ville ecrite dans le texte (« livraison a moundou », « Ndjamena », « abeche »...).
 // Les noms courts (Bol, Ati, Mao...) doivent etre ecrits seuls pour eviter les faux positifs.
 export function matchCity(cities: City[], text: string): City | null {
-  const n = normalize(text);
+  const latin = hasArabic(text) ? arabicCityToLatin(text) : null;
+  const n = normalize(latin ?? text);
   if (!n) return null;
   const tokens = n.split(' ');
   const flat = n.replace(/ /g, '');
@@ -275,51 +304,29 @@ export function matchCity(cities: City[], text: string): City | null {
   return best ? best.city : null;
 }
 
-export const fcfa = (n: number) => `${Math.round(n).toLocaleString('fr-FR')} FCFA`;
-
 // Livraison et paiement pour une ville.
-export function cityReply(city: City): string {
-  if (isHomeCity(city.name)) {
-    return `À ${HOME_CITY}, la livraison est gratuite 🚚 et vous payez à la livraison 💵 : vous ne payez qu'en recevant votre commande.`;
-  }
+export function cityReply(city: City, lang: Lang = 'fr'): string {
+  const t = texts(lang);
+  if (isHomeCity(city.name)) return t.cityHome;
   const agency = city.agency?.trim() || null;
-  const delivery =
-    city.fee == null
-      ? `Pour ${city.name}, le tarif de livraison est à confirmer avec notre équipe sur WhatsApp${agency ? `, par l'agence ${agency}` : ''}.`
-      : `Pour ${city.name}, la livraison coûte ${fcfa(city.fee)}, ${agency ? `par l'agence ${agency}` : `par agence de transport (${DEFAULT_AGENCIES})`}. 🚚`;
-  return `${delivery}\nLe paiement se fait à l'avance :\n📱 Airtel Money ${PAYMENT.airtel}\n📲 Moov Money ${PAYMENT.moov}`;
+  const delivery = city.fee == null ? t.cityNoFee(city.name, agency) : t.cityFee(city.name, fcfa(city.fee), agency);
+  return `${delivery}\n${t.cityPay}`;
 }
 
 // Horaires de livraison et duree d'une commande : rappeles apres chaque reponse sur la livraison.
-export function serviceNote(home: boolean): string {
-  return `🕗 Nos services de livraison sont ouverts de ${DELIVERY_HOURS}.\n⏳ Pour éviter les fausses commandes, chaque commande est valable ${ORDER_VALIDITY_HOURS} h${home ? '.' : ' : réglez dans ce délai.'}`;
-}
+export const serviceNote = (home: boolean, lang: Lang = 'fr'): string => texts(lang).serviceNote(home);
 
 // Les trois choses importantes, dites a chaque client au debut de la conversation.
-export function importantInfo(): string {
-  return [
-    'ℹ️ À savoir avant de commander :',
-    `🚚 Nos services de livraison sont ouverts de ${DELIVERY_HOURS}.`,
-    `💵 Paiement à la livraison : seulement à ${HOME_CITY}. Dans les autres villes, le paiement se fait à l'avance (Airtel Money ou Moov Money).`,
-    `⏳ Pour éviter les fausses commandes, chaque commande est valable ${ORDER_VALIDITY_HOURS} h.`,
-  ].join('\n');
-}
+export const importantInfo = (lang: Lang = 'fr'): string => texts(lang).info;
 
-export function rulesReply(): string {
-  return `⏳ Pour éviter les fausses commandes, chaque commande est valable ${ORDER_VALIDITY_HOURS} h. Passé ce délai, une commande restée en attente (non réglée) est signalée comme fausse commande.\nHors ${HOME_CITY}, réglez à l'avance : Airtel Money ${PAYMENT.airtel} ou Moov Money ${PAYMENT.moov}.`;
-}
+export const rulesReply = (lang: Lang = 'fr'): string => texts(lang).rules;
 
 // ---------------------------------------------------------------------------------------------
 // Phrases pour donner envie d'acheter (tournent pour ne pas se repeter)
 // ---------------------------------------------------------------------------------------------
 
-const ENCOURAGEMENTS = [
-  'Touchez « Voir le produit » puis « Acheter » : c’est simple et rapide ! 🛍️',
-  'À N’Djamena, la livraison est gratuite et vous payez à la livraison : commandez sans risque 😉',
-  'Profitez-en tant qu’il y a du stock ! 🔥',
-  'Une belle occasion de vous faire plaisir (ou d’offrir) ! 🎁',
-];
-
-export function encouragement(seed: number): string {
-  return ENCOURAGEMENTS[Math.abs(seed) % ENCOURAGEMENTS.length];
+// Phrase qui donne envie d'acheter : tourne parmi plusieurs pour ne pas se repeter.
+export function encouragement(seed: number, lang: Lang = 'fr'): string {
+  const lines = texts(lang).encouragements;
+  return lines[Math.abs(seed) % lines.length];
 }

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { colors, fonts, radius } from '../theme';
@@ -6,7 +6,7 @@ import { navigationRef } from '../navigation/navigationRef';
 import { useAssistantStore } from '../store/assistantStore';
 import { useAuthStore } from '../store/authStore';
 import { firstNameOfFullName } from '../lib/assistantBrain';
-import { ASSISTANT_NAME, ASSISTANT_ROLE } from '../constants/assistant';
+import { texts } from '../lib/assistantText';
 import { AssistantPanel } from './AssistantPanel';
 
 const AVATAR = require('../../assets/assistante-avatar.jpg');
@@ -54,10 +54,23 @@ export function Assistant() {
   const teaserDismissed = useAssistantStore((s) => s.teaserDismissed);
   const dismissTeaser = useAssistantStore((s) => s.dismissTeaser);
   const savedName = useAssistantStore((s) => s.name);
+  const lang = useAssistantStore((s) => s.lang);
   const profileName = useAuthStore((s) => s.profile?.full_name);
   const name = firstNameOfFullName(profileName) ?? savedName;
   const routeName = useCurrentRouteName();
   const [teaserVisible, setTeaserVisible] = useState(false);
+  const t = texts(lang);
+  const rtl = lang === 'ar';
+  const teaserRef = useRef<View>(null);
+
+  // Le traducteur automatique de Google ne doit pas traduire la bulle : elle suit déjà la langue de Zara.
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const el = teaserRef.current as unknown as HTMLElement | null;
+    if (!el?.setAttribute) return;
+    el.setAttribute('translate', 'no');
+    el.classList.add('notranslate');
+  });
 
   useEffect(() => {
     if (open || teaserDismissed || teaserAlreadySeen()) return;
@@ -90,14 +103,14 @@ export function Assistant() {
       {!open ? (
         <>
           {showTeaser ? (
-            <Pressable style={[styles.teaser, { bottom: 92 + lift }]} onPress={openChat} accessibilityRole="button" accessibilityLabel={`Ouvrir la discussion avec ${ASSISTANT_NAME}`}>
-              <Text style={styles.teaserText}>{`Bonjour${name ? ` ${name}` : ''} ! Je suis ${ASSISTANT_NAME}, l'${ASSISTANT_ROLE} d'Albasse Shopping. 😊`}</Text>
-              <Pressable onPress={dismissTeaser} hitSlop={10} style={styles.teaserClose} accessibilityRole="button" accessibilityLabel="Fermer la bulle">
+            <Pressable ref={teaserRef} style={[styles.teaser, { bottom: 92 + lift }]} onPress={openChat} accessibilityRole="button" accessibilityLabel={t.openLabel}>
+              <Text style={[styles.teaserText, rtl && styles.teaserTextRtl]}>{t.teaser(name)}</Text>
+              <Pressable onPress={dismissTeaser} hitSlop={10} style={styles.teaserClose} accessibilityRole="button" accessibilityLabel={t.ui.closeTeaser}>
                 <Text style={styles.teaserCloseText}>✕</Text>
               </Pressable>
             </Pressable>
           ) : null}
-          <Pressable style={[styles.fab, { bottom: 82 + lift }]} onPress={openChat} accessibilityRole="button" accessibilityLabel={`Discuter avec ${ASSISTANT_NAME}, l'${ASSISTANT_ROLE}`} testID="assistant-fab">
+          <Pressable style={[styles.fab, { bottom: 82 + lift }]} onPress={openChat} accessibilityRole="button" accessibilityLabel={t.fabLabel} testID="assistant-fab">
             <Image source={AVATAR} style={styles.avatar} contentFit="cover" />
             <View style={styles.dot} />
           </Pressable>
@@ -160,6 +173,7 @@ const styles = StyleSheet.create({
     zIndex: 900,
   },
   teaserText: { flex: 1, color: '#1b1405', fontFamily: fonts.bodySemiBold, fontSize: 13, lineHeight: 18 },
+  teaserTextRtl: { writingDirection: 'rtl', textAlign: 'right' },
   teaserClose: { paddingHorizontal: 4, paddingVertical: 1 },
   teaserCloseText: { color: 'rgba(27,20,5,0.55)', fontSize: 12 },
 });
