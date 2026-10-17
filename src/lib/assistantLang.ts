@@ -4,6 +4,14 @@
 
 export type Lang = 'fr' | 'ar';
 
+// Conversation : comment le visiteur salue, dit au revoir, et ce qu'il demande sur la vie personnelle de Zara.
+export type GreetingKind = 'salam' | 'evening' | 'morning' | 'hi' | 'hello';
+export type GoodbyeKind = 'night' | 'evening' | 'day' | 'plain';
+export type PersonalKind = 'address' | 'live' | 'phone' | 'whatsapp' | 'call' | 'life';
+
+// Modes de paiement proposés par Zara (les mêmes que sur la page de commande)
+export type PayMethodKey = 'airtel_money' | 'moov_money' | 'cash_on_delivery';
+
 export const hasArabic = (text: string) => /[؀-ۿ]/.test(text);
 
 // ٢٠٠٠٠ -> 20000

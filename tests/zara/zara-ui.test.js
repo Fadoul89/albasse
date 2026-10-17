@@ -1,8 +1,10 @@
-// Controle complet de Zara Kings v4 (langue en 1er message, conseillere, arabe, bouton +, panier dans le chat, PWA) sur la version
+// Controle complet de Zara Kings v5 (langue en 1er message, conseillere, arabe, bouton +, panier dans le chat, PWA, client avec compte salue par son prenom) sur la version
 // complete du site (export local). Lecture seule vers la vraie base : produits, villes, categories.
 // Les commandes d'un client connecte sont simulees (fausse base en memoire) : aucune ecriture reelle.
 // Parties : A (nouveau visiteur), B (contexte produit/panier), C (client connecte : chat, commande, mes commandes, admin),
-//           D (panne), E (clavier, fiche produit, admin cache, ordinateur). Choisir avec PARTS=ABCDE.
+//           D (panne), E (clavier, fiche produit, admin cache, ordinateur), M (client avec compte reconnu et salue par son prenom).
+//           T (personnalite : politesse, compliments, adresse et numero personnels), O (Zara finalise l'achat dans le chat).
+//           F (programme de fidelite : grade, points, comment gagner). Choisir avec PARTS=ABCDEMTOF.
 const { chromium, devices } = require('playwright');
 const { spawn } = require('child_process');
 const path = require('path');
@@ -10,7 +12,7 @@ const fs = require('fs');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const dist = process.argv[2] || '../../dist';
 const port = process.argv[3] || '4333';
-const PARTS = (process.env.PARTS || 'ALKPBCDE').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMTOFBCDE').toUpperCase();
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
 fs.mkdirSync(OUT, { recursive: true });
 const KEY = process.env.SUPABASE_ANON_KEY;
@@ -24,7 +26,10 @@ const get = async (q) => (await fetch(`${REST}/${q}`, { headers: { apikey: KEY, 
 const num = (t) => Number(String(t).replace(/[^\d]/g, ''));
 const barAmount = (t) => num(((String(t).match(/·\s*([\d\s\u00a0\u202f]+)\s*FCFA/) || [])[1]) || '');
 
-const WELCOME = "Bonjour ! Je suis Zara Kings, l'assistante marketing d'Albasse Shopping.";
+// Accueil de Zara (sans rang du jour : sans la fonction de la base, elle ne dit aucun nombre)
+const WELCOME_FR = (name) => `Salut${name ? ' ' + name : ''} ! 😍👋 Bienvenue chez Albasse Shopping ! Ça me fait plaisir de vous accueillir ! 🥰🛍️`;
+const INVITE_FR = 'Dites-moi, qu’est-ce qui vous ferait plaisir aujourd’hui ? Je suis là pour vous aider à trouver les meilleurs articles ! ❤️';
+const WELCOME_AR = /أهلاً بك في Albasse Shopping! يسعدني استقبالك! 🥰🛍️/;
 const FAB_NAME = /Discuter avec Zara Kings/;
 const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, deviceScaleFactor: 2 };
 
@@ -34,19 +39,25 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   const b = await chromium.launch();
 
   // Un contexte = un visiteur. Lecture seule vers la base ; le reste d'internet est coupe.
-  // fakeUser : compte simule. fakeOrders : { list: [...], patches: [] } = fausse table des commandes.
-  async function newVisitor(opts, { storage = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null } = {}) {
+  // rank : rang du jour renvoye par la fonction de la base (null : fonction pas installee). fakeUser : compte simule (token : reponse a une connexion par mot de passe ; delay : lenteur du profil en ms). fakeOrders : { list: [...], patches: [] } = fausse table des commandes.
+  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null } = {}) {
     const ctx = await b.newContext(opts);
     if (cookies) await ctx.addCookies(cookies);
     if (lang) storage = { albasse_zara_lang: lang, ...storage };
-    await ctx.addInitScript((entries) => {
+    await ctx.addInitScript(([entries, sessionEntries]) => {
       try {
         localStorage.setItem('albasse_app_banner_dismissed', '1');
         localStorage.setItem('albasse_app_popup_seen_' + new Date().toISOString().slice(0, 10), '1');
         for (const [k, v] of Object.entries(entries)) localStorage.setItem(k, v);
+        // la conversation et le « deja salue » de l'onglet ne sont mis qu'a la premiere page (pas apres un rechargement)
+        if (!sessionStorage.getItem('__zara_test_seeded')) {
+          for (const [k, v] of Object.entries(sessionEntries)) sessionStorage.setItem(k, v);
+          sessionStorage.setItem('__zara_test_seeded', '1');
+        }
       } catch (e) {}
-    }, storage);
+    }, [storage, session]);
     const writes = [];
+    const rpcCalls = [];
     const json = (route, body, status = 200) =>
       route.fulfill({ status, headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' }, body: JSON.stringify(body) });
     await ctx.route('**/*', (route) => {
@@ -57,10 +68,41 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       if (u.hostname.endsWith('.supabase.co')) {
         if (m === 'OPTIONS') return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' } });
         if (blockPath && u.pathname.includes(blockPath)) return route.abort();
+        // « Vous etes mon Ne client aujourd'hui » : la fonction de la base est simulee (absente si rank est null)
+        if (u.pathname === '/rest/v1/rpc/assistant_chat_start' && m === 'POST') {
+          rpcCalls.push(Date.now());
+          return rank === null ? json(route, { message: 'function not found' }, 404) : json(route, rank);
+        }
         if (fakeUser && u.pathname === '/auth/v1/user') return json(route, fakeUser.auth);
-        if (fakeUser && u.pathname === '/rest/v1/profiles' && m === 'GET' && u.searchParams.get('id') === 'eq.' + fakeUser.auth.id) return json(route, fakeUser.profile);
+        if (fakeUser && fakeUser.token && u.pathname === '/auth/v1/token' && m === 'POST') return json(route, fakeUser.token);
+        if (fakeUser && u.pathname === '/rest/v1/profiles' && m === 'GET' && u.searchParams.get('id') === 'eq.' + fakeUser.auth.id) {
+          if (!fakeUser.delay) return json(route, fakeUser.profile);
+          return sleep(fakeUser.delay).then(() => {
+            fakeUser.servedAt = Date.now();
+            return json(route, fakeUser.profile);
+          });
+        }
         if (fakeOrders && u.pathname === '/rest/v1/rpc/auto_flag_stale_orders') return json(route, null);
         if (fakeOrders && u.pathname === '/rest/v1/orders') {
+          // enregistrement d'une commande (fausse base : created = ce que la base aurait recu ; failNext = pannes a simuler)
+          if (m === 'POST') {
+            const body = JSON.parse(req.postData() || '{}');
+            (fakeOrders.attempts = fakeOrders.attempts || []).push(body);
+            if (fakeOrders.failNext > 0) {
+              fakeOrders.failNext--;
+              return json(route, { message: 'service indisponible', code: 'XX000' }, 500);
+            }
+            fakeOrders.created = fakeOrders.created || [];
+            // la commande est bien enregistree, mais la reponse est perdue (coupure de reseau) : le client reessaiera
+            if (fakeOrders.failAfterSave > 0 && !fakeOrders.created.some((o) => o.id === body.id)) {
+              fakeOrders.failAfterSave--;
+              fakeOrders.created.push(body);
+              return json(route, { message: 'reponse perdue', code: 'XX000' }, 500);
+            }
+            if (fakeOrders.created.some((o) => o.id === body.id)) return json(route, { code: '23505', message: 'duplicate key value violates unique constraint' }, 409);
+            fakeOrders.created.push(body);
+            return route.fulfill({ status: 201, headers: { 'access-control-allow-origin': '*' }, body: '' });
+          }
           if (m === 'GET') return json(route, fakeOrders.list);
           if (m === 'PATCH') {
             const id = (u.searchParams.get('id') || '').replace('eq.', '');
@@ -86,13 +128,21 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     page.on('console', (msg) => {
       if (msg.type() === 'error' && !/Failed to load resource|net::ERR|Erreur creation session visiteur/.test(msg.text())) errs.push(msg.text());
     });
-    return { ctx, page, errs, writes };
+    return { ctx, page, errs, writes, rpcCalls };
   }
 
   const panelOf = (p) => p.getByTestId('assistant-panel');
   const chip = (p, label) => panelOf(p).getByTestId('assistant-chip').filter({ hasText: label });
   const chipLabels = async (p) => (await panelOf(p).getByTestId('assistant-chip').allInnerTexts()).map((t) => t.trim());
-  const waitText = (p, re, timeout = 15000) => panelOf(p).getByText(re).first().waitFor({ timeout });
+  // en cas d'echec, on montre la fin de la conversation pour voir ce que Zara a vraiment dit
+  const waitText = async (p, re, timeout = 15000) => {
+    try {
+      await panelOf(p).getByText(re).first().waitFor({ timeout });
+    } catch (e) {
+      const seen = await panelOf(p).innerText({ timeout: 2000 }).catch(() => '(pas de panneau ouvert)');
+      throw new Error(`${String(e.message).split('\n')[0]} | fin de la conversation : ${seen.replace(/\s+/g, ' ').slice(-600)}`);
+    }
+  };
   const cardsOf = (p) => panelOf(p).getByTestId('assistant-card');
   // le prix est sur sa propre ligne (un nom de produit peut finir par des chiffres)
   const cardPrice = async (card) => num(((await card.innerText()).split('\n').map((l) => l.trim()).find((l) => /^[\d\s\u00a0\u202f]+FCFA$/.test(l)) || '').replace('FCFA', ''));
@@ -154,11 +204,11 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     await page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
     await sleep(2500);
     await page.getByRole('button', { name: FAB_NAME }).click();
-    await waitText(page, "Bonjour Fatimé ! Je suis Zara Kings, l'assistante marketing d'Albasse Shopping.");
+    await waitText(page, WELCOME_FR('Fatimé'));
     await waitText(page, /À savoir avant de commander/);
     await waitText(page, /Créez votre compte gratuit(?:, Fatimé)?/);
     const menu = await chipLabels(page);
-    check('menu du visiteur : compte, promotions, nouveautes, conseil, categories, livraison, WhatsApp, langue', menu.join('|') === '👤 Créer mon compte|🔥 Promotions|🆕 Nouveautés|🎯 Conseil|🛍️ Catégories|🚚 Livraison et paiement|💬 WhatsApp|🌐 العربية', menu);
+    check('menu du visiteur : compte, connexion, promotions, nouveautes, conseil, categories, livraison, WhatsApp, langue', menu.join('|') === '👤 Créer mon compte|Me connecter|🔥 Promotions|🆕 Nouveautés|🎯 Conseil|🛍️ Catégories|🚚 Livraison et paiement|💬 WhatsApp|🌐 العربية', menu);
     await page.screenshot({ path: path.join(OUT, 'A1-accueil.png') });
 
     // 1. la phrase du test du patron : un cadeau pour son mari -> des questions AVANT de montrer des articles
@@ -313,11 +363,11 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('deux boutons : Français et العربية', (await chipLabels(page)).join('|') === 'Français|العربية', await chipLabels(page));
       check("la langue n'est pas retenue tant que le client n'a pas choisi", (await page.evaluate(() => localStorage.getItem('albasse_zara_lang'))) === null);
       await page.screenshot({ path: path.join(OUT, 'L1-premiere-visite.png') });
-      await tap(page, 'العربية', /مرحبا! أنا زارا كينغز، مساعدة التسويق في Albasse Shopping\./);
+      await tap(page, 'العربية', /مرحباً! 😍👋 أهلاً بك في Albasse Shopping! يسعدني استقبالك!/);
       await waitText(page, /كيف يمكنني أن أناديك؟/);
       check('apres « العربية » : Zara se presente en arabe, puis demande le prenom en arabe', true);
       check('champ de saisie en arabe : « اكتب اسمك الأول… »', (await inputOf(page).getAttribute('placeholder')) === 'اكتب اسمك الأول…', await inputOf(page).getAttribute('placeholder'));
-      check('boutons : تخطي + Français', (await chipLabels(page)).join('|') === 'تخطي|🌐 Français', await chipLabels(page));
+      check('boutons : تخطي + تسجيل الدخول + Français', (await chipLabels(page)).join('|') === 'تخطي|تسجيل الدخول|🌐 Français', await chipLabels(page));
       check('la langue est retenue sur l\'appareil', (await page.evaluate(() => localStorage.getItem('albasse_zara_lang'))) === 'ar');
       const hdr = await page.evaluate(() => ({ role: document.body.innerText.includes('مساعدة التسويق'), lang: document.querySelector('[data-testid="assistant-lang"]').innerText.trim(), foot: document.body.innerText.includes('زارا كينغز مساعدة آلية') }));
       check('en-tete et pied en arabe (role, bouton « Français », mention « assistante automatique »)', hdr.role && hdr.lang === 'Français' && hdr.foot, hdr);
@@ -329,7 +379,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check("informations importantes en arabe : livraison 8:30-16:00, paiement a la livraison seulement a N'Djamena, 48 heures", /8:30/.test(infoAr) && /16:00/.test(infoAr) && /فقط في إنجامينا/.test(infoAr) && /48 ساعة/.test(infoAr), infoAr);
       await waitText(page, /أنشئ حسابك المجاني(?:، فاطمة)?/);
       const menuAr = await chipLabels(page);
-      check('menu en arabe : compte, offres, nouveautes, conseil, categories, livraison, WhatsApp, Francais', menuAr.join('|') === '👤 إنشاء حسابي|🔥 العروض|🆕 الجديد|🎯 نصيحة|🛍️ الفئات|🚚 التوصيل والدفع|💬 واتساب|🌐 Français', menuAr);
+      check('menu en arabe : compte, connexion, offres, nouveautes, conseil, categories, livraison, WhatsApp, Francais', menuAr.join('|') === '👤 إنشاء حسابي|تسجيل الدخول|🔥 العروض|🆕 الجديد|🎯 نصيحة|🛍️ الفئات|🚚 التوصيل والدفع|💬 واتساب|🌐 Français', menuAr);
       await page.screenshot({ path: path.join(OUT, 'L2-menu-arabe.png') });
 
       // --- L2. cadeau en arabe : questions une par une
@@ -415,7 +465,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await a.page.getByRole('button', { name: FAB_NAME }).click();
       await waitText(a.page, /Choisissez votre langue/);
       await typeIn(a.page, 'مرحبا');
-      await waitText(a.page, /مرحبا! ماذا تريد أن تكتشف؟ 🛍️/);
+      await waitText(a.page, /مرحباً(، علي)? 😊 أهلاً بك في Albasse Shopping! كيف أساعدك اليوم؟|مرحباً(، علي)?! 😊 يسعدني استقبالك/);
       check('premiere visite : il ecrit « مرحبا » -> Zara passe a l\'arabe et repond', (await a.page.evaluate(() => localStorage.getItem('albasse_zara_lang'))) === 'ar');
       await a.ctx.close();
       const f = await newVisitor(phone, { lang: null });
@@ -424,7 +474,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await f.page.getByRole('button', { name: FAB_NAME }).click();
       await waitText(f.page, /Choisissez votre langue/);
       await typeIn(f.page, 'bonjour');
-      await waitText(f.page, /Bonjour ! Que souhaitez-vous découvrir \? 🛍️/);
+      await waitText(f.page, /Bonjour(?: !)? 😊 (?:Bienvenue chez Albasse Shopping ! Comment puis-je vous aider aujourd’hui \?|Ravie de vous accueillir\. Que puis-je faire pour vous aujourd’hui \?)/);
       check('premiere visite : il ecrit « bonjour » -> Zara reste en francais et repond', (await f.page.evaluate(() => localStorage.getItem('albasse_zara_lang'))) === 'fr');
       await f.ctx.close();
     }
@@ -435,7 +485,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await g.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
       await sleep(2500);
       await g.page.getByRole('button', { name: /التحدث مع زارا كينغز|Discuter avec Zara Kings/ }).click();
-      await waitText(g.page, /مرحبا! أنا زارا كينغز، مساعدة التسويق في Albasse Shopping\./);
+      await waitText(g.page, /مرحباً! 😍👋 أهلاً بك في Albasse Shopping! يسعدني استقبالك!/);
       await waitText(g.page, /كيف يمكنني أن أناديك؟/);
       check('site deja affiche en arabe : Zara parle arabe tout de suite, sans demander la langue', (await g.page.getByText(/Choisissez votre langue/).count()) === 0);
       await g.ctx.close();
@@ -449,7 +499,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const teaser = await r.page.getByText(/مرحبا علي! أنا زارا كينغز، مساعدة التسويق في Albasse Shopping\. 😊/).count();
       check('visiteur arabe qui revient : la bulle de bienvenue du bouton est en arabe, avec son prenom', teaser === 1, teaser);
       await r.page.getByRole('button', { name: 'التحدث مع زارا كينغز، مساعدة التسويق' }).click();
-      await waitText(r.page, /مرحبا علي! أنا زارا كينغز، مساعدة التسويق في Albasse Shopping\./);
+      await waitText(r.page, /مرحباً علي! 😍👋 أهلاً بك في Albasse Shopping! يسعدني استقبالك!/);
       await waitText(r.page, /أنشئ حسابك المجاني(?:، علي)?/);
       check('visiteur arabe qui revient : pas de question de langue ni de prenom, directement les infos et le menu', (await r.page.getByText(/كيف يمكنني أن أناديك/).count()) === 0 && (await chipLabels(r.page))[0] === '👤 إنشاء حسابي');
       check('aucune erreur (visiteur arabe)', r.errs.length === 0, r.errs);
@@ -709,11 +759,12 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await g.page.getByRole('button', { name: FAB_NAME }).click();
       await waitText(g.page, /Votre panier vous attend/);
       await waitText(g.page, /Créez votre compte gratuit/);
-      await ask(g.page, 'je veux commander', /Touchez « Commander »/);
-      check('« je veux commander » : Zara guide (panier, coordonnees, paiement) sans demander de donnees bancaires', (await g.page.getByTestId('chat-cart').count()) >= 1 && !/carte bancaire|code secret|CVV/i.test(await panelOf(g.page).innerText()));
+      await ask(g.page, 'je veux commander', /créez votre compte ou connectez-vous/);
+      check('« je veux commander » sans compte : Zara demande de creer un compte / se connecter (jamais de donnees bancaires), la page reste, le panier est garde', g.page.url().endsWith('/') && (await chipLabels(g.page)).join('|') === '👤 Créer mon compte|Me connecter|🏠 Menu' && (await g.page.evaluate(() => JSON.parse(localStorage.getItem('albasse-cart')).state.items.length)) === 1 && !/carte bancaire|code secret|CVV/i.test(await panelOf(g.page).innerText()), await chipLabels(g.page));
+      await ask(g.page, 'mon panier', /Voici votre panier 🛒/);
       await g.page.getByTestId('chat-cart-checkout').last().click();
-      await waitText(g.page, /créez votre compte ou connectez-vous/);
-      check('sans compte : « Commander » demande de creer un compte / se connecter, la page reste, le panier est garde', g.page.url().endsWith('/') && (await chipLabels(g.page)).join('|') === '👤 Créer mon compte|Me connecter|🏠 Menu' && (await g.page.evaluate(() => JSON.parse(localStorage.getItem('albasse-cart')).state.items.length)) === 1, await chipLabels(g.page));
+      await sleep(1500);
+      check('sans compte : le bouton « Commander » du panier demande aussi un compte (deuxieme message), rien n\'est enregistre', (await panelOf(g.page).getByText(/créez votre compte ou connectez-vous/).count()) >= 2 && g.writes.every((w) => !/\/orders/.test(w)));
       check('visiteur sans compte : aucune donnee privee affichee (ni commandes ni coordonnees)', !/Commande #|Moundou|@/.test(await panelOf(g.page).innerText()));
       await ask(g.page, 'mes commandes', /Retrouvez et suivez toutes vos commandes ici/);
       check('« mes commandes » sans compte : seulement connexion / creation de compte', (await chipLabels(g.page)).join('|') === 'Me connecter|👤 Créer mon compte', await chipLabels(g.page));
@@ -737,21 +788,18 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await c.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
       await sleep(3000);
       await c.page.getByRole('button', { name: FAB_NAME }).click();
-      await waitText(c.page, "Bonjour Ahmed ! Je suis Zara Kings, l'assistante marketing d'Albasse Shopping.");
-      check('client connecte : salue avec le prenom de son profil (Ahmed)', true);
+      await waitText(c.page, WELCOME_FR('Ahmed'));
+      check('client connecte : salue par le prenom de son profil (Ahmed)', true);
       await waitText(c.page, /À savoir avant de commander/);
       await waitText(c.page, 'Que souhaitez-vous découvrir aujourd’hui ? 🛍️');
-      await ask(c.page, 'je veux commander', /Touchez « Commander »/);
-      await waitText(c.page, /Le prix de « .* » a changé/);
-      const guide = await panelOf(c.page).getByText(/Touchez « Commander »/).last().innerText();
-      check('prix de la base plus recent que celui du panier : Zara l\'annonce et corrige', new RegExp(`${String(Number(dbA.price) - 1000).replace(/\B(?=(\d{3})+(?!\d))/g, '\\s?')}\\s?FCFA → ${String(Number(dbA.price)).replace(/\B(?=(\d{3})+(?!\d))/g, '\\s?')}`).test(guide), guide);
+      await ask(c.page, 'je veux commander', /Le prix de « .* » a changé/);
+      const guide = await panelOf(c.page).getByText(/Le prix de « .* » a changé/).last().innerText();
+      check('prix de la base plus recent que celui du panier : Zara l\'annonce et corrige AVANT de commencer la commande', new RegExp(`${String(Number(dbA.price) - 1000).replace(/\B(?=(\d{3})+(?!\d))/g, '\\s?')}\\s?FCFA → ${String(Number(dbA.price)).replace(/\B(?=(\d{3})+(?!\d))/g, '\\s?')}`).test(guide), guide);
       check('le total du chat utilise le prix verifie de la base (2 x prix)', num(await c.page.getByTestId('chat-cart-total').last().innerText()) === 2 * Number(dbA.price));
+      check('rien n\'est demande tant que le client n\'a pas revu le panier (pas de question d\'adresse)', (await panelOf(c.page).getByText(/Quelle est votre adresse de livraison/).count()) === 0);
       await c.page.getByTestId('chat-cart-checkout').last().click();
-      await c.page.waitForURL(/\/commande/, { timeout: 15000 });
-      await sleep(2500);
-      const checkoutBody = await c.page.evaluate(() => document.body.innerText);
-      const subtotal = num((checkoutBody.match(/Sous-total\s*\n?\s*([\d\s\u00a0\u202f]+)\s*FCFA/) || [])[1]);
-      check('« Commander » ouvre la page de commande officielle avec le panier garde (sous-total = 2 x le prix verifie)', subtotal === 2 * Number(dbA.price) && (await panelOf(c.page).count()) === 0, { url: c.page.url(), subtotal });
+      await waitText(c.page, /Quelle est votre adresse de livraison/);
+      check('« Commander » : Zara finalise la commande DANS le chat (nom et telephone du compte deja connus, elle demande l\'adresse), la page de commande ne s\'ouvre pas', !/\/commande/.test(c.page.url()) && (await panelOf(c.page).count()) === 1 && (await panelOf(c.page).getByText(/Quel est le nom complet|Quel est votre numéro/).count()) === 0, c.page.url());
       const namesInBot = (await c.ctx.pages()[0].evaluate(() => JSON.parse(sessionStorage.getItem('albasse_zara_v1') || '{"messages":[]}').messages.filter((m) => m.role === 'assistant' && /Ahmed/.test(m.text)).length));
       check('le prenom n\'est pas repete a chaque message (2 fois au plus sur toute la conversation)', namesInBot >= 1 && namesInBot <= 2, namesInBot);
       check('aucune ecriture reelle de commande', c.writes.every((w) => !/\/orders/.test(w)), c.writes);
@@ -919,6 +967,738 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     }
   }
 
+  // =============================================== M. CLIENT AVEC COMPTE : RECONNU ET SALUE PAR SON PRENOM ===============================================
+  if (PARTS.includes('M')) {
+    console.log('\n== M. client avec compte : reconnu et salue par son prenom, avec honneur (francais et arabe)');
+    const uid = '11111111-1111-4111-8111-111111111111';
+    const JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMTExMTExMS0xMTExLTQxMTEtODExMS0xMTExMTExMTExMTEiLCJleHAiOjQxMDI0NDQ4MDAsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.c2ln';
+    // un compte simule : `session` est ce que le navigateur garde quand le client est deja connecte, `token` la reponse a une connexion par mot de passe
+    const memberOf = (fullName, extra = {}) => {
+      const auth = { id: uid, aud: 'authenticated', role: 'authenticated', email: 'test@example.com', app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' };
+      const token = { access_token: JWT, refresh_token: 'fake-refresh', token_type: 'bearer', expires_in: 3600, expires_at: 4102444800, user: auth };
+      return { auth, token, session: JSON.stringify(token), profile: { id: uid, email: 'test@example.com', full_name: fullName, phone: '66123456', banned: false, role: 'customer', is_admin: false }, ...extra };
+    };
+    const loggedIn = (fu) => ({ 'sb-xtitsmmccpkelxfjyqyh-auth-token': fu.session });
+    const MEMBER_FR = WELCOME_FR('Ahmed');
+    const countOf = (p, re) => panelOf(p).getByText(re).count();
+    const closeChat = (p) => panelOf(p).getByRole('button', { name: /^(Fermer|إغلاق)$/ }).click();
+    const openFab = (p) => p.getByRole('button', { name: /Discuter avec Zara Kings|التحدث مع زارا كينغز/ }).click();
+
+    // --- M1. 1re visite (aucune langue retenue) : le tout premier message salue par le prenom ET demande la langue
+    {
+      const fu = memberOf('Ahmed Hassan');
+      const c = await newVisitor(phone, { lang: null, storage: loggedIn(fu), fakeUser: fu });
+      const t0 = Date.now();
+      await c.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await openFab(c.page);
+      await sleep(1500);
+      const typingDuringWait = await c.page.getByLabel(TYPING).count();
+      const noMessageYet = (await countOf(c.page, /Salut Ahmed/)) === 0;
+      await waitText(c.page, /Salut Ahmed ! 😍👋/);
+      const waited = Date.now() - t0;
+      check('client connecte : Zara attend 10 secondes apres sa connexion avant de saluer (les trois points s\'affichent pendant l\'attente)', typingDuringWait >= 1 && noMessageYet && waited >= 9500 && waited < 20000, { typingDuringWait, noMessageYet, waitedMs: waited });
+      await waitText(c.page, /Choisissez votre langue \/ اختر لغتك/);
+      const first = await panelOf(c.page).getByText(/Choisissez votre langue/).first().innerText();
+      check('1re visite, client avec compte : le tout premier message dit son prenom (francais + arabe) puis demande la langue', /^Salut Ahmed ! 😍👋\s*\n\s*مرحباً Ahmed! 😍👋\s*\n\s*Choisissez votre langue \/ اختر لغتك/.test(first), first);
+      check('seuls deux boutons : Francais / arabe (et aucune langue retenue avant son choix)', (await chipLabels(c.page)).join('|') === 'Français|العربية' && (await c.page.evaluate(() => localStorage.getItem('albasse_zara_lang'))) === null, await chipLabels(c.page));
+      check('Zara ne demande pas le prenom d\'un client qui a un compte', (await countOf(c.page, /Comment puis-je vous appeler/)) === 0);
+      await c.page.screenshot({ path: path.join(OUT, 'M1-premier-message.png') });
+      await tap(c.page, 'Français', /Bienvenue chez Albasse Shopping ! Ça me fait plaisir de vous accueillir ! 🥰🛍️/);
+      await waitText(c.page, /À savoir avant de commander/);
+      await waitText(c.page, 'Que souhaitez-vous découvrir aujourd’hui ? 🛍️');
+      check('apres le choix du francais : accueil SANS redire « Salut » ni le prenom une 2e fois', (await countOf(c.page, /Bonjour/)) === 0 && (await countOf(c.page, /Salut Ahmed/)) === 1 && (await countOf(c.page, /Comment puis-je vous appeler/)) === 0);
+      const labels = await chipLabels(c.page);
+      check('client avec compte : ni « Creer mon compte » ni « Me connecter » ; « Mes commandes » propose', !labels.some((l) => /Créer mon compte|Me connecter/.test(l)) && labels.includes('📦 Mes commandes'), labels);
+      check('la langue choisie est retenue (fr)', (await c.page.evaluate(() => localStorage.getItem('albasse_zara_lang'))) === 'fr');
+      await c.page.screenshot({ path: path.join(OUT, 'M2-accueil-honneur.png') });
+      check('aucune erreur (client avec compte, 1re visite)', c.errs.length === 0, c.errs);
+      await c.ctx.close();
+    }
+
+    // --- M2. pareil en arabe
+    {
+      const fu = memberOf('Ahmed Hassan');
+      const c = await newVisitor(phone, { lang: null, storage: loggedIn(fu), fakeUser: fu });
+      await c.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await openFab(c.page);
+      await waitText(c.page, /Salut Ahmed ! 😍👋/);
+      await tap(c.page, 'العربية', /أهلاً بك في Albasse Shopping! يسعدني استقبالك! 🥰🛍️/);
+      await waitText(c.page, /معلومات مهمة قبل الطلب/);
+      await waitText(c.page, 'ماذا تريد أن تكتشف اليوم؟ 🛍️');
+      const labels = await chipLabels(c.page);
+      check('en arabe : accueil sans repeter le prenom, sans question de prenom ni de compte a creer', (await countOf(c.page, /مرحباً/)) === 1 && (await countOf(c.page, /Ahmed/)) === 1 && (await countOf(c.page, /كيف يمكنني أن أناديك/)) === 0 && !labels.some((l) => /إنشاء حسابي|تسجيل الدخول/.test(l)) && labels.includes('📦 طلباتي'), labels);
+      const dir = await panelOf(c.page).getByText(/أهلاً بك في Albasse Shopping! يسعدني استقبالك!/).first().evaluate((el) => getComputedStyle(el).direction);
+      check('la salutation arabe s\'ecrit de droite a gauche', dir === 'rtl', dir);
+      await c.page.screenshot({ path: path.join(OUT, 'M3-arabe.png') });
+      check('aucune erreur (client avec compte, arabe)', c.errs.length === 0, c.errs);
+      await c.ctx.close();
+    }
+
+    // --- M3. langue deja retenue : un seul message de bienvenue d'honneur ; jamais salue deux fois (fermer/rouvrir, recharger)
+    {
+      const fu = memberOf('Ahmed Hassan');
+      const c = await newVisitor(phone, { lang: 'fr', storage: loggedIn(fu), fakeUser: fu });
+      await c.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await openFab(c.page);
+      await waitText(c.page, MEMBER_FR);
+      await waitText(c.page, 'Que souhaitez-vous découvrir aujourd’hui ? 🛍️');
+      check('langue deja retenue : pas de question de langue, un seul accueil', (await countOf(c.page, /Choisissez votre langue/)) === 0 && (await countOf(c.page, /Salut Ahmed/)) === 1);
+      await closeChat(c.page);
+      await openFab(c.page);
+      await sleep(2500);
+      check('fermer puis rouvrir le chat : pas de nouvelle salutation', (await countOf(c.page, /Salut Ahmed/)) === 1 && (await countOf(c.page, /Vous êtes bien connecté/)) === 0);
+      await c.page.reload({ waitUntil: 'load' });
+      await sleep(3000);
+      await openFab(c.page);
+      await sleep(3000);
+      check('apres un rechargement de la page : la conversation revient et il n\'est pas salue une 2e fois', (await countOf(c.page, /Salut Ahmed/)) === 1 && (await countOf(c.page, /Vous êtes bien connecté/)) === 0 && (await countOf(c.page, /Comment puis-je vous appeler/)) === 0);
+      check('aucune erreur (bienvenue unique)', c.errs.length === 0, c.errs);
+      await c.ctx.close();
+    }
+
+    // --- M4. nom du profil ecrit en majuscules, avec un titre : « Mr MAHAMAT ABDERAMAN » -> Mahamat
+    {
+      const fu = memberOf('Mr MAHAMAT ABDERAMAN');
+      const c = await newVisitor(phone, { lang: 'fr', storage: loggedIn(fu), fakeUser: fu });
+      await c.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await openFab(c.page);
+      await waitText(c.page, WELCOME_FR('Mahamat'));
+      check('« Mr MAHAMAT ABDERAMAN » : salue « Mahamat » (ni « Mr », ni « MAHAMAT » en majuscules)', (await countOf(c.page, /Salut Mr|MAHAMAT/)) === 0);
+      await c.ctx.close();
+    }
+
+    // --- M5. le compte met du temps a se charger (2,5 s) : le site attend (page de chargement), puis Zara salue par le prenom
+    {
+      const fu = memberOf('Ahmed Hassan', { delay: 2500 });
+      const c = await newVisitor(phone, { lang: 'fr', storage: loggedIn(fu), fakeUser: fu });
+      await c.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await openFab(c.page);
+      await waitText(c.page, MEMBER_FR);
+      check('compte lent a charger : Zara salue Ahmed, elle ne demande pas le prenom', !!fu.servedAt && (await countOf(c.page, /Comment puis-je vous appeler/)) === 0 && (await countOf(c.page, /Salut Ahmed/)) === 1);
+      await c.ctx.close();
+    }
+
+    // --- M6. visiteur qui a deja un compte mais n'est pas connecte : « Me connecter » depuis Zara, puis il est reconnu (telephone)
+    {
+      const fu = memberOf('Ahmed Hassan');
+      const c = await newVisitor(phone, { lang: 'fr', fakeUser: fu }); // aucune session gardee : il arrive comme un visiteur
+      await c.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await openFab(c.page);
+      await waitText(c.page, /Comment puis-je vous appeler \? Si vous avez déjà un compte, connectez-vous : je vous reconnaîtrai 😊/);
+      check('visiteur sans compte connecte : Zara propose de se connecter pour etre reconnue (Passer / Me connecter / arabe)', (await chipLabels(c.page)).join('|') === 'Passer|Me connecter|🌐 العربية', await chipLabels(c.page));
+      await c.page.screenshot({ path: path.join(OUT, 'M4-visiteur-connexion.png') });
+      await chip(c.page, 'Me connecter').click();
+      await c.page.waitForURL(/\/connexion/, { timeout: 15000 });
+      await c.page.getByPlaceholder('Email').fill('test@example.com');
+      await c.page.getByPlaceholder('Mot de passe').fill('motdepasse-test');
+      await c.page.getByText('Se connecter', { exact: true }).first().click();
+      await c.page.waitForURL((url) => !/\/connexion/.test(url.pathname), { timeout: 20000 });
+      await sleep(1000);
+      await openFab(c.page);
+      await waitText(c.page, /Salut Ahmed ! 😍👋 Vous êtes bien connecté\(e\), ça me fait plaisir de vous retrouver ! 🥰/, 20000);
+      await waitText(c.page, /À savoir avant de commander/);
+      await waitText(c.page, 'Que souhaitez-vous découvrir aujourd’hui ? 🛍️');
+      const labels = await chipLabels(c.page);
+      check('apres la connexion : Zara salue Ahmed par son prenom, puis continue (infos, menu de client connecte)', labels.includes('📦 Mes commandes') && !labels.some((l) => /Créer mon compte|Me connecter/.test(l)), labels);
+      await c.page.screenshot({ path: path.join(OUT, 'M5-apres-connexion.png') });
+      await closeChat(c.page);
+      await openFab(c.page);
+      await sleep(2500);
+      check('fermer puis rouvrir : la salutation de connexion n\'est dite qu\'une fois', (await countOf(c.page, /Vous êtes bien connecté/)) === 1);
+      check('aucune ecriture reelle dans la base (connexion simulee)', c.writes.every((w) => /visitor_sessions|profiles/.test(w)), c.writes);
+      check('aucune erreur (connexion depuis Zara)', c.errs.length === 0, c.errs);
+      await c.ctx.close();
+    }
+
+    // --- M7. ordinateur : le chat reste ouvert pendant la connexion, Zara salue des que le client est connecte
+    {
+      const fu = memberOf('Fatimé Ali');
+      const d = await newVisitor({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 }, { lang: 'fr', fakeUser: fu });
+      await d.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await openFab(d.page);
+      await waitText(d.page, /Comment puis-je vous appeler \? Si vous avez déjà un compte/);
+      await chip(d.page, 'Me connecter').click();
+      await d.page.waitForURL(/\/connexion/, { timeout: 15000 });
+      check('ordinateur : le chat reste ouvert pendant que le client se connecte', (await panelOf(d.page).count()) === 1);
+      await d.page.getByPlaceholder('Email').fill('test@example.com');
+      await d.page.getByPlaceholder('Mot de passe').fill('motdepasse-test');
+      await d.page.getByText('Se connecter', { exact: true }).first().click();
+      await waitText(d.page, /Salut Fatimé ! 😍👋 Vous êtes bien connecté\(e\), ça me fait plaisir de vous retrouver ! 🥰/, 25000);
+      check('ordinateur : Zara salue Fatimé tout de suite apres la connexion, sans rouvrir le chat', (await countOf(d.page, /Salut Fatimé/)) === 1);
+      await d.page.screenshot({ path: path.join(OUT, 'M6-ordinateur.png') });
+      await d.ctx.close();
+    }
+
+    // --- M9. « Vous etes mon Ne client aujourd'hui » : le VRAI rang du jour, donne par la base, jamais invente
+    {
+      const SAMPLE = 'Salut Moussa ! 😍👋 Bienvenue chez Albasse Shopping ! Vous êtes mon 3ᵉ client aujourd’hui, ça me fait plaisir de vous accueillir ! 🥰🛍️\n' + INVITE_FR;
+      const v = await newVisitor(phone, { lang: 'fr', storage: { albasse_zara_name: 'Moussa' }, rank: 3 });
+      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await openFab(v.page);
+      await waitText(v.page, /Vous êtes mon 3ᵉ client aujourd’hui/);
+      const bubble = (await panelOf(v.page).getByText(/Vous êtes mon 3ᵉ client aujourd’hui/).first().innerText()).replace(/[ \t]+/g, ' ').trim();
+      check('accueil = exactement l\'exemple du patron (prenom, 3ᵉ client, invitation, emojis)', bubble === SAMPLE, bubble);
+      check('le rang vient bien de la base (une seule demande)', v.rpcCalls.length === 1, v.rpcCalls.length);
+      const stored = await v.page.evaluate(() => JSON.parse(localStorage.getItem('albasse_zara_rank') || 'null'));
+      check('le rang est retenu pour la journee sur l\'appareil (il n\'est compte qu\'une fois)', stored && stored.n === 3 && /^\d{4}-\d{2}-\d{2}$/.test(stored.day), stored);
+      await v.page.screenshot({ path: path.join(OUT, 'M7-vrai-rang.png') });
+      // meme appareil, nouvel onglet, meme jour : meme rang, pas de nouveau comptage
+      const tab = await v.ctx.newPage();
+      await tab.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await openFab(tab);
+      await waitText(tab, /Vous êtes mon 3ᵉ client aujourd’hui/);
+      check('meme appareil, meme jour : toujours « mon 3ᵉ client » et aucun nouveau comptage', v.rpcCalls.length === 1, v.rpcCalls.length);
+      check('aucune erreur (rang du jour)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+
+      // un autre jour : nouvelle demande, nouveau rang (4)
+      const y = await newVisitor(phone, { lang: 'fr', storage: { albasse_zara_name: 'Moussa', albasse_zara_rank: JSON.stringify({ day: '2020-01-01', n: 99 }) }, rank: 4 });
+      await y.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await openFab(y.page);
+      await waitText(y.page, /Vous êtes mon 4ᵉ client aujourd’hui/);
+      check('le lendemain : nouvelle demande a la base et nouveau rang (pas l\'ancien 99)', y.rpcCalls.length === 1 && (await countOf(y.page, /99/)) === 0, y.rpcCalls.length);
+      await y.ctx.close();
+
+      // 1er client du jour : « 1ᵉʳ »
+      const f = await newVisitor(phone, { lang: 'fr', storage: { albasse_zara_name: 'Moussa' }, rank: 1 });
+      await f.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await openFab(f.page);
+      await waitText(f.page, /Vous êtes mon 1ᵉʳ client aujourd’hui/);
+      check('le tout premier client du jour : « mon 1ᵉʳ client »', true);
+      await f.ctx.close();
+
+      // en arabe
+      const a = await newVisitor(phone, { lang: 'ar', storage: { albasse_zara_name: 'علي' }, rank: 3 });
+      await a.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await openFab(a.page);
+      await waitText(a.page, /أنت رقم 3 بين عملائي اليوم، ويسعدني استقبالك!/);
+      check('en arabe : « أنت رقم 3 بين عملائي اليوم »', (await countOf(a.page, /مرحباً علي! 😍👋/)) === 1);
+      await a.ctx.close();
+
+      // fonction absente (pas encore installee) ou reponse bizarre : AUCUN nombre n'est dit
+      for (const [label, rankValue] of [['fonction pas installee', null], ['reponse incorrecte (texte)', 'abc'], ['reponse incorrecte (zero)', 0], ['reponse incorrecte (negatif)', -5]]) {
+        const n = await newVisitor(phone, { lang: 'fr', storage: { albasse_zara_name: 'Moussa' }, rank: rankValue });
+        await n.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+        await sleep(2500);
+        await openFab(n.page);
+        await waitText(n.page, WELCOME_FR('Moussa'));
+        check(`${label} : Zara accueille sans dire de nombre (rien d'invente)`, (await countOf(n.page, /client aujourd/)) === 0 && (await n.page.evaluate(() => localStorage.getItem('albasse_zara_rank'))) === null);
+        await n.ctx.close();
+      }
+    }
+
+    // --- M8. la bulle de bienvenue du bouton salue le client avec compte par son prenom (fr et ar)
+    for (const [lg, expected] of [['fr', /Salut Ahmed ! 😍👋 Zara Kings est à votre service 🛍️/], ['ar', /مرحباً Ahmed! 😍👋 زارا كينغز في خدمتك 🛍️/]]) {
+      const fu = memberOf('Ahmed Hassan');
+      const c = await newVisitor(phone, { lang: lg, storage: loggedIn(fu), fakeUser: fu });
+      await c.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(7500);
+      const tooEarly = await c.page.getByText(expected).count();
+      await sleep(5000);
+      const n = await c.page.getByText(expected).count();
+      check(`bulle du bouton (${lg}) : pas avant 10 secondes, puis le client avec compte est accueilli par son prenom`, tooEarly === 0 && n === 1, { tooEarly, n });
+      await c.ctx.close();
+    }
+  }
+
+  // =============================================== T. PERSONNALITE : POLITESSE, COMPLIMENTS, ADRESSE ET NUMERO PERSONNELS ===============================================
+  if (PARTS.includes('T')) {
+    console.log('\n== T. personnalite : politesse, compliments, jamais d\'adresse ni de numero personnel (francais et arabe)');
+    // tous les messages de Zara depuis le debut (gardes dans l'onglet), et le dernier message qui correspond a un motif
+    const replies = (p) => p.evaluate(() => JSON.parse(sessionStorage.getItem('albasse_zara_v1') || '{"messages":[]}').messages.filter((m) => m.role === 'assistant').map((m) => m.text));
+    const lastMatching = (p, re) => panelOf(p).getByText(re).last().innerText();
+    const openZara = async (p, name) => {
+      await p.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await p.getByRole('button', { name: /Discuter avec Zara Kings|التحدث مع زارا كينغز/ }).click();
+      await waitText(p, name === 'ar' ? /أنشئ حسابك المجاني(?:، علي)?/ : /Créez votre compte gratuit(?:, Ali)?/);
+    };
+    const HELLO = /Bienvenue chez Albasse Shopping ! Comment puis-je vous aider aujourd’hui \?|Ravie de vous accueillir\. Que puis-je faire pour vous aujourd’hui \?/;
+    const COMPL = /(Oh, merci beaucoup|Oh, c’est très gentil|Merci beaucoup, c’est adorable)/;
+
+    // --- T1. francais : salutations, merci, ca va, au revoir
+    {
+      const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
+      const { page } = v;
+      const tOpen0 = Date.now();
+      await openZara(page, 'fr');
+      check('visiteur sans compte : salue tout de suite (pas d\'attente de 10 secondes)', Date.now() - tOpen0 < 12000 && (await replies(page)).length >= 2, Date.now() - tOpen0);
+      await ask(page, 'Bonjour !', HELLO);
+      const hello = await lastMatching(page, HELLO);
+      check('« Bonjour ! » : « Bonjour 😊 Bienvenue chez Albasse Shopping ! Comment puis-je vous aider aujourd\'hui ? » (ou une variante) avec le menu', /^Bonjour(, Ali)? ?!? ?😊/.test(hello) && (await chipLabels(page)).includes('🔥 Promotions'), hello);
+      await ask(page, 'Salut Zara !', /Salut(, Ali)? ?!? ?😊/);
+      const salut = await lastMatching(page, /Salut(, Ali)? ?!? ?😊/);
+      check('« Salut Zara ! » : Zara salue sur le meme ton et dit « retrouver / revoir » car elle connait deja le prenom', /retrouver|revoir/.test(salut), salut);
+      await ask(page, 'Bonsoir', /Bonsoir(, Ali)? ?!? ?(😊|🌙)/);
+      check('« Bonsoir » : Zara repond « Bonsoir »', true);
+      await ask(page, 'Ça va ?', /(Très bien, merci|Je vais très bien, merci|Ça va très bien, merci)/);
+      const fine = await lastMatching(page, /(Très bien, merci|Je vais très bien, merci|Ça va très bien, merci)/);
+      check('« Ça va ? » : Zara repond qu\'elle va bien et demande comment l\'aider', /Et vous \?|J’espère que vous aussi|Et de votre côté/.test(fine), fine);
+      await ask(page, 'Merci.', /^Avec plaisir|^Je vous en prie/);
+      const thanks1 = await lastMatching(page, /^Avec plaisir|^Je vous en prie/);
+      check('« Merci. » : reponse simple et chaleureuse, sans publicite (pas de « promotions »), seulement le bouton Menu', !/promotion|solde|remise/i.test(thanks1) && (await chipLabels(page)).join('|') === '🏠 Menu', { thanks1, chips: await chipLabels(page) });
+      await ask(page, 'Merci beaucoup', /^C’est avec plaisir|^Merci à vous|^Avec grand plaisir/);
+      const thanks2 = await lastMatching(page, /^C’est avec plaisir|^Merci à vous|^Avec grand plaisir/);
+      check('« Merci beaucoup » : une autre phrase que « Merci. »', thanks2 !== thanks1, { thanks1, thanks2 });
+      await ask(page, 'merci', /^Avec plaisir|^Je vous en prie/);
+      await ask(page, 'merci', /^Avec plaisir|^Je vous en prie/);
+      const seq = (await replies(page)).filter((t) => /^(Avec plaisir|Je vous en prie)/.test(t));
+      check('« merci » dit plusieurs fois : Zara ne repond jamais deux fois exactement la meme phrase de suite', seq.length >= 3 && seq.every((t, i) => i === 0 || t !== seq[i - 1]), seq);
+      await ask(page, 'Bonne nuit', /Bonne nuit (à vous aussi )?🌙/);
+      check('« Bonne nuit » : « Bonne nuit à vous aussi 🌙 Merci pour votre visite ! » (ou variante)', /🌙/.test(await lastMatching(page, /Bonne nuit (à vous aussi )?🌙/)));
+      await ask(page, 'Au revoir', /Au plaisir de vous revoir sur Albasse Shopping|Au revoir ! 😊 Merci pour votre visite/);
+      await ask(page, 'merci, bonne journée', /Bonne journée/);
+      check('« Au revoir » et « merci, bonne journée » : Zara dit au revoir gentiment', true);
+      const byeCount = (await replies(page)).filter((t) => /^(Au plaisir de vous revoir|Au revoir ! 😊)/.test(t)).length;
+      await ask(page, 'à plus de 10000 FCFA', /budget|Voici|trouvé|Je n’ai rien|Quel genre|Pour qui/i).catch(() => {});
+      check('« à plus de 10 000 FCFA » n\'est PAS pris pour un au revoir (c\'est un budget)', (await replies(page)).filter((t) => /^(Au plaisir de vous revoir|Au revoir ! 😊)/.test(t)).length === byeCount, byeCount);
+      await page.screenshot({ path: path.join(OUT, 'T1-politesse.png') });
+      check('aucune erreur (politesse en francais)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+
+    // --- T2. compliments, puis « merci » juste apres
+    {
+      const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
+      const { page } = v;
+      await openZara(page, 'fr');
+      await ask(page, 'Tu es belle 😍', COMPL);
+      const c1 = await lastMatching(page, COMPL);
+      check('« Tu es belle 😍 » : Zara remercie avec chaleur et dit qu\'elle est l\'assistante virtuelle Zara (aucun faux sentiment humain)', /assistante virtuelle/.test(c1) && !/toi aussi|moi aussi|je t’aime/i.test(c1), c1);
+      await ask(page, 'Merci.', /aujourd’hui \? 🛍️/);
+      const c2 = await lastMatching(page, /aujourd’hui \? 🛍️/);
+      check('« Merci. » juste apres le compliment : « Avec grand plaisir ! ... qu\'est-ce qui vous ferait plaisir aujourd\'hui ? 🛍️ »', /^Avec (grand )?plaisir/.test(c2), c2);
+      await ask(page, 'vous êtes adorable', COMPL);
+      await ask(page, 'bravo', COMPL);
+      const compl = (await replies(page)).filter((t) => COMPL.test(t));
+      check('3 compliments de suite : 3 reponses differentes', compl.length === 3 && new Set(compl).size === 3, compl);
+      await page.screenshot({ path: path.join(OUT, 'T2-compliment.png') });
+      check('aucune erreur (compliments)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+
+    // --- T3. adresse, numero, vie personnelle : Zara reste une assistante virtuelle, aucun faux numero
+    {
+      const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
+      const { page } = v;
+      await openZara(page, 'fr');
+      const cases = [
+        ['Zara, quelle est ton adresse ?', /Je suis votre assistante virtuelle, disponible en ligne pour vous aider ! Vous pouvez me retrouver ici sur Albasse Shopping\.|Je n’ai pas d’adresse comme une personne/, ['📍 Adresse de la boutique', '🏠 Menu']],
+        ['Tu habites où ?', /Je n’ai pas de domicile comme une personne|Je n’ai pas de maison/, ['🏠 Menu']],
+        ['Zara, donne-moi ton numéro', /Je n’ai pas de numéro personnel\. Je travaille en ligne comme assistante virtuelle de marketing digital chez Albasse Shopping|Je n’ai pas de téléphone personnel/, ['💬 WhatsApp', '🏠 Menu']],
+        ['Je veux ton WhatsApp personnel', /Je n’ai pas de WhatsApp personnel|Je n’ai pas de WhatsApp à moi/, ['💬 WhatsApp', '🏠 Menu']],
+        ['Je veux t’appeler', /Je comprends ! Je suis une assistante virtuelle|Je ne peux pas recevoir d’appels/, ['💬 WhatsApp', '🏠 Menu']],
+        ['tu es mariée ?', /Je suis une assistante virtuelle/, ['🏠 Menu']],
+      ];
+      for (const [q, re, chips] of cases) {
+        await ask(page, q, re);
+        const reply = await lastMatching(page, re);
+        const got = await chipLabels(page);
+        check(`« ${q} » : assistante virtuelle, aucun numero ni adresse invente, boutons ${chips.join(' + ')}`, !/\d{3,}|\+\s?\d|rue |avenue |quartier/i.test(reply) && got.join('|') === chips.join('|'), { reply: reply.slice(0, 160), got });
+      }
+      await page.screenshot({ path: path.join(OUT, 'T3-perso.png') });
+      // le bouton « Adresse de la boutique » donne la VRAIE adresse (donnees de la boutique), pas celle de Zara
+      await ask(page, 'Zara, quelle est ton adresse ?', /Je suis votre assistante virtuelle, disponible|Je n’ai pas d’adresse/);
+      await tap(page, 'Adresse de la boutique', /Pour une question, écrivez-nous sur WhatsApp/);
+      const shop = await lastMatching(page, /Pour une question, écrivez-nous sur WhatsApp/);
+      check('« Adresse de la boutique » : les vraies informations de la boutique (adresse, horaires de la base), pas celles de Zara', /📍|🕗/.test(shop), shop);
+      // les questions sur la boutique, elles, continuent de marcher
+      await ask(page, 'numéro whatsapp de la boutique', /Pour une question, écrivez-nous sur WhatsApp/);
+      check('« numéro whatsapp de la boutique » : reponse de la boutique (contact officiel), pas « je n\'ai pas de numero »', true);
+      check('aucune erreur (vie personnelle)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+
+    // --- T4. arabe
+    {
+      const v = await newVisitor(phone, { lang: 'ar', storage: { albasse_zara_name: 'علي' } });
+      const { page } = v;
+      await openZara(page, 'ar');
+      await ask(page, 'السلام عليكم', /وعليكم السلام/);
+      await ask(page, 'شكرا', /(على الرحب والسعة|العفو|بكل سرور)/);
+      await ask(page, 'كيف حالك', /(بخير|الحمد لله)/);
+      await ask(page, 'تصبح على خير', /(وأنتم من أهل الخير|تصبحون على خير)/);
+      await ask(page, 'انت جميلة', /(شكراً جزيلاً|ما أجمل كلامك|هذا لطف منك)/);
+      await ask(page, 'ما هو عنوانك', /(أنا مساعدتك الافتراضية|أنا مساعدة افتراضية)/);
+      const addrChips = await chipLabels(page);
+      check('en arabe : « ما هو عنوانك » -> assistante virtuelle + bouton « عنوان المتجر »', addrChips.includes('📍 عنوان المتجر'), addrChips);
+      await ask(page, 'اعطني رقمك', /ليس لدي (رقم|هاتف) شخصي/);
+      const numChips = await chipLabels(page);
+      const numReply = await lastMatching(page, /ليس لدي (رقم|هاتف) شخصي/);
+      check('en arabe : « اعطني رقمك » -> pas de numero personnel, bouton واتساب officiel, aucun chiffre invente', numChips.includes('💬 واتساب') && !/\d{3,}/.test(numReply), { numChips, numReply: numReply.slice(0, 120) });
+      await ask(page, 'كم عمرك', /(أنا مساعدة افتراضية)/);
+      const dir = await panelOf(page).getByText(/ليس لدي (رقم|هاتف) شخصي/).last().evaluate((el) => getComputedStyle(el).direction);
+      check('les reponses arabes s\'ecrivent de droite a gauche', dir === 'rtl', dir);
+      await page.screenshot({ path: path.join(OUT, 'T4-arabe.png') });
+      check('aucune erreur (politesse en arabe)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+  }
+
+  // =============================================== O. ZARA FINALISE L'ACHAT DANS LE CHAT ===============================================
+  if (PARTS.includes('O') || PARTS.includes('F')) {
+    console.log('\n== O/F. Zara finalise l\'achat dans le chat et repond sur la fidelite (fausse base : aucune vraie commande)');
+    const UID = '11111111-1111-4111-8111-111111111111';
+    const JWT_FAKE = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMTExMTExMS0xMTExLTQxMTEtODExMS0xMTExMTExMTExMTEiLCJleHAiOjQxMDI0NDQ4MDAsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.c2ln';
+    const mkMember = (fullName, { phone: ph = '66123456', address = null, points = undefined } = {}) => {
+      const auth = { id: UID, aud: 'authenticated', role: 'authenticated', email: 'test@example.com', app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' };
+      const token = { access_token: JWT_FAKE, refresh_token: 'fake-refresh', token_type: 'bearer', expires_in: 3600, expires_at: 4102444800, user: auth };
+      return { auth, token, session: JSON.stringify(token), profile: { id: UID, email: 'test@example.com', full_name: fullName, phone: ph, address, loyalty_points: points, banned: false, role: 'customer', is_admin: false } };
+    };
+    const newDb = () => ({ list: [], patches: [], created: [], attempts: [], failNext: 0, failAfterSave: 0 });
+    const cartOf = (qty) => JSON.stringify({ state: { items: [{ id: `${realProduct.id}__nc__ns`, product: realProduct, quantity: qty, color: null, size: null }], updatedAt: Date.now() }, version: 0 });
+    // le client est deja connu et salue (conversation et « deja salue » mis dans l'onglet) : ces essais testent la commande, pas l'accueil
+    const seedOf = (lg) => ({ albasse_zara_v1: JSON.stringify({ messages: [{ id: 's1', role: 'assistant', text: lg === 'ar' ? 'مرحباً' : 'Bonjour', lang: lg }], step: 'menu', ctx: null, need: null, order: null }), albasse_zara_member: UID });
+    const orderVisitor = (fu, db, { qty = 1, lg = 'fr' } = {}) =>
+      newVisitor(phone, { lang: lg, storage: { 'sb-xtitsmmccpkelxfjyqyh-auth-token': fu.session, 'albasse-cart': cartOf(qty) }, session: seedOf(lg), fakeUser: fu, fakeOrders: db });
+    const openOrderChat = async (c) => {
+      await c.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await c.page.getByRole('button', { name: /Discuter avec Zara Kings|التحدث مع زارا كينغز/ }).click();
+    };
+    const numRe = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '[\\s\\u00a0\\u202f]?');
+    const esc = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const tapExact = async (p, label, re, timeout = 15000) => {
+      const n = await panelOf(p).getByText(re).count();
+      await panelOf(p).getByTestId('assistant-chip').filter({ hasText: new RegExp(`^\\s*${esc(label)}\\s*$`) }).click();
+      const t0 = Date.now();
+      while ((await panelOf(p).getByText(re).count()) <= n) {
+        if (Date.now() - t0 > timeout) throw new Error(`pas de nouvelle reponse apres « ${label} » (${re})`);
+        await sleep(200);
+      }
+    };
+    const cartCount = (p) => p.evaluate(() => (JSON.parse(localStorage.getItem('albasse-cart') || '{"state":{"items":[]}}').state.items || []).length);
+    const realErrs = (c) => c.errs.filter((e) => !/Erreur création commande/.test(e));
+
+    // donnees reelles (lecture seule) : villes avec leurs frais, numeros de paiement
+    const cityRows = await get('cities?select=name,delivery_fee&is_active=eq.true&order=sort_order&order=name');
+    const isHome = (n) => ['ndjamena', 'djamena', 'ndjam'].includes(n.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z]/g, ''));
+    const homeCity = cityRows.find((c) => isHome(c.name));
+    const farCity = cityRows.slice(0, 8).find((c) => !isHome(c.name) && Number(c.delivery_fee) > 0) || cityRows.find((c) => !isHome(c.name) && Number(c.delivery_fee) > 0);
+    const payRow = (await get('payment_settings?select=*&id=eq.1'))[0] || {};
+    const price = Number(realProduct.price);
+    const farFee = Number(farCity.delivery_fee);
+    const homeFee = homeCity && homeCity.delivery_fee != null ? Number(homeCity.delivery_fee) : 0;
+    console.log('info  commande : article', realProduct.name, price, '| ville loin :', farCity.name, farFee, '| ville de la boutique :', homeCity && homeCity.name, homeFee, '| paiement Airtel :', payRow.airtel_number || '(constante)');
+
+    if (PARTS.includes('O')) {
+    // --- O1. parcours complet : adresse, ville avec frais, Airtel Money, emballage cadeau, recapitulatif, confirmation
+    {
+      const fu = mkMember('Ahmed Hassan');
+      const db = newDb();
+      const c = await orderVisitor(fu, db, { qty: 2 });
+      await openOrderChat(c);
+      await ask(c.page, 'je veux commander', /Quelle est votre adresse de livraison/);
+      await waitText(c.page, /finalisons votre commande ensemble/);
+      check('compte connu : Zara ne redemande ni le nom ni le telephone, elle commence par l\'adresse', (await panelOf(c.page).getByText(/nom complet de la personne|Quel est votre numéro/).count()) === 0);
+      await typeIn(c.page, 'Quartier Farcha, rue 12, près du marché');
+      await waitText(c.page, /Dans quelle ville doit-on vous livrer/);
+      const cityChips = await chipLabels(c.page);
+      check('la ville : boutons des villes de la boutique + annuler', cityChips.includes(farCity.name) && cityChips[cityChips.length - 1] === 'Annuler la commande', cityChips);
+      await tapExact(c.page, farCity.name, /Dans votre ville, le paiement se fait à l’avance/);
+      const payChips = await chipLabels(c.page);
+      check('hors N\'Djamena : paiement a l\'avance seulement (Airtel Money, Moov Money), pas de paiement a la livraison', payChips.join('|') === '📱 Airtel Money|📲 Moov Money|Annuler la commande', payChips);
+      await tapExact(c.page, '📱 Airtel Money', /Souhaitez-vous l’emballage cadeau/);
+      check('emballage cadeau : oui (+2 000 FCFA) / non', (await chipLabels(c.page)).join('|').replace(/[\s  ]/g, '') === '🎁Oui(+2000FCFA)|Non,merci|Annulerlacommande', await chipLabels(c.page));
+      await tapExact(c.page, (await chipLabels(c.page))[0], /Récapitulatif de votre commande/);
+      const total = 2 * price + farFee + 2000;
+      const recap = await panelOf(c.page).getByText(/Récapitulatif de votre commande/).last().innerText();
+      check('recapitulatif : article x 2, livraison de la ville, emballage cadeau, total exact', new RegExp(`× 2 : ${numRe(2 * price)} FCFA`).test(recap) && new RegExp(`Livraison à ${esc(farCity.name)} : ${numRe(farFee)} FCFA`).test(recap) && new RegExp(`Emballage cadeau : ${numRe(2000)} FCFA`).test(recap) && new RegExp(`Total : ${numRe(total)} FCFA`).test(recap), recap);
+      check('recapitulatif : nom, telephone, adresse, ville, mode de paiement', /👤 Ahmed Hassan · 📞 66123456/.test(recap) && new RegExp(`📍 Quartier Farcha, rue 12, près du marché, ${esc(farCity.name)}`).test(recap) && /📱 Paiement à l’avance par Airtel Money/.test(recap), recap);
+      check('recapitulatif : boutons Confirmer / Modifier / Annuler, et RIEN n\'est encore enregistre', (await chipLabels(c.page)).join('|') === '✅ Confirmer la commande|✏️ Modifier|Annuler la commande' && db.attempts.length === 0, await chipLabels(c.page));
+      await c.page.screenshot({ path: path.join(OUT, 'O1-recapitulatif.png') });
+      await tapExact(c.page, '✅ Confirmer la commande', /a bien été enregistrée/);
+      check('la commande est enregistree UNE fois', db.created.length === 1 && db.attempts.length === 1, db.attempts.length);
+      const b = db.created[0];
+      check('ce qui est enregistre : compte, statut en attente, paiement, livraison, cadeau, total', b.user_id === UID && b.status === 'pending' && b.payment_method === 'airtel_money' && b.shipping_name === 'Ahmed Hassan' && b.shipping_phone === '66123456' && b.shipping_address === 'Quartier Farcha, rue 12, près du marché' && b.shipping_city === farCity.name && b.gift_wrap === true && b.total === total && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(b.id), { ...b, items: undefined });
+      check('articles enregistres : le bon produit, le prix de la base, la quantite', b.items.length === 1 && b.items[0].product_id === realProduct.id && b.items[0].unit_price === price && b.items[0].quantity === 2, b.items);
+      const done = await panelOf(c.page).getByText(/a bien été enregistrée/).last().innerText();
+      const airtelLine = payRow.airtel_payment_url ? `Payez ici : ${payRow.airtel_payment_url}` : `Envoyez ${numRe(total)} FCFA au ${esc(payRow.airtel_number || '60 60 51 51')} \\(Airtel Money\\)`;
+      check('confirmation : numero de commande, total, instructions de paiement, emballage cadeau, horaires et 48 h', done.includes(`#${b.id.slice(0, 8)}`) && new RegExp(`Total à régler : ${numRe(total)} FCFA`).test(done) && new RegExp(airtelLine).test(done) && /Emballage cadeau inclus/.test(done) && /valable 48 h/.test(done) && /8h30 à 16h/.test(done) && new RegExp(`Fidélité : cette commande vous rapportera ${Math.floor(total / 5000)} points? une fois livrée`).test(done), done);
+      check('confirmation : jamais « payee » ni « confirmee par la boutique » (seulement « enregistree »)', !/payée|paiement reçu|commande confirmée/i.test(done), done);
+      check('le panier est vide apres l\'enregistrement, et boutons Mes commandes / Menu', (await cartCount(c.page)) === 0 && (await chipLabels(c.page)).join('|') === '📦 Mes commandes|🏠 Menu', await chipLabels(c.page));
+      await c.page.screenshot({ path: path.join(OUT, 'O2-confirmation.png') });
+      await ask(c.page, 'oui', /./).catch(() => {});
+      await sleep(1500);
+      check('un « oui » apres coup ne refait PAS de commande', db.attempts.length === 1 && db.created.length === 1);
+      check('aucune ecriture reelle (toutes les ecritures sont dans la fausse base)', c.writes.every((w) => !/\/orders/.test(w)), c.writes);
+      check('aucune erreur (commande complete)', c.errs.length === 0, c.errs);
+      await c.ctx.close();
+    }
+
+    // --- O2. en ecrivant : N'Djamena, paiement a la livraison, sans emballage, confirmation par « oui »
+    {
+      const fu = mkMember('Ahmed Hassan');
+      const db = newDb();
+      const c = await orderVisitor(fu, db, { qty: 1 });
+      await openOrderChat(c);
+      await ask(c.page, 'je veux commander', /Quelle est votre adresse de livraison/);
+      await typeIn(c.page, 'Farcha, face à la pharmacie');
+      await waitText(c.page, /Dans quelle ville doit-on vous livrer/);
+      await typeIn(c.page, homeCity.name);
+      await waitText(c.page, /Comment souhaitez-vous payer/);
+      check('a N\'Djamena : paiement a la livraison propose en plus d\'Airtel Money et Moov Money', (await chipLabels(c.page)).join('|') === '💵 À la livraison|📱 Airtel Money|📲 Moov Money|Annuler la commande', await chipLabels(c.page));
+      await typeIn(c.page, 'je paie à la livraison');
+      await waitText(c.page, /Souhaitez-vous l’emballage cadeau/);
+      await typeIn(c.page, 'non merci');
+      await waitText(c.page, /Récapitulatif de votre commande/);
+      const recap = await panelOf(c.page).getByText(/Récapitulatif de votre commande/).last().innerText();
+      check('recapitulatif a N\'Djamena : pas d\'emballage cadeau, paiement a la livraison en especes', !/Emballage cadeau/.test(recap) && /💵 Paiement à la livraison, en espèces/.test(recap) && new RegExp(`Total : ${numRe(price + homeFee)} FCFA`).test(recap), recap);
+      await typeIn(c.page, 'oui');
+      await waitText(c.page, /a bien été enregistrée/);
+      const b = db.created[0];
+      const done = await panelOf(c.page).getByText(/a bien été enregistrée/).last().innerText();
+      check('enregistre : paiement a la livraison, sans emballage, bon total ; confirmation sans numero Mobile Money', db.created.length === 1 && b.payment_method === 'cash_on_delivery' && !('gift_wrap' in b) && b.total === price + homeFee && /Vous payez en espèces directement à la livraison/.test(done) && !/Envoyez|Payez ici/.test(done) && !/Emballage cadeau inclus/.test(done) && /réglez dans ce délai|valable 48 h/.test(done) && new RegExp(`vous rapportera ${Math.floor((price + homeFee) / 5000)} points? une fois livrée`).test(done), { total: b.total, done });
+      check('aucune erreur (paiement a la livraison)', c.errs.length === 0, c.errs);
+      await c.ctx.close();
+    }
+
+    // --- O3. controles : telephone invalide, question au milieu, modifier, annuler
+    {
+      const fu = mkMember('Ahmed Hassan', { phone: '' });
+      const db = newDb();
+      const c = await orderVisitor(fu, db, { qty: 1 });
+      await openOrderChat(c);
+      await ask(c.page, 'je veux commander', /Quel est votre numéro de téléphone/);
+      await ask(c.page, '1234', /Le numéro doit contenir 8 chiffres et commencer par 6 ou 9/);
+      await ask(c.page, 'abc', /Le numéro doit contenir 8 chiffres et commencer par 6 ou 9/);
+      await ask(c.page, '55123456', /Le numéro doit contenir 8 chiffres et commencer par 6 ou 9/);
+      check('telephone invalide (trop court, lettres, commence par 5) : refuse chaque fois, rien d\'enregistre', (await panelOf(c.page).getByText(/Le numéro doit contenir 8 chiffres/).count()) === 3 && db.attempts.length === 0);
+      await ask(c.page, '+235 66 12 34 56', /Quelle est votre adresse de livraison/);
+      const addressAsks = await panelOf(c.page).getByText(/Quelle est votre adresse de livraison/).count();
+      await ask(c.page, 'tu es une vraie personne ?', /assistante virtuelle d’Albasse Shopping/);
+      await waitText(c.page, /Quelle est votre adresse de livraison/);
+      await sleep(800);
+      check('une question au milieu de la commande : Zara repond, puis repose la question en cours (la commande reste ouverte)', (await panelOf(c.page).getByText(/Quelle est votre adresse de livraison/).count()) === addressAsks + 1 && (await c.page.evaluate(() => JSON.parse(sessionStorage.getItem('albasse_zara_v1')).step)) === 'co_address');
+      await typeIn(c.page, 'Quartier Moursal');
+      await waitText(c.page, /Dans quelle ville doit-on vous livrer/);
+      await tapExact(c.page, homeCity.name, /Comment souhaitez-vous payer/);
+      await tapExact(c.page, '💵 À la livraison', /Souhaitez-vous l’emballage cadeau/);
+      await tapExact(c.page, 'Non, merci', /Récapitulatif de votre commande/);
+      const recap1 = await panelOf(c.page).getByText(/Récapitulatif de votre commande/).last().innerText();
+      check('le telephone « +235 66 12 34 56 » est enregistre en 8 chiffres : 66123456', /📞 66123456/.test(recap1), recap1);
+      await tapExact(c.page, '✏️ Modifier', /Que voulez-vous modifier/);
+      check('modifier : nom, telephone, adresse, ville, paiement, emballage', (await chipLabels(c.page)).join('|') === '👤 Nom|📞 Téléphone|📍 Adresse|🏙️ Ville|💳 Paiement|🎁 Emballage|Annuler la commande', await chipLabels(c.page));
+      await tapExact(c.page, '📍 Adresse', /Quelle est votre adresse de livraison/);
+      await typeIn(c.page, 'Quartier Chagoua, rue 5');
+      await waitText(c.page, /📍 Quartier Chagoua, rue 5, /);
+      const recap2 = await panelOf(c.page).getByText(/Récapitulatif de votre commande/).last().innerText();
+      check('apres la modification : nouveau recapitulatif avec la nouvelle adresse (le reste ne change pas)', /📍 Quartier Chagoua, rue 5,/.test(recap2) && /📞 66123456/.test(recap2) && !/Moursal/.test(recap2), recap2);
+      await tapExact(c.page, 'Annuler la commande', /j’ai arrêté la commande/);
+      check('annuler : le panier est garde, rien n\'est enregistre, boutons du panier', (await cartCount(c.page)) === 1 && db.attempts.length === 0 && (await chipLabels(c.page)).includes('✅ Commander'), await chipLabels(c.page));
+      check('aucune erreur (controles)', c.errs.length === 0, c.errs);
+      await c.ctx.close();
+    }
+
+    // --- O4. panne a l'enregistrement : rien n'est dit « enregistre », le panier est garde, on peut reessayer (meme numero de commande)
+    {
+      const fu = mkMember('Ahmed Hassan');
+      const db = newDb();
+      db.failNext = 1;
+      const c = await orderVisitor(fu, db, { qty: 1 });
+      await openOrderChat(c);
+      await ask(c.page, 'je veux commander', /Quelle est votre adresse de livraison/);
+      await typeIn(c.page, 'Quartier Farcha');
+      await tapExact(c.page, homeCity.name, /Comment souhaitez-vous payer/);
+      await tapExact(c.page, '💵 À la livraison', /Souhaitez-vous l’emballage cadeau/);
+      await tapExact(c.page, 'Non, merci', /Récapitulatif de votre commande/);
+      await tapExact(c.page, '✅ Confirmer la commande', /Je n’ai pas pu enregistrer votre commande/);
+      check('panne : Zara dit la verite (commande NON enregistree), propose Reessayer / Page de commande / WhatsApp', (await chipLabels(c.page)).join('|') === '🔄 Réessayer|📄 Page de commande|💬 WhatsApp' && (await panelOf(c.page).getByText(/a bien été enregistrée/).count()) === 0, await chipLabels(c.page));
+      check('panne : rien d\'enregistre, le panier est garde', db.created.length === 0 && db.attempts.length === 1 && (await cartCount(c.page)) === 1);
+      await tapExact(c.page, '🔄 Réessayer', /a bien été enregistrée/);
+      check('reessayer : la commande est enregistree avec le MEME numero que le premier essai', db.created.length === 1 && db.attempts.length === 2 && db.attempts[0].id === db.created[0].id && db.attempts[1].id === db.created[0].id, db.attempts.map((a) => a.id));
+      check('apres reussite : panier vide', (await cartCount(c.page)) === 0);
+      await c.page.screenshot({ path: path.join(OUT, 'O3-reessai.png') });
+      check('aucune autre erreur (panne)', realErrs(c).length === 0, c.errs);
+      await c.ctx.close();
+    }
+
+    // --- O5. reponse perdue : la commande est deja enregistree, le client reessaie -> pas de doublon
+    {
+      const fu = mkMember('Ahmed Hassan');
+      const db = newDb();
+      db.failAfterSave = 1;
+      const c = await orderVisitor(fu, db, { qty: 1 });
+      await openOrderChat(c);
+      await ask(c.page, 'je veux commander', /Quelle est votre adresse de livraison/);
+      await typeIn(c.page, 'Quartier Farcha');
+      await tapExact(c.page, homeCity.name, /Comment souhaitez-vous payer/);
+      await tapExact(c.page, '📲 Moov Money', /Souhaitez-vous l’emballage cadeau/);
+      await tapExact(c.page, 'Non, merci', /Récapitulatif de votre commande/);
+      await tapExact(c.page, '✅ Confirmer la commande', /Je n’ai pas pu enregistrer votre commande/);
+      await tapExact(c.page, '🔄 Réessayer', /a bien été enregistrée/);
+      const done = await panelOf(c.page).getByText(/a bien été enregistrée/).last().innerText();
+      const moovLine = payRow.moov_payment_url ? `Payez ici : ${payRow.moov_payment_url}` : `Envoyez ${numRe(price + homeFee)} FCFA au ${esc(payRow.moov_number || '99 22 10 17')} \\(Moov Money\\)`;
+      check('reponse perdue puis reessai : UNE seule commande en base (pas de doublon), confirmation avec les instructions Moov Money', db.created.length === 1 && db.attempts.length === 2 && new RegExp(moovLine).test(done), { created: db.created.length, attempts: db.attempts.length, done });
+      check('aucune autre erreur (reponse perdue)', realErrs(c).length === 0, c.errs);
+      await c.ctx.close();
+    }
+
+    // --- O6. la page de commande du site reste possible (secours)
+    {
+      const fu = mkMember('Ahmed Hassan');
+      const db = newDb();
+      db.failNext = 1;
+      const c = await orderVisitor(fu, db, { qty: 1 });
+      await openOrderChat(c);
+      await ask(c.page, 'je veux commander', /Quelle est votre adresse de livraison/);
+      await typeIn(c.page, 'Quartier Farcha');
+      await tapExact(c.page, homeCity.name, /Comment souhaitez-vous payer/);
+      await tapExact(c.page, '💵 À la livraison', /Souhaitez-vous l’emballage cadeau/);
+      await tapExact(c.page, 'Non, merci', /Récapitulatif de votre commande/);
+      await tapExact(c.page, '✅ Confirmer la commande', /Je n’ai pas pu enregistrer votre commande/);
+      await panelOf(c.page).getByTestId('assistant-chip').filter({ hasText: 'Page de commande' }).click();
+      await c.page.waitForURL(/\/commande/, { timeout: 15000 });
+      check('« Page de commande » : ouvre la page officielle du site, le panier est garde', (await cartCount(c.page)) === 1 && db.created.length === 0);
+      await c.ctx.close();
+    }
+
+    // --- O7. le prix change pendant la commande : Zara le dit et redemande la confirmation, jamais de prix change en silence
+    {
+      const fu = mkMember('Ahmed Hassan');
+      const db = newDb();
+      const c = await orderVisitor(fu, db, { qty: 2 });
+      let bump = 0;
+      await c.page.route(/\/rest\/v1\/products\?.*select=id%2Cprice|\/rest\/v1\/products\?.*select=id,price/, (route) =>
+        route.fulfill({ status: 200, headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' }, body: JSON.stringify([{ id: realProduct.id, price: price + bump, compare_at_price: realProduct.compare_at_price, stock: realProduct.stock, is_active: true }]) })
+      );
+      await openOrderChat(c);
+      await ask(c.page, 'je veux commander', /Quelle est votre adresse de livraison/);
+      await typeIn(c.page, 'Quartier Farcha');
+      await tapExact(c.page, homeCity.name, /Comment souhaitez-vous payer/);
+      await tapExact(c.page, '💵 À la livraison', /Souhaitez-vous l’emballage cadeau/);
+      await tapExact(c.page, 'Non, merci', /Récapitulatif de votre commande/);
+      bump = 500;
+      await tapExact(c.page, '✅ Confirmer la commande', /Les prix ou le stock ont changé/);
+      await waitText(c.page, /Le prix de « .* » a changé/);
+      await sleep(1200);
+      const recaps = await panelOf(c.page).getByText(/Récapitulatif de votre commande/).allInnerTexts();
+      const newTotal = 2 * (price + 500) + homeFee;
+      check('prix change au moment de confirmer : Zara l\'annonce, montre le nouveau recapitulatif, et N\'enregistre PAS', db.attempts.length === 0 && recaps.length === 2 && new RegExp(`Total : ${numRe(newTotal)} FCFA`).test(recaps[1]), recaps.map((r) => r.slice(0, 120)));
+      await tapExact(c.page, '✅ Confirmer la commande', /a bien été enregistrée/);
+      check('apres nouvelle confirmation : enregistre au NOUVEAU prix', db.created.length === 1 && db.created[0].items[0].unit_price === price + 500 && db.created[0].total === newTotal, db.created[0] && db.created[0].total);
+      await c.ctx.close();
+    }
+
+    // --- O8. arabe, avec changement de langue en cours de route
+    {
+      const fu = mkMember('Ahmed Hassan');
+      const db = newDb();
+      const c = await orderVisitor(fu, db, { qty: 1 });
+      await openOrderChat(c);
+      await ask(c.page, 'je veux commander', /Quelle est votre adresse de livraison/);
+      await c.page.getByTestId('assistant-lang').click();
+      await waitText(c.page, /ما عنوان التوصيل؟/);
+      check('changement de langue pendant la commande : la question en cours est reposee en arabe, la commande continue', (await c.page.evaluate(() => JSON.parse(sessionStorage.getItem('albasse_zara_v1')).step)) === 'co_address' && (await c.page.evaluate(() => localStorage.getItem('albasse_zara_lang'))) === 'ar');
+      await typeIn(c.page, 'حي فرشا قرب الصيدلية');
+      await waitText(c.page, /في أي مدينة يجب أن نوصّل إليك؟/);
+      await tapExact(c.page, farCity.name, /في مدينتك، يتم الدفع مسبقاً/);
+      await tapExact(c.page, '📱 Airtel Money', /هل تريد تغليف الهدية؟/);
+      await tapExact(c.page, 'لا، شكراً', /ملخص طلبك/);
+      const recap = await panelOf(c.page).getByText(/ملخص طلبك/).last().innerText();
+      check('recapitulatif en arabe : article, livraison, total, nom, telephone, adresse, paiement', /الدفع مسبقاً عبر Airtel Money/.test(recap) && new RegExp(`المجموع: ${numRe(price + farFee)} FCFA`).test(recap) && /66123456/.test(recap) && /حي فرشا قرب الصيدلية/.test(recap), recap);
+      const dir = await panelOf(c.page).getByText(/ملخص طلبك/).last().evaluate((el) => getComputedStyle(el).direction);
+      check('le recapitulatif arabe s\'ecrit de droite a gauche', dir === 'rtl', dir);
+      await c.page.screenshot({ path: path.join(OUT, 'O4-arabe-recapitulatif.png') });
+      await tapExact(c.page, '✅ تأكيد الطلب', /تم تسجيل طلبك رقم #/);
+      check('commande enregistree une fois, avec les bonnes informations (arabe)', db.created.length === 1 && db.created[0].payment_method === 'airtel_money' && db.created[0].shipping_address === 'حي فرشا قرب الصيدلية' && db.created[0].shipping_city === farCity.name && db.created[0].total === price + farFee, db.created[0]);
+      const done = await panelOf(c.page).getByText(/تم تسجيل طلبك رقم #/).last().innerText();
+      check('confirmation arabe : numero de commande et total', done.includes(`#${db.created[0].id.slice(0, 8)}`) && new RegExp(`المبلغ المطلوب: ${numRe(price + farFee)} FCFA`).test(done), done);
+      check('aucune erreur (commande en arabe)', c.errs.length === 0, c.errs);
+      await c.ctx.close();
+    }
+    }
+
+    // --- F. programme de fidelite : le grade et les points viennent du compte (relus dans la base), jamais inventes
+    if (PARTS.includes('F')) {
+      const loyalty = async (points, question, re, { lg = 'fr', fail = false, stale } = {}) => {
+        const fu = mkMember('Ahmed Hassan', { points: stale === undefined ? points : stale });
+        const c = await orderVisitor(fu, newDb(), { qty: 1, lg });
+        if (fail) await c.page.route(/select=loyalty_points/, (route) => route.abort());
+        await openOrderChat(c);
+        if (stale !== undefined) fu.profile.loyalty_points = points; // les points ont change depuis la connexion : Zara doit lire la valeur actuelle
+        await ask(c.page, question, re);
+        const text = await panelOf(c.page).getByText(re).last().innerText();
+        return { c, text, fu };
+      };
+      {
+        const { c, text } = await loyalty(0, 'quel est mon grade ?', /Bienvenue dans notre programme de fidélité ! 🥉/);
+        check('0 point : Bronze 🥉, bienvenue dans le programme, 0 point, il manque 25 points pour Argent 🥈', /Vous êtes actuellement au grade Bronze/.test(text) && /Vos points : 0/.test(text) && /Il vous manque 25 points pour atteindre le grade Argent 🥈/.test(text), text);
+        check('boutons : gagner des points / mes commandes / menu', (await chipLabels(c.page)).join('|') === '🎁 Gagner des points|📦 Mes commandes|🏠 Menu', await chipLabels(c.page));
+        await c.page.screenshot({ path: path.join(OUT, 'F1-bronze.png') });
+        await c.ctx.close();
+      }
+      {
+        const { c, text } = await loyalty(37, 'mes points de fidélité', /Bonne nouvelle ! 😍 Vous êtes au grade Argent 🥈/);
+        check('37 points : Argent 🥈, « il ne vous manque que 13 points pour atteindre le grade Or 🥇 » (nombre exact)', /il ne vous manque que 13 points pour atteindre le grade Or 🥇 ! Continuez à profiter de nos articles sur albasseshopping\.com/.test(text) && /Vos points : 37/.test(text), text);
+        await c.page.screenshot({ path: path.join(OUT, 'F2-argent-proche.png') });
+        await c.ctx.close();
+      }
+      {
+        const { c, text } = await loyalty(30, 'mon grade', /Félicitations ! 🎉 Votre grade actuel chez Albasse Shopping est Argent 🥈/);
+        check('30 points : Argent 🥈, il manque 20 points pour Or 🥇, invitation a continuer sur albasseshopping.com', /Il vous manque 20 points pour atteindre le grade Or 🥇/.test(text) && /Continuez à acheter sur albasseshopping\.com/.test(text), text);
+        await c.ctx.close();
+      }
+      {
+        const { c, text } = await loyalty(120, 'quel est mon niveau', /le plus haut grade du programme/);
+        check('120 points : Diamond 👑, le plus haut grade, aucun « points manquants »', /Diamond 👑/.test(text) && !/manque/.test(text), text);
+        await c.ctx.close();
+      }
+      {
+        // points changes depuis la connexion (le profil gardait 10) : Zara relit le compte, elle ne se sert pas d'une valeur ancienne
+        const { c, text } = await loyalty(55, 'combien de points j’ai', /Votre grade actuel chez Albasse Shopping est Or 🥇/, { stale: 10 });
+        check('les points sont relus dans le compte au moment de la question (55 maintenant, et non les 10 gardes a la connexion)', /Vos points : 55/.test(text) && /Il vous manque 20 points pour atteindre le grade Platine 💎/.test(text), text);
+        await c.ctx.close();
+      }
+      {
+        const { c, text } = await loyalty(0, 'comment gagner des points', /C’est simple ! 😊 Achetez vos articles sur https:\/\/albasseshopping\.com/);
+        check('comment gagner des points : phrase du patron, regle reelle (1 point / 5 000 FCFA d\'une commande livree) et les 5 grades avec leurs vrais paliers', /1 point pour chaque tranche de 5[\s  ]000 FCFA du total d’une commande livrée/.test(text) && text.includes('🥉 Bronze (au départ) · 🥈 Argent (25 points) · 🥇 Or (50 points) · 💎 Platine (75 points) · 👑 Diamond (100 points)'), text);
+        check('boutons du client connecte : mes points / menu', (await chipLabels(c.page)).join('|') === '🏆 Mes points|🏠 Menu', await chipLabels(c.page));
+        await ask(c.page, 'Bonjour', /Bienvenue chez Albasse Shopping ! Comment puis-je vous aider aujourd’hui \?|Ravie de vous accueillir\. Que puis-je faire pour vous aujourd’hui \?/);
+        check('le menu du client connecte propose « Mes points »', (await chipLabels(c.page)).includes('🏆 Mes points'), await chipLabels(c.page));
+        await tapExact(c.page, '🏆 Mes points', /Bienvenue dans notre programme de fidélité ! 🥉/);
+        check('le bouton « Mes points » donne le grade du compte', true);
+        await c.ctx.close();
+      }
+      {
+        // visiteur sans compte : aucun grade, aucun nombre, il est invite a se connecter
+        const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' }, session: seedOf('fr') });
+        await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+        await sleep(2500);
+        await v.page.getByRole('button', { name: FAB_NAME }).click();
+        await ask(v.page, 'quel est mon grade ?', /Pour connaître votre grade et vos points de fidélité, connectez-vous à votre compte sur albasseshopping\.com/);
+        const text = await panelOf(v.page).getByText(/Pour connaître votre grade/).last().innerText();
+        check('sans compte : aucun grade ni nombre invente, invitation a se connecter (boutons compte / connexion / gagner des points)', !/\d|Bronze|Argent|Diamond/.test(text) && (await chipLabels(v.page)).join('|') === '👤 Créer mon compte|Me connecter|🎁 Gagner des points|🏠 Menu', { text, chips: await chipLabels(v.page) });
+        await v.ctx.close();
+      }
+      {
+        // les points ne se lisent pas : Zara n'invente rien et ne se sert pas du profil ancien (80 points -> Platine)
+        const { c, text } = await loyalty(0, 'quel est mon grade', /Je n’arrive pas à lire vos points pour le moment/, { fail: true, stale: 80 });
+        check('lecture impossible : aucun grade ni nombre (meme pas celui du profil ancien), on invite a consulter le compte', !/\d|Platine|Bronze|Or 🥇/.test(text) && /albasseshopping\.com/.test(text) && (await chipLabels(c.page)).join('|') === '👤 Mon compte|🎁 Gagner des points|🏠 Menu', { text, chips: await chipLabels(c.page) });
+        await c.ctx.close();
+      }
+      {
+        const { c, text } = await loyalty(37, 'ما هي درجتي', /بشرى سارة! 😍/, { lg: 'ar' });
+        check('en arabe : grade (الدرجة الفضية 🥈), points restants exacts (13), enthousiasme', /الدرجة الفضية 🥈/.test(text) && /ينقصك 13 نقطة فقط للوصول إلى الدرجة الذهبية 🥇/.test(text) && /نقاطك: 37/.test(text), text);
+        const dir = await panelOf(c.page).getByText(/بشرى سارة/).last().evaluate((el) => getComputedStyle(el).direction);
+        check('la reponse arabe s\'ecrit de droite a gauche', dir === 'rtl', dir);
+        await c.page.screenshot({ path: path.join(OUT, 'F3-arabe.png') });
+        await c.ctx.close();
+      }
+    }
+  }
+
   // =============================================== B. CONTEXTE : FICHE PRODUIT ET PANIER ===============================================
   if (PARTS.includes('B')) {
     console.log('\n== B. contexte : fiche produit et panier');
@@ -927,7 +1707,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await c.page.goto(`http://localhost:${port}/produit/rolex`, { waitUntil: 'load' });
       await sleep(3500);
       await c.page.getByRole('button', { name: FAB_NAME }).click();
-      await waitText(c.page, 'Bonjour Ali ! Je suis Zara Kings, l\'assistante marketing d\'Albasse Shopping.');
+      await waitText(c.page, WELCOME_FR('Ali'));
       await waitText(c.page, /Vous regardez « Rolex » \? Excellent choix !/);
       const pitch = await panelOf(c.page).getByText(/Vous regardez « Rolex »/).first().innerText();
       check('sur la fiche d\'un produit : Zara parle de ce produit (prix barre, -50 %, « Acheter »)', /12\s?500 FCFA au lieu de 25\s?000 FCFA \(-50 %\)/.test(pitch) && /« Acheter »/.test(pitch), pitch);
@@ -986,7 +1766,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await c.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
       await sleep(3500);
       await c.page.getByRole('button', { name: FAB_NAME }).click();
-      await waitText(c.page, "Bonjour Aminata ! Je suis Zara Kings, l'assistante marketing d'Albasse Shopping.");
+      await waitText(c.page, WELCOME_FR('Aminata'));
       await waitText(c.page, /À savoir avant de commander/);
       await waitText(c.page, 'Que souhaitez-vous découvrir aujourd’hui ? 🛍️');
       const labels = await chipLabels(c.page);

@@ -5,13 +5,16 @@ export interface LoyaltyTier {
   min: number;
 }
 
-// 5000 FCFA depenses = 1 point. Paliers jusqu'a 100 points (Diamond).
+// 1 point par tranche de 5000 FCFA d'une commande livree (la base fait le calcul : award_loyalty_points).
+// Paliers jusqu'a 100 points (Diamond).
+export const LOYALTY_FCFA_PER_POINT = 5000;
+
 export const LOYALTY_TIERS: LoyaltyTier[] = [
   { key: 'bronze', label: 'Bronze', icon: '🥉', min: 0 },
   { key: 'argent', label: 'Argent', icon: '🥈', min: 25 },
   { key: 'or', label: 'Or', icon: '🥇', min: 50 },
-  { key: 'platine', label: 'Platine', icon: '🔷', min: 75 },
-  { key: 'diamond', label: 'Diamond', icon: '💎', min: 100 },
+  { key: 'platine', label: 'Platine', icon: '💎', min: 75 },
+  { key: 'diamond', label: 'Diamond', icon: '👑', min: 100 },
 ];
 
 export interface LoyaltyStatus {

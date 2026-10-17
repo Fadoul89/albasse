@@ -1,5 +1,5 @@
 import { isHomeCity } from './deliveryRules';
-import { arabicCityToLatin, foldArabic, hasArabic, type Lang } from './assistantLang';
+import { arabicCityToLatin, arabicDigits, foldArabic, hasArabic, type GoodbyeKind, type GreetingKind, type Lang, type PayMethodKey, type PersonalKind } from './assistantLang';
 import { fcfa, texts } from './assistantText';
 
 export { isHomeCity, fcfa };
@@ -174,30 +174,109 @@ export function newest(products: CatalogProduct[], limit = 4): CatalogProduct[] 
 
 const NO_NAME = /^(non|no|passer|plus tard|rien|aucun|skip|pas maintenant|jamais|merci|لا|تخطي|لاحقا|بعدين|شكرا|ليس الان)$/;
 
+// Le texte sans les formules du début (« bonjour », « je m'appelle »...) ni la ponctuation de fin.
+function stripNameIntro(text: string): string {
+  return text
+    .replace(/^(bonjour|bonsoir|salut|salam|مرحبا|مرحباً|أهلا|اهلا|السلام عليكم|سلام)[ ,!،]*/i, '')
+    .replace(/^(اسمي|أنا|انا|ناديني|نادني|يسمونني)\s+/, '')
+    .replace(/^(je m'appelle|je m’appelle|je me nomme|mon nom est|mon prénom est|mon prenom est|moi c'est|moi c’est|c'est|c’est|je suis|appelez[- ]moi|appelle[- ]moi|moi)\s+/i, '')
+    .replace(/[.!?,;:،؛؟]+$/g, '')
+    .trim();
+}
+
+// « MAHAMAT » écrit tout en majuscules -> « Mahamat » (et « JEAN-PIERRE » -> « Jean-Pierre ») ; sinon on met seulement la 1re lettre en majuscule.
+function properName(word: string): string {
+  if (word === word.toLocaleUpperCase('fr-FR') && word !== word.toLocaleLowerCase('fr-FR')) {
+    return word.toLocaleLowerCase('fr-FR').replace(/(^|[-'’])(\p{L})/gu, (_, sep: string, letter: string) => sep + letter.toLocaleUpperCase('fr-FR'));
+  }
+  return word.charAt(0).toLocaleUpperCase('fr-FR') + word.slice(1);
+}
+
 // « Fatimé », « je m'appelle Fatimé Ali », « moi c'est Ali » -> « Fatimé » / « Ali ». Renvoie null si ce
 // n'est pas un prenom (phrase, chiffres, refus).
 export function firstNameFrom(text: string): string | null {
   const t = text.trim().replace(/\s+/g, ' ');
   if (!t || t.length > 40) return null;
   if (NO_NAME.test(normalize(t))) return null;
-  let s = t
-    .replace(/^(bonjour|bonsoir|salut|salam|مرحبا|مرحباً|أهلا|اهلا|السلام عليكم|سلام)[ ,!،]*/i, '')
-    .replace(/^(اسمي|أنا|انا|ناديني|نادني|يسمونني)\s+/, '')
-    .replace(/^(je m'appelle|je m’appelle|je me nomme|mon nom est|mon prénom est|mon prenom est|moi c'est|moi c’est|c'est|c’est|je suis|appelez[- ]moi|appelle[- ]moi|moi)\s+/i, '')
-    .replace(/[.!?,;:،؛؟]+$/g, '')
-    .trim();
+  const s = stripNameIntro(t);
   if (!s || /\d/.test(s)) return null;
   const words = s.split(' ').filter(Boolean);
   if (words.length === 0 || words.length > 3) return null;
   const first = words[0];
   if (!/^[\p{L}][\p{L}'’-]{1,19}$/u.test(first)) return null;
-  return first.charAt(0).toLocaleUpperCase('fr-FR') + first.slice(1);
+  return properName(first);
 }
+
+// Nom complet pour la livraison : « ahmed hassan », « Mahamat Saleh Idriss » -> mots avec majuscules. Null si ce n'est pas un nom
+// (chiffres, question, « merci »...).
+export function fullNameFrom(text: string): string | null {
+  const t = text.trim().replace(/\s+/g, ' ');
+  if (!t || t.length > 60 || /[?؟]/.test(t)) return null;
+  if (NO_NAME.test(normalize(t))) return null;
+  const s = stripNameIntro(t);
+  if (!s || /\d/.test(s)) return null;
+  const words = s.split(' ').filter(Boolean);
+  if (words.length === 0 || words.length > 5) return null;
+  if (!words.every((w) => /^[\p{L}][\p{L}'’.-]{0,29}$/u.test(w))) return null;
+  if (s.replace(/[^\p{L}]/gu, '').length < 2) return null;
+  // une demande (« je veux commander », « merci ») n'est pas un nom : seul un texte sans autre sens est accepté
+  const intent = detectIntent(t);
+  if (intent !== 'search' && intent !== 'greeting') return null;
+  return words.map(properName).join(' ');
+}
+
+// Numéro de téléphone du Tchad : 8 chiffres commençant par 6 ou 9 (comme sur la page de commande). « +235 66 12 34 56 » est accepté.
+export function phoneFrom(text: string): string | null {
+  const digits = arabicDigits(text).replace(/\D/g, '');
+  const d = digits.length === 11 && digits.startsWith('235') ? digits.slice(3) : digits.length === 13 && digits.startsWith('00235') ? digits.slice(5) : digits;
+  return /^[69]\d{7}$/.test(d) ? d : null;
+}
+
+// Adresse de livraison : quartier, rue, repère (4 à 150 caractères, pas un lien).
+export function addressFrom(text: string): string | null {
+  const t = text.trim().replace(/\s+/g, ' ');
+  if (t.length < 4 || t.length > 150 || !/\p{L}/u.test(t) || /https?:\/\//i.test(t)) return null;
+  // « merci », « bonjour », « oui » ne sont pas une adresse (un quartier qui parle de « la boutique » reste accepté)
+  if (['thanks', 'goodbye', 'smalltalk', 'compliment', 'greeting', 'personal', 'bot'].includes(detectIntent(t)) || yesNo(t)) return null;
+  return t;
+}
+
+const YES_WORDS = new Set(['oui', 'ouais', 'yes', 'ok', 'okay', 'daccord', 'volontiers', 'parfait', 'exact', 'ouai', 'نعم', 'ايوه', 'اي', 'اجل', 'تمام', 'حسنا', 'موافق', 'اكيد']);
+const NO_WORDS = new Set(['non', 'no', 'nan', 'pas', 'jamais', 'لا', 'كلا']);
+
+// « oui », « non merci », « ok », « نعم », « لا »... ; null si ce n'est pas clair.
+export function yesNo(text: string): 'yes' | 'no' | null {
+  const tokens = normalize(text).replace(/d accord/g, 'daccord').split(' ').filter(Boolean);
+  const yes = tokens.some((t) => YES_WORDS.has(t));
+  const no = tokens.some((t) => NO_WORDS.has(t));
+  return yes && !no ? 'yes' : no && !yes ? 'no' : null;
+}
+
+export type { PayMethodKey };
+
+// « airtel », « moov money », « à la livraison », « كاش »... -> mode de paiement
+export function paymentFrom(text: string): PayMethodKey | null {
+  const n = normalize(text);
+  if (/airtel|ايرتل/.test(n)) return 'airtel_money';
+  if (/moov|موف/.test(n)) return 'moov_money';
+  if (/livraison|cash|espece|especes|sur place|a la reception|عند الاستلام|نقدا|كاش|نقد/.test(n)) return 'cash_on_delivery';
+  return null;
+}
+
+// Arrêter la commande (« annuler », « stop », « laisse tomber »...), la confirmer (« je confirme »), la modifier (« changer »).
+export const wantsCancelOrder = (text: string): boolean => /(^| )(annule|annuler|annulation|stop|stoppe|quitter|abandonner|laisse tomber|laisser tomber|الغاء|الغي|توقف|اوقف)( |$)/.test(normalize(text));
+export const wantsConfirmOrder = (text: string): boolean => /(^| )(confirme|confirmer|valide|valider|je confirme|اكد|تاكيد|اتمام)( |$)/.test(normalize(text)) || yesNo(text) === 'yes';
+export const wantsEditOrder = (text: string): boolean => /(^| )(modifier|modifie|changer|change|corriger|corrige|erreur|faux|تعديل|عدل|غير|خطا)( |$)/.test(normalize(text));
+
+// Titres de politesse écrits devant un prénom (« Mr Ali », « Mme Fatimé ») : ce ne sont pas des prénoms.
+const NAME_TITLES = new Set(['m', 'mr', 'mme', 'mlle', 'dr', 'pr', 'prof', 'madame', 'monsieur', 'mademoiselle', 'السيد', 'السيده', 'الاستاذ', 'الاستاذه', 'الدكتور', 'الدكتوره']);
 
 // Prenom a partir du nom complet d'un compte.
 export function firstNameOfFullName(fullName: string | null | undefined): string | null {
   if (!fullName) return null;
-  return firstNameFrom(fullName.split(' ')[0] ?? '');
+  const words = fullName.trim().split(/\s+/).filter(Boolean);
+  while (words.length > 0 && NAME_TITLES.has(normalize(words[0]))) words.shift();
+  return firstNameFrom(words[0] ?? '');
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -206,8 +285,13 @@ export function firstNameOfFullName(fullName: string | null | undefined): string
 
 export type Intent =
   | 'bot'
+  | 'compliment'
+  | 'goodbye'
   | 'thanks'
+  | 'smalltalk'
   | 'greeting'
+  | 'personal'
+  | 'loyalty'
   | 'account'
   | 'orders'
   | 'delivery'
@@ -237,14 +321,122 @@ const has = (tokens: string[], words: string[]) => words.some((w) => tokens.incl
 // « الهدية » -> « هديه » : on enleve l'article et les petits prefixes pour retrouver le mot de la liste.
 const stemAr = (token: string) => (hasArabic(token) ? token.replace(/^(وال|بال|فال|كال|لل|ال)/, (m) => (m === 'لل' ? 'ل' : '')) : token);
 
+// ---------------------------------------------------------------------------------------------
+// Politesse et conversation : salutations, merci, au revoir, compliments, questions sur la vie de Zara
+// ---------------------------------------------------------------------------------------------
+
+// Les motifs arabes sont écrits normalement puis passés par le même « lissage » que le texte du visiteur.
+const ar = (pattern: string) => new RegExp(foldArabic(pattern));
+
+const tokensOf = (text: string): string[] => {
+  const base = normalize(text).split(' ').filter(Boolean);
+  return [...base, ...base.map(stemAr).filter((t, i) => t !== base[i])];
+};
+
+// Comment le visiteur salue : Zara répond sur le même ton (bonsoir -> bonsoir, salam -> salam).
+export function greetingKind(text: string): GreetingKind | null {
+  const tokens = tokensOf(text);
+  if (has(tokens, ['salam', 'salaam', 'assalam', 'assalamou', 'سلام'])) return 'salam';
+  if (has(tokens, ['bonsoir', 'مساء'])) return 'evening';
+  if (has(tokens, ['صباح'])) return 'morning';
+  if (has(tokens, ['salut', 'coucou', 'hello', 'hey', 'hi', 'slt', 'هلا', 'هاي'])) return 'hi';
+  if (has(tokens, ['bonjour', 'bjr', 'مرحبا', 'اهلا'])) return 'hello';
+  return null;
+}
+
+// « merci » seul (ou avec « beaucoup », le prénom de Zara, « ok »...) : si le visiteur ajoute une demande, on répond à la demande.
+const THANK_WORDS = ['merci', 'shukran', 'thanks', 'thank', 'شكرا', 'مشكور', 'مشكوره', 'جزاك'];
+const THANK_FILLER = new Set([
+  ...THANK_WORDS, 'beaucoup', 'infiniment', 'mille', 'enormement', 'vraiment', 'zara', 'kings', 'pour', 'tout', 'votre', 'ton', 'ta', 'aide', 'le', 'la', 'les',
+  'de', 'du', 'des', 'et', 'a', 'vous', 'toi', 'info', 'infos', 'information', 'informations', 'reponse', 'reponses', 'conseil', 'conseils', 'explication',
+  'explications', 'you', 'very', 'much', 'so', 'جزيلا', 'لك', 'لكم', 'كثيرا', 'جدا', 'على', 'علي', 'مساعدتك', 'مساعدتكم', 'زارا', 'كينغز', 'يا', 'الله', 'خيرا',
+  'بارك', 'فيك', 'فيكم', 'الف', 'مره',
+]);
+const ACK_WORDS = new Set(['ok', 'okay', 'd', 'accord', 'daccord', 'compris', 'parfait', 'super', 'genial', 'top', 'nickel', 'cool', 'oui', 'bien', 'recu', 'entendu', 'bravo', 'excellent', 'تمام', 'حسنا', 'ممتاز', 'واضح', 'فهمت']);
+
+function isThanksOnly(base: string[], tokens: string[]): boolean {
+  if (!has(tokens, THANK_WORDS)) return false;
+  const rest = base.filter((w) => !THANK_FILLER.has(w) && !THANK_FILLER.has(stemAr(w)));
+  return rest.every((w) => ACK_WORDS.has(w));
+}
+
+export const thanksKind = (text: string): 'much' | 'plain' =>
+  has(tokensOf(text), ['beaucoup', 'infiniment', 'mille', 'enormement', 'vraiment', 'much', 'جزيلا', 'الف', 'كثيرا', 'جدا']) ? 'much' : 'plain';
+
+// Au revoir, bonne nuit, bonne journée... (« a plus » seulement en fin de phrase : « a plus de 10 000 FCFA » est un budget)
+const BYE_NIGHT = ar('bonne nuit|beaux reves|dors bien|تصبح على خير|تصبحين على خير|تصبحون على خير|ليلة سعيدة');
+const BYE_EVENING = /bonne soiree|passe une bonne soiree/;
+const BYE_DAY = ar('bonne journee|يوم سعيد|نهارك سعيد');
+const BYE_PLAIN = ar('au revoir|(^| )(a bientot|a demain|a la prochaine|a plus tard|a plus|bye|ciao|adieu)( zara| kings)*$|bonne continuation|je dois partir|مع السلامة|إلى اللقاء|وداعا|بالسلامة|في أمان الله|الله يسلمك');
+
+export function goodbyeKind(text: string): GoodbyeKind | null {
+  const n = normalize(text);
+  if (BYE_NIGHT.test(n)) return 'night';
+  if (BYE_EVENING.test(n)) return 'evening';
+  if (BYE_DAY.test(n)) return 'day';
+  if (BYE_PLAIN.test(n)) return 'plain';
+  return null;
+}
+
+// « Tu es belle », « bravo », « je t'aime »... : Zara remercie avec chaleur (sans se vanter et sans changer de sujet).
+const COMPLIMENT = ar(
+  '(^| )(tu es|t es|tes|vous etes) ((tres|trop|vraiment|si|tellement|super) )?(belle|jolie|magnifique|superbe|gentille|mignonne|charmante|adorable|intelligente|merveilleuse|sublime|parfaite|geniale|canon|top|forte|sympa|incroyable|formidable|excellente|la meilleure)( |$)' +
+    '|(^| )(bravo|felicitations|bien joue|bon travail|beau travail|super travail|excellent travail)( |$)|(^| )je (t|vous) (aime|adore|kiffe)( |$)' +
+    '|(انت|انتي) (جميلة|حلوة|رائعة|لطيفة|ذكية|مبدعة|ممتازة|مذهلة|قمر|طيبة|كريمة)|احبك|بحبك|اعشقك|ماشاء الله|ما شاء الله|بارك الله فيك|يعطيك العافية'
+);
+
+// « Ça va ? » (avec ou sans « bonjour » devant) : seulement si c'est tout ce qu'il écrit
+const SMALLTALK = ar(
+  '^((bonjour|bonsoir|salut|coucou|hello|slt|salam|hi|hey) )?(zara )?(kings )?(et )?(comment )?(ca va|vas tu|tu vas|allez vous|vous allez|va tu|la forme)( bien| aujourd hui| ce matin| ce soir)?( et toi| et vous| zara| kings)*$' +
+    '|^((السلام عليكم|مرحبا|اهلا|سلام|هلا) )?(زارا )?(كيف حالك|كيف حالكم|كيفك|كيف الحال|شلونك|اخبارك|شخبارك|لاباس|لا باس)( عليك| يا زارا| زارا)*$'
+);
+
+// Ce que le visiteur demande sur la vie de Zara : son numéro, son adresse, sa famille... Elle reste une assistante virtuelle.
+export function personalKind(text: string): PersonalKind | null {
+  const n = normalize(text);
+  if (/(^| )(ton|ta|tes) (whatsapp|watsap|wasap|watsapp)( |$)/.test(n) || ar('واتسابك|واتساب الخاص بك').test(n)) return 'whatsapp';
+  if (/(^| )(t appeler|te joindre|te contacter|te telephoner|appeler toi)( |$)/.test(n) || ar('اتصل بك|اتصل عليك|اكلمك|اتصل عليكي').test(n)) return 'call';
+  if (/(^| )(ton|ta|tes) (numero|num|telephone|tel|contact|portable|cellulaire|phone|email|mail|facebook|instagram|snap|snapchat|tiktok)( |$)/.test(n) || ar('رقمك|هاتفك|جوالك|ارقامك').test(n)) return 'phone';
+  if (/(^| )(ton|ta|tes) (adresse|domicile|quartier)( |$)/.test(n) || ar('عنوانك').test(n)) return 'address';
+  if (/(^| )(ton|ta|tes) (maison|ville|pays)( |$)|(^| )(tu|t|vous) (habite|habites|habitez)( |$)|(^| )ou (tu |vous )?(habite|habites|habitez|vis|vivez|demeures?|restes?)( |$)|(^| )(tu|vous) (vis|vivez|restes?|demeures?) (ou|a|dans)( |$)/.test(n) || ar('(اين|وين) (تسكن|تعيش|ساكن|بيتك|منزلك)|بيتك|منزلك|سكنك').test(n)) return 'live';
+  if (
+    /(^| )(quel age (as tu|tu as|avez vous|vous avez)|tu as quel age|ton age|vous avez quel age|tu as \d+ ans)( |$)|(^| )(tu es|t es|vous etes) (mariee|marie|celibataire|en couple|enceinte|fiancee|divorcee)( |$)|(^| )tu as (un|une|des) (mari|femme|copain|copine|petit ami|petite amie|enfant|enfants|bebe|famille|frere|freres|soeur|soeurs|fiance|amoureux)( |$)|(^| )(ta famille|tes parents|tes enfants|tes freres|tes soeurs|ton mari|ton copain|ton fiance)( |$)|(^| )(tu es|t es) (d ou|de quel(le)? (pays|ville))( |$)|(^| )(tu viens|d ou (viens|venez) (tu|vous))( |$)|(^| )ta nationalite( |$)|(^| )tu es (une |un )?(fille|femme|homme|garcon)( |$)|(^| )(te voir|te rencontrer|on se voit|on se rencontre|sortir avec (moi|toi)|rendez vous avec toi|ta photo|une photo de toi|ton visage)( |$)|(^| )tu (manges|dors|as faim|as soif|fais quoi|travailles ou|pleures)( |$)/.test(n) ||
+    ar('كم عمرك|عمرك|متزوجة|هل انت متزوج|عندك اولاد|عائلتك|اهلك|زوجك|اخوتك|حبيبك|خطيبك|من اين انت|من وين انت|جنسيتك|صورتك|اريد رؤيتك|نتقابل|الخروج معك').test(n)
+  )
+    return 'life';
+  return null;
+}
+
+// Programme de fidélité : le grade, les points, les paliers. Les noms de métaux (« or », « argent », « ذهبي ») ne comptent pas seuls :
+// ce sont aussi des produits ou de l'argent.
+const LOYALTY_RE = ar(
+  'fidelite|(^| )grades?( |$)|(^| )paliers?( |$)|mes points|mon nombre de points|combien de points|gagner (des |les )?points|points? de (fidelite|loyaute)|mon niveau|bronze|platine|diamond|diamant|loyalty' +
+    '|نقاطي|نقاط الولاء|نقاط|الولاء|ولاء|رتبتي|درجتي|مستواي|درجه الولاء|بلاتيني|دايموند|برونزي'
+);
+const EARN_RE = ar('gagner|cumuler|accumuler|comment (avoir|obtenir|recuperer)|اكسب|اجمع|احصل|اربح|كيف.*(نقاط)');
+const TIERS_RE = ar('(^| )(les |quels sont les |quelles sont les |liste des )(grades|paliers|niveaux)|(grades|paliers) (du|de) (programme|fidelite)|الدرجات|الرتب|المستويات');
+
+// Ce que le client veut savoir : son grade (mine), comment gagner des points (earn), la liste des grades (tiers).
+export function loyaltyKind(text: string): 'mine' | 'earn' | 'tiers' {
+  const n = normalize(text);
+  if (EARN_RE.test(n)) return 'earn';
+  if (TIERS_RE.test(n)) return 'tiers';
+  return 'mine';
+}
+
 export function detectIntent(text: string): Intent {
   const n = normalize(text);
   const base = n.split(' ').filter(Boolean);
   if (base.length === 0) return 'search';
   const tokens = [...base, ...base.map(stemAr).filter((t, i) => t !== base[i])];
   if (has(tokens, ['robot', 'bot', 'ia', 'intelligence', 'artificielle', 'humain', 'humaine', 'machine', 'automatique', 'روبوت', 'بوت', 'ذكاء', 'اصطناعي', 'اله']) || /vraie? personne|vrai humain|une personne|شخص حقيقي|انسان حقيقي/.test(n)) return 'bot';
-  if (has(tokens, ['merci', 'shukran', 'thanks', 'شكرا', 'مشكور', 'مشكوره', 'جزاك'])) return 'thanks';
-  if (has(tokens, ['bonjour', 'bonsoir', 'salut', 'salam', 'coucou', 'hello', 'slt', 'hi', 'مرحبا', 'اهلا', 'سلام', 'صباح', 'مساء', 'هلا', 'هاي']) && base.length <= 3) return 'greeting';
+  if (COMPLIMENT.test(n)) return 'compliment';
+  if (goodbyeKind(text)) return 'goodbye';
+  if (isThanksOnly(base, tokens)) return 'thanks';
+  if (SMALLTALK.test(n)) return 'smalltalk';
+  if (greetingKind(text) && base.length <= 3) return 'greeting';
+  if (personalKind(text)) return 'personal';
+  if (LOYALTY_RE.test(n)) return 'loyalty';
   // installer l'application / ajouter à l'écran d'accueil
   if (has(tokens, ['installer', 'installe', 'installation', 'telecharger', 'raccourci', 'pwa', 'appli', 'application', 'تثبيت', 'ثبت', 'تحميل', 'تطبيق']) || /ecran d accueil|ecran accueil|الشاشه الرئيسيه/.test(n)) return 'install';
   // panier : ajouter un article, voir le panier ou le total (« comment ... » reste une question d'aide)
@@ -256,13 +448,13 @@ export function detectIntent(text: string): Intent {
   if (has(tokens, ['retour', 'retourner', 'retourne', 'rembourse', 'remboursement', 'rembourser', 'echange', 'echanger', 'defectueux', 'defectueuse', 'abime', 'abimee', 'ارجاع', 'استرجاع', 'ارجع', 'استبدال', 'تبديل', 'معيب', 'تالف', 'استرداد'])) return 'returns';
   if (tokens.includes('48') || tokens.includes('48h') || has(tokens, ['valable', 'validite', 'expire', 'expiree', 'expiration', 'fausse', 'fausses', 'صالح', 'صلاحيه', 'وهميه', 'وهمي'])) return 'rules';
   if (has(tokens, ['infos', 'info', 'informations', 'important', 'importante', 'importantes', 'conditions', 'regles', 'معلومات', 'شروط', 'قواعد'])) return 'info';
-  if (/qui etes vous|a propos|presentation|votre histoire|votre experience|depuis quand|2013|من انتم|عن الشركه|عنكم/.test(n)) return 'about';
+  if (/qui etes vous|a propos|presentation|votre histoire|votre experience|depuis quand|2013|site officiel|(adresse|lien|nom|url) (du|de votre|de ton) site|من انتم|عن الشركه|عنكم|رابط الموقع|رابط موقعكم|موقعكم الرسمي/.test(n)) return 'about';
   if (has(tokens, ['emballage', 'emballer', 'emballe', 'emballee', 'empaqueter', 'تغليف', 'غلاف', 'تغلف', 'مغلف', 'اغلف'])) return 'wrap';
   if (has(tokens, ['cadeau', 'cadeaux', 'offrir', 'anniversaire', 'mariage', 'tabaski', 'ramadan', 'eid', 'هديه', 'هدايا', 'هديتي', 'اهداء', 'اهدي', 'ميلاد', 'زواج', 'عرس', 'رمضان', 'عيد', 'مناسبه'])) return 'gift';
   if (has(tokens, ['arnaque', 'arnaques', 'confiance', 'fiable', 'fiables', 'serieux', 'serieuse', 'securise', 'securisee', 'securite', 'garantie', 'escroquerie', 'escroc', 'peur', 'risque', 'نصب', 'احتيال', 'ثقه', 'موثوق', 'موثوقين', 'موثوقون', 'موثوقه', 'ضمان', 'خوف', 'خايف', 'مصداقيه', 'امان'])) return 'trust';
   if (has(tokens, ['cher', 'chere', 'chers', 'cheres', 'couteux', 'couteuse', 'negocier', 'marchander', 'baisser', 'diminuer', 'غالي', 'غال', 'غاليه', 'باهظ', 'مكلف', 'مساومه', 'تفاوض', 'ارخص'])) return 'price';
   if (/plus tard|reflechi|je verrai|on verra|pas maintenant|je reviendrai|je reviens|لاحقا|بعدين|سافكر|افكر|ليس الان/.test(n)) return 'later';
-  if (has(tokens, ['livraison', 'livrer', 'livre', 'livrez', 'frais', 'expedition', 'delai', 'agence', 'paiement', 'payer', 'paye', 'payez', 'airtel', 'moov', 'cash', 'espece', 'especes', 'mobile', 'argent', 'توصيل', 'شحن', 'دفع', 'ادفع', 'تسليم', 'رسوم', 'وكاله', 'ايرتل', 'موف', 'كاش', 'نقدا', 'تكلفه', 'مصاريف'])) return 'delivery';
+  if (has(tokens, ['livraison', 'livrer', 'livre', 'livrez', 'frais', 'expedition', 'delai', 'agence', 'paiement', 'payer', 'paye', 'payez', 'airtel', 'moov', 'cash', 'espece', 'especes', 'mobile', 'توصيل', 'شحن', 'دفع', 'ادفع', 'تسليم', 'رسوم', 'وكاله', 'ايرتل', 'موف', 'كاش', 'نقدا', 'تكلفه', 'مصاريف'])) return 'delivery';
   if (has(tokens, ['promo', 'promos', 'promotion', 'promotions', 'solde', 'soldes', 'reduction', 'reductions', 'remise', 'remises', 'offre', 'offres', 'flash', 'rabais', 'عروض', 'عرض', 'تخفيضات', 'تخفيض', 'خصم', 'خصومات', 'تنزيلات', 'تنزيل'])) return 'promo';
   if (has(tokens, ['nouveaute', 'nouveautes', 'nouveau', 'nouveaux', 'recent', 'recents', 'derniere', 'dernieres', 'جديد', 'جديده', 'احدث', 'حديثا'])) return 'new';
   if (has(tokens, ['categorie', 'categories', 'catalogue', 'rayon', 'rayons', 'فئات', 'اقسام', 'تصنيفات', 'كتالوج', 'فئه', 'قسم'])) return 'categories';

@@ -1,23 +1,36 @@
 import { create } from 'zustand';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { HOME_CITY } from '../constants/shopRules';
+import { GIFT_WRAP_FEE, HOME_CITY, PAYMENT } from '../constants/shopRules';
 import {
+  addressFrom,
   cityReply,
   detectIntent,
   firstNameFrom,
   firstNameOfFullName,
+  fullNameFrom,
+  goodbyeKind,
+  greetingKind,
+  loyaltyKind,
   isHomeCity,
   matchCity,
   newest,
   normalize,
+  paymentFrom,
+  personalKind,
+  phoneFrom,
   promotions,
   searchCatalog,
+  thanksKind,
   tokenize,
+  wantsCancelOrder,
+  wantsConfirmOrder,
+  wantsEditOrder,
+  yesNo,
   type CatalogProduct,
   type City,
 } from '../lib/assistantBrain';
-import { hasArabic, type Lang, type Who } from '../lib/assistantLang';
+import { hasArabic, type Lang, type PayMethodKey, type Who } from '../lib/assistantLang';
 import { categoryLabel, fcfa, texts, withName as applyName, type Texts } from '../lib/assistantText';
 import {
   ANY_BUDGET,
@@ -57,7 +70,11 @@ import {
   type Parsed,
   type Range,
 } from '../lib/assistantMarketing';
-import { fetchCartStatus, fetchProductForCart, getCatalog, getCategories, getCities, getStoreInfo, toCard, type AssistantProduct } from '../lib/assistantData';
+import { fetchCartStatus, fetchLoyaltyPoints, fetchPaymentNumbers, fetchProductForCart, getCatalog, getCategories, getCities, getStoreInfo, startChatToday, toCard, type AssistantProduct } from '../lib/assistantData';
+import { createOrder, generateOrderId } from '../lib/orders';
+import { trackTikTokEvent } from '../lib/tiktokPixel';
+import { initiatePayment } from '../lib/payments';
+import { getLoyaltyStatus, LOYALTY_FCFA_PER_POINT } from '../lib/loyalty';
 import {
   installNotReadyMessage,
   isAndroidDevice,
@@ -106,7 +123,16 @@ export interface ChatAction {
     | 'install'
     | 'installHelp'
     | 'iosGuide'
-    | 'installLater';
+    | 'installLater'
+    | 'orderCity'
+    | 'orderPay'
+    | 'orderGift'
+    | 'orderConfirm'
+    | 'orderEdit'
+    | 'orderCancel'
+    | 'orderAddress'
+    | 'orderPage'
+    | 'account';
   payload?: string;
   highlight?: boolean;
 }
@@ -121,7 +147,33 @@ export interface ChatMessage {
   actions?: ChatAction[];
 }
 
-export type Step = 'ask_lang' | 'ask_name' | 'menu' | 'ask_city' | 'ask_who' | 'ask_type' | 'ask_budget';
+export type Step =
+  | 'ask_lang'
+  | 'ask_name'
+  | 'menu'
+  | 'ask_city'
+  | 'ask_who'
+  | 'ask_type'
+  | 'ask_budget'
+  | 'co_name'
+  | 'co_phone'
+  | 'co_address'
+  | 'co_city'
+  | 'co_pay'
+  | 'co_gift'
+  | 'co_confirm';
+
+// Commande en cours dans la conversation. Le numéro est choisi une fois : si l'enregistrement est refait après une coupure, la
+// même commande n'est pas enregistrée deux fois.
+export interface OrderDraft {
+  id: string;
+  name: string | null;
+  phone: string | null;
+  address: string | null;
+  city: { name: string; fee: number | null; agency: string | null } | null;
+  method: PayMethodKey | null;
+  giftWrap: boolean | null;
+}
 
 interface AssistantState {
   open: boolean;
@@ -132,12 +184,15 @@ interface AssistantState {
   ctx: Context | null;
   // Ce que veut le visiteur pendant que Zara pose ses questions (pour qui, quel article, quel budget).
   need: Need | null;
+  order: OrderDraft | null;
   lang: Lang;
   // Dernière ville dont le client a parlé : les frais de livraison ne sont affichés dans le panier que s'ils sont connus.
   deliveryCity: { name: string; fee: number | null } | null;
   name: string | null;
   teaserDismissed: boolean;
   openChat: () => void;
+  // client qui vient de se connecter pendant la conversation : Zara le reconnaît à son prénom (une seule fois par visite)
+  greetMember: () => void;
   closeChat: () => void;
   dismissTeaser: () => void;
   send: (text: string) => Promise<void>;
@@ -146,16 +201,22 @@ interface AssistantState {
   // bouton « + » d'une fiche produit : ajoute au vrai panier du site sans fermer la conversation
   addToCart: (slug: string) => void;
   openCart: () => void;
-  // vérifie le panier (prix, stock, compte) avant d'ouvrir la page de commande officielle
-  prepareCheckout: () => Promise<'ok' | 'login' | 'empty' | 'issues'>;
+  // « Commander » : Zara vérifie le panier (prix, stock, compte) puis finalise la commande avec le client, dans la conversation
+  startCheckout: () => Promise<void>;
   reset: () => void;
 }
 
 const STORAGE_KEY = 'albasse_zara_v1';
 const NAME_KEY = 'albasse_zara_name';
 const LANG_KEY = 'albasse_zara_lang';
+const MEMBER_KEY = 'albasse_zara_member';
+const RANK_KEY = 'albasse_zara_rank';
+// Le client connecté est salué 10 secondes après sa connexion (arrivée avec son compte ouvert, ou connexion pendant la visite),
+// jamais avant : s'il ouvre Zara plus tôt, elle « écrit » (les trois points) jusqu'à la fin des 10 secondes.
+const GREETING_WAIT_MS = 10000;
+let connectedAt: number | null = null;
 const MAX_SAVED = 40;
-const STEPS: Step[] = ['ask_lang', 'ask_name', 'menu', 'ask_city', 'ask_who', 'ask_type', 'ask_budget'];
+const STEPS: Step[] = ['ask_lang', 'ask_name', 'menu', 'ask_city', 'ask_who', 'ask_type', 'ask_budget', 'co_name', 'co_phone', 'co_address', 'co_city', 'co_pay', 'co_gift', 'co_confirm'];
 const CTX_KINDS = ['query', 'category', 'gift', 'who', 'promo', 'new'];
 
 interface Saved {
@@ -163,10 +224,11 @@ interface Saved {
   step: Step;
   ctx: Context | null;
   need: Need | null;
+  order: OrderDraft | null;
 }
 
 function load(): Saved {
-  const empty: Saved = { messages: [], step: 'menu', ctx: null, need: null };
+  const empty: Saved = { messages: [], step: 'menu', ctx: null, need: null, order: null };
   if (Platform.OS !== 'web') return empty;
   try {
     const raw = window.sessionStorage.getItem(STORAGE_KEY);
@@ -174,19 +236,22 @@ function load(): Saved {
     const messages = Array.isArray(parsed?.messages)
       ? (parsed.messages as ChatMessage[]).filter((m) => m && typeof m.text === 'string' && (m.role === 'user' || m.role === 'assistant'))
       : [];
-    const step: Step = STEPS.includes(parsed?.step) ? parsed.step : 'menu';
     const ctx: Context | null = parsed?.ctx && CTX_KINDS.includes(parsed.ctx.kind) ? parsed.ctx : null;
     const need: Need | null = parsed?.need && typeof parsed.need === 'object' ? parsed.need : null;
-    return { messages, step, ctx, need };
+    const order: OrderDraft | null = parsed?.order && typeof parsed.order === 'object' && typeof parsed.order.id === 'string' ? (parsed.order as OrderDraft) : null;
+    const savedStep: Step = STEPS.includes(parsed?.step) ? parsed.step : 'menu';
+    // une commande en cours sans ses informations (onglet recopié...) : on revient au menu
+    const step: Step = savedStep.startsWith('co_') && !order ? 'menu' : savedStep;
+    return { messages, step, ctx, need, order };
   } catch {
     return empty;
   }
 }
 
-function save(messages: ChatMessage[], step: Step, ctx: Context | null, need: Need | null) {
+function save(messages: ChatMessage[], step: Step, ctx: Context | null, need: Need | null, order: OrderDraft | null) {
   if (Platform.OS !== 'web') return;
   try {
-    window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ messages: messages.slice(-MAX_SAVED), step, ctx, need }));
+    window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ messages: messages.slice(-MAX_SAVED), step, ctx, need, order }));
   } catch {
     // ignore : la conversation ne sera simplement pas gardée
   }
@@ -211,6 +276,60 @@ function saveLang(lang: Lang) {
     window.localStorage.setItem(LANG_KEY, lang);
   } catch {
     // ignore : la langue ne sera pas retenue
+  }
+}
+
+// Le jour, à l'heure du Tchad (la fonction de la base compte aussi par jour tchadien).
+function chadDay(): string {
+  try {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Ndjamena' }).format(new Date());
+  } catch {
+    return new Date().toISOString().slice(0, 10);
+  }
+}
+
+// Rang du jour de ce visiteur (« mon 3ᵉ client aujourd'hui »), donné par la base. Retenu sur l'appareil pour la journée :
+// il n'est compté qu'une fois, et reste le même s'il rouvre Zara. Sans réponse de la base : null (pas de nombre).
+async function todayRank(): Promise<number | null> {
+  if (Platform.OS !== 'web') return null;
+  const day = chadDay();
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(RANK_KEY) ?? 'null');
+    if (saved && saved.day === day && Number.isInteger(saved.n) && saved.n > 0) return saved.n as number;
+  } catch {
+    // pas de rang retenu
+  }
+  const n = await startChatToday();
+  if (n) {
+    try {
+      window.localStorage.setItem(RANK_KEY, JSON.stringify({ day, n }));
+    } catch {
+      // ignore : il pourrait être compté une deuxième fois s'il rouvre Zara
+    }
+  }
+  return n;
+}
+
+// Client avec compte déjà salué par son prénom : Zara ne le salue qu'une fois par visite (le compte est noté dans l'onglet).
+let greetedMemberId: string | null = null;
+
+function memberGreeted(id: string): boolean {
+  if (greetedMemberId === id) return true;
+  if (Platform.OS !== 'web') return false;
+  try {
+    return window.sessionStorage.getItem(MEMBER_KEY) === id;
+  } catch {
+    return false;
+  }
+}
+
+function markMemberGreeted(id: string) {
+  greetedMemberId = id;
+  if (Platform.OS !== 'web') return;
+  try {
+    window.sessionStorage.setItem(MEMBER_KEY, id);
+  } catch {
+    // ignore : après un rechargement, il pourra être salué une deuxième fois
   }
 }
 
@@ -271,11 +390,11 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
   const push = (message: ChatMessage) => {
     set((s) => {
       const messages = [...s.messages, message];
-      save(messages, s.step, s.ctx, s.need);
+      save(messages, s.step, s.ctx, s.need, s.order);
       return { messages };
     });
   };
-  const persist = () => save(get().messages, get().step, get().ctx, get().need);
+  const persist = () => save(get().messages, get().step, get().ctx, get().need, get().order);
   const setStep = (step: Step) => {
     set({ step });
     persist();
@@ -287,6 +406,14 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
   const setNeed = (need: Need | null) => {
     set({ need });
     persist();
+  };
+  const setOrder = (order: OrderDraft | null) => {
+    set({ order });
+    persist();
+  };
+  const patchOrder = (patch: Partial<OrderDraft>) => {
+    const current = get().order;
+    if (current) setOrder({ ...current, ...patch });
   };
 
   const T = (): Texts => texts(get().lang);
@@ -315,7 +442,11 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       });
     } finally {
       depth--;
-      if (depth === 0) set({ loading: false });
+      if (depth === 0) {
+        set({ loading: false });
+        // le compte du client a pu arriver pendant que Zara écrivait : elle le salue dès qu'elle a fini
+        if (get().open) get().greetMember();
+      }
     }
   }
 
@@ -340,7 +471,22 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     return pool[get().messages.length % pool.length];
   };
 
+  // Une phrase parmi plusieurs (le prénom mis si besoin) : Zara ne dit pas deux fois la même de suite.
+  const pickLine = (lines: string[]) => freshLine(lines.map(withName));
+  const lastAssistantIn = (lines: string[]) => {
+    const last = [...get().messages].reverse().find((m) => m.role === 'assistant');
+    return !!last && lines.includes(last.text);
+  };
+
   const isGuest = () => !useAuthStore.getState().isAuthenticated;
+  // Le client connecté, reconnu à son prénom (celui de son profil, relu sur le serveur) ; sinon null.
+  const memberIdentity = (): { id: string; name: string } | null => {
+    const auth = useAuthStore.getState();
+    const name = auth.isAuthenticated ? firstNameOfFullName(auth.profile?.full_name) : null;
+    return name && auth.profile ? { id: auth.profile.id, name } : null;
+  };
+  // Temps restant avant de pouvoir saluer le client connecté (0 pour un visiteur sans compte : il est salué tout de suite).
+  const greetingWaitLeft = () => (memberIdentity() && connectedAt ? Math.max(0, connectedAt + GREETING_WAIT_MS - Date.now()) : 0);
   const otherLang = (): Lang => (get().lang === 'fr' ? 'ar' : 'fr');
 
   const langAction = (): ChatAction => ({ label: T().chip.otherLang, kind: 'lang', payload: otherLang() });
@@ -351,10 +497,10 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
   const menuActions = (): ChatAction[] => {
     const c = T().chip;
     const actions: ChatAction[] = [];
-    if (isGuest()) actions.push({ label: c.createAccount, kind: 'register', highlight: true });
+    if (isGuest()) actions.push({ label: c.createAccount, kind: 'register', highlight: true }, { label: c.login, kind: 'login' });
     actions.push(sayBtn(c.promotions, 'promotions'), sayBtn(c.news, 'nouveautés'), sayBtn(c.advice, 'conseil'), sayBtn(c.categories, 'catégories'), sayBtn(c.delivery, 'livraison'));
     if (useCartStore.getState().items.length > 0) actions.push({ label: c.cart, kind: 'cart' });
-    if (!isGuest()) actions.push({ label: c.orders, kind: 'orders' });
+    if (!isGuest()) actions.push({ label: c.orders, kind: 'orders' }, sayBtn(c.points, T().loyalty.mineQuery));
     actions.push(wa(), langAction());
     return actions;
   };
@@ -406,11 +552,20 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     else await showMenu(T().menuIntro);
   }
 
+  // Le prénom est demandé une seule fois. Un visiteur qui a déjà un compte peut se connecter : Zara le reconnaîtra.
+  async function askName() {
+    setStep('ask_name');
+    const guest = isGuest();
+    const actions: ChatAction[] = [{ label: T().chip.skip, kind: 'skip' }];
+    if (guest) actions.push({ label: T().chip.login, kind: 'login' });
+    actions.push(langAction());
+    await say(guest ? T().askNameGuest : T().askName, { actions });
+  }
+
   // Après le bonjour : on demande le prénom (une seule fois), sinon on enchaîne.
   async function afterWelcome() {
     if (!get().name) {
-      setStep('ask_name');
-      await say(T().askName, { actions: [{ label: T().chip.skip, kind: 'skip' }, langAction()] });
+      await askName();
       return;
     }
     await onboarding();
@@ -427,12 +582,17 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
   }
 
   async function begin() {
+    const wait = greetingWaitLeft();
+    if (wait > 0) await sleep(wait);
     const name = await rememberedName();
     set({ name });
+    const member = memberIdentity();
+    if (member) markMemberGreeted(member.id);
     if (!chosenLang()) {
-      // Première visite : le tout premier message de Zara demande la langue (français / arabe).
+      // Première visite : le tout premier message de Zara salue par le prénom (s'il est connu) et demande la langue (français / arabe).
       setStep('ask_lang');
-      await say(`${texts('fr').chooseLang} / ${texts('ar').chooseLang} 🌐`, {
+      const hello = name ? `${texts('fr').hello(name)}\n${texts('ar').hello(name)}\n` : '';
+      await say(`${hello}${texts('fr').chooseLang} / ${texts('ar').chooseLang} 🌐`, {
         lang: 'fr',
         actions: [
           { label: 'Français', kind: 'lang', payload: 'fr' },
@@ -441,9 +601,36 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       });
       return;
     }
-    // Message de bienvenue : seulement le nom et le rôle.
-    await say(T().welcome(name));
+    // Accueil chaleureux : prénom, vrai rang du jour (si la base le donne), invitation.
+    await say(T().welcome(name, await todayRank(), false));
     await afterWelcome();
+  }
+
+  // Un client qui se connecte pendant la conversation : Zara le reconnaît à son prénom (une seule fois par visite).
+  const shouldGreetMember = () => {
+    const member = memberIdentity();
+    return !!member && !memberGreeted(member.id) && get().step !== 'ask_lang' && get().messages.length > 0;
+  };
+
+  async function greetMember() {
+    let member = memberIdentity();
+    if (!member || memberGreeted(member.id) || get().step === 'ask_lang') return;
+    markMemberGreeted(member.id);
+    const wait = greetingWaitLeft();
+    if (wait > 0) {
+      await sleep(wait);
+      member = memberIdentity();
+      if (!member) return; // il s'est déconnecté pendant l'attente
+    }
+    set({ name: member.name });
+    if (get().step === 'ask_name') {
+      // il n'a plus à donner son prénom : on continue comme après la présentation
+      setStep('menu');
+      await say(T().memberBack(member.name));
+      await onboarding();
+      return;
+    }
+    await say(T().memberBack(member.name), get().step === 'menu' ? { actions: menuActions() } : {});
   }
 
   async function afterName(name: string) {
@@ -807,16 +994,24 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     saveLang(next);
     const step = get().step;
     if (step === 'ask_lang') {
-      // premier choix de langue : Zara se présente dans cette langue
+      // premier choix de langue : Zara se présente dans cette langue (sans redire « Bonjour » si elle a déjà salué par le prénom)
       setStep('menu');
-      await say(T().welcome(get().name));
+      const name = get().name;
+      const greeted = !!name && get().messages.some((m) => m.role === 'assistant' && m.text.includes(name));
+      const member = memberIdentity();
+      if (member) markMemberGreeted(member.id);
+      await say(T().welcome(name, await todayRank(), greeted));
       await afterWelcome();
       return;
     }
     await say(T().langSwitched);
     // la question en cours est reposée dans la nouvelle langue
     if (step === 'ask_name') {
-      await say(T().askName, { actions: [{ label: T().chip.skip, kind: 'skip' }, langAction()] });
+      await askName();
+      return;
+    }
+    if (step.startsWith('co_')) {
+      await nextCheckoutStep();
       return;
     }
     if (step === 'ask_city') {
@@ -840,7 +1035,10 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
   // variantes sont relus dans la base au moment de l'ajout ; la commande passe par la page officielle.
   // -------------------------------------------------------------------------------------------
 
-  const shortName = (name: string) => (name.length > 40 ? `${name.slice(0, 39).trimEnd()}…` : name);
+  const shortName = (raw: string) => {
+    const name = raw.trim();
+    return name.length > 40 ? `${name.slice(0, 39).trimEnd()}…` : name;
+  };
   const variantText = (size: string | null, color: string | null) => {
     const parts = [size ? T().cart.sizeLabel(size) : null, color].filter(Boolean);
     return parts.length ? ` (${parts.join(' · ')})` : '';
@@ -909,12 +1107,6 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     await say(lines.join('\n'), { fast: true, cart: true, actions: [checkoutChip(), sayBtn(T().chip.moreItems, 'conseil'), menuBtn()] });
   }
 
-  // « Je veux commander » avec un panier plein : Zara guide vers la page de commande officielle.
-  async function checkoutGuide() {
-    const check = await verifyCart();
-    await say([T().cart.checkoutGuide, ...check.notes].join('\n'), { fast: true, cart: true, actions: [checkoutChip(), sayBtn(T().chip.moreItems, 'conseil'), menuBtn()] });
-  }
-
   async function checkoutCheck(): Promise<'ok' | 'login' | 'empty' | 'issues'> {
     if (useCartStore.getState().items.length === 0) {
       await say(T().cart.empty, { fast: true, actions: [sayBtn(T().chip.advice, 'conseil'), sayBtn(T().chip.promotions, 'promotions'), menuBtn()] });
@@ -931,6 +1123,355 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       return 'issues';
     }
     return 'ok';
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // Commande dans la conversation : Zara pose les questions de la page de commande (nom, téléphone, adresse, ville, paiement,
+  // emballage cadeau), récapitule, puis enregistre la commande avec le MÊME code que la page de commande (createOrder) et les
+  // mêmes règles. Elle ne dit « enregistrée » qu'après la réponse de la base ; en cas d'échec le panier est gardé.
+  // -------------------------------------------------------------------------------------------
+
+  const cancelOrderChip = (): ChatAction => ({ label: T().chip.cancelOrder, kind: 'orderCancel' });
+
+  function orderTotals(d: OrderDraft) {
+    const items = useCartStore.getState().items;
+    const subtotal = items.reduce((sum, i) => sum + i.product.price * i.quantity, 0);
+    return { items, subtotal, total: subtotal + (d.city?.fee ?? 0) + (d.giftWrap ? GIFT_WRAP_FEE : 0) };
+  }
+
+  async function startCheckoutFlow() {
+    const result = await checkoutCheck(); // panier vide, pas de compte, ou prix / stock à revoir : Zara l'explique et s'arrête
+    if (result !== 'ok') return;
+    const profile = useAuthStore.getState().profile;
+    let city: OrderDraft['city'] = null;
+    const known = get().deliveryCity;
+    if (known) {
+      try {
+        const found = matchCity(await getCities(), known.name);
+        if (found) city = { name: found.name, fee: found.fee, agency: found.agency };
+      } catch {
+        // la ville sera demandée
+      }
+    }
+    setOrder({ id: generateOrderId(), name: fullNameFrom(profile?.full_name ?? ''), phone: phoneFrom(profile?.phone ?? ''), address: null, city, method: null, giftWrap: null });
+    // comme à l'ouverture de la page de commande : le début de la commande est signalé à TikTok (publicités)
+    const cartItems = useCartStore.getState().items;
+    trackTikTokEvent('InitiateCheckout', { value: cartTotals().total, currency: 'XAF', content_id: cartItems.map((i) => i.product.id), contents: cartItems.map((i) => ({ content_id: i.product.id, quantity: i.quantity })) });
+    await say(T().checkout.intro, { fast: true });
+    await nextCheckoutStep();
+  }
+
+  // La première information qui manque est demandée ; quand tout est là : le récapitulatif.
+  async function nextCheckoutStep() {
+    const d = get().order;
+    if (!d) return;
+    const c = T().checkout;
+    if (!d.name) {
+      setStep('co_name');
+      await say(c.askName, { fast: true, actions: [cancelOrderChip()] });
+      return;
+    }
+    if (!d.phone) {
+      setStep('co_phone');
+      await say(c.askPhone, { fast: true, actions: [cancelOrderChip()] });
+      return;
+    }
+    if (!d.address) {
+      setStep('co_address');
+      const saved = useAuthStore.getState().profile?.address?.trim();
+      const actions: ChatAction[] = [];
+      if (saved && addressFrom(saved)) actions.push({ label: T().chip.useAddress(saved), kind: 'orderAddress', payload: saved });
+      actions.push(cancelOrderChip());
+      await say(c.askAddress, { fast: true, actions });
+      return;
+    }
+    if (!d.city) {
+      await askOrderCity();
+      return;
+    }
+    if (!d.method) {
+      await askPayment();
+      return;
+    }
+    if (d.giftWrap === null) {
+      setStep('co_gift');
+      await say(c.askGift, {
+        fast: true,
+        actions: [{ label: T().chip.giftYes, kind: 'orderGift', payload: 'yes' }, { label: T().chip.giftNo, kind: 'orderGift', payload: 'no' }, cancelOrderChip()],
+      });
+      return;
+    }
+    await showRecap();
+  }
+
+  async function askOrderCity(known?: City[] | null) {
+    setStep('co_city');
+    let popular: string[] = [HOME_CITY];
+    try {
+      const cities = known ?? (await getCities());
+      popular = cities.slice(0, 8).map((x) => x.name);
+    } catch {
+      // N'Djamena seulement : il peut écrire sa ville
+    }
+    await say(T().checkout.askCity, { fast: true, actions: [...popular.map((name) => ({ label: name, kind: 'orderCity' as const, payload: name })), cancelOrderChip()] });
+  }
+
+  async function askPayment() {
+    const d = get().order;
+    if (!d?.city) return;
+    setStep('co_pay');
+    const home = isHomeCity(d.city.name);
+    const chips = T().chip;
+    const actions: ChatAction[] = [];
+    if (home) actions.push({ label: chips.payCash, kind: 'orderPay', payload: 'cash_on_delivery' });
+    actions.push({ label: chips.payAirtel, kind: 'orderPay', payload: 'airtel_money' }, { label: chips.payMoov, kind: 'orderPay', payload: 'moov_money' }, cancelOrderChip());
+    await say(T().checkout.askPay(home), { fast: true, actions });
+  }
+
+  async function setOrderCity(text: string) {
+    let cities: City[] | null = null;
+    try {
+      cities = await getCities();
+    } catch {
+      cities = null;
+    }
+    const found = cities ? matchCity(cities, text) : null;
+    if (found) {
+      patchOrder({ city: { name: found.name, fee: found.fee, agency: found.agency } });
+    } else if (cities) {
+      await say(T().cityNotFound(text), { fast: true, actions: [...cities.slice(0, 10).map((x) => ({ label: x.name, kind: 'orderCity' as const, payload: x.name })), cancelOrderChip()] });
+      return;
+    } else {
+      patchOrder({ city: { name: text.slice(0, 40), fee: null, agency: null } }); // villes indisponibles : l'équipe confirmera les frais
+    }
+    const d = get().order;
+    if (d?.city && d.method === 'cash_on_delivery' && !isHomeCity(d.city.name)) {
+      patchOrder({ method: null });
+      await say(T().checkout.codOnlyHome, { fast: true });
+    }
+    await nextCheckoutStep();
+  }
+
+  async function showRecap() {
+    const d = get().order;
+    if (!d || !d.name || !d.phone || !d.address || !d.city || !d.method || d.giftWrap === null) return;
+    setStep('co_confirm');
+    const { items, total } = orderTotals(d);
+    const chips = T().chip;
+    await say(
+      T().checkout.recap({
+        lines: items.map((i) => ({ name: shortName(i.product.name), variant: variantText(i.size, i.color), qty: i.quantity, subtotal: i.product.price * i.quantity })),
+        city: d.city.name,
+        fee: d.city.fee,
+        gift: d.giftWrap,
+        total,
+        name: d.name,
+        phone: d.phone,
+        address: d.address,
+        method: d.method,
+      }),
+      { actions: [{ label: chips.confirmOrder, kind: 'orderConfirm', highlight: true }, { label: chips.editOrder, kind: 'orderEdit', payload: '?' }, cancelOrderChip()] }
+    );
+  }
+
+  async function cancelOrder() {
+    setOrder(null);
+    setStep('menu');
+    await say(T().checkout.cancelled, { fast: true, actions: cartActions() });
+  }
+
+  async function placeOrder() {
+    const d = get().order;
+    const profile = useAuthStore.getState().profile;
+    const c = T().checkout;
+    if (!d || !d.name || !d.phone || !d.address || !d.city || !d.method || d.giftWrap === null || !profile) {
+      setOrder(null);
+      setStep('menu');
+      await say(c.resumeLost, { fast: true, actions: [checkoutChip(), menuBtn()] });
+      return;
+    }
+    if (useCartStore.getState().items.length === 0) {
+      setOrder(null);
+      setStep('menu');
+      await say(T().cart.empty, { fast: true, actions: [sayBtn(T().chip.advice, 'conseil'), menuBtn()] });
+      return;
+    }
+    // le prix et le stock sont relus dans la base juste avant d'enregistrer : un prix changé n'est jamais appliqué en silence
+    const check = await verifyCart();
+    if (check.blocked) {
+      setStep('menu');
+      await say([T().cart.show, ...check.notes].join('\n'), { fast: true, cart: true, actions: [checkoutChip(), menuBtn()] });
+      return;
+    }
+    if (check.notes.length > 0) {
+      await say([c.priceChanged, ...check.notes].join('\n'), { fast: true });
+      await showRecap();
+      return;
+    }
+    if (d.method === 'cash_on_delivery' && !isHomeCity(d.city.name)) {
+      patchOrder({ method: null });
+      await say(c.codOnlyHome, { fast: true });
+      await askPayment();
+      return;
+    }
+    const { items, total } = orderTotals(d);
+    const label = c.methodLabel(d.method);
+    let created: Awaited<ReturnType<typeof createOrder>>;
+    try {
+      created = await createOrder({
+        id: d.id,
+        userId: profile.id,
+        items,
+        total,
+        paymentMethod: d.method,
+        shippingName: d.name,
+        shippingPhone: d.phone,
+        shippingAddress: d.address,
+        shippingCity: d.city.name,
+        giftWrap: d.giftWrap,
+      });
+    } catch (e) {
+      created = { order: null, error: e instanceof Error ? e.message : String(e) };
+    }
+    if (created.error || !created.order) {
+      console.error('Erreur création commande (Zara):', created.error);
+      // la commande n'est PAS enregistrée : le panier et les réponses sont gardés, et on peut réessayer (même numéro de commande)
+      await say(c.failed, { actions: [{ label: T().chip.retry, kind: 'orderConfirm' }, { label: T().chip.orderPage, kind: 'orderPage' }, wa()] });
+      return;
+    }
+    // instructions de paiement : les mêmes que sur la page de commande (numéro et lien réglés par la boutique)
+    let instructions: string;
+    if (d.method === 'cash_on_delivery') {
+      instructions = c.payCash;
+    } else {
+      let message: string | null = null;
+      try {
+        const pay = await initiatePayment({ method: d.method, amount: total, phone: d.phone, orderId: created.order.id });
+        if (pay.success) message = pay.message;
+      } catch {
+        // paiement automatique pas encore branché : instructions à la main, comme sur la page de commande
+      }
+      if (message) {
+        instructions = c.payInitiated(label, message);
+      } else {
+        const numbers = await fetchPaymentNumbers().catch(() => null);
+        const url = d.method === 'airtel_money' ? numbers?.airtelUrl : numbers?.moovUrl;
+        const number = (d.method === 'airtel_money' ? numbers?.airtelNumber : numbers?.moovNumber) || (d.method === 'airtel_money' ? PAYMENT.airtel : PAYMENT.moov);
+        instructions = url ? c.payUrl(url) : c.payNumber(total, number, label);
+      }
+    }
+    const home = isHomeCity(d.city.name);
+    const lines = [c.placed(firstNameOfFullName(d.name) ?? d.name, created.order.id.slice(0, 8)), c.totalToPay(total), instructions];
+    if (d.giftWrap) lines.push(c.giftIncluded);
+    const points = Math.floor(total / LOYALTY_FCFA_PER_POINT); // la base ajoute floor(total / 5000) points quand la commande est livrée
+    if (points >= 1) lines.push(T().loyalty.orderPoints(points));
+    lines.push(T().serviceNote(home));
+    useCartStore.getState().clear();
+    setOrder(null);
+    setStep('menu');
+    await say(lines.join('\n'), { actions: [{ label: T().chip.orders, kind: 'orders' }, menuBtn()] });
+  }
+
+  // Ce que le client écrit pendant la commande. Vrai : Zara a traité le message ; faux : on laisse le routage normal répondre.
+  async function handleOrderText(text: string, step: Step): Promise<boolean> {
+    const c = T().checkout;
+    if (!get().order) {
+      setStep('menu');
+      await say(c.resumeLost, { fast: true, actions: [checkoutChip(), menuBtn()] });
+      return true;
+    }
+    if (wantsCancelOrder(text)) {
+      await cancelOrder();
+      return true;
+    }
+    // une vraie question (« c'est combien la livraison ? ») : Zara répond, puis repose sa question (la commande reste ouverte)
+    if (/[?؟]/.test(text) && step !== 'co_confirm') {
+      await route(text);
+      await nextCheckoutStep();
+      return true;
+    }
+    switch (step) {
+      case 'co_name': {
+        const name = fullNameFrom(text);
+        if (name) patchOrder({ name });
+        await nextCheckoutStep();
+        return true;
+      }
+      case 'co_phone': {
+        const phone = phoneFrom(text);
+        if (phone) patchOrder({ phone });
+        else await say(c.badPhone, { fast: true, actions: [cancelOrderChip()] });
+        if (phone) await nextCheckoutStep();
+        return true;
+      }
+      case 'co_address': {
+        const address = addressFrom(text);
+        if (address) patchOrder({ address });
+        await nextCheckoutStep();
+        return true;
+      }
+      case 'co_city':
+        await setOrderCity(text);
+        return true;
+      case 'co_pay': {
+        const method = paymentFrom(text);
+        if (!method) {
+          await say(c.pickButton, { fast: true });
+          await askPayment();
+          return true;
+        }
+        await choosePayment(method);
+        return true;
+      }
+      case 'co_gift': {
+        const answer = yesNo(text);
+        if (!answer) {
+          await say(c.pickButton, { fast: true });
+          await nextCheckoutStep();
+          return true;
+        }
+        patchOrder({ giftWrap: answer === 'yes' });
+        await nextCheckoutStep();
+        return true;
+      }
+      case 'co_confirm':
+        if (wantsEditOrder(text) || yesNo(text) === 'no') await editChooser();
+        else if (wantsConfirmOrder(text)) await placeOrder();
+        else {
+          await say(c.pickButton, { fast: true });
+          await showRecap();
+        }
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  async function choosePayment(method: PayMethodKey) {
+    const d = get().order;
+    if (d?.city && method === 'cash_on_delivery' && !isHomeCity(d.city.name)) {
+      await say(T().checkout.codOnlyHome, { fast: true });
+      await askPayment();
+      return;
+    }
+    patchOrder({ method });
+    await nextCheckoutStep();
+  }
+
+  async function editChooser() {
+    const chips = T().chip;
+    await say(T().checkout.editWhat, {
+      fast: true,
+      actions: [
+        { label: chips.editName, kind: 'orderEdit', payload: 'name' },
+        { label: chips.editPhone, kind: 'orderEdit', payload: 'phone' },
+        { label: chips.editAddress, kind: 'orderEdit', payload: 'address' },
+        { label: chips.editCity, kind: 'orderEdit', payload: 'city' },
+        { label: chips.editPay, kind: 'orderEdit', payload: 'method' },
+        { label: chips.editGift, kind: 'orderEdit', payload: 'giftWrap' },
+        cancelOrderChip(),
+      ],
+    });
   }
 
   async function unavailable(slug: string, name?: string) {
@@ -1158,12 +1699,61 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       case 'bot':
         await say(t.bot, { actions: [wa(), menuBtn()] });
         return;
-      case 'thanks':
-        await say(withName(t.thanks), { actions: afterAnswerActions() });
+      // Politesse : Zara répond à ce qui est dit, simplement, sans transformer chaque message en publicité.
+      case 'thanks': {
+        const lines = lastAssistantIn(t.talk.compliment) ? t.talk.afterCompliment : thanksKind(text) === 'much' ? t.talk.thanksMuch : t.talk.thanks;
+        await say(pickLine(lines), { actions: [menuBtn()] });
         return;
+      }
       case 'greeting':
-        await showMenu(withName(t.greeting));
+        await showMenu(pickLine(t.talk.hello(greetingKind(text) ?? 'hello', !!get().name)));
         return;
+      case 'smalltalk': {
+        const kind = greetingKind(text);
+        const word = kind ? t.talk.helloWord(kind) : '';
+        await showMenu(`${word ? `${word} ` : ''}${pickLine(t.talk.fine)}`);
+        return;
+      }
+      case 'goodbye':
+        await say(pickLine(t.talk.goodbye(goodbyeKind(text) ?? 'plain')));
+        return;
+      case 'compliment':
+        await say(pickLine(t.talk.compliment), { actions: [menuBtn()] });
+        return;
+      case 'personal': {
+        // Zara n'a ni adresse, ni numéro, ni famille : elle reste une assistante virtuelle. Seuls les contacts officiels de la boutique sont proposés.
+        const kind = personalKind(text) ?? 'life';
+        const actions: ChatAction[] = [];
+        if (kind === 'address') actions.push({ label: t.chip.shopAddress, kind: 'say' });
+        if (kind === 'phone' || kind === 'whatsapp' || kind === 'call') actions.push(wa());
+        actions.push(menuBtn());
+        await say(pickLine(t.talk.personal(kind)), { actions });
+        return;
+      }
+      case 'loyalty': {
+        const kind = loyaltyKind(text);
+        const earnChip = sayBtn(t.chip.earnPoints, t.loyalty.earnQuery);
+        if (kind === 'earn' || kind === 'tiers') {
+          await say(kind === 'earn' ? t.loyalty.earn : t.loyalty.tiers, { actions: isGuest() ? [{ label: t.chip.createAccount, kind: 'register', highlight: true }, { label: t.chip.login, kind: 'login' }, menuBtn()] : [sayBtn(t.chip.points, t.loyalty.mineQuery), menuBtn()] });
+          return;
+        }
+        // son grade : relu dans SON compte ; sans compte connecté, ou si la lecture échoue, Zara n'invente rien
+        const profile = useAuthStore.getState().profile;
+        if (!profile) {
+          await say(t.loyalty.needLogin, { actions: [{ label: t.chip.createAccount, kind: 'register', highlight: true }, { label: t.chip.login, kind: 'login' }, earnChip, menuBtn()] });
+          return;
+        }
+        const points = await fetchLoyaltyPoints(profile.id);
+        if (points === null) {
+          await say(t.loyalty.unavailable, { actions: [{ label: t.chip.myAccount, kind: 'account' }, earnChip, menuBtn()] });
+          return;
+        }
+        const status = getLoyaltyStatus(points);
+        await say(t.loyalty.mine({ points, tier: status.current.key, next: status.next ? { key: status.next.key, missing: status.pointsToNext } : null }), {
+          actions: [earnChip, { label: t.chip.orders, kind: 'orders' }, menuBtn()],
+        });
+        return;
+      }
       case 'account':
         if (isGuest()) {
           await say(t.accountExplain, { actions: [{ label: t.chip.createAccount, kind: 'register', highlight: true }, { label: t.chip.login, kind: 'login' }, menuBtn()] });
@@ -1282,9 +1872,9 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         });
         return;
       case 'order': {
-        // « Je veux commander » avec un panier plein : on guide vers la commande ; « comment commander ? » : l'explication
+        // « Je veux commander » avec un panier plein : Zara finalise la commande ici ; « comment commander ? » : l'explication
         if (!/comment|كيف/.test(normalize(text)) && useCartStore.getState().items.length > 0) {
-          await checkoutGuide();
+          await startCheckoutFlow();
           return;
         }
         await say(t.howToOrder, { actions: [sayBtn(t.chip.promotions, 'promotions'), sayBtn(t.chip.delivery, 'livraison'), wa()] });
@@ -1380,6 +1970,8 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         return;
       }
       setStep('menu');
+    } else if (step.startsWith('co_')) {
+      if (await handleOrderText(text, step)) return;
     } else if (step === 'ask_budget') {
       const range = parseBudget(text);
       if (range) {
@@ -1462,6 +2054,53 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         userSays(action.label);
         await pairReply(action.payload ?? '');
         return;
+      // --- commande dans la conversation
+      case 'orderCity':
+        userSays(action.label);
+        if (get().order) await setOrderCity(action.payload ?? action.label);
+        else await say(T().checkout.resumeLost, { fast: true, actions: [checkoutChip(), menuBtn()] });
+        return;
+      case 'orderPay':
+        userSays(action.label);
+        if (get().order) await choosePayment((action.payload as PayMethodKey) ?? 'airtel_money');
+        else await say(T().checkout.resumeLost, { fast: true, actions: [checkoutChip(), menuBtn()] });
+        return;
+      case 'orderGift':
+        userSays(action.label);
+        if (get().order) {
+          patchOrder({ giftWrap: action.payload === 'yes' });
+          await nextCheckoutStep();
+        } else await say(T().checkout.resumeLost, { fast: true, actions: [checkoutChip(), menuBtn()] });
+        return;
+      case 'orderAddress':
+        userSays(action.label);
+        if (get().order) {
+          const address = addressFrom(action.payload ?? '');
+          if (address) patchOrder({ address });
+          await nextCheckoutStep();
+        } else await say(T().checkout.resumeLost, { fast: true, actions: [checkoutChip(), menuBtn()] });
+        return;
+      case 'orderEdit': {
+        userSays(action.label);
+        if (!get().order) {
+          await say(T().checkout.resumeLost, { fast: true, actions: [checkoutChip(), menuBtn()] });
+          return;
+        }
+        const field = action.payload;
+        if (field === 'name' || field === 'phone' || field === 'address' || field === 'city' || field === 'method' || field === 'giftWrap') {
+          patchOrder({ [field]: null } as Partial<OrderDraft>);
+          await nextCheckoutStep();
+        } else await editChooser();
+        return;
+      }
+      case 'orderConfirm':
+        userSays(action.label);
+        await placeOrder();
+        return;
+      case 'orderCancel':
+        userSays(action.label);
+        await cancelOrder();
+        return;
       case 'size':
       case 'color': {
         userSays(action.label);
@@ -1509,6 +2148,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
 
   // Après six messages du client, si ce n'est pas déjà fait : la proposition d'installer le raccourci (une seule fois).
   async function afterTurn() {
+    if (get().step.startsWith('co_')) return; // jamais au milieu d'une commande
     if (get().messages.filter((m) => m.role === 'user').length >= 6) await maybeOfferInstall();
   }
 
@@ -1519,13 +2159,20 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     step: saved.step,
     ctx: saved.ctx,
     need: saved.need,
+    order: saved.order,
     lang: chosenLang() ?? 'fr',
     deliveryCity: null,
     name: null,
     teaserDismissed: false,
     openChat: () => {
       set({ open: true, teaserDismissed: true });
-      if (get().messages.length === 0 && !get().loading) void run(begin);
+      if (get().loading) return;
+      if (get().messages.length === 0) void run(begin);
+      else get().greetMember();
+    },
+    greetMember: () => {
+      if (get().loading || !shouldGreetMember()) return;
+      void run(greetMember);
     },
     closeChat: () => set({ open: false }),
     dismissTeaser: () => set({ teaserDismissed: true }),
@@ -1547,13 +2194,10 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     openCart: () => {
       void run(showCart);
     },
-    prepareCheckout: async () => {
-      let result: 'ok' | 'login' | 'empty' | 'issues' = 'ok';
+    startCheckout: async () => {
+      if (get().loading) return;
       userSays(T().chip.checkout);
-      await run(async () => {
-        result = await checkoutCheck();
-      });
-      return result;
+      await run(startCheckoutFlow);
     },
     toggleLang: () => {
       if (get().loading) return;
@@ -1561,8 +2205,8 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     },
     reset: () => {
       if (get().loading) return;
-      save([], 'menu', null, null);
-      set({ messages: [], step: 'menu', ctx: null, need: null });
+      save([], 'menu', null, null, null);
+      set({ messages: [], step: 'menu', ctx: null, need: null, order: null });
       void run(begin);
     },
   };
@@ -1575,3 +2219,24 @@ AsyncStorage.getItem(NAME_KEY)
     if (name && !useAssistantStore.getState().name) useAssistantStore.setState({ name });
   })
   .catch(() => {});
+
+// Le prénom du compte suit la connexion : le client connecté est reconnu à son prénom. À la déconnexion, on ne garde pas
+// ce prénom (un autre visiteur peut utiliser le même appareil) : on revient au prénom retenu sur l'appareil, s'il y en a un.
+useAuthStore.subscribe((state, prev) => {
+  // l'heure de la connexion : les 10 secondes d'attente avant la salutation partent de là
+  if (state.isAuthenticated && !prev.isAuthenticated) connectedAt = Date.now();
+  else if (!state.isAuthenticated) connectedAt = null;
+  const assistant = useAssistantStore.getState();
+  const account = state.isAuthenticated ? firstNameOfFullName(state.profile?.full_name) : null;
+  if (account) {
+    if (assistant.name !== account) useAssistantStore.setState({ name: account });
+    // le chat est ouvert : Zara salue tout de suite (une seule fois par visite, elle note qu'elle l'a déjà fait)
+    if (assistant.open) assistant.greetMember();
+    return;
+  }
+  if (prev.isAuthenticated && !state.isAuthenticated) {
+    AsyncStorage.getItem(NAME_KEY)
+      .then((value) => useAssistantStore.setState({ name: firstNameFrom(value ?? '') }))
+      .catch(() => useAssistantStore.setState({ name: null }));
+  }
+});

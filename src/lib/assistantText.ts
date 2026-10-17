@@ -1,6 +1,7 @@
 import { ASSISTANT_NAME, ASSISTANT_ROLE } from '../constants/assistant';
 import { DEFAULT_AGENCIES, DELIVERY_HOURS, GIFT_WRAP_FEE, HOME_CITY, ORDER_VALIDITY_HOURS, PAYMENT } from '../constants/shopRules';
-import { CATEGORY_AR, type Lang, type Who } from './assistantLang';
+import { LOYALTY_FCFA_PER_POINT, LOYALTY_TIERS, type LoyaltyTier } from './loyalty';
+import { CATEGORY_AR, type GoodbyeKind, type GreetingKind, type Lang, type PayMethodKey, type PersonalKind, type Who } from './assistantLang';
 
 // Tous les textes que Zara dit ou affiche, en français et en arabe. Un « {nom} » dans un texte devient
 // « , Prénom » (ou « ، Prénom » en arabe) quand on connaît le prénom du visiteur.
@@ -8,20 +9,58 @@ import { CATEGORY_AR, type Lang, type Who } from './assistantLang';
 
 export const fcfa = (n: number) => `${Math.round(n).toLocaleString('fr-FR')} FCFA`;
 
+// 1 -> 1ᵉʳ, 3 -> 3ᵉ
+export const ordinalFr = (n: number) => (n === 1 ? '1ᵉʳ' : `${n}ᵉ`);
+
 export interface Range {
   min: number;
   max: number; // Infinity : pas de plafond
 }
 
+// Ce que le récapitulatif de commande montre (tout vient du panier vérifié et des réponses du client)
+export interface RecapData {
+  lines: { name: string; variant: string; qty: number; subtotal: number }[];
+  city: string;
+  fee: number | null; // null : frais à confirmer par l'équipe
+  gift: boolean;
+  total: number;
+  name: string;
+  phone: string;
+  address: string;
+  method: PayMethodKey;
+}
+
+// Programme de fidélité : les paliers et la règle des points viennent de lib/loyalty.ts (les mêmes que la page « Mon compte »).
+export interface LoyaltyAnswer {
+  points: number;
+  tier: LoyaltyTier['key'];
+  next: { key: LoyaltyTier['key']; missing: number } | null;
+}
+const TIER_AR: Record<LoyaltyTier['key'], string> = { bronze: 'البرونزية', argent: 'الفضية', or: 'الذهبية', platine: 'البلاتينية', diamond: 'الماسية' };
+const tierOf = (key: LoyaltyTier['key']) => LOYALTY_TIERS.find((t) => t.key === key) ?? LOYALTY_TIERS[0];
+const FR_POINTS = (n: number) => `${n} point${n > 1 ? 's' : ''}`;
+const AR_POINTS = (n: number) => (n === 1 ? 'نقطة واحدة' : n === 2 ? 'نقطتان' : n >= 3 && n <= 10 ? `${n} نقاط` : `${n} نقطة`);
+// « presque au grade suivant » : le ton change quand il ne manque pas beaucoup de points
+const CLOSE_TO_NEXT = 15;
+const fcfaGroup = (n: number) => Math.round(n).toLocaleString('fr-FR');
+
 export interface Texts {
   dir: 'ltr' | 'rtl';
   roleTitle: string;
-  welcome(name: string | null): string;
+  // Accueil chaleureux : prénom, VRAI rang du jour (rank : null si on ne le connaît pas, jamais inventé), invitation.
+  // greeted : le prénom a déjà été dit dans le tout premier message (celui de la langue), on ne redit pas le bonjour.
+  welcome(name: string | null, rank: number | null, greeted: boolean): string;
   teaser(name: string | null): string;
+  // première ligne du tout premier message (avant le choix de la langue) quand on connaît le prénom
+  hello(name: string): string;
+  // client qui vient de se connecter pendant la conversation
+  memberBack(name: string): string;
+  teaserMember(name: string): string;
   askName: string;
+  askNameGuest: string;
   nice(name: string): string;
   footer: string;
-  placeholder: { message: string; name: string; city: string; amount: string };
+  placeholder: { message: string; name: string; city: string; amount: string; fullName: string; phone: string; address: string };
   ui: { writing: string; close: string; reset: string; send: string; input: string; whatsappPill: string; whatsappAria: string; closeTeaser: string; otherLang: string };
   chooseLang: string;
   fabLabel: string;
@@ -44,6 +83,27 @@ export interface Texts {
     budget: string;
     withCategory(name: string): string;
     seeShop: string;
+    shopAddress: string;
+    payCash: string;
+    payAirtel: string;
+    payMoov: string;
+    giftYes: string;
+    giftNo: string;
+    confirmOrder: string;
+    editOrder: string;
+    cancelOrder: string;
+    editName: string;
+    editPhone: string;
+    editAddress: string;
+    editCity: string;
+    editPay: string;
+    editGift: string;
+    useAddress(address: string): string;
+    orderPage: string;
+    retry: string;
+    points: string;
+    earnPoints: string;
+    myAccount: string;
     giftIdea: string;
     wrap: string;
     policy: string;
@@ -68,8 +128,57 @@ export interface Texts {
   accountExplain: string;
   menuIntro: string;
   menuIntroNamed: string;
-  greeting: string;
-  thanks: string;
+  // politesse et conversation : plusieurs phrases par situation (Zara ne dit pas deux fois la même de suite)
+  talk: {
+    hello(kind: GreetingKind, known: boolean): string[];
+    helloWord(kind: GreetingKind): string;
+    fine: string[];
+    thanks: string[];
+    thanksMuch: string[];
+    afterCompliment: string[];
+    compliment: string[];
+    goodbye(kind: GoodbyeKind): string[];
+    personal(kind: PersonalKind): string[];
+  };
+  // programme de fidélité : le grade et les points viennent du compte du client (relus dans la base) ; rien n'est inventé
+  loyalty: {
+    mine(d: LoyaltyAnswer): string;
+    earn: string;
+    tiers: string;
+    needLogin: string;
+    unavailable: string;
+    orderPoints(n: number): string;
+    mineQuery: string;
+    earnQuery: string;
+  };
+  // commande finalisée dans la conversation : mêmes règles et même enregistrement que la page de commande du site
+  checkout: {
+    intro: string;
+    askName: string;
+    askPhone: string;
+    badPhone: string;
+    askAddress: string;
+    askCity: string;
+    askPay(home: boolean): string;
+    askGift: string;
+    methodLabel(method: PayMethodKey): string;
+    recap(d: RecapData): string;
+    pickButton: string;
+    editWhat: string;
+    cancelled: string;
+    resumeLost: string;
+    priceChanged: string;
+    codOnlyHome: string;
+    placed(name: string, id: string): string;
+    totalToPay(total: number): string;
+    giftIncluded: string;
+    payCash: string;
+    payInitiated(label: string, message: string): string;
+    payUrl(url: string): string;
+    payNumber(amount: number, number: string, label: string): string;
+    payTeam(phone: string, label: string): string;
+    failed: string;
+  };
   bot: string;
   alreadyMember: string;
   ordersLink: string;
@@ -146,7 +255,6 @@ export interface Texts {
     empty: string;
     show: string;
     verified: string;
-    checkoutGuide: string;
     needLogin: string;
     priceChanged(name: string, from: string, to: string): string;
     blocked(name: string, stock: number): string;
@@ -194,12 +302,17 @@ export interface Texts {
 const FR: Texts = {
   dir: 'ltr',
   roleTitle: 'Assistante marketing',
-  welcome: (name) => `Bonjour${name ? ` ${name}` : ''} ! Je suis ${ASSISTANT_NAME}, l'${ASSISTANT_ROLE} d'Albasse Shopping.`,
+  welcome: (name, rank, greeted) =>
+    `${greeted ? '' : `Salut${name ? ` ${name}` : ''} ! 😍👋 `}Bienvenue chez Albasse Shopping ! ${rank ? `Vous êtes mon ${ordinalFr(rank)} client aujourd’hui, ça` : 'Ça'} me fait plaisir de vous accueillir ! 🥰🛍️\nDites-moi, qu’est-ce qui vous ferait plaisir aujourd’hui ? Je suis là pour vous aider à trouver les meilleurs articles ! ❤️`,
   teaser: (name) => `Bonjour${name ? ` ${name}` : ''} ! Je suis ${ASSISTANT_NAME}, l'${ASSISTANT_ROLE} d'Albasse Shopping. 😊`,
+  hello: (name) => `Salut ${name} ! 😍👋`,
+  memberBack: (name) => `Salut ${name} ! 😍👋 Vous êtes bien connecté(e), ça me fait plaisir de vous retrouver ! 🥰`,
+  teaserMember: (name) => `Salut ${name} ! 😍👋 ${ASSISTANT_NAME} est à votre service 🛍️`,
   askName: 'Comment puis-je vous appeler ?',
+  askNameGuest: 'Comment puis-je vous appeler ? Si vous avez déjà un compte, connectez-vous : je vous reconnaîtrai 😊',
   nice: (name) => `Enchantée ${name} ! 😊`,
   footer: `${ASSISTANT_NAME} est une assistante automatique. Pour une commande ou un souci, écrivez-nous sur WhatsApp.`,
-  placeholder: { message: 'Écrivez votre message…', name: 'Écrivez votre prénom…', city: 'Écrivez votre ville…', amount: 'Écrivez un montant…' },
+  placeholder: { message: 'Écrivez votre message…', name: 'Écrivez votre prénom…', city: 'Écrivez votre ville…', amount: 'Écrivez un montant…', fullName: 'Écrivez votre nom complet…', phone: 'Ex. 66123456', address: 'Quartier, rue, repère…' },
   ui: {
     writing: 'Zara est en train d’écrire…',
     close: 'Fermer',
@@ -232,6 +345,27 @@ const FR: Texts = {
     budget: '💰 Mon budget',
     withCategory: (name) => `➕ Avec : ${name}`,
     seeShop: '📍 Voir la boutique',
+    shopAddress: '📍 Adresse de la boutique',
+    payCash: '💵 À la livraison',
+    payAirtel: '📱 Airtel Money',
+    payMoov: '📲 Moov Money',
+    giftYes: `🎁 Oui (+${fcfa(GIFT_WRAP_FEE)})`,
+    giftNo: 'Non, merci',
+    confirmOrder: '✅ Confirmer la commande',
+    editOrder: '✏️ Modifier',
+    cancelOrder: 'Annuler la commande',
+    editName: '👤 Nom',
+    editPhone: '📞 Téléphone',
+    editAddress: '📍 Adresse',
+    editCity: '🏙️ Ville',
+    editPay: '💳 Paiement',
+    editGift: '🎁 Emballage',
+    useAddress: (address) => `📍 Utiliser : ${address.length > 26 ? `${address.slice(0, 25).trimEnd()}…` : address}`,
+    orderPage: '📄 Page de commande',
+    retry: '🔄 Réessayer',
+    points: '🏆 Mes points',
+    earnPoints: '🎁 Gagner des points',
+    myAccount: '👤 Mon compte',
     giftIdea: '🎁 Idée cadeau',
     wrap: '🎁 Emballage cadeau',
     policy: '📄 Conditions de retour',
@@ -260,8 +394,156 @@ const FR: Texts = {
   accountExplain: 'Créer un compte est gratuit et rapide : vous suivez vos commandes, retrouvez vos favoris ❤️, gagnez des points fidélité et tournez la roue de la chance 🎡.',
   menuIntro: 'Que souhaitez-vous découvrir aujourd’hui ? 🛍️',
   menuIntroNamed: 'Que souhaitez-vous découvrir{nom} ? 🛍️',
-  greeting: 'Bonjour{nom} ! Que souhaitez-vous découvrir ? 🛍️',
-  thanks: 'Avec plaisir{nom} ! 😊 Profitez bien de nos promotions.',
+  talk: {
+    hello: (kind, known) => {
+      switch (kind) {
+        case 'evening':
+          return ['Bonsoir{nom} 😊 Bienvenue chez Albasse Shopping ! Comment puis-je vous aider ?', 'Bonsoir{nom} ! 🌙 Ravie de vous voir. Que recherchez-vous ce soir ?'];
+        case 'hi':
+          return known
+            ? ['Salut{nom} 😊 Ravie de vous retrouver ! Que recherchez-vous aujourd’hui ?', 'Salut{nom} ! 😊 Contente de vous revoir. Comment puis-je vous aider ?']
+            : ['Salut{nom} 😊 Ravie de vous voir ! Que recherchez-vous aujourd’hui ?', 'Salut{nom} ! 😊 Bienvenue chez Albasse Shopping. Comment puis-je vous aider ?'];
+        case 'salam':
+          return ['Wa alaykoum salam{nom} 😊 Bienvenue chez Albasse Shopping ! Comment puis-je vous aider ?', 'Salam{nom} ! 😊 Ravie de vous accueillir. Que puis-je faire pour vous ?'];
+        default:
+          return ['Bonjour{nom} 😊 Bienvenue chez Albasse Shopping ! Comment puis-je vous aider aujourd’hui ?', 'Bonjour{nom} ! 😊 Ravie de vous accueillir. Que puis-je faire pour vous aujourd’hui ?'];
+      }
+    },
+    helloWord: (kind) => (kind === 'evening' ? 'Bonsoir !' : kind === 'hi' ? 'Salut !' : kind === 'salam' ? 'Salam !' : 'Bonjour !'),
+    fine: [
+      'Très bien, merci 😊 Et vous ? Que puis-je faire pour vous aujourd’hui ?',
+      'Je vais très bien, merci ! 😊 J’espère que vous aussi. Comment puis-je vous aider ?',
+      'Ça va très bien, merci ! 😊 Et de votre côté ? Dites-moi ce qui vous ferait plaisir aujourd’hui 🛍️',
+    ],
+    thanks: [
+      'Avec plaisir{nom} 😊 Je suis là pour vous aider !',
+      'Je vous en prie{nom} 😊 N’hésitez pas si vous avez besoin de quoi que ce soit.',
+      'Avec plaisir ! ❤️ Je reste là si vous avez d’autres questions.',
+    ],
+    thanksMuch: [
+      'C’est avec plaisir{nom} ! ❤️ N’hésitez pas si vous avez besoin d’autre chose.',
+      'Merci à vous{nom} ! 😊 Je suis là dès que vous avez besoin de moi.',
+      'Avec grand plaisir{nom} ! ❤️ Je suis toujours là pour vous aider.',
+    ],
+    afterCompliment: [
+      'Avec grand plaisir ! 😊❤️ Je suis toujours là pour vous aider. Dites-moi, qu’est-ce qui vous ferait plaisir aujourd’hui ? 🛍️',
+      'Avec plaisir ! 😊 Je suis là quand vous voulez. Que puis-je faire pour vous aujourd’hui ? 🛍️',
+    ],
+    compliment: [
+      'Oh, merci beaucoup ! 🥰 Vous êtes adorable ! Je suis votre assistante virtuelle Zara, toujours là pour vous aider avec le sourire ❤️🛍️',
+      'Oh, c’est très gentil, merci ! 🥰 Je suis Zara, votre assistante virtuelle : je suis là pour vous aider avec le sourire ❤️',
+      'Merci beaucoup, c’est adorable ! 😊❤️ Zara, votre assistante virtuelle, est toujours là pour vous aider 🛍️',
+    ],
+    goodbye: (kind) => {
+      switch (kind) {
+        case 'night':
+          return ['Bonne nuit à vous aussi 🌙 Merci pour votre visite !', 'Bonne nuit 🌙 Merci pour votre visite, à très bientôt sur Albasse Shopping !'];
+        case 'evening':
+          return ['Bonne soirée à vous aussi 🌙 Merci pour votre visite !', 'Bonne soirée ! 🌙 Au plaisir de vous revoir sur Albasse Shopping.'];
+        case 'day':
+          return ['Bonne journée à vous aussi ☀️ Merci pour votre visite !', 'Bonne journée ! ☀️ Au plaisir de vous revoir sur Albasse Shopping.'];
+        default:
+          return ['Au plaisir de vous revoir sur Albasse Shopping ! 😊', 'Au revoir ! 😊 Merci pour votre visite, à très bientôt.'];
+      }
+    },
+    personal: (kind) => {
+      const shop = '\nPour l’adresse de la boutique, touchez le bouton ci-dessous 👇';
+      const team = '\nPour joindre l’équipe de la boutique, touchez le bouton WhatsApp ci-dessous 👇';
+      switch (kind) {
+        case 'address':
+          return [
+            `😊 Je suis votre assistante virtuelle, disponible en ligne pour vous aider ! Vous pouvez me retrouver ici sur Albasse Shopping.${shop}`,
+            `😊 Je n’ai pas d’adresse comme une personne : je suis une assistante virtuelle, je travaille en ligne, ici, sur Albasse Shopping, et je suis là pour vous aider à tout moment !${shop}`,
+          ];
+        case 'live':
+          return [
+            'Haha 😊 Je n’ai pas de domicile comme une personne. Je suis votre assistante virtuelle en ligne, toujours prête à vous aider à découvrir nos articles !',
+            'Haha 😊 Je n’ai pas de maison : je suis une assistante virtuelle, toujours disponible ici pour vous aider dans vos achats !',
+          ];
+        case 'whatsapp':
+          return [
+            `Haha 😊 Je n’ai pas de WhatsApp personnel. Je suis votre assistante virtuelle en ligne. Vous pouvez continuer à discuter avec moi ici pour découvrir nos articles et préparer votre commande.${team}`,
+            `😊 Je n’ai pas de WhatsApp à moi : je suis une assistante virtuelle en ligne. Posez-moi vos questions ici, je vous aide avec plaisir !${team}`,
+          ];
+        case 'call':
+          return [
+            `😊 Je comprends ! Je suis une assistante virtuelle qui travaille en ligne et je n’ai pas de numéro personnel. Je peux toutefois vous aider ici pour vos achats.${team}`,
+            `😊 Je ne peux pas recevoir d’appels : je suis une assistante virtuelle en ligne. Mais je suis là, ici, pour vous aider dans vos achats !${team}`,
+          ];
+        case 'life':
+          return [
+            '😊 Je suis une assistante virtuelle : je n’ai pas de vie personnelle comme une personne. Mais je suis toujours là pour vous aider à trouver ce qu’il vous faut !',
+            'Haha 😊 Je suis une assistante virtuelle, sans famille ni vie privée ! Ma mission : vous aider à bien acheter sur Albasse Shopping 🛍️',
+          ];
+        default:
+          return [
+            `😊 Je n’ai pas de numéro personnel. Je travaille en ligne comme assistante virtuelle de marketing digital chez Albasse Shopping. Je suis là pour vous aider directement ici !${team}`,
+            `😊 Je n’ai pas de téléphone personnel : je suis une assistante virtuelle en ligne. Posez-moi vos questions ici, je suis là pour vous aider !${team}`,
+          ];
+      }
+    },
+  },
+  loyalty: {
+    mine: (d) => {
+      const cur = tierOf(d.tier);
+      const nxt = d.next ? tierOf(d.next.key) : null;
+      const pts = `⭐ Vos points : ${d.points}`;
+      if (!nxt || !d.next) return `Félicitations ! 🎉 Votre grade actuel chez Albasse Shopping est ${cur.label} ${cur.icon} : c’est le plus haut grade du programme ! Merci pour votre fidélité 🛍️❤️\n${pts}`;
+      if (d.tier === 'bronze')
+        return `Bienvenue dans notre programme de fidélité ! ${cur.icon} Vous êtes actuellement au grade ${cur.label}. Chaque achat éligible sur albasseshopping.com vous permet de gagner des points. Continuez vos achats pour vous rapprocher du grade ${nxt.label} ! 🎁\n${pts}\nIl vous manque ${FR_POINTS(d.next.missing)} pour atteindre le grade ${nxt.label} ${nxt.icon}.`;
+      if (d.next.missing <= CLOSE_TO_NEXT)
+        return `Bonne nouvelle ! 😍 Vous êtes au grade ${cur.label} ${cur.icon} et il ne vous manque que ${FR_POINTS(d.next.missing)} pour atteindre le grade ${nxt.label} ${nxt.icon} ! Continuez à profiter de nos articles sur albasseshopping.com. Chaque achat éligible vous rapproche de votre objectif ! 🎁\n${pts}`;
+      return `Félicitations ! 🎉 Votre grade actuel chez Albasse Shopping est ${cur.label} ${cur.icon}.\n${pts}\nIl vous manque ${FR_POINTS(d.next.missing)} pour atteindre le grade ${nxt.label} ${nxt.icon}.\nContinuez à acheter sur albasseshopping.com pour gagner des points de fidélité et progresser vers le grade supérieur ! 🛍️❤️`;
+    },
+    earn: `C’est simple ! 😊 Achetez vos articles sur https://albasseshopping.com et gagnez des points de fidélité selon les règles du programme. Plus vous progressez, plus vous vous rapprochez des grades supérieurs ! 🛍️💎\n📌 La règle : 1 point pour chaque tranche de ${fcfaGroup(LOYALTY_FCFA_PER_POINT)} FCFA du total d’une commande livrée (les points arrivent une fois la commande livrée).\n🏆 Les grades : ${LOYALTY_TIERS.map((t) => `${t.icon} ${t.label} (${t.min === 0 ? 'au départ' : FR_POINTS(t.min)})`).join(' · ')}`,
+    tiers: `Voici les ${LOYALTY_TIERS.length} grades de notre programme de fidélité : ${LOYALTY_TIERS.map((t) => `${t.icon} ${t.label} (${t.min === 0 ? 'au départ' : FR_POINTS(t.min)})`).join(' · ')}.\n📌 La règle : 1 point pour chaque tranche de ${fcfaGroup(LOYALTY_FCFA_PER_POINT)} FCFA du total d’une commande livrée.`,
+    needLogin: 'Pour connaître votre grade et vos points de fidélité, connectez-vous à votre compte sur albasseshopping.com 😊 Pas encore de compte ? Créez-le gratuitement : chaque achat éligible vous fait gagner des points ! 🎁',
+    unavailable: 'Je n’arrive pas à lire vos points pour le moment 😕 Vous pouvez consulter votre grade et vos points dans votre compte sur albasseshopping.com, ou réessayer dans un instant.',
+    orderPoints: (n) => `🎁 Fidélité : cette commande vous rapportera ${FR_POINTS(n)} une fois livrée.`,
+    mineQuery: 'mes points de fidélité',
+    earnQuery: 'comment gagner des points',
+  },
+  checkout: {
+    intro: 'Très bien, finalisons votre commande ensemble 🛍️ Quelques questions rapides, et c’est fait !',
+    askName: 'Quel est le nom complet de la personne qui va recevoir la commande ? 👤',
+    askPhone: 'Quel est votre numéro de téléphone ? 8 chiffres, commençant par 6 ou 9 (ex. 66123456) 📞',
+    badPhone: 'Le numéro doit contenir 8 chiffres et commencer par 6 ou 9 (ex. 66123456). Pouvez-vous le réécrire ? 📞',
+    askAddress: 'Quelle est votre adresse de livraison ? Quartier, rue, repère… 📍',
+    askCity: 'Dans quelle ville doit-on vous livrer ? 🚚',
+    askPay: (home) =>
+      home
+        ? `Comment souhaitez-vous payer ? 💳\n💵 À la livraison (${HOME_CITY}), ou à l’avance par Airtel Money ou Moov Money.`
+        : 'Dans votre ville, le paiement se fait à l’avance par Mobile Money 📱 Choisissez Airtel Money ou Moov Money.',
+    askGift: `🎁 Souhaitez-vous l’emballage cadeau ? C’est ${fcfa(GIFT_WRAP_FEE)}.`,
+    methodLabel: (m) => (m === 'airtel_money' ? 'Airtel Money' : m === 'moov_money' ? 'Moov Money' : 'Paiement à la livraison'),
+    recap: (d) =>
+      [
+        '📝 Récapitulatif de votre commande :',
+        ...d.lines.map((l) => `• ${l.name}${l.variant} × ${l.qty} : ${fcfa(l.subtotal)}`),
+        `🚚 Livraison à ${d.city} : ${d.fee === null ? 'à confirmer par l’équipe' : d.fee === 0 ? 'gratuite' : fcfa(d.fee)}`,
+        ...(d.gift ? [`🎁 Emballage cadeau : ${fcfa(GIFT_WRAP_FEE)}`] : []),
+        `💰 Total : ${fcfa(d.total)}`,
+        `👤 ${d.name} · 📞 ${d.phone}`,
+        `📍 ${d.address}, ${d.city}`,
+        d.method === 'cash_on_delivery' ? '💵 Paiement à la livraison, en espèces' : `📱 Paiement à l’avance par ${d.method === 'airtel_money' ? 'Airtel Money' : 'Moov Money'}`,
+        'Tout est correct ? Touchez « Confirmer la commande » pour l’enregistrer 👇',
+      ].join('\n'),
+    pickButton: 'Touchez un des boutons ci-dessous pour continuer 👇',
+    editWhat: 'Que voulez-vous modifier ? ✏️',
+    cancelled: 'D’accord, j’ai arrêté la commande. Votre panier est gardé 🛒 Vous pouvez la reprendre quand vous voulez.',
+    resumeLost: 'Je ne retrouve plus les informations de cette commande. Touchez « Commander » pour la reprendre 🙂',
+    priceChanged: 'Les prix ou le stock ont changé : voici le nouveau récapitulatif. Vérifiez, puis confirmez à nouveau 👇',
+    codOnlyHome: `Le paiement à la livraison est possible seulement à ${HOME_CITY}. Choisissez Airtel Money ou Moov Money 📱`,
+    placed: (name, id) => `🎉 Merci ${name} ! Votre commande #${id} a bien été enregistrée.`,
+    totalToPay: (total) => `💰 Total à régler : ${fcfa(total)}`,
+    giftIncluded: `🎁 Emballage cadeau inclus (${fcfa(GIFT_WRAP_FEE)})`,
+    payCash: '💵 Vous payez en espèces directement à la livraison.',
+    payInitiated: (label, message) => `📱 Paiement ${label} initié. ${message}`,
+    payUrl: (url) => `📱 Payez ici : ${url}`,
+    payNumber: (amount, number, label) => `📱 Envoyez ${fcfa(amount)} au ${number} (${label}).`,
+    payTeam: (phone, label) => `📞 Notre équipe vous contactera au ${phone} pour finaliser le paiement ${label}.`,
+    failed: '😕 Je n’ai pas pu enregistrer votre commande pour le moment. Votre panier est gardé. Vous pouvez réessayer, finaliser sur la page de commande, ou nous écrire sur WhatsApp.',
+  },
   bot: 'Je suis l’assistante virtuelle d’Albasse Shopping : une assistante automatique, pas une personne. Pour parler à quelqu’un de l’équipe, écrivez-nous sur WhatsApp 👇',
   alreadyMember: 'Vous êtes déjà connecté(e){nom} ✅ Retrouvez vos commandes à tout moment.',
   ordersLink: 'Retrouvez et suivez toutes vos commandes ici 👇',
@@ -317,7 +599,7 @@ const FR: Texts = {
       .filter(Boolean)
       .join('\n'),
   later: 'Pas de souci{nom} 😊 Prenez votre temps. Touchez le cœur ❤️ sur un produit pour le retrouver dans vos favoris (avec un compte gratuit). Je reste là si vous avez une question !',
-  about: 'Albasse Shopping est la première plateforme de vente en ligne du Tchad. Nous sommes dans ce domaine depuis 2013 : Service, Qualité, Garantie 🤝',
+  about: 'Albasse Shopping est la première plateforme de vente en ligne du Tchad. Nous sommes dans ce domaine depuis 2013 : Service, Qualité, Garantie 🤝\nNotre site officiel : https://albasseshopping.com',
   returns: [
     '↩️ Nos conditions de retour :',
     '• Article incorrect ou défectueux : contactez-nous dans les 72 h après la réception, avec une photo ou une vidéo. Après vérification, les frais de retour sont à notre charge.',
@@ -356,7 +638,7 @@ const FR: Texts = {
     `🕗 Nos services de livraison sont ouverts de ${DELIVERY_HOURS}.\n⏳ Pour éviter les fausses commandes, chaque commande est valable ${ORDER_VALIDITY_HOURS} h${home ? '.' : ' : réglez dans ce délai.'}`,
   rules: `⏳ Pour éviter les fausses commandes, chaque commande est valable ${ORDER_VALIDITY_HOURS} h. Passé ce délai, une commande restée en attente (non réglée) est signalée comme fausse commande.\nHors ${HOME_CITY}, réglez à l'avance : Airtel Money ${PAYMENT.airtel} ou Moov Money ${PAYMENT.moov}.`,
   contact: { hours: (h) => `🕗 Boutique : ${h}`, delivery: `🚚 Livraison : de ${DELIVERY_HOURS}`, ask: 'Pour une question, écrivez-nous sur WhatsApp 👇' },
-  howToOrder: `Commander est simple 👇\n1. Ouvrez le produit qui vous plaît\n2. Choisissez la couleur ou la taille\n3. Touchez « Ajouter au panier » ou « Acheter »\n4. Indiquez votre nom, téléphone, ville et adresse\n5. Payez : à la livraison à N’Djamena, à l’avance (Airtel Money ou Moov Money) dans les autres villes\n🎁 En option : emballage cadeau, ${fcfa(GIFT_WRAP_FEE)} (touchez l’image cadeau)\n⏳ Pour éviter les fausses commandes, chaque commande est valable ${ORDER_VALIDITY_HOURS} h.`,
+  howToOrder: `Commander est simple 👇\n💬 Je peux finaliser votre commande avec vous, ici : ajoutez vos articles avec le bouton « + », puis touchez « Commander ».\nOu sur le site :\n1. Ouvrez le produit qui vous plaît\n2. Choisissez la couleur ou la taille\n3. Touchez « Ajouter au panier » ou « Acheter »\n4. Indiquez votre nom, téléphone, ville et adresse\n5. Payez : à la livraison à N’Djamena, à l’avance (Airtel Money ou Moov Money) dans les autres villes\n🎁 En option : emballage cadeau, ${fcfa(GIFT_WRAP_FEE)} (touchez l’image cadeau)\n⏳ Pour éviter les fausses commandes, chaque commande est valable ${ORDER_VALIDITY_HOURS} h.`,
 
   cart: {
     added: (name, variant, count, total) => `✅ « ${name} »${variant} ajouté au panier.\nVotre panier : ${count} article${count > 1 ? 's' : ''} · ${fcfa(total)}`,
@@ -371,7 +653,6 @@ const FR: Texts = {
     empty: 'Votre panier est vide pour le moment 🛒 Dites-moi ce que vous cherchez, je vous aide à choisir.',
     show: 'Voici votre panier 🛒',
     verified: '✓ Prix et stock vérifiés à l’instant.',
-    checkoutGuide: 'Parfait ! 🛒 Voici votre panier. Touchez « Commander » : vous indiquerez votre nom, votre téléphone, votre ville et votre adresse, puis le paiement (à la livraison à N’Djamena ; ailleurs, à l’avance par Airtel Money ou Moov Money).',
     needLogin: 'Pour valider votre commande, créez votre compte ou connectez-vous (c’est gratuit). Votre panier est gardé 🛒',
     priceChanged: (name, from, to) => `ℹ️ Le prix de « ${name} » a changé : ${from} → ${to}.`,
     blocked: (name, stock) => (stock > 0 ? `⚠️ Il ne reste que ${stock} « ${name} » : baissez la quantité pour commander.` : `⚠️ « ${name} » n’est plus disponible : retirez-le de votre panier pour commander.`),
@@ -423,12 +704,17 @@ const arWho = (who: Who) => (who === 'lui' ? 'له' : who === 'elle' ? 'لها' 
 const AR: Texts = {
   dir: 'rtl',
   roleTitle: 'مساعدة التسويق',
-  welcome: (name) => `مرحبا${name ? ` ${name}` : ''}! أنا زارا كينغز، مساعدة التسويق في Albasse Shopping.`,
+  welcome: (name, rank, greeted) =>
+    `${greeted ? '' : `مرحباً${name ? ` ${name}` : ''}! 😍👋 `}أهلاً بك في Albasse Shopping! ${rank ? `أنت رقم ${rank} بين عملائي اليوم، ويسعدني` : 'يسعدني'} استقبالك! 🥰🛍️\nما الذي يسعدك اليوم؟ أنا هنا لمساعدتك في إيجاد أفضل المنتجات! ❤️`,
   teaser: (name) => `مرحبا${name ? ` ${name}` : ''}! أنا زارا كينغز، مساعدة التسويق في Albasse Shopping. 😊`,
+  hello: (name) => `مرحباً ${name}! 😍👋`,
+  memberBack: (name) => `مرحباً ${name}! 😍👋 تم تسجيل دخولك، ويسعدني لقاؤك من جديد! 🥰`,
+  teaserMember: (name) => `مرحباً ${name}! 😍👋 زارا كينغز في خدمتك 🛍️`,
   askName: 'كيف يمكنني أن أناديك؟',
+  askNameGuest: 'كيف يمكنني أن أناديك؟ إذا كان لديك حساب، سجّل الدخول وسأتعرف عليك 😊',
   nice: (name) => `سعدت بمعرفتك يا ${name}! 😊`,
   footer: 'زارا كينغز مساعدة آلية. لأي طلب أو مشكلة، راسلنا على واتساب.',
-  placeholder: { message: 'اكتب رسالتك…', name: 'اكتب اسمك الأول…', city: 'اكتب مدينتك…', amount: 'اكتب مبلغا…' },
+  placeholder: { message: 'اكتب رسالتك…', name: 'اكتب اسمك الأول…', city: 'اكتب مدينتك…', amount: 'اكتب مبلغا…', fullName: 'اكتب اسمك الكامل…', phone: 'مثال: 66123456', address: 'الحي، الشارع، معلم قريب…' },
   ui: {
     writing: 'زارا تكتب الآن…',
     close: 'إغلاق',
@@ -461,6 +747,27 @@ const AR: Texts = {
     budget: '💰 ميزانيتي',
     withCategory: (name) => `➕ مع: ${name}`,
     seeShop: '📍 عرض المتجر',
+    shopAddress: '📍 عنوان المتجر',
+    payCash: '💵 عند الاستلام',
+    payAirtel: '📱 Airtel Money',
+    payMoov: '📲 Moov Money',
+    giftYes: `🎁 نعم (+${fcfa(GIFT_WRAP_FEE)})`,
+    giftNo: 'لا، شكراً',
+    confirmOrder: '✅ تأكيد الطلب',
+    editOrder: '✏️ تعديل',
+    cancelOrder: 'إلغاء الطلب',
+    editName: '👤 الاسم',
+    editPhone: '📞 الهاتف',
+    editAddress: '📍 العنوان',
+    editCity: '🏙️ المدينة',
+    editPay: '💳 الدفع',
+    editGift: '🎁 التغليف',
+    useAddress: (address) => `📍 استخدم: ${address.length > 26 ? `${address.slice(0, 25).trimEnd()}…` : address}`,
+    orderPage: '📄 صفحة الطلب',
+    retry: '🔄 إعادة المحاولة',
+    points: '🏆 نقاطي',
+    earnPoints: '🎁 اكسب نقاطاً',
+    myAccount: '👤 حسابي',
     giftIdea: '🎁 فكرة هدية',
     wrap: '🎁 تغليف الهدايا',
     policy: '📄 شروط الإرجاع',
@@ -489,8 +796,158 @@ const AR: Texts = {
   accountExplain: 'إنشاء الحساب مجاني وسريع: تتابع طلباتك، وتحتفظ بمفضلاتك ❤️، وتجمع نقاط الولاء وتدير عجلة الحظ 🎡.',
   menuIntro: 'ماذا تريد أن تكتشف اليوم؟ 🛍️',
   menuIntroNamed: 'ماذا تريد أن تكتشف{nom}؟ 🛍️',
-  greeting: 'مرحبا{nom}! ماذا تريد أن تكتشف؟ 🛍️',
-  thanks: 'على الرحب والسعة{nom}! 😊 استفد جيدا من عروضنا.',
+  talk: {
+    hello: (kind, known) => {
+      switch (kind) {
+        case 'evening':
+          return ['مساء النور{nom} 😊 أهلاً بك في Albasse Shopping! كيف أساعدك؟', 'مساء الخير{nom}! 🌙 يسعدني رؤيتك. عن ماذا تبحث هذا المساء؟'];
+        case 'morning':
+          return ['صباح النور{nom} ☀️ أهلاً بك في Albasse Shopping! كيف أساعدك اليوم؟', 'صباح الخير{nom}! ☀️ يسعدني استقبالك. ماذا يمكنني أن أفعل لك؟'];
+        case 'hi':
+          return known
+            ? ['هلا{nom} 😊 يسعدني أن أراك من جديد! عن ماذا تبحث اليوم؟', 'أهلاً{nom}! 😊 سعيدة برؤيتك مجدداً. كيف أساعدك؟']
+            : ['هلا{nom} 😊 يسعدني أن أراك! عن ماذا تبحث اليوم؟', 'أهلاً{nom}! 😊 أهلاً بك في Albasse Shopping. كيف أساعدك؟'];
+        case 'salam':
+          return ['وعليكم السلام ورحمة الله وبركاته{nom} 😊 أهلاً بك في Albasse Shopping! كيف أساعدك؟', 'وعليكم السلام{nom}! 😊 يسعدني استقبالك. ماذا يمكنني أن أفعل لك؟'];
+        default:
+          return ['مرحباً{nom} 😊 أهلاً بك في Albasse Shopping! كيف أساعدك اليوم؟', 'مرحباً{nom}! 😊 يسعدني استقبالك. ماذا يمكنني أن أفعل لك اليوم؟'];
+      }
+    },
+    helloWord: (kind) => (kind === 'evening' ? 'مساء الخير!' : kind === 'morning' ? 'صباح الخير!' : kind === 'hi' ? 'أهلاً!' : kind === 'salam' ? 'وعليكم السلام!' : 'مرحباً!'),
+    fine: [
+      'بخير، شكراً لك 😊 وأنت؟ ماذا يمكنني أن أفعل لك اليوم؟',
+      'أنا بخير، شكراً! 😊 أتمنى أن تكون بخير أيضاً. كيف أساعدك؟',
+      'الحمد لله، بخير 😊 وأنت؟ أخبرني بما يسعدك اليوم 🛍️',
+    ],
+    thanks: [
+      'على الرحب والسعة{nom} 😊 أنا هنا لمساعدتك!',
+      'العفو{nom} 😊 لا تتردد إذا احتجت أي شيء.',
+      'بكل سرور! ❤️ أنا هنا إذا كانت لديك أسئلة أخرى.',
+    ],
+    thanksMuch: [
+      'بكل سرور{nom}! ❤️ لا تتردد إذا احتجت أي شيء آخر.',
+      'الشكر لك{nom}! 😊 أنا هنا متى احتجت إلي.',
+      'بكل سرور{nom}! ❤️ أنا دائماً هنا لمساعدتك.',
+    ],
+    afterCompliment: [
+      'بكل سرور! 😊❤️ أنا دائماً هنا لمساعدتك. أخبرني، ما الذي يسعدك اليوم؟ 🛍️',
+      'على الرحب والسعة! 😊 أنا هنا متى شئت. ماذا يمكنني أن أفعل لك اليوم؟ 🛍️',
+    ],
+    compliment: [
+      'شكراً جزيلاً! 🥰 كلامك جميل جداً! أنا زارا، مساعدتك الافتراضية، وأنا دائماً هنا لمساعدتك بكل سرور ❤️🛍️',
+      'ما أجمل كلامك، شكراً لك! 🥰 أنا زارا، مساعدتك الافتراضية، وهنا لمساعدتك دائماً بابتسامة ❤️',
+      'شكراً لك، هذا لطف منك! 😊❤️ زارا، مساعدتك الافتراضية، دائماً هنا لمساعدتك 🛍️',
+    ],
+    goodbye: (kind) => {
+      switch (kind) {
+        case 'night':
+          return ['وأنتم من أهل الخير 🌙 شكراً على زيارتكم!', 'تصبحون على خير 🌙 إلى اللقاء قريباً في Albasse Shopping!'];
+        case 'evening':
+          return ['مساء الخير عليك أيضاً 🌙 شكراً على زيارتك!', 'أتمنى لك مساءً سعيداً 🌙 إلى اللقاء قريباً في Albasse Shopping.'];
+        case 'day':
+          return ['أتمنى لك يوماً سعيداً ☀️ شكراً على زيارتك!', 'يوماً سعيداً لك أيضاً ☀️ إلى اللقاء قريباً في Albasse Shopping.'];
+        default:
+          return ['إلى اللقاء! 😊 يسعدنا رؤيتك مجدداً في Albasse Shopping.', 'مع السلامة! 😊 شكراً على زيارتك، وإلى لقاء قريب.'];
+      }
+    },
+    personal: (kind) => {
+      const shop = '\nلعنوان المتجر، اضغط على الزر أدناه 👇';
+      const team = '\nللتحدث مع فريق المتجر، اضغط على زر واتساب أدناه 👇';
+      switch (kind) {
+        case 'address':
+          return [
+            `😊 أنا مساعدتك الافتراضية، متاحة عبر الإنترنت لمساعدتك! يمكنك أن تجدني هنا في Albasse Shopping.${shop}`,
+            `😊 ليس لدي عنوان مثل الأشخاص: أنا مساعدة افتراضية، أعمل عبر الإنترنت هنا في Albasse Shopping، وأنا موجودة دائماً لمساعدتك!${shop}`,
+          ];
+        case 'live':
+          return [
+            'هاها 😊 ليس لدي منزل مثل الأشخاص. أنا مساعدتك الافتراضية عبر الإنترنت، وجاهزة دائماً لمساعدتك في اكتشاف منتجاتنا!',
+            'هاها 😊 ليس لدي بيت: أنا مساعدة افتراضية، موجودة هنا دائماً لمساعدتك في مشترياتك!',
+          ];
+        case 'whatsapp':
+          return [
+            `هاها 😊 ليس لدي واتساب شخصي. أنا مساعدتك الافتراضية عبر الإنترنت. يمكنك متابعة الحديث معي هنا لاكتشاف منتجاتنا وتحضير طلبك.${team}`,
+            `😊 ليس لدي واتساب خاص بي: أنا مساعدة افتراضية عبر الإنترنت. اطرح أسئلتك هنا وسأساعدك بكل سرور!${team}`,
+          ];
+        case 'call':
+          return [
+            `😊 أتفهم ذلك! أنا مساعدة افتراضية أعمل عبر الإنترنت وليس لدي رقم شخصي، لكن يمكنني مساعدتك هنا في مشترياتك.${team}`,
+            `😊 لا أستطيع استقبال المكالمات: أنا مساعدة افتراضية عبر الإنترنت. لكنني هنا لمساعدتك في مشترياتك!${team}`,
+          ];
+        case 'life':
+          return [
+            '😊 أنا مساعدة افتراضية: ليست لدي حياة شخصية مثل الأشخاص. لكنني موجودة دائماً لمساعدتك في إيجاد ما تحتاجه!',
+            'هاها 😊 أنا مساعدة افتراضية بلا عائلة ولا حياة خاصة! مهمتي مساعدتك على التسوق في Albasse Shopping 🛍️',
+          ];
+        default:
+          return [
+            `😊 ليس لدي رقم شخصي. أعمل عبر الإنترنت كمساعدة افتراضية للتسويق الرقمي في Albasse Shopping، وأنا هنا لمساعدتك مباشرة!${team}`,
+            `😊 ليس لدي هاتف شخصي: أنا مساعدة افتراضية عبر الإنترنت. اطرح أسئلتك هنا وأنا هنا لمساعدتك!${team}`,
+          ];
+      }
+    },
+  },
+  loyalty: {
+    mine: (d) => {
+      const cur = tierOf(d.tier);
+      const nxt = d.next ? tierOf(d.next.key) : null;
+      const pts = `⭐ نقاطك: ${d.points}`;
+      if (!nxt || !d.next) return `تهانينا! 🎉 درجتك الحالية في Albasse Shopping هي ${TIER_AR[cur.key]} ${cur.icon}: أعلى درجة في البرنامج! شكراً لولائك 🛍️❤️\n${pts}`;
+      if (d.tier === 'bronze')
+        return `مرحباً بك في برنامج الولاء! ${cur.icon} أنت حالياً في الدرجة ${TIER_AR[cur.key]}. كل عملية شراء مؤهلة على albasseshopping.com تمنحك نقاطاً. واصل مشترياتك لتقترب من الدرجة ${TIER_AR[nxt.key]}! 🎁\n${pts}\nينقصك ${AR_POINTS(d.next.missing)} للوصول إلى الدرجة ${TIER_AR[nxt.key]} ${nxt.icon}.`;
+      if (d.next.missing <= CLOSE_TO_NEXT)
+        return `بشرى سارة! 😍 أنت في الدرجة ${TIER_AR[cur.key]} ${cur.icon} وينقصك ${AR_POINTS(d.next.missing)} فقط للوصول إلى الدرجة ${TIER_AR[nxt.key]} ${nxt.icon}! واصل الاستفادة من منتجاتنا على albasseshopping.com. كل عملية شراء مؤهلة تقربك من هدفك! 🎁\n${pts}`;
+      return `تهانينا! 🎉 درجتك الحالية في Albasse Shopping هي ${TIER_AR[cur.key]} ${cur.icon}.\n${pts}\nينقصك ${AR_POINTS(d.next.missing)} للوصول إلى الدرجة ${TIER_AR[nxt.key]} ${nxt.icon}.\nواصل الشراء على albasseshopping.com لتجمع نقاط الولاء وتتقدم نحو الدرجة الأعلى! 🛍️❤️`;
+    },
+    earn: `الأمر بسيط! 😊 اشترِ منتجاتك على https://albasseshopping.com واجمع نقاط الولاء حسب قواعد البرنامج. كلما تقدمت، اقتربت من الدرجات الأعلى! 🛍️💎\n📌 القاعدة: نقطة واحدة لكل ${fcfaGroup(LOYALTY_FCFA_PER_POINT)} FCFA من مجموع الطلب بعد تسليمه (تُضاف النقاط بعد تسليم الطلب).\n🏆 الدرجات: ${LOYALTY_TIERS.map((t) => `${t.icon} ${TIER_AR[t.key]} (${t.min === 0 ? 'في البداية' : AR_POINTS(t.min)})`).join(' · ')}`,
+    tiers: `إليك درجات برنامج الولاء الخمس: ${LOYALTY_TIERS.map((t) => `${t.icon} ${TIER_AR[t.key]} (${t.min === 0 ? 'في البداية' : AR_POINTS(t.min)})`).join(' · ')}.\n📌 القاعدة: نقطة واحدة لكل ${fcfaGroup(LOYALTY_FCFA_PER_POINT)} FCFA من مجموع الطلب بعد تسليمه.`,
+    needLogin: 'لمعرفة درجتك ونقاط الولاء، سجّل الدخول إلى حسابك على albasseshopping.com 😊 ليس لديك حساب بعد؟ أنشئه مجاناً: كل عملية شراء مؤهلة تمنحك نقاطاً! 🎁',
+    unavailable: 'لا أستطيع قراءة نقاطك الآن 😕 يمكنك الاطلاع على درجتك ونقاطك في حسابك على albasseshopping.com، أو المحاولة بعد قليل.',
+    orderPoints: (n) => `🎁 الولاء: هذا الطلب سيمنحك ${AR_POINTS(n)} بعد تسليمه.`,
+    mineQuery: 'نقاطي',
+    earnQuery: 'كيف اكسب نقاط الولاء',
+  },
+  checkout: {
+    intro: 'حسناً، لنُكمل طلبك معاً 🛍️ بضعة أسئلة سريعة وينتهي الأمر!',
+    askName: 'ما الاسم الكامل للشخص الذي سيستلم الطلب؟ 👤',
+    askPhone: 'ما رقم هاتفك؟ 8 أرقام تبدأ بـ 6 أو 9 (مثال: 66123456) 📞',
+    badPhone: 'يجب أن يتكون الرقم من 8 أرقام ويبدأ بـ 6 أو 9 (مثال: 66123456). هل يمكنك كتابته من جديد؟ 📞',
+    askAddress: 'ما عنوان التوصيل؟ الحي، الشارع، معلم قريب… 📍',
+    askCity: 'في أي مدينة يجب أن نوصّل إليك؟ 🚚',
+    askPay: (home) =>
+      home
+        ? 'كيف تريد الدفع؟ 💳\n💵 عند الاستلام (إنجامينا)، أو مسبقاً عبر Airtel Money أو Moov Money.'
+        : 'في مدينتك، يتم الدفع مسبقاً عبر Airtel Money أو Moov Money 📱 اختر إحداهما.',
+    askGift: `🎁 هل تريد تغليف الهدية؟ التكلفة ${fcfa(GIFT_WRAP_FEE)}.`,
+    methodLabel: (m) => (m === 'airtel_money' ? 'Airtel Money' : m === 'moov_money' ? 'Moov Money' : 'الدفع عند الاستلام'),
+    recap: (d) =>
+      [
+        '📝 ملخص طلبك:',
+        ...d.lines.map((l) => `• ${l.name}${l.variant} × ${l.qty}: ${fcfa(l.subtotal)}`),
+        `🚚 التوصيل إلى ${d.city}: ${d.fee === null ? 'سيؤكدها الفريق' : d.fee === 0 ? 'مجاني' : fcfa(d.fee)}`,
+        ...(d.gift ? [`🎁 تغليف الهدية: ${fcfa(GIFT_WRAP_FEE)}`] : []),
+        `💰 المجموع: ${fcfa(d.total)}`,
+        `👤 ${d.name} · 📞 ${d.phone}`,
+        `📍 ${d.address}، ${d.city}`,
+        d.method === 'cash_on_delivery' ? '💵 الدفع عند الاستلام نقداً' : `📱 الدفع مسبقاً عبر ${d.method === 'airtel_money' ? 'Airtel Money' : 'Moov Money'}`,
+        'هل كل شيء صحيح؟ اضغط «تأكيد الطلب» لتسجيله 👇',
+      ].join('\n'),
+    pickButton: 'اضغط على أحد الأزرار أدناه للمتابعة 👇',
+    editWhat: 'ماذا تريد أن تعدّل؟ ✏️',
+    cancelled: 'حسناً، أوقفت الطلب. سلتك محفوظة 🛒 يمكنك المتابعة متى شئت.',
+    resumeLost: 'لم أعد أجد معلومات هذا الطلب. اضغط «إتمام الطلب» للمتابعة 🙂',
+    priceChanged: 'تغيّرت الأسعار أو المخزون: هذا هو الملخص الجديد. راجعه ثم أكّد من جديد 👇',
+    codOnlyHome: 'الدفع عند الاستلام ممكن فقط في إنجامينا. اختر Airtel Money أو Moov Money 📱',
+    placed: (name, id) => `🎉 شكراً ${name}! تم تسجيل طلبك رقم #${id} بنجاح.`,
+    totalToPay: (total) => `💰 المبلغ المطلوب: ${fcfa(total)}`,
+    giftIncluded: `🎁 تغليف الهدية مُضمَّن (${fcfa(GIFT_WRAP_FEE)})`,
+    payCash: '💵 تدفع نقداً عند الاستلام مباشرة.',
+    payInitiated: (label, message) => `📱 تم بدء الدفع عبر ${label}. ${message}`,
+    payUrl: (url) => `📱 ادفع من هنا: ${url}`,
+    payNumber: (amount, number, label) => `📱 أرسل ${fcfa(amount)} إلى الرقم ${number} (${label}).`,
+    payTeam: (phone, label) => `📞 سيتصل بك فريقنا على ${phone} لإتمام الدفع عبر ${label}.`,
+    failed: '😕 لم أستطع تسجيل طلبك الآن. سلتك محفوظة. يمكنك المحاولة من جديد، أو الإتمام من صفحة الطلب، أو مراسلتنا على واتساب.',
+  },
   bot: 'أنا المساعدة الافتراضية لـ Albasse Shopping: مساعدة آلية وليست شخصا. للتحدث مع أحد أفراد الفريق، راسلنا على واتساب 👇',
   alreadyMember: 'أنت مسجل بالفعل{nom} ✅ تجد طلباتك في أي وقت.',
   ordersLink: 'تابع كل طلباتك هنا 👇',
@@ -543,7 +1000,7 @@ const AR: Texts = {
       .filter(Boolean)
       .join('\n'),
   later: 'لا مشكلة{nom} 😊 خذ وقتك. اضغط على القلب ❤️ في أي منتج لتجده في مفضلتك (مع حساب مجاني). أنا هنا إن كان لديك سؤال!',
-  about: 'Albasse Shopping هي أول منصة للبيع عبر الإنترنت في تشاد. نعمل في هذا المجال منذ عام 2013: خدمة، جودة، ضمان 🤝',
+  about: 'Albasse Shopping هي أول منصة للبيع عبر الإنترنت في تشاد. نعمل في هذا المجال منذ عام 2013: خدمة، جودة، ضمان 🤝\nموقعنا الرسمي: https://albasseshopping.com',
   returns: [
     '↩️ شروط الإرجاع لدينا:',
     '• منتج خاطئ أو معيب: تواصل معنا خلال 72 ساعة من الاستلام مع صورة أو فيديو. بعد التحقق، تكاليف الإرجاع علينا.',
@@ -582,7 +1039,7 @@ const AR: Texts = {
     `🕗 خدمات التوصيل لدينا تعمل ${AR_HOURS}.\n⏳ لتجنب الطلبات الوهمية، كل طلب صالح لمدة ${ORDER_VALIDITY_HOURS} ساعة${home ? '.' : ': ادفع خلال هذه المدة.'}`,
   rules: `⏳ لتجنب الطلبات الوهمية، كل طلب صالح لمدة ${ORDER_VALIDITY_HOURS} ساعة. بعد هذه المدة، يُبلَّغ عن الطلب المتروك قيد الانتظار (غير المدفوع) على أنه طلب وهمي.\nخارج إنجامينا، ادفع مسبقا: Airtel Money ${PAYMENT.airtel} أو Moov Money ${PAYMENT.moov}.`,
   contact: { hours: (h) => `🕗 المتجر: ${h}`, delivery: `🚚 التوصيل: ${AR_HOURS}`, ask: 'لأي سؤال، راسلنا على واتساب 👇' },
-  howToOrder: `الطلب سهل 👇\n1. افتح المنتج الذي يعجبك\n2. اختر اللون أو المقاس\n3. اضغط على «Ajouter au panier» (أضف إلى السلة) أو «Acheter» (اشترِ)\n4. اكتب اسمك وهاتفك ومدينتك وعنوانك\n5. ادفع: عند الاستلام في إنجامينا، ومسبقا (Airtel Money أو Moov Money) في المدن الأخرى\n🎁 اختياري: تغليف الهدايا بـ ${fcfa(GIFT_WRAP_FEE)} (اضغط على صورة الهدية)\n⏳ لتجنب الطلبات الوهمية، كل طلب صالح لمدة ${ORDER_VALIDITY_HOURS} ساعة.`,
+  howToOrder: `الطلب سهل 👇\n💬 يمكنني إتمام طلبك معك هنا: أضف منتجاتك بزر «+» ثم اضغط «إتمام الطلب».\nأو من الموقع:\n1. افتح المنتج الذي يعجبك\n2. اختر اللون أو المقاس\n3. اضغط على «Ajouter au panier» (أضف إلى السلة) أو «Acheter» (اشترِ)\n4. اكتب اسمك وهاتفك ومدينتك وعنوانك\n5. ادفع: عند الاستلام في إنجامينا، ومسبقا (Airtel Money أو Moov Money) في المدن الأخرى\n🎁 اختياري: تغليف الهدايا بـ ${fcfa(GIFT_WRAP_FEE)} (اضغط على صورة الهدية)\n⏳ لتجنب الطلبات الوهمية، كل طلب صالح لمدة ${ORDER_VALIDITY_HOURS} ساعة.`,
 
   cart: {
     added: (name, variant, count, total) => `✅ «${name}»${variant} أضيف إلى السلة.\nسلتك: ${count} ${count > 1 ? 'منتجات' : 'منتج'} · ${fcfa(total)}`,
@@ -597,7 +1054,6 @@ const AR: Texts = {
     empty: 'سلتك فارغة حاليا 🛒 أخبرني بما تبحث عنه وأساعدك على الاختيار.',
     show: 'إليك سلتك 🛒',
     verified: '✓ تم التحقق من الأسعار والمخزون الآن.',
-    checkoutGuide: 'ممتاز! 🛒 إليك سلتك. اضغط «إتمام الطلب»: ستكتب اسمك وهاتفك ومدينتك وعنوانك، ثم طريقة الدفع (عند الاستلام في إنجامينا؛ وفي المدن الأخرى مسبقا عبر Airtel Money أو Moov Money).',
     needLogin: 'لإتمام طلبك، أنشئ حسابك أو سجل الدخول (مجاني). سلتك محفوظة 🛒',
     priceChanged: (name, from, to) => `ℹ️ تغير سعر «${name}»: ${from} ← ${to}.`,
     blocked: (name, stock) => (stock > 0 ? `⚠️ لم يبق سوى ${stock} من «${name}»: قلل الكمية لإتمام الطلب.` : `⚠️ «${name}» لم يعد متوفرا: احذفه من سلتك لإتمام الطلب.`),
