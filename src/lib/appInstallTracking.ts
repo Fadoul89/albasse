@@ -31,18 +31,47 @@ export function trackAppInstallIfNeeded() {
 
 const SHORTCUT_FLAG_KEY = 'albasse_shortcut_install_tracked';
 
+function detectBrowser(): string {
+  if (typeof navigator === 'undefined') return 'Autre';
+  const ua = navigator.userAgent;
+  if (/SamsungBrowser/i.test(ua)) return 'Samsung Internet';
+  if (/OPR|Opera/i.test(ua)) return 'Opera';
+  if (/Edg\//i.test(ua)) return 'Edge';
+  if (/Firefox/i.test(ua)) return 'Firefox';
+  if (/Chrome/i.test(ua)) return 'Chrome';
+  if (/Safari/i.test(ua)) return 'Safari';
+  return 'Autre';
+}
+
+function detectDeviceType(): string {
+  if (typeof navigator === 'undefined') return 'PC';
+  const ua = navigator.userAgent;
+  if (/iPad/i.test(ua)) return 'Tablette';
+  if (/iPhone|iPod/i.test(ua)) return 'iPhone';
+  if (/Android/i.test(ua)) return /Mobile/i.test(ua) ? 'Android' : 'Tablette';
+  return 'PC';
+}
+
 // Compte une installation quand le visiteur accepte la boite de dialogue
-// native d'installation du raccourci Chrome (PWA). Utilise la meme table
-// que l'app native : c'est desormais le principal canal d'installation.
+// native d'installation du raccourci PWA. Enregistre le navigateur et le
+// type d'appareil pour la repartition dans le dashboard admin.
 export function trackShortcutInstallIfNeeded() {
   if (typeof window === 'undefined' || !isSupabaseConfigured) return;
   try {
     if (window.localStorage.getItem(SHORTCUT_FLAG_KEY)) return;
     const deviceId = generateDeviceId();
     window.localStorage.setItem(SHORTCUT_FLAG_KEY, deviceId);
-    supabase.from('app_installs').insert({ device_id: deviceId }).then(({ error }) => {
-      if (error) console.error('Erreur suivi installation raccourci:', error.message);
-    });
+    supabase
+      .from('app_installs')
+      .insert({
+        device_id: deviceId,
+        install_type: 'shortcut',
+        browser: detectBrowser(),
+        device_type: detectDeviceType(),
+      })
+      .then(({ error }) => {
+        if (error) console.error('Erreur suivi installation raccourci:', error.message);
+      });
   } catch {
     // silencieux : le suivi ne doit jamais bloquer l'installation
   }

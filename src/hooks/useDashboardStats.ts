@@ -18,6 +18,11 @@ export interface SourcePerformance {
   conversionRate: number;
 }
 
+export interface BrowserStat {
+  browser: string;
+  count: number;
+}
+
 export interface DashboardStats {
   revenueToday: number;
   ordersToday: number;
@@ -31,6 +36,8 @@ export interface DashboardStats {
   appDownloadClicksToday: number;
   appInstallsTotal: number;
   appInstallsToday: number;
+  shortcutsByBrowser: BrowserStat[];
+  shortcutsByDevice: BrowserStat[];
 }
 
 const LOW_STOCK_THRESHOLD = 5;
@@ -80,6 +87,7 @@ export function useDashboardStats() {
       downloadsTodayRes,
       installsTotalRes,
       installsTodayRes,
+      shortcutsBrowserRes,
     ] = await Promise.all([
       supabase.from('orders').select('id,total,status,created_at,session_id,referrer_source,items').gte('created_at', todayIso),
       supabase
@@ -102,6 +110,7 @@ export function useDashboardStats() {
       supabase.from('app_download_clicks').select('id', { count: 'exact', head: true }).gte('created_at', todayIso),
       supabase.from('app_installs').select('id', { count: 'exact', head: true }),
       supabase.from('app_installs').select('id', { count: 'exact', head: true }).gte('created_at', todayIso),
+      supabase.from('app_installs').select('browser,device_type').eq('install_type', 'shortcut'),
     ]);
 
     const ordersToday = (ordersTodayRes.data as Order[]) ?? [];
@@ -178,6 +187,23 @@ export function useDashboardStats() {
     });
     sourcePerformance.sort((a, b) => b.sessions - a.sessions);
 
+    const browserCounts: Record<string, number> = {};
+    const deviceCounts: Record<string, number> = {};
+    ((shortcutsBrowserRes.data ?? []) as { browser: string | null; device_type: string | null }[]).forEach(
+      ({ browser, device_type }) => {
+        const bKey = browser ?? 'Autre';
+        browserCounts[bKey] = (browserCounts[bKey] ?? 0) + 1;
+        const dKey = device_type ?? 'PC';
+        deviceCounts[dKey] = (deviceCounts[dKey] ?? 0) + 1;
+      }
+    );
+    const shortcutsByBrowser: BrowserStat[] = Object.entries(browserCounts)
+      .map(([browser, count]) => ({ browser, count }))
+      .sort((a, b) => b.count - a.count);
+    const shortcutsByDevice: BrowserStat[] = Object.entries(deviceCounts)
+      .map(([browser, count]) => ({ browser, count }))
+      .sort((a, b) => b.count - a.count);
+
     setStats({
       revenueToday,
       ordersToday: ordersToday.length,
@@ -191,6 +217,8 @@ export function useDashboardStats() {
       appDownloadClicksToday: downloadsTodayRes.count ?? 0,
       appInstallsTotal: installsTotalRes.count ?? 0,
       appInstallsToday: installsTodayRes.count ?? 0,
+      shortcutsByBrowser,
+      shortcutsByDevice,
     });
     setIsLoading(false);
   };

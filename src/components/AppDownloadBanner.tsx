@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, fonts, radius, spacing } from '../theme';
 import { trackAppDownloadClick } from '../lib/appDownloadTracking';
 import { isRunningInsideApp } from '../lib/runningInApp';
-import { isAndroidDevice, isIosDevice, isRunningAsInstalledPwa, triggerPwaInstallPrompt } from '../lib/pwaInstallPrompt';
+import { isIosDevice, isRunningAsInstalledPwa, manualInstallInstructions, triggerPwaInstallPrompt } from '../lib/pwaInstallPrompt';
 import { subscribeToWebPush } from '../lib/webPushSubscription';
 import { trackShortcutInstallIfNeeded } from '../lib/appInstallTracking';
 
@@ -36,18 +36,12 @@ export function AppDownloadBanner() {
   const install = async () => {
     trackAppDownloadClick('banner');
     if (isIosDevice()) {
-      window.alert(
-        "Pour installer : appuyez sur le bouton Partager (le carré avec une flèche) en bas de Safari, puis « Sur l'écran d'accueil »."
-      );
+      window.alert(manualInstallInstructions());
       return;
     }
     const outcome = await triggerPwaInstallPrompt();
     if (outcome === 'unavailable') {
-      window.alert(
-        isAndroidDevice()
-          ? "Pour installer : appuyez sur les trois points (⋮) en haut de Chrome, puis « Ajouter à l'écran d'accueil »."
-          : "Pour installer : cliquez sur l'icône d'installation ⊕ dans la barre d'adresse de Chrome, ou sur les trois points (⋮) en haut à droite puis « Installer Albasse Shopping »."
-      );
+      window.alert(manualInstallInstructions());
     } else if (outcome === 'accepted') {
       trackShortcutInstallIfNeeded();
       subscribeToWebPush();
