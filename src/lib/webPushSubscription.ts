@@ -31,12 +31,26 @@ export function isWebPushBlocked(): boolean {
   return Notification.permission === 'denied';
 }
 
+// Raison du dernier echec de subscribeToWebPush(), pour l'afficher au visiteur
+// au lieu de refermer le bandeau sans rien dire.
+export const PUSH_PERMISSION_NOT_GRANTED = 'autorisation non accordée';
+let lastIssue = '';
+export function getWebPushIssue(): string {
+  return lastIssue;
+}
+function fail(reason: string, e?: unknown): false {
+  const err = e as { name?: string; code?: string; message?: string } | null;
+  lastIssue = e ? `${reason} : ${err?.name ?? err?.code ?? 'erreur'} ${String(err?.message ?? '').slice(0, 90)}`.trim() : reason;
+  return false;
+}
+
 export async function subscribeToWebPush(): Promise<boolean> {
-  if (!isWebPushSupported() || !isSupabaseConfigured) return false;
+  lastIssue = '';
+  if (!isWebPushSupported() || !isSupabaseConfigured) return fail('notifications non prises en charge ici');
 
   try {
     const permission = await Notification.requestPermission();
-    if (permission !== 'granted') return false;
+    if (permission !== 'granted') return fail(PUSH_PERMISSION_NOT_GRANTED);
 
     const registration = await navigator.serviceWorker.register('/sw.js');
     await navigator.serviceWorker.ready;
@@ -50,17 +64,55 @@ export async function subscribeToWebPush(): Promise<boolean> {
     }
 
     const json = subscription.toJSON();
-    if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) return false;
+    if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) return fail('abonnement incomplet');
+
+    // Simple insertion, pas d'« insert ou mise a jour » : celle-ci exige le droit de
+    // lire la table (reserve aux administrateurs) et etait refusee (403), surtout pour
+    // les clients connectes. 23505 = cet appareil est deja abonne : c'est un succes.
+    const { error } = await supabase
+      .from('web_push_subscriptions')
+      .insert({ endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth });
+    if (error && error.code !== '23505') return fail('enregistrement sur le site refusé', error);
+
+    rememberSynced(json.endpoint);
+    return true;
+  } catch (e) {
+    return fail('activation impossible', e);
+  }
+}
+
+// Adresse du dernier abonnement dont l'enregistrement sur le site a reussi : evite
+// de renvoyer la meme chose (et une erreur « doublon ») a chaque ouverture.
+const SYNCED_KEY = 'albasse_push_synced_endpoint';
+function rememberSynced(endpoint: string) {
+  try {
+    window.localStorage.setItem(SYNCED_KEY, endpoint);
+  } catch {
+    // silencieux
+  }
+}
+
+// L'autorisation est deja accordee et l'appareil a deja un abonnement, mais celui-ci
+// n'est jamais arrive sur le site (ancien echec d'enregistrement) : on le renvoie, une
+// seule fois. Aucun toucher n'est necessaire : rien n'est demande, on reutilise
+// l'abonnement existant.
+export async function syncWebPushSubscription(): Promise<void> {
+  if (!isWebPushSupported() || !isSupabaseConfigured || Notification.permission !== 'granted') return;
+  try {
+    const registration =
+      (await navigator.serviceWorker.getRegistration()) ?? (await navigator.serviceWorker.register('/sw.js'));
+    await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription();
+    if (!subscription) return;
+    const json = subscription.toJSON();
+    if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) return;
+    if (window.localStorage.getItem(SYNCED_KEY) === json.endpoint) return;
 
     const { error } = await supabase
       .from('web_push_subscriptions')
-      .upsert(
-        { endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth },
-        { onConflict: 'endpoint' }
-      );
-
-    return !error;
+      .insert({ endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth });
+    if (!error || error.code === '23505') rememberSynced(json.endpoint);
   } catch {
-    return false;
+    // silencieux : la synchronisation ne doit jamais gener le site
   }
 }

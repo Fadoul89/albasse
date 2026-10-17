@@ -12,7 +12,7 @@ import { AppDownloadBanner } from '../components/AppDownloadBanner';
 import { trackPageView } from '../lib/analytics';
 import { startShortcutInstallTracking, trackAppInstallIfNeeded } from '../lib/appInstallTracking';
 import { isIosDevice, isRunningAsInstalledPwa } from '../lib/pwaInstallPrompt';
-import { hasWebPushPermission, isWebPushSupported, subscribeToWebPush } from '../lib/webPushSubscription';
+import { hasWebPushPermission, isWebPushSupported, subscribeToWebPush, syncWebPushSubscription } from '../lib/webPushSubscription';
 import { useAuthStore } from '../store/authStore';
 import { TabNavigator } from './TabNavigator';
 import { CategoryScreen } from '../screens/CategoryScreen';
@@ -158,6 +158,8 @@ export function RootNavigator() {
     if (isRunningAsInstalledPwa() && !isIosDevice() && isWebPushSupported() && !hasWebPushPermission()) {
       subscribeToWebPush();
     }
+    // Autorisation deja accordee mais abonnement jamais arrive sur le site : on le renvoie.
+    syncWebPushSubscription();
   }, []);
 
   useEffect(() => {
