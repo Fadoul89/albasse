@@ -5,9 +5,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, fonts, radius, spacing } from '../theme';
 import { trackAppDownloadClick } from '../lib/appDownloadTracking';
 import { isRunningInsideApp } from '../lib/runningInApp';
-import { installNotReadyMessage, isIosDevice, isRunningAsInstalledPwa, manualInstallInstructions, triggerPwaInstallPrompt } from '../lib/pwaInstallPrompt';
+import { installNotReadyMessage, isIosDevice, isRunningAsInstalledPwa, triggerPwaInstallPrompt } from '../lib/pwaInstallPrompt';
 import { subscribeToWebPush } from '../lib/webPushSubscription';
 import { trackShortcutInstallIfNeeded } from '../lib/appInstallTracking';
+import { useInstallGuideStore } from '../store/installGuideStore';
 
 const SHOW_DELAY_MS = 2500;
 
@@ -32,7 +33,10 @@ export function AppDownloadPopup() {
     let cancelled = false;
     AsyncStorage.getItem(seenKey()).then((seen) => {
       if (cancelled || seen) return;
-      const timer = setTimeout(() => setVisible(true), SHOW_DELAY_MS);
+      // Pas par-dessus le tutoriel video deja ouvert depuis le bandeau.
+      const timer = setTimeout(() => {
+        if (!useInstallGuideStore.getState().visible) setVisible(true);
+      }, SHOW_DELAY_MS);
       return () => clearTimeout(timer);
     });
     return () => {
@@ -48,8 +52,9 @@ export function AppDownloadPopup() {
   const install = async () => {
     trackAppDownloadClick('popup');
     if (isIosDevice()) {
-      window.alert(manualInstallInstructions());
+      // Safari n'a pas de boite d'installation : on ferme cette fenetre et on ouvre le tutoriel video.
       await dismiss();
+      useInstallGuideStore.getState().show();
       return;
     }
     const outcome = await triggerPwaInstallPrompt();
