@@ -13,8 +13,11 @@ import { GoldButton } from '../components/GoldButton';
 import { createOrder } from '../lib/orders';
 import { initiatePayment } from '../lib/payments';
 import { CityPicker } from '../components/CityPicker';
+import { GiftWrapOption } from '../components/GiftWrapOption';
 import { trackTikTokEvent } from '../lib/tiktokPixel';
 import type { PaymentMethod, City } from '../types';
+import { isHomeCity } from '../lib/deliveryRules';
+import { DELIVERY_HOURS, GIFT_WRAP_FEE, HOME_CITY, ORDER_VALIDITY_HOURS } from '../constants/shopRules';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
 const CHAD_PHONE_REGEX = /^[69]\d{7}$/;
@@ -57,8 +60,15 @@ export function CheckoutScreen() {
   const showToast = useToastStore((s) => s.show);
   const { settings: paymentSettings } = usePaymentSettings();
 
+  const [giftWrap, setGiftWrap] = useState(false);
   const deliveryFee = selectedCity?.delivery_fee ?? null;
-  const grandTotal = total + (deliveryFee ?? 0);
+  const grandTotal = total + (deliveryFee ?? 0) + (giftWrap ? GIFT_WRAP_FEE : 0);
+
+  // Paiement a la livraison : seulement pour les clients de N'Djamena. Ailleurs : a l'avance (Airtel Money, Moov Money).
+  const cashOnDeliveryAllowed = isHomeCity(city);
+  useEffect(() => {
+    if (!cashOnDeliveryAllowed && method === 'cash_on_delivery') setMethod('airtel_money');
+  }, [cashOnDeliveryAllowed, method]);
 
   const paymentInfo =
     method === 'airtel_money'
@@ -74,6 +84,13 @@ export function CheckoutScreen() {
     }
     if (!name || !phone || !address || !city) {
       showToast('Merci de remplir toutes les informations de livraison.', { title: 'Champs manquants', type: 'error' });
+      return;
+    }
+    if (method === 'cash_on_delivery' && !cashOnDeliveryAllowed) {
+      showToast(`Le paiement à la livraison est possible seulement à ${HOME_CITY}. Choisissez Airtel Money ou Moov Money.`, {
+        title: 'Paiement',
+        type: 'error',
+      });
       return;
     }
     if (!CHAD_PHONE_REGEX.test(phone)) {
@@ -95,6 +112,7 @@ export function CheckoutScreen() {
         shippingPhone: phone,
         shippingAddress: address,
         shippingCity: city,
+        giftWrap,
       });
 
       if (error || !order) {
@@ -125,7 +143,7 @@ export function CheckoutScreen() {
       }
 
       clearCart();
-      navigation.navigate('OrderConfirmation', { orderId: order.id, total: grandTotal, instructions });
+      navigation.navigate('OrderConfirmation', { orderId: order.id, total: grandTotal, instructions, giftWrap });
     } catch (e) {
       console.error('Exception création commande:', e);
       showToast(e instanceof Error ? e.message : String(e), { title: 'Erreur inattendue', type: 'error' });
@@ -174,17 +192,33 @@ export function CheckoutScreen() {
         />
 
         <Text style={styles.sectionTitle}>Paiement</Text>
-        {PAYMENT_OPTIONS.map((opt) => (
-          <Pressable
-            key={opt.value}
-            style={[styles.paymentOption, method === opt.value && styles.paymentOptionActive]}
-            onPress={() => setMethod(opt.value)}
-          >
-            <Text style={styles.paymentIcon}>{opt.icon}</Text>
-            <Text style={styles.paymentLabel}>{opt.label}</Text>
-            <View style={[styles.radio, method === opt.value && styles.radioActive]} />
-          </Pressable>
-        ))}
+        {PAYMENT_OPTIONS.map((opt) => {
+          const disabled = opt.value === 'cash_on_delivery' && !cashOnDeliveryAllowed;
+          return (
+            <Pressable
+              key={opt.value}
+              style={[styles.paymentOption, method === opt.value && styles.paymentOptionActive, disabled && styles.paymentOptionDisabled]}
+              onPress={() => {
+                if (!disabled) setMethod(opt.value);
+              }}
+              disabled={disabled}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: method === opt.value, disabled }}
+              aria-checked={method === opt.value}
+              aria-disabled={disabled}
+            >
+              <Text style={styles.paymentIcon}>{opt.icon}</Text>
+              <View style={styles.paymentLabelWrap}>
+                <Text style={styles.paymentLabel}>{opt.label}</Text>
+                {disabled ? <Text style={styles.paymentHint}>{`Seulement à ${HOME_CITY}`}</Text> : null}
+              </View>
+              <View style={[styles.radio, method === opt.value && styles.radioActive]} />
+            </Pressable>
+          );
+        })}
+        <Text style={styles.paymentRule}>
+          {`💵 Paiement à la livraison : seulement à ${HOME_CITY}. Dans les autres villes, le paiement se fait à l'avance (Airtel Money ou Moov Money).`}
+        </Text>
 
         {paymentInfo && (paymentInfo.number || paymentInfo.url) && (
           <View style={styles.paymentInfoBox}>
@@ -196,6 +230,9 @@ export function CheckoutScreen() {
             )}
           </View>
         )}
+
+        <Text style={styles.sectionTitle}>Option</Text>
+        <GiftWrapOption checked={giftWrap} onToggle={() => setGiftWrap((v) => !v)} />
 
         <View style={styles.summary}>
           <View style={styles.summaryRow}>
@@ -214,11 +251,21 @@ export function CheckoutScreen() {
                 : formatXAF(deliveryFee)}
             </Text>
           </View>
+          {giftWrap ? (
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>🎁 Emballage cadeau</Text>
+              <Text style={styles.summaryValue}>{formatXAF(GIFT_WRAP_FEE)}</Text>
+            </View>
+          ) : null}
           <View style={[styles.summaryRow, { marginTop: 8 }]}>
             <Text style={styles.totalLabel}>Total</Text>
             <Text style={styles.totalValue}>{formatXAF(grandTotal)}</Text>
           </View>
         </View>
+
+        <Text style={styles.serviceNote}>
+          {`🕗 Nos services de livraison sont ouverts de ${DELIVERY_HOURS}.\n⏳ Pour éviter les fausses commandes, chaque commande est valable ${ORDER_VALIDITY_HOURS} h.`}
+        </Text>
 
         <GoldButton
           label="Confirmer la commande"
@@ -264,8 +311,13 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   paymentOptionActive: { borderColor: colors.gold },
+  paymentOptionDisabled: { opacity: 0.5 },
+  paymentLabelWrap: { flex: 1 },
+  paymentHint: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 12, marginTop: 2 },
+  paymentRule: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 12.5, lineHeight: 18, marginBottom: spacing.sm },
+  serviceNote: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 12.5, lineHeight: 19, marginTop: spacing.md },
   paymentIcon: { fontSize: 20, marginRight: 10 },
-  paymentLabel: { flex: 1, color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 14 },
+  paymentLabel: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 14 },
   radio: {
     width: 18,
     height: 18,

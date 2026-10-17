@@ -1,4 +1,7 @@
-import { HOME_CITY, PAYMENT } from '../constants/assistant';
+import { DEFAULT_AGENCIES, DELIVERY_HOURS, HOME_CITY, ORDER_VALIDITY_HOURS, PAYMENT } from '../constants/shopRules';
+import { isHomeCity } from './deliveryRules';
+
+export { isHomeCity };
 
 // Cerveau de Zara : fonctions simples (sans IA) qui comprennent quelques mots-cles et preparent
 // les reponses. Aucune dependance a l'ecran ni a la base : facile a tester.
@@ -12,6 +15,7 @@ const STOP_WORDS = new Set([
   'a', 'je', 'j', 'veux', 'voudrais', 'cherche', 'cherch', 'achete', 'acheter', 'produit', 'produits', 'prix', 'svp', 'stp',
   's', 'il', 'elle', 'vous', 'plait', 'quel', 'quels', 'quelle', 'quelles', 'que', 'qui', 'est', 'sont', 'y', 'avez', 'avoir',
   'vendez', 'vend', 'tu', 'as', 'moi', 'mon', 'ma', 'mes', 'ce', 'cette', 'ces', 'bonjour', 'salut', 'merci',
+  'moins', 'plus', 'entre', 'max', 'maximum', 'minimum', 'fcfa', 'cfa', 'franc', 'francs', 'budget', 'mille',
 ]);
 
 // Mots qui precisent un produit sans dire de quoi il s'agit : ils comptent moins dans le classement.
@@ -53,6 +57,7 @@ export interface RawProduct {
   compare_at_price: number | string | null;
   stock: number | null;
   category: string;
+  category_slug?: string | null;
   colors: string[] | null;
   description: string | null;
   image: string | null;
@@ -67,6 +72,7 @@ export interface CatalogProduct {
   compareAt: number | null;
   stock: number;
   category: string;
+  categorySlug: string;
   image: string | null;
   createdAt: number;
   nameTokens: string[];
@@ -84,9 +90,11 @@ export function buildProduct(p: RawProduct): CatalogProduct {
     name: p.name.trim(),
     slug: p.slug,
     price,
-    compareAt: compare !== null && compare > price ? compare : null,
+    // un ancien prix plus de 10 fois superieur est une erreur de saisie : on ne l'affiche pas
+    compareAt: compare !== null && compare > price && price / compare >= 0.1 ? compare : null,
     stock: Number(p.stock ?? 0),
     category: p.category,
+    categorySlug: p.category_slug ?? '',
     image: p.image,
     createdAt: Date.parse(p.created_at) || 0,
     nameTokens: tokenize(p.name),
@@ -134,7 +142,7 @@ export function searchCatalog(products: CatalogProduct[], query: string, limit =
   return scored.slice(0, limit).map((s) => s.p);
 }
 
-const discount = (p: CatalogProduct) => (p.compareAt ? 1 - p.price / p.compareAt : 0);
+export const discount = (p: CatalogProduct) => (p.compareAt ? 1 - p.price / p.compareAt : 0);
 
 // Plus fortes remises, en stock, avec photo.
 export function promotions(products: CatalogProduct[], limit = 4): CatalogProduct[] {
@@ -198,6 +206,15 @@ export type Intent =
   | 'categories'
   | 'order'
   | 'contact'
+  | 'advice'
+  | 'wrap'
+  | 'gift'
+  | 'budget'
+  | 'price'
+  | 'trust'
+  | 'later'
+  | 'rules'
+  | 'info'
   | 'search';
 
 const has = (tokens: string[], words: string[]) => words.some((w) => tokens.includes(w));
@@ -210,11 +227,20 @@ export function detectIntent(text: string): Intent {
   if (has(tokens, ['bonjour', 'bonsoir', 'salut', 'salam', 'coucou', 'hello', 'slt', 'hi']) && tokens.length <= 3) return 'greeting';
   if (has(tokens, ['compte', 'inscription', 'inscrire', 'inscris', 'connexion', 'connecter'])) return 'account';
   if (has(tokens, ['suivre', 'suivi']) || /mes commandes/.test(normalize(text))) return 'orders';
+  if (tokens.includes('48') || tokens.includes('48h') || has(tokens, ['valable', 'validite', 'expire', 'expiree', 'expiration', 'fausse', 'fausses'])) return 'rules';
+  if (has(tokens, ['infos', 'info', 'informations', 'important', 'importante', 'importantes', 'conditions', 'regles'])) return 'info';
+  if (has(tokens, ['emballage', 'emballer', 'emballe', 'emballee', 'empaqueter'])) return 'wrap';
+  if (has(tokens, ['cadeau', 'cadeaux', 'offrir', 'anniversaire', 'mariage', 'tabaski', 'ramadan', 'eid'])) return 'gift';
+  if (has(tokens, ['arnaque', 'arnaques', 'confiance', 'fiable', 'fiables', 'serieux', 'serieuse', 'securise', 'securisee', 'securite', 'garantie', 'escroquerie', 'escroc', 'peur', 'risque'])) return 'trust';
+  if (has(tokens, ['cher', 'chere', 'chers', 'cheres', 'couteux', 'couteuse', 'negocier', 'marchander', 'baisser', 'diminuer'])) return 'price';
+  if (/plus tard|reflechi|je verrai|on verra|pas maintenant|je reviendrai|je reviens/.test(normalize(text))) return 'later';
   if (has(tokens, ['livraison', 'livrer', 'livre', 'livrez', 'frais', 'expedition', 'delai', 'agence', 'paiement', 'payer', 'paye', 'payez', 'airtel', 'moov', 'cash', 'espece', 'especes', 'mobile', 'argent'])) return 'delivery';
   if (has(tokens, ['promo', 'promos', 'promotion', 'promotions', 'solde', 'soldes', 'reduction', 'reductions', 'remise', 'remises', 'offre', 'offres', 'flash', 'rabais'])) return 'promo';
   if (has(tokens, ['nouveaute', 'nouveautes', 'nouveau', 'nouveaux', 'recent', 'recents', 'derniere', 'dernieres'])) return 'new';
   if (has(tokens, ['categorie', 'categories', 'catalogue', 'rayon', 'rayons'])) return 'categories';
   if (has(tokens, ['commande', 'commander', 'panier', 'passer'])) return 'order';
+  if (has(tokens, ['conseil', 'conseils', 'conseille', 'recommande', 'recommandez', 'suggere', 'choisir', 'idee', 'idees'])) return 'advice';
+  if (has(tokens, ['budget'])) return 'budget';
   if (has(tokens, ['whatsapp', 'contact', 'contacter', 'appeler', 'telephone', 'numero', 'joindre', 'equipe', 'conseiller', 'horaire', 'horaires', 'adresse', 'boutique', 'magasin'])) return 'contact';
   return 'search';
 }
@@ -227,11 +253,6 @@ export interface City {
   name: string;
   fee: number | null;
   agency: string | null;
-}
-
-export function isHomeCity(name: string): boolean {
-  const c = compact(name);
-  return c === 'ndjamena' || c === 'djamena' || c === 'ndjam';
 }
 
 // Retrouve la ville ecrite dans le texte (« livraison a moundou », « Ndjamena », « abeche »...).
@@ -254,18 +275,38 @@ export function matchCity(cities: City[], text: string): City | null {
   return best ? best.city : null;
 }
 
-const fcfa = (n: number) => `${Math.round(n).toLocaleString('fr-FR')} FCFA`;
+export const fcfa = (n: number) => `${Math.round(n).toLocaleString('fr-FR')} FCFA`;
 
 // Livraison et paiement pour une ville.
 export function cityReply(city: City): string {
   if (isHomeCity(city.name)) {
     return `À ${HOME_CITY}, la livraison est gratuite 🚚 et vous payez à la livraison 💵 : vous ne payez qu'en recevant votre commande.`;
   }
+  const agency = city.agency?.trim() || null;
   const delivery =
     city.fee == null
-      ? `Pour ${city.name}, le tarif de livraison est à confirmer avec notre équipe sur WhatsApp.`
-      : `Pour ${city.name}, la livraison coûte ${fcfa(city.fee)}${city.agency ? `, par l'agence ${city.agency}` : ''}. 🚚`;
+      ? `Pour ${city.name}, le tarif de livraison est à confirmer avec notre équipe sur WhatsApp${agency ? `, par l'agence ${agency}` : ''}.`
+      : `Pour ${city.name}, la livraison coûte ${fcfa(city.fee)}, ${agency ? `par l'agence ${agency}` : `par agence de transport (${DEFAULT_AGENCIES})`}. 🚚`;
   return `${delivery}\nLe paiement se fait à l'avance :\n📱 Airtel Money ${PAYMENT.airtel}\n📲 Moov Money ${PAYMENT.moov}`;
+}
+
+// Horaires de livraison et duree d'une commande : rappeles apres chaque reponse sur la livraison.
+export function serviceNote(home: boolean): string {
+  return `🕗 Nos services de livraison sont ouverts de ${DELIVERY_HOURS}.\n⏳ Pour éviter les fausses commandes, chaque commande est valable ${ORDER_VALIDITY_HOURS} h${home ? '.' : ' : réglez dans ce délai.'}`;
+}
+
+// Les trois choses importantes, dites a chaque client au debut de la conversation.
+export function importantInfo(): string {
+  return [
+    'ℹ️ À savoir avant de commander :',
+    `🚚 Nos services de livraison sont ouverts de ${DELIVERY_HOURS}.`,
+    `💵 Paiement à la livraison : seulement à ${HOME_CITY}. Dans les autres villes, le paiement se fait à l'avance (Airtel Money ou Moov Money).`,
+    `⏳ Pour éviter les fausses commandes, chaque commande est valable ${ORDER_VALIDITY_HOURS} h.`,
+  ].join('\n');
+}
+
+export function rulesReply(): string {
+  return `⏳ Pour éviter les fausses commandes, chaque commande est valable ${ORDER_VALIDITY_HOURS} h. Passé ce délai, une commande restée en attente (non réglée) est signalée comme fausse commande.\nHors ${HOME_CITY}, réglez à l'avance : Airtel Money ${PAYMENT.airtel} ou Moov Money ${PAYMENT.moov}.`;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -275,7 +316,7 @@ export function cityReply(city: City): string {
 const ENCOURAGEMENTS = [
   'Touchez « Voir le produit » puis « Acheter » : c’est simple et rapide ! 🛍️',
   'À N’Djamena, la livraison est gratuite et vous payez à la livraison : commandez sans risque 😉',
-  'Les bonnes affaires partent vite : ne les laissez pas passer ! 🔥',
+  'Profitez-en tant qu’il y a du stock ! 🔥',
   'Une belle occasion de vous faire plaisir (ou d’offrir) ! 🎁',
 ];
 

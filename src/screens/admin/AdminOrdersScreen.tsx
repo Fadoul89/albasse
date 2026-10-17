@@ -149,6 +149,7 @@ export function AdminOrdersScreen() {
             </View>
             <Text style={styles.customer}>{item.shipping_name} · {item.shipping_phone}</Text>
             <Text style={styles.address}>{item.shipping_address}, {item.shipping_city}</Text>
+            {item.gift_wrap && <Text style={styles.giftBadge}>🎁 À emballer : emballage cadeau (2 000 FCFA inclus dans le total)</Text>}
             <View style={styles.dateRow}>
               <Text style={styles.date}>{formatOrderDate(item.created_at)}</Text>
               {getOrderDay(item.created_at) === 'today' && (
@@ -320,6 +321,18 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   deadlineLabel: { color: colors.creamFaint, fontFamily: fonts.bodyMedium, fontSize: 10.5, textAlign: 'center' },
+  giftBadge: {
+    alignSelf: 'flex-start',
+    color: colors.goldLight,
+    fontFamily: fonts.bodyBold,
+    fontSize: 12,
+    borderWidth: 1,
+    borderColor: colors.gold,
+    borderRadius: radius.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginBottom: 6,
+  },
   flaggedBadge: {
     color: colors.red,
     fontFamily: fonts.bodyBold,

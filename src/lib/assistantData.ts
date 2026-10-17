@@ -32,6 +32,7 @@ export interface AssistantProduct {
   compare_at_price: number | null;
   image: string | null;
   in_stock: boolean;
+  stock: number;
 }
 
 export interface CategoryInfo {
@@ -43,11 +44,12 @@ export interface StoreInfo {
   hours: string | null;
   address: string | null;
   city: string | null;
+  phone: string | null;
   mapsUrl: string | null;
 }
 
 export function toCard(p: CatalogProduct): AssistantProduct {
-  return { slug: p.slug, name: p.name, price: p.price, compare_at_price: p.compareAt, image: p.image, in_stock: p.stock > 0 };
+  return { slug: p.slug, name: p.name, price: p.price, compare_at_price: p.compareAt, image: p.image, in_stock: p.stock > 0, stock: p.stock };
 }
 
 function cached<T>(load: () => Promise<T>) {
@@ -90,7 +92,7 @@ export const getCategories = cached<CategoryInfo[]>(async () => {
 
 export const getCatalog = cached<CatalogProduct[]>(async () => {
   const [cats, prods] = await Promise.all([
-    supabase.from('categories').select('id,name'),
+    supabase.from('categories').select('id,name,slug'),
     supabase
       .from('products')
       .select('id,name,slug,price,compare_at_price,stock,category_id,colors,description,images,created_at')
@@ -100,7 +102,9 @@ export const getCatalog = cached<CatalogProduct[]>(async () => {
   ]);
   if (cats.error) throw cats.error;
   if (prods.error) throw prods.error;
-  const names = new Map<string, string>(((cats.data ?? []) as { id: string; name: string }[]).map((c) => [c.id, c.name]));
+  const categories = new Map<string, { name: string; slug: string }>(
+    ((cats.data ?? []) as { id: string; name: string; slug: string }[]).map((c) => [c.id, { name: c.name, slug: c.slug }])
+  );
   return ((prods.data ?? []) as Record<string, any>[]).map((p) =>
     buildProduct({
       id: p.id,
@@ -109,7 +113,8 @@ export const getCatalog = cached<CatalogProduct[]>(async () => {
       price: p.price,
       compare_at_price: p.compare_at_price,
       stock: p.stock,
-      category: names.get(p.category_id) ?? '',
+      category: categories.get(p.category_id)?.name ?? '',
+      category_slug: categories.get(p.category_id)?.slug ?? '',
       colors: p.colors,
       description: p.description,
       image: Array.isArray(p.images) && p.images.length ? p.images[0] : null,
@@ -134,6 +139,12 @@ export const getCities = cached<City[]>(async () => {
 });
 
 export const getStoreInfo = cached<StoreInfo>(async () => {
-  const { data } = await supabase.from('store_settings').select('hours,address,city,google_maps_url').limit(1).maybeSingle();
-  return { hours: data?.hours ?? null, address: data?.address ?? null, city: data?.city ?? null, mapsUrl: data?.google_maps_url ?? null };
+  const { data } = await supabase.from('store_settings').select('hours,address,city,phone,google_maps_url').limit(1).maybeSingle();
+  return {
+    hours: data?.hours ?? null,
+    address: data?.address ?? null,
+    city: data?.city ?? null,
+    phone: data?.phone ?? null,
+    mapsUrl: data?.google_maps_url ?? null,
+  };
 });

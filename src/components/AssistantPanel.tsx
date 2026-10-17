@@ -99,6 +99,9 @@ function ProductCards({ products, onOpen }: { products: AssistantProduct[]; onOp
             </Text>
             <Text style={styles.cardPrice}>{formatXAF(p.price)}</Text>
             {discount && p.compare_at_price ? <Text style={styles.cardOldPrice}>{formatXAF(p.compare_at_price)}</Text> : null}
+            {p.in_stock && typeof p.stock === 'number' && p.stock >= 1 && p.stock <= 5 ? (
+              <Text style={styles.cardLow}>🔥 {p.stock === 1 ? 'Dernier en stock' : `Plus que ${p.stock} en stock`}</Text>
+            ) : null}
             {!p.in_stock ? <Text style={styles.cardOut}>Épuisé</Text> : <Text style={styles.cardSee}>Voir le produit ›</Text>}
           </Pressable>
         );
@@ -230,6 +233,12 @@ export function AssistantPanel() {
       case 'category':
         if (action.payload) go(() => navigationRef.navigate('Category', { slug: action.payload as string }));
         return;
+      case 'cart':
+        go(() => navigationRef.navigate('Tabs', { screen: 'Cart' } as never));
+        return;
+      case 'link':
+        if (action.payload) Linking.openURL(action.payload);
+        return;
       default:
         choose(action);
     }
@@ -239,7 +248,8 @@ export function AssistantPanel() {
     ? { right: spacing.md, bottom: spacing.md, width: 400, height: Math.min(620, height - spacing.md * 2) }
     : { left: 0, right: 0, top: area?.top ?? 0, height: area?.height ?? height };
 
-  const placeholder = step === 'ask_name' ? 'Écrivez votre prénom…' : step === 'ask_city' ? 'Écrivez votre ville…' : 'Écrivez votre message…';
+  const placeholder =
+    step === 'ask_name' ? 'Écrivez votre prénom…' : step === 'ask_city' ? 'Écrivez votre ville…' : step === 'ask_budget' ? 'Écrivez un montant…' : 'Écrivez votre message…';
   const lastIndex = messages.length - 1;
 
   return (
@@ -418,6 +428,7 @@ const styles = StyleSheet.create({
   cardOldPrice: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11.5, textDecorationLine: 'line-through', paddingHorizontal: 9 },
   cardSee: { color: colors.gold, fontFamily: fonts.bodySemiBold, fontSize: 12, paddingHorizontal: 9, marginTop: 6 },
   cardOut: { color: colors.error, fontFamily: fonts.bodySemiBold, fontSize: 12, paddingHorizontal: 9, marginTop: 6 },
+  cardLow: { color: '#ffb347', fontFamily: fonts.bodySemiBold, fontSize: 11.5, paddingHorizontal: 9, marginTop: 5 },
 
   inputBar: {
     flexDirection: 'row',
