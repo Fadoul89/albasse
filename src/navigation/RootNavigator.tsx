@@ -10,7 +10,7 @@ import { SocialProofTicker } from '../components/SocialProofTicker';
 import { WhatsAppFab } from '../components/WhatsAppFab';
 import { AppDownloadBanner } from '../components/AppDownloadBanner';
 import { trackPageView } from '../lib/analytics';
-import { trackAppInstallIfNeeded } from '../lib/appInstallTracking';
+import { startShortcutInstallTracking, trackAppInstallIfNeeded } from '../lib/appInstallTracking';
 import { isRunningAsInstalledPwa } from '../lib/pwaInstallPrompt';
 import { hasWebPushPermission, isWebPushSupported, subscribeToWebPush } from '../lib/webPushSubscription';
 import { useAuthStore } from '../store/authStore';
@@ -149,6 +149,7 @@ export function RootNavigator() {
 
   useEffect(() => {
     trackAppInstallIfNeeded();
+    startShortcutInstallTracking();
     // Pour les visiteurs qui ont deja installe le raccourci (PWA) : on
     // propose l'activation des notifications a l'ouverture plutot que
     // d'attendre qu'ils reinstallent.
