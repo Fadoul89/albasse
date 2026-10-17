@@ -40,6 +40,7 @@ import { AdminPromotionsScreen } from '../screens/admin/AdminPromotionsScreen';
 import { SmartPromotionPopup } from '../components/SmartPromotionPopup';
 import { WheelPopup } from '../components/WheelPopup';
 import { AppDownloadPopup } from '../components/AppDownloadPopup';
+import { IosInstallGuide } from '../components/IosInstallGuide';
 import { AdminStoreSettingsScreen } from '../screens/admin/AdminStoreSettingsScreen';
 import { ContactScreen } from '../screens/ContactScreen';
 import { CustomerNotificationsScreen } from '../screens/CustomerNotificationsScreen';
@@ -241,6 +242,7 @@ export function RootNavigator() {
         <SmartPromotionPopup />
         <WheelPopup />
         <AppDownloadPopup />
+        <IosInstallGuide />
       </View>
     </NavigationContainer>
   );

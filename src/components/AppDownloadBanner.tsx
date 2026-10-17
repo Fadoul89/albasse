@@ -4,9 +4,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, fonts, radius, spacing } from '../theme';
 import { trackAppDownloadClick } from '../lib/appDownloadTracking';
 import { isRunningInsideApp } from '../lib/runningInApp';
-import { installNotReadyMessage, isIosDevice, isRunningAsInstalledPwa, manualInstallInstructions, triggerPwaInstallPrompt } from '../lib/pwaInstallPrompt';
+import { installNotReadyMessage, isIosDevice, isRunningAsInstalledPwa, triggerPwaInstallPrompt } from '../lib/pwaInstallPrompt';
 import { subscribeToWebPush } from '../lib/webPushSubscription';
 import { trackShortcutInstallIfNeeded } from '../lib/appInstallTracking';
+import { useInstallGuideStore } from '../store/installGuideStore';
 
 const DISMISS_KEY = 'albasse_app_banner_dismissed';
 
@@ -36,7 +37,8 @@ export function AppDownloadBanner() {
   const install = async () => {
     trackAppDownloadClick('banner');
     if (isIosDevice()) {
-      window.alert(manualInstallInstructions());
+      // Safari n'a pas de boite d'installation : tutoriel video + etapes.
+      useInstallGuideStore.getState().show();
       return;
     }
     const outcome = await triggerPwaInstallPrompt();
