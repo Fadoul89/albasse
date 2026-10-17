@@ -19,9 +19,12 @@ import { SideAdBanner } from '../components/SideAdBanner';
 import { ChadFlag } from '../components/ChadFlag';
 import { WebPushBanner } from '../components/WebPushBanner';
 
-const CHAD_BLUE = '#0033A0';
 const CHAD_YELLOW = '#FECB00';
 const CHAD_RED = '#D21034';
+// Sur le fond bleu du site, le bleu et le rouge du drapeau sont trop sombres pour du texte :
+// l'accroche utilise leurs teintes claires (le jaune reste celui du drapeau).
+const TAGLINE_BLUE = '#6EA4FF';
+const TAGLINE_RED = '#FF5A70';
 
 export function HomeScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -116,7 +119,7 @@ export function HomeScreen() {
             <Animated.Text
               style={[
                 styles.taglineWord,
-                { color: CHAD_BLUE, textShadowColor: CHAD_BLUE, textShadowRadius: glowRadius, opacity: glowOpacity },
+                { color: TAGLINE_BLUE, textShadowColor: TAGLINE_BLUE, textShadowRadius: glowRadius, opacity: glowOpacity },
               ]}
             >
               SERVICE
@@ -132,7 +135,7 @@ export function HomeScreen() {
             <Animated.Text
               style={[
                 styles.taglineWord,
-                { color: CHAD_RED, textShadowColor: CHAD_RED, textShadowRadius: glowRadius, opacity: glowOpacity },
+                { color: TAGLINE_RED, textShadowColor: TAGLINE_RED, textShadowRadius: glowRadius, opacity: glowOpacity },
               ]}
             >
               GARANTIE
