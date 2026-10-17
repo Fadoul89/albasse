@@ -1,5 +1,6 @@
 import { supabase, isSupabaseConfigured } from './supabase';
 import { isRunningInsideApp } from './runningInApp';
+import { isRunningAsInstalledPwa } from './pwaInstallPrompt';
 
 const FLAG_KEY = 'albasse_app_install_tracked';
 
@@ -75,4 +76,15 @@ export function trackShortcutInstallIfNeeded() {
   } catch {
     // silencieux : le suivi ne doit jamais bloquer l'installation
   }
+}
+
+// Compte aussi les installations faites autrement que par le bouton du site
+// (menu ⋮ de Chrome, Partager > Sur l'ecran d'accueil sur iPhone...) : Chrome
+// envoie « appinstalled » quelle que soit la methode, et l'icone installee
+// s'ouvre en mode application. Un seul comptage par appareil (meme drapeau
+// que ci-dessus), et jamais dans la coquille de l'app Android.
+export function startShortcutInstallTracking() {
+  if (typeof window === 'undefined' || isRunningInsideApp()) return;
+  window.addEventListener('appinstalled', trackShortcutInstallIfNeeded);
+  if (isRunningAsInstalledPwa()) trackShortcutInstallIfNeeded();
 }
