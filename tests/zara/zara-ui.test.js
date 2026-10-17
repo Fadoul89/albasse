@@ -1210,6 +1210,40 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check(`bulle du bouton (${lg}) : pas avant 10 secondes, puis le client avec compte est accueilli par son prenom`, tooEarly === 0 && n === 1, { tooEarly, n });
       await c.ctx.close();
     }
+
+    // --- M10. compte connecte SANS prenom (profil sans nom) : Zara voit qu'il est connecte, demande le prenom sans l'inviter a se connecter, puis le retient
+    for (const [lg, askRe, niceRe, typed, skipLabel] of [['fr', /Je vois que vous êtes connecté\(e\)/, /Enchantée Fadoul/, 'Fadoul', 'Passer'], ['ar', /أرى أنك مسجّل الدخول/, /سعدت بمعرفتك يا Fadoul/, 'Fadoul', null]]) {
+      const fu = memberOf(null);
+      const c = await newVisitor(phone, { lang: lg, storage: loggedIn(fu), fakeUser: fu });
+      await c.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await openFab(c.page);
+      await waitText(c.page, askRe);
+      const labels = await chipLabels(c.page);
+      check(`connecte sans prenom (${lg}) : Zara dit qu'elle le voit connecte, sans « connectez-vous » ni bouton « Me connecter »`, (await countOf(c.page, /connectez-vous|déjà un compte|سجّل الدخول وسأتعرف|إذا كان لديك حساب/)) === 0 && !labels.some((l) => /Me connecter|تسجيل الدخول|Créer mon compte|إنشاء حسابي/.test(l)), labels);
+      if (skipLabel) check(`connecte sans prenom (${lg}) : il peut passer`, labels.includes(skipLabel), labels);
+      await c.page.screenshot({ path: path.join(OUT, `M10-sans-prenom-${lg}.png`) });
+      await ask(c.page, typed, niceRe);
+      check(`connecte sans prenom (${lg}) : le prenom donne est retenu sur l'appareil`, (await c.page.evaluate(() => localStorage.getItem('albasse_zara_name'))) === typed);
+      await waitText(c.page, lg === 'fr' ? 'Que souhaitez-vous découvrir aujourd’hui ? 🛍️' : 'ماذا تريد أن تكتشف اليوم؟ 🛍️');
+      const menu = await chipLabels(c.page);
+      check(`connecte sans prenom (${lg}) : le menu est celui d'un client connecte (Mes commandes, pas de creation de compte)`, menu.includes(lg === 'fr' ? '📦 Mes commandes' : '📦 طلباتي') && !menu.some((l) => /Créer mon compte|Me connecter|إنشاء حسابي|تسجيل الدخول/.test(l)), menu);
+      check(`aucune erreur (connecte sans prenom, ${lg})`, c.errs.length === 0, c.errs);
+      await c.ctx.close();
+    }
+    // prochaine visite sur cet appareil : le prenom retenu sert, Zara ne le redemande pas
+    {
+      const fu = memberOf(null);
+      const c = await newVisitor(phone, { lang: 'fr', storage: { ...loggedIn(fu), albasse_zara_name: 'Fadoul' }, fakeUser: fu });
+      await c.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await openFab(c.page);
+      await waitText(c.page, WELCOME_FR('Fadoul'));
+      await sleep(1500);
+      check('connecte sans prenom, prenom deja retenu sur l\'appareil : accueil par son prenom, Zara ne le redemande pas', (await countOf(c.page, /Comment puis-je vous appeler|Je vois que vous êtes connecté/)) === 0);
+      check('aucune erreur (connecte sans prenom, prenom retenu)', c.errs.length === 0, c.errs);
+      await c.ctx.close();
+    }
   }
 
   // =============================================== T. PERSONNALITE : POLITESSE, COMPLIMENTS, ADRESSE ET NUMERO PERSONNELS ===============================================
