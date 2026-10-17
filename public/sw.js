@@ -8,7 +8,7 @@
 //
 // Le gestionnaire ne met rien d'autre en cache que la page hors connexion :
 // pas de risque de montrer une ancienne version du site.
-const CACHE = 'albasse-hors-connexion-v1';
+const CACHE = 'albasse-hors-connexion-v2';
 const OFFLINE_URL = '/offline.html';
 // Cache partage avec la page (public/index.html) pour le toucher d'une notification.
 const HANDOFF_CACHE = 'albasse-notification';

@@ -1,7 +1,7 @@
 export const colors = {
-  background: '#0c0c0f',
-  panel: '#15151b',
-  panelAlt: '#1b1b22',
+  background: '#072469',
+  panel: '#0e3181',
+  panelAlt: '#163c95',
 
   gold: '#c79a3e',
   goldLight: '#e7c87a',
@@ -14,7 +14,7 @@ export const colors = {
   creamFaint: 'rgba(244, 239, 228, 0.35)',
 
   border: 'rgba(199, 154, 62, 0.25)',
-  overlay: 'rgba(12, 12, 15, 0.7)',
+  overlay: 'rgba(7, 36, 105, 0.7)',
 
   success: '#2e8b57',
   error: '#d8232a',
