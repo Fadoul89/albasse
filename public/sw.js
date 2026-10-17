@@ -46,18 +46,45 @@ self.addEventListener('push', (event) => {
       body: data.message || '',
       icon: '/icon-192.png',
       badge: '/icon-192.png',
+      // Page a ouvrir au toucher : la fiche du produit (envoyee par le serveur).
+      data: { url: data.url || '/' },
     })
   );
 });
 
+// Adresse a ouvrir au toucher de la notification : celle envoyee avec elle, sinon
+// l'accueil. Jamais une adresse hors du site.
+function pageToOpen(notification) {
+  const home = self.location.origin + '/';
+  try {
+    const url = new URL((notification.data && notification.data.url) || '/', self.location.origin);
+    return url.origin === self.location.origin ? url.href : home;
+  } catch {
+    return home;
+  }
+}
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
+  const target = pageToOpen(event.notification);
   event.waitUntil(
-    self.clients.matchAll({ type: 'window' }).then((clientList) => {
-      for (const client of clientList) {
-        if ('focus' in client) return client.focus();
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (clientList) => {
+      const client = clientList[0];
+      if (client) {
+        // Le site est deja ouvert : on le ramene devant puis on l'amene sur la bonne page.
+        try {
+          await client.focus();
+        } catch {
+          // refuse sur certains appareils : la navigation suffit
+        }
+        try {
+          if (client.url !== target) await client.navigate(target);
+          return;
+        } catch {
+          // fenetre non controlee ou navigation refusee : on ouvre la page a la place
+        }
       }
-      if (self.clients.openWindow) return self.clients.openWindow('/');
+      return self.clients.openWindow(target);
     })
   );
 });
