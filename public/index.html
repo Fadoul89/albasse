@@ -43,6 +43,7 @@
       window.addEventListener('beforeinstallprompt', function(e) {
         e.preventDefault();
         window.__pwaInstallPrompt__ = e;
+        window.__pwaInstallPromptAt__ = Math.round(performance.now());
       });
 
       // Chrome n'envoie cet evenement que si un service worker avec gestionnaire
@@ -56,12 +57,89 @@
             /AlbasseShoppingApp/i.test(navigator.userAgent) ||
             /[?&]albasse_app=1/.test(window.location.search) ||
             window.localStorage.getItem('albasse_app_shell') === '1';
-          if (inApp || !('serviceWorker' in navigator) || !('onbeforeinstallprompt' in window)) return;
+          if (inApp) { window.__swReg__ = 'non tente (coquille de l\'app)'; return; }
+          if (!('serviceWorker' in navigator)) { window.__swReg__ = 'non tente (navigateur sans service worker)'; return; }
+          if (!('onbeforeinstallprompt' in window)) { window.__swReg__ = 'non tente (navigateur sans installation en un tap)'; return; }
           window.addEventListener('load', function () {
-            navigator.serviceWorker.register('/sw.js').catch(function () {});
+            navigator.serviceWorker.register('/sw.js').then(
+              function () { window.__swReg__ = 'enregistre'; },
+              function (err) { window.__swReg__ = 'ERREUR ' + err.name + ' : ' + err.message; }
+            );
           });
         } catch (e) {
           // silencieux : l'enregistrement ne doit jamais bloquer le site
+        }
+      })();
+
+      // Diagnostic de l'installation : ajouter ?diag=1 a l'adresse du site affiche
+      // en bas de l'ecran ce que le navigateur sait faire (service worker,
+      // evenement d'installation, temps passe sur la page). Rien n'est envoye.
+      (function () {
+        try {
+          if (!/[?&]diag=1/.test(window.location.search)) return;
+          var t0 = performance.now();
+          var box = document.createElement('pre');
+          box.style.cssText =
+            'position:fixed;left:0;right:0;bottom:0;z-index:2147483647;margin:0;padding:6px 8px;background:rgba(0,0,0,.9);' +
+            'color:#9fe870;font:11px/1.35 monospace;white-space:pre-wrap;word-break:break-all;pointer-events:none';
+          document.body.appendChild(box);
+          var actions = 0;
+          ['touchstart', 'click', 'scroll'].forEach(function (n) {
+            window.addEventListener(n, function () { actions++; }, { passive: true, capture: true });
+          });
+          var installedEvt = false;
+          window.addEventListener('appinstalled', function () { installedEvt = true; });
+          var related = 'non supporte';
+          if (navigator.getInstalledRelatedApps) {
+            related = 'en cours';
+            navigator.getInstalledRelatedApps().then(
+              function (a) { related = a.length ? 'OUI (' + a.length + ')' : 'aucune'; },
+              function (e) { related = 'erreur ' + e.name; }
+            );
+          }
+          var manifestInfo = 'en cours';
+          fetch('/manifest.json', { cache: 'no-store' }).then(function (r) {
+            return r.json().then(function (j) { manifestInfo = r.status + ' | ' + j.display + ' | ' + (j.icons || []).length + ' icones'; });
+          }).catch(function (e) { manifestInfo = 'ERREUR ' + e.name; });
+          var quota = '?';
+          if (navigator.storage && navigator.storage.estimate) {
+            navigator.storage.estimate().then(function (e) { quota = Math.round(e.quota / 1048576) + ' Mo'; });
+          }
+          var swInfo = 'en cours';
+          function refresh() {
+            var ua = navigator.userAgent;
+            var chrome = (ua.match(/Chrome\/(\d+)/) || [])[1] || '-';
+            var browser = /SamsungBrowser/.test(ua) ? 'Samsung Internet'
+              : /EdgA|Edg\//.test(ua) ? 'Edge'
+              : /OPR\//.test(ua) ? 'Opera'
+              : /FBAN|FBAV|Instagram|WhatsApp|TikTok/i.test(ua) ? 'appli integree'
+              : 'Chrome ' + chrome;
+            var modes = ['standalone', 'minimal-ui', 'fullscreen', 'browser'].filter(function (m) {
+              return window.matchMedia('(display-mode: ' + m + ')').matches;
+            });
+            if (navigator.serviceWorker) {
+              navigator.serviceWorker.getRegistrations().then(function (rs) {
+                swInfo = rs.length
+                  ? rs.map(function (r) { var w = r.active || r.waiting || r.installing; return (w ? w.state : '?') + (r.active ? '' : ' (pas actif)'); }).join(', ')
+                  : 'AUCUN';
+              });
+            }
+            var at = window.__pwaInstallPromptAt__;
+            box.textContent = [
+              'DIAG installation | ' + Math.round((performance.now() - t0) / 1000) + ' s sur la page | actions : ' + actions,
+              'Navigateur : ' + browser + (/; wv\)/.test(ua) ? ' (WebView)' : '') + ' | mobile=' + (navigator.userAgentData ? navigator.userAgentData.mobile : '?') + ' | mode : ' + (modes[0] || '?'),
+              'HTTPS=' + window.isSecureContext + ' | stockage=' + quota + ' | evenement gere=' + ('onbeforeinstallprompt' in window),
+              'EVENEMENT D\'INSTALLATION : ' + (at !== undefined ? 'RECU a ' + (at / 1000).toFixed(1) + ' s' : 'jamais recu'),
+              'Service worker : ' + swInfo + ' | controle la page=' + (navigator.serviceWorker && navigator.serviceWorker.controller ? 'oui' : 'non'),
+              'Enregistrement : ' + (window.__swReg__ || 'en attente'),
+              'Manifest : ' + manifestInfo,
+              'Deja installe : ' + related + ' | appinstalled=' + installedEvt
+            ].join('\n');
+          }
+          refresh();
+          setInterval(refresh, 1000);
+        } catch (e) {
+          // silencieux : le diagnostic ne doit jamais bloquer le site
         }
       })();
     </script>
