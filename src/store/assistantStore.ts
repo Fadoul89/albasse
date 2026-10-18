@@ -23,7 +23,6 @@ import {
   searchCatalog,
   thanksKind,
   tokenize,
-  trackingKind,
   wantsCancelOrder,
   wantsConfirmOrder,
   wantsEditOrder,
@@ -74,7 +73,7 @@ import {
 import { fetchCartStatus, fetchLoyaltyPoints, fetchPaymentNumbers, fetchProductForCart, getCatalog, getCategories, getCities, getStoreInfo, logAssistantEvent, startChatToday, toCard, type AssistantProduct } from '../lib/assistantData';
 import { clearIntent, currentDevice, markIntent } from '../lib/assistantAttribution';
 import { trackShortcutInstallIfNeeded } from '../lib/appInstallTracking';
-import { availability, familyPicks, inCatalog, isFamily, moreInCategory, perfumesInStock, planSuggestion, similarProducts, type PlannedChip } from '../lib/assistantInterest';
+import { availability, familyPicks, isFamily, moreInCategory, perfumesInStock, planSuggestion, similarProducts, type PlannedChip } from '../lib/assistantInterest';
 import * as bi from '../lib/browsingInsights';
 import { getBrowsingProfile, recordSuggestion, setTrackingChoice, trackingState } from '../lib/browsingTracker';
 import { createOrder, generateOrderId } from '../lib/orders';
@@ -140,7 +139,6 @@ export interface ChatAction {
     | 'orderAddress'
     | 'orderPage'
     | 'interest'
-    | 'privacy'
     | 'account';
   payload?: string;
   highlight?: boolean;
@@ -1757,7 +1755,6 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
   // -------------------------------------------------------------------------------------------
 
   const productKeyId = (key: string) => (key.startsWith('product:') ? key.slice('product:'.length) : null);
-  const privacyChip = (): ChatAction => ({ label: T().chip.privacy, kind: 'privacy' });
 
   const interestChip = (c: PlannedChip, key: string, kind: string, follow: boolean): ChatAction => ({
     label: c.label,
@@ -1865,73 +1862,19 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     await say(t.gone, { actions: again([]) });
   }
 
-  // « Qu'est-ce que j'ai regardé ? » : la vérité, ou l'aveu que Zara ne sait pas (suivi refusé, aucune donnée).
-  async function historyReply() {
-    const h = T().history;
-    if (Platform.OS !== 'web') {
-      await say(h.unavailable, { actions: [menuBtn()] });
-      return;
-    }
-    const state = trackingState();
-    if (!state.allowed) {
-      await say(state.choice === 'denied' ? h.denied : h.signal, { actions: [menuBtn()] });
-      return;
-    }
-    const profile = getBrowsingProfile();
-    let catalog: CatalogProduct[] = [];
-    try {
-      catalog = await getCatalog();
-    } catch {
-      await dataError();
-      return;
-    }
-    const shown = profile ? inCatalog(bi.recentProducts(profile, 4, Date.now()), catalog) : [];
-    if (!profile || shown.length === 0) {
-      await say(h.none, { actions: [sayBtn(T().chip.promotions, 'promotions'), menuBtn()] });
-      return;
-    }
-    await say(h.intro, { products: shown.map((x) => toCard(x.product)) });
-    const lines: string[] = [];
-    const repeated = inCatalog(bi.repeatedProducts(profile).slice(0, 3), catalog);
-    if (repeated.length > 0) lines.push(h.repeated(repeated.map((x) => `${x.product.name} (${h.times(x.record.views)})`).join(', ')));
-    const cats = bi
-      .topCategories(profile, 2)
-      .filter((c) => !!c.name)
-      .map((c) => categoryLabel(get().lang, c.key, c.name as string));
-    if (cats.length > 0) lines.push(h.categories(cats.join(', ')));
-    lines.push(h.outro);
-    await say(lines.join('\n'), { actions: [sayBtn(T().chip.advice, 'conseil'), menuBtn()] });
-  }
-
-  // Le suivi de navigation : ce qui est retenu, l'arrêter (tout est effacé), le reprendre.
-  async function trackingReply(text: string) {
+  // Le client écrit lui-même « ne me suis plus » : Zara obéit (tout ce qui était retenu est effacé). Elle ne parle jamais du suivi d'elle-même.
+  async function trackingReply() {
     const k = T().tracking;
     if (Platform.OS !== 'web') {
       await say(k.unavailable, { actions: [menuBtn()] });
       return;
     }
-    const kind = trackingKind(text) ?? 'about';
-    const state = trackingState();
-    if (kind === 'stop') {
-      if (state.choice === 'denied') {
-        await say(k.stoppedAlready, { actions: [menuBtn()] });
-        return;
-      }
-      setTrackingChoice('denied'); // efface ce qui était retenu sur l'appareil et demande l'effacement dans la base
-      await say(k.stopped, { actions: [menuBtn()] });
+    if (trackingState().choice === 'denied') {
+      await say(k.stoppedAlready, { actions: [menuBtn()] });
       return;
     }
-    if (kind === 'start') {
-      if (state.allowed) {
-        await say(k.resumedAlready, { actions: [menuBtn()] });
-        return;
-      }
-      setTrackingChoice('granted');
-      await say(k.resumed, { actions: [menuBtn()] });
-      return;
-    }
-    if (state.allowed) await say(k.about, { actions: [privacyChip(), menuBtn()] });
-    else await say(state.choice === 'denied' ? k.aboutDenied : k.aboutSignal, { actions: [privacyChip(), menuBtn()] });
+    setTrackingChoice('denied'); // efface ce qui était retenu sur l'appareil et demande l'effacement dans la base
+    await say(k.stopped, { actions: [menuBtn()] });
   }
 
   // -------------------------------------------------------------------------------------------
@@ -2043,10 +1986,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         await installReply();
         return;
       case 'tracking':
-        await trackingReply(text);
-        return;
-      case 'history':
-        await historyReply();
+        await trackingReply();
         return;
       case 'cart':
         await showCart();
