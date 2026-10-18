@@ -4,7 +4,7 @@
 // Parties : A (nouveau visiteur), B (contexte produit/panier), C (client connecte : chat, commande, mes commandes, admin),
 //           D (panne), E (clavier, fiche produit, admin cache, ordinateur), M (client avec compte reconnu et salue par son prenom).
 //           T (personnalite : politesse, compliments, adresse et numero personnels), O (Zara finalise l'achat dans le chat).
-//           F (programme de fidelite : grade, points, comment gagner). Y (conclure la vente, preuves vraies, packs), Z (rappel WhatsApp avec jour choisi et page admin), H (bouton de Zara : espace du milieu de la barre du bas, vibration, lumiere).
+//           F (programme de fidelite : grade, points, comment gagner). Y (conclure la vente, preuves vraies, packs), Z (rappel WhatsApp avec jour choisi et page admin), H (bouton de Zara : milieu de l'ecran, vibration, lumiere).
 //           Choisir avec PARTS=ABCDEMTOF.
 const { chromium, devices } = require('playwright');
 const { spawn } = require('child_process');
@@ -3270,7 +3270,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
 
   // =============================================== H. LE BOUTON DE ZARA : AU MILIEU, VIBRATION ET LUMIERE ===============================================
   if (PARTS.includes('H')) {
-    console.log('\n== H. bouton de Zara : dans l\'espace ouvert au milieu de la barre du bas, vibration et lumiere, bulle au-dessus, moins d\'animations respecte, plus de glissement');
+    console.log('\n== H. bouton de Zara : au milieu de l\'ecran (un peu plus haut qu\'avant), vibration et lumiere, bulle au-dessus, moins d\'animations respecte');
     const base = `http://localhost:${port}`;
     const open = async (v) => {
       await v.page.goto(`${base}/`, { waitUntil: 'load' });
@@ -3385,24 +3385,131 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.ctx.close();
     }
 
-    // --- H5. plus de glissement : le bouton reste a sa place (appuyer et glisser ne le deplace pas), et l'ancienne place retenue est effacee
+    // --- H5. appuyer et glisser (souris) : le bouton suit, reste dans l'ecran, retient sa place, et un glissement n'ouvre jamais Zara
     {
-      const v = await newVisitor(desk, { lang: 'fr', storage: { albasse_zara_name: 'Ali', albasse_zara_fab_pos: '{"dx":-100,"b":222}' } });
+      const v = await newVisitor(desk, { lang: 'fr', storage: { albasse_zara_name: 'Ali' } });
       await open(v);
       const fab = v.page.getByTestId('assistant-fab');
       const vp = v.page.viewportSize();
       const g0 = await geo(fab);
-      check('une ancienne place retenue (quand le bouton etait deplacable) est ignoree : le bouton est dans l\'espace du milieu de la barre du bas', Math.abs(g0.cx - vp.width / 2) <= 2 && Math.abs(vp.height - g0.bottom - 8) <= 2, g0);
-      check('et cette ancienne place est effacee de l\'appareil', (await v.page.evaluate(() => window.localStorage.getItem('albasse_zara_fab_pos'))) === null);
-      await v.page.mouse.move(g0.cx, g0.y + g0.h / 2);
-      await v.page.mouse.down();
-      await v.page.mouse.move(g0.cx - 80, g0.y - 150, { steps: 10 });
-      await v.page.mouse.up();
+      const drag = async (dx, dy) => {
+        const g = await geo(fab);
+        const x = g.cx;
+        const y = g.y + g.h / 2;
+        await v.page.mouse.move(x, y);
+        await v.page.mouse.down();
+        await v.page.mouse.move(x + dx / 2, y + dy / 2, { steps: 6 });
+        await v.page.mouse.move(x + dx, y + dy, { steps: 6 });
+        await v.page.mouse.up();
+        await sleep(600);
+      };
+      await drag(-100, -200);
+      const g1 = await geo(fab);
+      check('glisser : le bouton suit le doigt (100 px a gauche, 200 px plus haut, a 2 px pres)', Math.abs(g1.cx - (g0.cx - 100)) <= 2 && Math.abs(g1.y - (g0.y - 200)) <= 2, { g0, g1 });
+      check('un glissement n\'ouvre PAS Zara (meme quand on relache sur le bouton)', (await panelOf(v.page).count()) === 0 && (await v.page.getByTestId('assistant-fab').count()) === 1);
+      const stored = await v.page.evaluate(() => window.localStorage.getItem('albasse_zara_fab_pos'));
+      check('la place est retenue sur l\'appareil (100 px a gauche du milieu, et sa distance du bas)', stored === JSON.stringify({ dx: -100, b: Math.round(vp.height - g1.bottom) }), stored);
+      await v.page.reload({ waitUntil: 'load' });
+      await v.page.getByTestId('assistant-fab').waitFor({ timeout: 25000 });
+      await sleep(3500);
+      await v.page.keyboard.press('Escape'); // ferme la fenetre « offre speciale » si elle s'est ouverte
+      await sleep(500);
+      const g2 = await geo(fab);
+      check('apres rechargement de la page : le bouton est a la meme place', Math.abs(g2.cx - g1.cx) <= 2 && Math.abs(g2.y - g1.y) <= 2, { g1, g2 });
+      // jamais hors de l'ecran : en haut a gauche, puis en bas a droite
+      await drag(5 - g2.cx, 5 - (g2.y + g2.h / 2));
+      const g3 = await geo(fab);
+      check('tire trop loin en haut a gauche : le bouton reste dans l\'ecran (marge de 8 px a gauche, 56 px en haut)', Math.abs(g3.x - 8) <= 1 && Math.abs(g3.y - 56) <= 1, g3);
+      await drag(vp.width - 12 - g3.cx, vp.height - 150 - (g3.y + g3.h / 2));
+      const g4 = await geo(fab);
+      check('colle a droite, au-dessus de la barre du bas : le bouton reste dans l\'ecran (marge de 8 px a droite)', Math.abs(g4.x + g4.w - (vp.width - 8)) <= 1 && Math.abs(vp.height - g4.bottom - 119) <= 2, g4);
+      // lache dans la barre du bas : il revient dans l'espace du milieu, et la place retenue est effacee
+      await drag(vp.width / 2 - g4.cx, vp.height - 30 - (g4.y + g4.h / 2));
+      const g5 = await geo(fab);
+      const stored5 = await v.page.evaluate(() => window.localStorage.getItem('albasse_zara_fab_pos'));
+      check('lache dans la barre du bas (sur les onglets) : le bouton revient tout seul dans l\'espace du milieu, et la place retenue est effacee', Math.abs(g5.cx - vp.width / 2) <= 2 && Math.abs(vp.height - g5.bottom - 8) <= 2 && stored5 === null, { g5, stored5 });
+      await drag(-150, -300);
+      const g6 = await geo(fab);
+      check('on peut le redeplacer ensuite (150 px a gauche, 300 px plus haut)', Math.abs(g6.cx - (g5.cx - 150)) <= 2 && Math.abs(g6.y - (g5.y - 300)) <= 2, { g5, g6 });
+      await v.page.screenshot({ path: path.join(OUT, 'H5-bouton-deplace.png') });
+      // un simple toucher (sans glisser) ouvre toujours Zara, a sa nouvelle place
+      await sleep(500);
+      await fab.click();
+      await panelOf(v.page).waitFor({ timeout: 15000 });
+      check('un simple toucher a la nouvelle place ouvre Zara', true);
+      check('aucune erreur (glissement)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+
+    // --- H6. au doigt (vrais evenements tactiles) : la page ne defile pas, le bouton suit, un toucher simple ouvre Zara
+    {
+      const v = await newVisitor(phone, { lang: 'fr', storage: { albasse_zara_name: 'Ali' } });
+      await open(v);
+      const fab = v.page.getByTestId('assistant-fab');
+      const g0 = await geo(fab);
+      const cdp = await v.ctx.newCDPSession(v.page);
+      const touch = (type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y, id: 1 }] });
+      const x = g0.cx;
+      const y = g0.y + g0.h / 2;
+      const scrollBefore = await v.page.evaluate(() => [window.scrollY, ...[...document.querySelectorAll('*')].filter((e) => e.scrollTop > 0).map((e) => e.scrollTop)]);
+      await touch('touchStart', x, y);
+      for (let i = 1; i <= 12; i++) {
+        await touch('touchMove', x + (i * 60) / 12, y - (i * 150) / 12);
+        await sleep(16);
+      }
+      await touch('touchEnd', 0, 0);
       await sleep(600);
       const g1 = await geo(fab);
-      check('appuyer et glisser ne deplace plus le bouton (il reste a sa place)', Math.abs(g1.x - g0.x) <= 1 && Math.abs(g1.y - g0.y) <= 1, { g0, g1 });
-      check('aucune erreur (bouton fixe)', v.errs.length === 0, v.errs);
+      const scrollAfter = await v.page.evaluate(() => [window.scrollY, ...[...document.querySelectorAll('*')].filter((e) => e.scrollTop > 0).map((e) => e.scrollTop)]);
+      check('au doigt : le bouton suit (60 px a droite, 150 px plus haut, a 3 px pres)', Math.abs(g1.cx - (g0.cx + 60)) <= 3 && Math.abs(g1.y - (g0.y - 150)) <= 3, { g0, g1 });
+      check('au doigt : la page ne defile pas pendant le glissement', JSON.stringify(scrollBefore) === JSON.stringify(scrollAfter), { scrollBefore, scrollAfter });
+      check('au doigt : le glissement n\'ouvre pas Zara', (await panelOf(v.page).count()) === 0);
+      await sleep(500);
+      const x1 = g1.cx;
+      const y1 = g1.y + g1.h / 2;
+      await touch('touchStart', x1, y1);
+      await sleep(60);
+      await touch('touchEnd', 0, 0);
+      await panelOf(v.page).waitFor({ timeout: 15000 });
+      check('au doigt : un simple toucher ouvre Zara', true);
+      check('aucune erreur (glissement au doigt)', v.errs.length === 0, v.errs);
       await v.ctx.close();
+    }
+
+    // --- H7. la bulle de bienvenue suit le bouton : sur le cote, ou en dessous quand le bouton est tout en haut
+    {
+      const v = await newVisitor(desk, { lang: 'fr', storage: { albasse_zara_name: 'Ali' } });
+      await open(v);
+      const fab = v.page.getByTestId('assistant-fab');
+      const vp = v.page.viewportSize();
+      const g = await geo(fab);
+      await v.page.mouse.move(g.cx, g.y + g.h / 2);
+      await v.page.mouse.down();
+      await v.page.mouse.move(g.cx - 60, g.y - 200, { steps: 8 });
+      await v.page.mouse.move(12, 70, { steps: 8 });
+      await v.page.mouse.up();
+      await sleep(500);
+      const bubble = v.page.getByRole('button', { name: 'Ouvrir la discussion avec Zara Kings' });
+      await bubble.waitFor({ timeout: 15000 });
+      const b = await geo(bubble);
+      const g2 = await geo(fab);
+      check('bouton tout en haut a gauche : la bulle passe EN DESSOUS du bouton et reste dans l\'ecran', b.y >= g2.bottom + 6 && b.x >= 0 && b.x + b.w <= vp.width, { b, g2 });
+      await v.page.screenshot({ path: path.join(OUT, 'H7-bulle-sous-le-bouton.png') });
+      await v.ctx.close();
+      const w = await newVisitor(desk, { lang: 'fr', storage: { albasse_zara_name: 'Ali' } });
+      await open(w);
+      const gw = await geo(w.page.getByTestId('assistant-fab'));
+      await w.page.mouse.move(gw.cx, gw.y + gw.h / 2);
+      await w.page.mouse.down();
+      await w.page.mouse.move(vp.width - 12, gw.y - 200, { steps: 10 });
+      await w.page.mouse.up();
+      await sleep(500);
+      const bubble2 = w.page.getByRole('button', { name: 'Ouvrir la discussion avec Zara Kings' });
+      await bubble2.waitFor({ timeout: 15000 });
+      const b2 = await geo(bubble2);
+      const g3 = await geo(w.page.getByTestId('assistant-fab'));
+      check('bouton colle a droite : la bulle reste au-dessus, entiere dans l\'ecran, et toujours au-dessus du bouton', b2.bottom <= g3.y - 6 && b2.x >= 0 && b2.x + b2.w <= vp.width, { b2, g3 });
+      await w.ctx.close();
     }
   }
 
