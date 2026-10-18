@@ -120,6 +120,17 @@ export function AdminDashboardScreen() {
               <Text style={styles.sourceLinkArrow}>→</Text>
             </Pressable>
 
+            <Pressable style={styles.sourceLinkCard} onPress={() => navigation.navigate('AdminZaraStats')} testID="dashboard-zara-link">
+              <Text style={styles.sourceLinkIcon}>💬</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sourceLinkTitle}>Statistiques de Zara</Text>
+                <Text style={styles.sourceLinkSubtitle}>
+                  Ventes, comptes créés et installations grâce à Zara, iPhone / Android
+                </Text>
+              </View>
+              <Text style={styles.sourceLinkArrow}>→</Text>
+            </Pressable>
+
             <Section title="📡 Performance par source (résumé)">
               {stats.sourcePerformance.length === 0 ? (
                 <Text style={styles.emptyText}>Pas encore de données.</Text>

@@ -6,6 +6,8 @@ import { useToastStore } from './toastStore';
 import { useFavoritesStore } from './favoritesStore';
 import type { Profile } from '../types';
 import type { ProfileChanges } from '../lib/profileEdit';
+import { clearIntent, readIntent } from '../lib/assistantAttribution';
+import { isMissingColumn } from '../lib/dbErrors';
 
 export interface SignUpDetails {
   fullName: string;
@@ -79,6 +81,17 @@ async function recordLogin(userId: string) {
       login_count: (current?.login_count ?? 0) + 1,
     })
     .eq('id', userId);
+
+  // Première connexion d'un compte tout neuf (inscription, e-mail confirmé plus tard, ou Google) : si le client vient de toucher
+  // « Créer mon compte » dans le chat de Zara, le compte est compté « grâce à Zara », avec son appareil. Demande à part : si la colonne
+  // n'existe pas encore dans la base, la connexion elle-même n'est jamais touchée.
+  if (current && !current.login_count) {
+    const intent = readIntent('signup');
+    if (intent) {
+      const { error } = await supabase.from('profiles').update({ assistant_device: intent.device }).eq('id', userId);
+      if (!error || isMissingColumn(error, 'assistant_device')) clearIntent('signup');
+    }
+  }
 
   attachUserToSession(userId);
 }

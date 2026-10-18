@@ -19,6 +19,7 @@ export type RootStackParamList = {
   AdminCustomerDetail: { userId: string };
   AdminDashboard: undefined;
   AdminSourcePerformance: undefined;
+  AdminZaraStats: undefined;
   AdminAbandonedCarts: undefined;
   AdminNotifications: undefined;
   AdminPromotions: undefined;

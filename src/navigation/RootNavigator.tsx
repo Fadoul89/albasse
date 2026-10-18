@@ -34,6 +34,7 @@ import { AdminCustomersScreen } from '../screens/admin/AdminCustomersScreen';
 import { AdminCustomerDetailScreen } from '../screens/admin/AdminCustomerDetailScreen';
 import { AdminDashboardScreen } from '../screens/admin/AdminDashboardScreen';
 import { AdminSourcePerformanceScreen } from '../screens/admin/AdminSourcePerformanceScreen';
+import { AdminZaraStatsScreen } from '../screens/admin/AdminZaraStatsScreen';
 import { AdminAbandonedCartsScreen } from '../screens/admin/AdminAbandonedCartsScreen';
 import { AdminNotificationsScreen } from '../screens/admin/AdminNotificationsScreen';
 import { AdminPromotionsScreen } from '../screens/admin/AdminPromotionsScreen';
@@ -90,6 +91,7 @@ const linking: LinkingOptions<RootStackParamList> = {
       ResetPassword: 'reinitialiser-mot-de-passe',
       AdminDashboard: 'admin/tableau-de-bord',
       AdminSourcePerformance: 'admin/performance-par-source',
+      AdminZaraStats: 'admin/statistiques-zara',
       AdminAbandonedCarts: 'admin/paniers-abandonnes',
       AdminNotifications: 'admin/notifications',
       AdminPromotions: 'admin/promotions',
@@ -213,6 +215,7 @@ export function RootNavigator() {
             <Stack.Screen name="AdminCustomerDetail" component={AdminCustomerDetailScreen} />
             <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
             <Stack.Screen name="AdminSourcePerformance" component={AdminSourcePerformanceScreen} />
+            <Stack.Screen name="AdminZaraStats" component={AdminZaraStatsScreen} />
             <Stack.Screen name="AdminAbandonedCarts" component={AdminAbandonedCartsScreen} />
             <Stack.Screen name="AdminNotifications" component={AdminNotificationsScreen} />
             <Stack.Screen name="AdminPromotions" component={AdminPromotionsScreen} />

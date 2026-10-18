@@ -21,6 +21,7 @@ import { navigationRef } from '../navigation/navigationRef';
 import { useAssistantStore, type ChatAction, type ChatImage, type ChatMessage } from '../store/assistantStore';
 import type { AssistantProduct } from '../lib/assistantData';
 import { hasArabic, type Lang } from '../lib/assistantLang';
+import { currentDevice, markIntent } from '../lib/assistantAttribution';
 import { CartBar, ChatCart } from './AssistantCart';
 import { texts } from '../lib/assistantText';
 import { ASSISTANT_NAME, WHATSAPP_URL } from '../constants/assistant';
@@ -294,6 +295,7 @@ export function AssistantPanel() {
         Linking.openURL(WHATSAPP_URL);
         return;
       case 'register':
+        markIntent('signup', currentDevice()); // si le compte se crée, il sera compté « grâce à Zara »
         go(() => navigationRef.navigate('Register'));
         return;
       case 'login':

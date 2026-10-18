@@ -12,7 +12,7 @@ const fs = require('fs');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const dist = process.argv[2] || '../../dist';
 const port = process.argv[3] || '4333';
-const PARTS = (process.env.PARTS || 'ALKPMRTOFBCDE').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMRSTOFBCDE').toUpperCase();
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
 fs.mkdirSync(OUT, { recursive: true });
 const KEY = process.env.SUPABASE_ANON_KEY;
@@ -40,7 +40,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
 
   // Un contexte = un visiteur. Lecture seule vers la base ; le reste d'internet est coupe.
   // rank : rang du jour renvoye par la fonction de la base (null : fonction pas installee). fakeUser : compte simule (token : reponse a une connexion par mot de passe ; delay : lenteur du profil en ms). fakeOrders : { list: [...], patches: [] } = fausse table des commandes.
-  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null } = {}) {
+  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null } = {}) {
     const ctx = await b.newContext(opts);
     if (cookies) await ctx.addCookies(cookies);
     if (lang) storage = { albasse_zara_lang: lang, ...storage };
@@ -58,6 +58,11 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     }, [storage, session]);
     const writes = [];
     const rpcCalls = [];
+    // statistiques de Zara : ce que le site envoie a la base (appareil du compteur, gestes d'installation, installations, demandes de la page admin)
+    const chatStarts = [];
+    const events = [];
+    const installs = [];
+    const statsCalls = [];
     const json = (route, body, status = 200) =>
       route.fulfill({ status, headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' }, body: JSON.stringify(body) });
     await ctx.route('**/*', (route) => {
@@ -70,8 +75,29 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         if (blockPath && u.pathname.includes(blockPath)) return route.abort();
         // « Vous etes mon Ne client aujourd'hui » : la fonction de la base est simulee (absente si rank est null)
         if (u.pathname === '/rest/v1/rpc/assistant_chat_start' && m === 'POST') {
+          const body = JSON.parse(req.postData() || '{}');
           rpcCalls.push(Date.now());
+          chatStarts.push(body);
+          // oldRank : l'ancienne fonction de la base (sans appareil) : l'appel avec l'appareil est refuse comme « fonction introuvable »
+          if (oldRank && body.p_device !== undefined) return json(route, { code: 'PGRST202', message: 'Could not find the function public.assistant_chat_start(p_device) in the schema cache' }, 404);
           return rank === null ? json(route, { message: 'function not found' }, 404) : json(route, rank);
+        }
+        if (u.pathname === '/rest/v1/rpc/assistant_log_event' && m === 'POST') {
+          events.push(JSON.parse(req.postData() || '{}'));
+          return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } });
+        }
+        if (u.pathname === '/rest/v1/app_installs' && m === 'POST') {
+          const body = JSON.parse(req.postData() || '{}');
+          installs.push(body);
+          // noStatsColumns : le script de la base n'est pas applique, la colonne via_assistant n'existe pas
+          if (noStatsColumns && body.via_assistant !== undefined) return json(route, { code: 'PGRST204', message: "Could not find the 'via_assistant' column of 'app_installs' in the schema cache" }, 400);
+          return route.fulfill({ status: 201, headers: { 'access-control-allow-origin': '*' }, body: '' });
+        }
+        // la page « Statistiques de Zara » : fakeStats.replies = reponses a donner dans l'ordre (la derniere se repete)
+        if (fakeStats && u.pathname === '/rest/v1/rpc/assistant_stats' && m === 'POST') {
+          statsCalls.push(JSON.parse(req.postData() || '{}'));
+          const reply = fakeStats.replies[Math.min(statsCalls.length - 1, fakeStats.replies.length - 1)];
+          return json(route, reply.body, reply.status || 200);
         }
         if (fakeUser && u.pathname === '/auth/v1/user') return json(route, fakeUser.auth);
         if (fakeUser && fakeUser.token && u.pathname === '/auth/v1/token' && m === 'POST') return json(route, fakeUser.token);
@@ -86,6 +112,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         if (fakeUser && fakeUser.editable && u.pathname === '/rest/v1/profiles' && m === 'PATCH' && u.searchParams.get('id') === 'eq.' + fakeUser.auth.id) {
           const body = JSON.parse(req.postData() || '{}');
           fakeUser.patches.push(body);
+          if (fakeUser.rejectColumn && body[fakeUser.rejectColumn] !== undefined) return json(route, { code: 'PGRST204', message: `Could not find the '${fakeUser.rejectColumn}' column of 'profiles' in the schema cache` }, 400);
           if (fakeUser.failNext > 0) {
             fakeUser.failNext--;
             return json(route, { message: 'service indisponible', code: 'XX000' }, 500);
@@ -103,6 +130,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
           if (m === 'POST') {
             const body = JSON.parse(req.postData() || '{}');
             (fakeOrders.attempts = fakeOrders.attempts || []).push(body);
+            if (fakeOrders.rejectColumn && body[fakeOrders.rejectColumn] !== undefined) return json(route, { code: 'PGRST204', message: `Could not find the '${fakeOrders.rejectColumn}' column of 'orders' in the schema cache` }, 400);
             if (fakeOrders.failNext > 0) {
               fakeOrders.failNext--;
               return json(route, { message: 'service indisponible', code: 'XX000' }, 500);
@@ -143,7 +171,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     page.on('console', (msg) => {
       if (msg.type() === 'error' && !/Failed to load resource|net::ERR|Erreur creation session visiteur/.test(msg.text())) errs.push(msg.text());
     });
-    return { ctx, page, errs, writes, rpcCalls };
+    return { ctx, page, errs, writes, rpcCalls, chatStarts, events, installs, statsCalls };
   }
 
   const panelOf = (p) => p.getByTestId('assistant-panel');
@@ -1613,6 +1641,308 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     }
   }
 
+  // =============================================== S. STATISTIQUES DE ZARA ===============================================
+  if (PARTS.includes('S')) {
+    console.log('\n== S. statistiques de Zara : suivi (appareil, comptes, installations, gestes) et page « Statistiques de Zara » (administrateur)');
+    const iphone = { ...devices['iPhone 13'], viewport: { width: 390, height: 800 } };
+    const uid = '11111111-1111-4111-8111-111111111111';
+    const JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMTExMTExMS0xMTExLTQxMTEtODExMS0xMTExMTExMTExMTEiLCJleHAiOjQxMDI0NDQ4MDAsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.c2ln';
+    const accountOf = (profile = {}, opts = {}) => {
+      const auth = { id: uid, aud: 'authenticated', role: 'authenticated', email: 'test@example.com', app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' };
+      const token = { access_token: JWT, refresh_token: 'fake-refresh', token_type: 'bearer', expires_in: 3600, expires_at: 4102444800, user: auth };
+      return { auth, token, session: JSON.stringify(token), editable: true, patches: [], ...opts, profile: { id: uid, email: 'test@example.com', full_name: 'Ahmed Hassan', phone: '66123456', whatsapp_number: null, profession: null, region: null, country: 'Tchad', address: null, loyalty_points: 0, banned: false, role: 'customer', is_admin: false, is_affiliate: false, ...profile } };
+    };
+    const SESSION_KEY = 'sb-xtitsmmccpkelxfjyqyh-auth-token';
+    const openChat = async (v, name = /Discuter avec Zara Kings|التحدث مع زارا كينغز/) => {
+      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await v.page.getByRole('button', { name }).click();
+    };
+    // la boite d'installation de Chrome, simulee : outcome = ce que le client y repond
+    const fakePromptWith = (v, outcome) => v.ctx.addInitScript(`window.__fakePromptCalls = 0; window.__pwaInstallPrompt__ = { prompt: async () => { window.__fakePromptCalls++; }, userChoice: Promise.resolve({ outcome: ${JSON.stringify(outcome)} }) };`);
+    const reachQuestion = async (v) => {
+      await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?/);
+      await tap(v.page, 'Promotions', /promotion|promo|offre/i);
+      await sleep(1500);
+      await ask(v.page, 'conseil', /Je suis là pour vous conseiller\. Que cherchez-vous \?/);
+      await waitText(v.page, /Avez-vous déjà installé l’application Albasse Shopping/);
+    };
+    const eventNames = (v) => v.events.map((e) => `${e.p_event}:${e.p_device}`);
+
+    // --- S1. chaque conversation envoie l'appareil au compteur ; l'ancienne fonction de la base (sans appareil) marche toujours
+    {
+      const a = await newVisitor(phone, { lang: 'fr', storage: { albasse_zara_name: 'Ali' }, rank: 5 });
+      await openChat(a);
+      await waitText(a.page, /Vous êtes mon 5ᵉ client aujourd’hui/);
+      check('Android : le compteur de conversations recoit l\'appareil (Android), une seule fois', a.chatStarts.length === 1 && a.chatStarts[0].p_device === 'Android', a.chatStarts);
+      await a.ctx.close();
+      const i = await newVisitor(iphone, { lang: 'fr', storage: { albasse_zara_name: 'Ali' }, rank: 3 });
+      await openChat(i);
+      await waitText(i.page, /Vous êtes mon 3ᵉ client aujourd’hui/);
+      check('iPhone : le compteur recoit « iPhone »', i.chatStarts.length === 1 && i.chatStarts[0].p_device === 'iPhone', i.chatStarts);
+      await i.ctx.close();
+      const d = await newVisitor({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 }, { lang: 'fr', storage: { albasse_zara_name: 'Ali' }, rank: 2 });
+      await openChat(d);
+      await waitText(d.page, /Vous êtes mon 2ᵉ client aujourd’hui/);
+      check('ordinateur : le compteur recoit « PC »', d.chatStarts.length === 1 && d.chatStarts[0].p_device === 'PC', d.chatStarts);
+      await d.ctx.close();
+      const o = await newVisitor(phone, { lang: 'fr', storage: { albasse_zara_name: 'Ali' }, rank: 4, oldRank: true });
+      await openChat(o);
+      await waitText(o.page, /Vous êtes mon 4ᵉ client aujourd’hui/);
+      check('ancienne fonction de la base (script pas encore applique) : Zara refait UN appel sans appareil, le numero de client s\'affiche quand meme', o.chatStarts.length === 2 && o.chatStarts[0].p_device === 'Android' && o.chatStarts[1].p_device === undefined, o.chatStarts);
+      check('aucune erreur (compteur de conversations)', a.errs.length === 0 && i.errs.length === 0 && d.errs.length === 0 && o.errs.length === 0, [a.errs, i.errs, d.errs, o.errs]);
+      await o.ctx.close();
+    }
+
+    // --- S2. les gestes de Zara autour de l'installation sont notes avec l'appareil (question, deja installee, plus tard, aide iPhone)
+    {
+      const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
+      await fakePromptWith(v, 'accepted');
+      await openChat(v);
+      await reachQuestion(v);
+      await sleep(600);
+      check('Android : la question posee est notee (install_question, Android)', eventNames(v).join('|') === 'install_question:Android', v.events);
+      await chip(v.page, 'Oui, déjà installée').click();
+      await waitText(v.page, /Parfait, merci/);
+      await sleep(600);
+      check('Android : « Oui, deja installee » est note (install_already)', eventNames(v).join('|') === 'install_question:Android|install_already:Android', v.events);
+      check('aucune erreur (gestes, Android)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+      const w = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
+      await fakePromptWith(w, 'accepted');
+      await openChat(w);
+      await reachQuestion(w);
+      await chip(w.page, 'Plus tard').click();
+      await waitText(w.page, /je ne vous le propose plus pour le moment/);
+      await sleep(600);
+      check('« Plus tard » est note (install_later)', eventNames(w).join('|') === 'install_question:Android|install_later:Android', w.events);
+      await w.ctx.close();
+      const x = await newVisitor(iphone, { storage: { albasse_zara_name: 'Ali' } });
+      await openChat(x);
+      await reachQuestion(x);
+      await chip(x.page, 'Voir comment installer').click();
+      await waitText(x.page, /Sur iPhone :/);
+      await sleep(600);
+      check('iPhone : la question puis l\'aide avec la photo sont notees (install_ios_guide, iPhone)', eventNames(x).join('|') === 'install_question:iPhone|install_ios_guide:iPhone', x.events);
+      check('aucune erreur (gestes, iPhone)', x.errs.length === 0, x.errs);
+      await x.ctx.close();
+    }
+
+    // --- S3. installations : « grace a Zara » seulement si le client a touche « Installer » chez Zara et accepte
+    {
+      const a = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
+      await fakePromptWith(a, 'accepted');
+      await openChat(a);
+      await waitText(a.page, /Créez votre compte gratuit(?:, Ali)?/);
+      await chip(a.page, 'Installer Albasse Shopping').click();
+      await waitText(a.page, /C’est installé !/);
+      await sleep(800);
+      const row = a.installs[0] || {};
+      check('installation acceptee depuis Zara : comptee UNE fois, « grace a Zara », avec l\'appareil et le navigateur', a.installs.length === 1 && row.via_assistant === true && row.install_type === 'shortcut' && row.device_type === 'Android' && row.browser === 'Chrome' && /^[0-9a-f-]{36}$/.test(row.device_id), a.installs);
+      check('la memoire « vient de Zara » est effacee apres le comptage', (await a.page.evaluate(() => localStorage.getItem('albasse_zara_install_intent'))) === null);
+      check('aucune erreur (installation via Zara)', a.errs.length === 0, a.errs);
+      await a.ctx.close();
+
+      const b = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
+      await b.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(3000);
+      await b.page.evaluate(() => window.dispatchEvent(new Event('appinstalled')));
+      await sleep(800);
+      check('installation faite autrement (menu de Chrome, sans passer par Zara) : comptee, mais PAS « grace a Zara »', b.installs.length === 1 && b.installs[0].via_assistant === undefined && b.installs[0].device_type === 'Android', b.installs);
+      await b.ctx.close();
+
+      const c = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
+      await fakePromptWith(c, 'dismissed');
+      await openChat(c);
+      await waitText(c.page, /Créez votre compte gratuit(?:, Ali)?/);
+      await chip(c.page, 'Installer Albasse Shopping').click();
+      await waitText(c.page, /Pas de souci 😊/);
+      check('refus dans la boite de Chrome : rien n\'est compte, la memoire « vient de Zara » est effacee', c.installs.length === 0 && (await c.page.evaluate(() => localStorage.getItem('albasse_zara_install_intent'))) === null, c.installs);
+      await c.page.evaluate(() => window.dispatchEvent(new Event('appinstalled')));
+      await sleep(800);
+      check('installe plus tard par un autre chemin apres un refus : PAS « grace a Zara »', c.installs.length === 1 && c.installs[0].via_assistant === undefined, c.installs);
+      await c.ctx.close();
+
+      const d = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' }, noStatsColumns: true });
+      await fakePromptWith(d, 'accepted');
+      await openChat(d);
+      await waitText(d.page, /Créez votre compte gratuit(?:, Ali)?/);
+      await chip(d.page, 'Installer Albasse Shopping').click();
+      await waitText(d.page, /C’est installé !/);
+      await sleep(1200);
+      check('base sans la colonne de Zara : l\'installation est comptee QUAND MEME (2e essai sans la colonne)', d.installs.length === 2 && d.installs[0].via_assistant === true && d.installs[1].via_assistant === undefined && d.installs[1].install_type === 'shortcut', d.installs);
+      check('aucune erreur (installation sans colonne de Zara)', d.errs.length === 0, d.errs);
+      await d.ctx.close();
+    }
+
+    // --- S4. comptes : « Creer mon compte » touche chez Zara, puis premiere connexion du nouveau compte = « grace a Zara »
+    {
+      const login = async (c) => {
+        await c.page.goto(`http://localhost:${port}/connexion`, { waitUntil: 'load' });
+        await c.page.getByPlaceholder('Email').fill('test@example.com');
+        await c.page.getByPlaceholder('Mot de passe').fill('motdepasse-test');
+        await c.page.getByText('Se connecter', { exact: true }).first().click();
+        await sleep(3500); // la page /connexion ouverte directement n'a pas de page precedente : on attend l'enregistrement de la connexion, pas un changement de page
+      };
+      const withZaraRegister = async (fu, extra = {}) => {
+        const c = await newVisitor(phone, { lang: 'fr', storage: { albasse_zara_name: 'Ali' }, fakeUser: fu, ...extra });
+        await openChat(c);
+        await waitText(c.page, /Créez votre compte gratuit(?:, Ali)?/);
+        await chip(c.page, 'Créer mon compte').click();
+        await c.page.waitForURL(/\/inscription/, { timeout: 15000 });
+        return c;
+      };
+      const forZara = (fu) => fu.patches.filter((p) => p.assistant_device !== undefined);
+
+      const fu1 = accountOf({ login_count: 0 });
+      const c1 = await withZaraRegister(fu1);
+      const intent = await c1.page.evaluate(() => JSON.parse(localStorage.getItem('albasse_zara_signup_intent') || 'null'));
+      check('« Creer mon compte » touche chez Zara : retenu avec l\'appareil (Android)', intent && intent.device === 'Android' && Math.abs(Date.now() - intent.at) < 60000, intent);
+      await login(c1);
+      check('premiere connexion du compte : note « grace a Zara » avec l\'appareil, UNE fois', forZara(fu1).length === 1 && forZara(fu1)[0].assistant_device === 'Android' && fu1.patches.some((p) => p.login_count === 1), fu1.patches);
+      check('la memoire est effacee apres le comptage (un seul compte compte)', (await c1.page.evaluate(() => localStorage.getItem('albasse_zara_signup_intent'))) === null);
+      check('aucune erreur (compte grace a Zara)', c1.errs.length === 0, c1.errs);
+      await c1.ctx.close();
+
+      const fu2 = accountOf({ login_count: 0 });
+      const c2 = await newVisitor(phone, { lang: 'fr', storage: { albasse_zara_name: 'Ali' }, fakeUser: fu2 });
+      await login(c2);
+      check('compte cree SANS passer par Zara : rien n\'est note « grace a Zara »', forZara(fu2).length === 0 && fu2.patches.some((p) => p.login_count === 1), fu2.patches);
+      await c2.ctx.close();
+
+      const fu3 = accountOf({ login_count: 7 });
+      const c3 = await withZaraRegister(fu3);
+      await login(c3);
+      check('client deja connu (il se connecte juste) qui a touche le bouton : PAS compte comme nouveau compte', forZara(fu3).length === 0, fu3.patches);
+      await c3.ctx.close();
+
+      const fu4 = accountOf({ login_count: 0 }, { rejectColumn: 'assistant_device' });
+      const c4 = await withZaraRegister(fu4);
+      await login(c4);
+      check('base sans la colonne de Zara : la connexion reussit quand meme, aucun message d\'erreur', fu4.patches.some((p) => p.login_count === 1) && forZara(fu4).length === 1 && (await c4.page.getByText(/Erreur technique|Connexion impossible/).count()) === 0 && (await c4.page.evaluate(() => localStorage.getItem('albasse_zara_signup_intent'))) === null);
+      check('aucune erreur (compte, base sans colonne)', c4.errs.length === 0, c4.errs);
+      await c4.ctx.close();
+    }
+
+    // --- S5. la page « Statistiques de Zara » (administrateur)
+    {
+      const STATS = {
+        conversations: [{ device: 'iPhone', n: 1 }, { device: 'Android', n: 1 }, { device: 'Autre', n: 2 }],
+        events: [{ event: 'install_question', device: 'iPhone', n: 1 }, { event: 'install_question', device: 'Android', n: 1 }, { event: 'install_ios_guide', device: 'iPhone', n: 1 }, { event: 'install_already', device: 'Android', n: 1 }, { event: 'install_later', device: 'Autre', n: 1 }],
+        orders: [{ device: 'Android', status: 'pending', n: 1, amount: 10000 }, { device: 'Android', status: 'delivered', n: 1, amount: 20000 }, { device: 'iPhone', status: 'paid', n: 1, amount: 5000 }, { device: 'Android', status: 'cancelled', n: 1, amount: 3000 }],
+        accounts: [{ device: 'Android', n: 2 }, { device: 'iPhone', n: 1 }],
+        installs: [{ device: 'Android', n: 1 }, { device: 'iPhone', n: 1 }],
+        totals: { orders: 4, orders_amount: 42000, accounts: 5, installs: 3 },
+      };
+      const norm = (t) => t.replace(/[\s  ]+/g, ' ').trim();
+      const text = async (c, id) => norm(await c.page.getByTestId(id).innerText());
+      const openStats = async (fakeStats, admin = true) => {
+        const fu = accountOf({ is_admin: admin, full_name: 'Admin Albasse' });
+        const c = await newVisitor(phone, { lang: 'fr', storage: { [SESSION_KEY]: fu.session }, fakeUser: fu, fakeStats });
+        await c.page.goto(`http://localhost:${port}/admin/statistiques-zara`, { waitUntil: 'load' });
+        return c;
+      };
+
+      // chiffres, appareils, parcours
+      {
+        const c = await openStats({ replies: [{ body: STATS }] });
+        await c.page.getByTestId('zara-stat-sales-value').waitFor({ timeout: 25000 });
+        check('ventes de Zara : 3 commandes (l\'annulee n\'est pas comptee), 35 000 FCFA, dont 1 livree de 20 000, 75 % des commandes de la boutique', (await text(c, 'zara-stat-sales-value')) === '3' && /35 000 FCFA/.test(await text(c, 'zara-stat-sales')) && /dont livrées : 1 \(20 000 FCFA\)/.test(await text(c, 'zara-stat-sales')) && /75 % des commandes de la boutique \(4\)/.test(await text(c, 'zara-stat-sales')) && /1 annulée\(s\), non comptée\(s\)/.test(await text(c, 'zara-stat-sales')), await text(c, 'zara-stat-sales'));
+        check('comptes crees grace a Zara : 3, soit 60 % des nouveaux comptes (5)', (await text(c, 'zara-stat-accounts-value')) === '3' && /60 % des nouveaux comptes \(5\)/.test(await text(c, 'zara-stat-accounts')), await text(c, 'zara-stat-accounts'));
+        check('installations grace a Zara : 2, soit 66,7 % des installations (3), 1 aide iPhone envoyee', (await text(c, 'zara-stat-installs-value')) === '2' && /66,7 % des installations \(3\)/.test(await text(c, 'zara-stat-installs')) && /Aides iPhone envoyées : 1/.test(await text(c, 'zara-stat-installs')), await text(c, 'zara-stat-installs'));
+        check('conversations : 4, soit 75 ventes pour 100 conversations', (await text(c, 'zara-stat-chats-value')) === '4' && /75 vente\(s\) pour 100 conversations/.test(await text(c, 'zara-stat-chats')), await text(c, 'zara-stat-chats'));
+        check('par appareil : iPhone 1 conversation, 1 vente (5 000), 1 compte, 1 installation', (await text(c, 'zara-device-iPhone')) === 'iPhone 1 1 5 000 1 1', await text(c, 'zara-device-iPhone'));
+        check('par appareil : Android 1 conversation, 2 ventes (30 000), 2 comptes, 1 installation', (await text(c, 'zara-device-Android')) === 'Android 1 2 30 000 2 1', await text(c, 'zara-device-Android'));
+        check('par appareil : tablette et ordinateur a zero ; « Autre / inconnu » affiche (2 conversations)', (await text(c, 'zara-device-Tablette')) === 'Tablette 0 0 0 0' && (await text(c, 'zara-device-PC')) === 'Ordinateur 0 0 0 0' && (await text(c, 'zara-device-Autre')) === 'Autre / inconnu 2 0 0 0');
+        check('parcours d\'installation : 2 questions, 1 deja installee, 1 plus tard, 1 aide iPhone, 2 installees', (await text(c, 'zara-funnel-questions')).endsWith(' 2') && (await text(c, 'zara-funnel-already')).endsWith(' 1') && (await text(c, 'zara-funnel-later')).endsWith(' 1') && (await text(c, 'zara-funnel-ios')).endsWith(' 1') && (await text(c, 'zara-funnel-done')).endsWith(' 2'));
+        check('la page dit comment on compte (iPhone non confirmable, jours a l\'heure du Tchad)', (await c.page.getByText(/Sur iPhone, le site ne peut pas savoir/).count()) === 1 && (await c.page.getByText(/minuit, heure du Tchad/).count()) === 1);
+        await c.page.screenshot({ path: path.join(OUT, 'S1-statistiques-zara.png') });
+        await c.page.setViewportSize({ width: 390, height: 1900 });
+        await sleep(800);
+        await c.page.screenshot({ path: path.join(OUT, 'S3-statistiques-zara-complet.png') });
+        await c.page.setViewportSize({ width: 390, height: 800 });
+        const b = c.statsCalls[0] || {};
+        check('1re demande : 30 jours (debut a minuit heure du Tchad = 23:00 UTC), sans fin', c.statsCalls.length === 1 && /T23:00:00\.000Z$/.test(b.p_since) && b.p_until === null, c.statsCalls);
+        check('aucune erreur (page des statistiques)', c.errs.length === 0, c.errs);
+        // periodes
+        await c.page.getByTestId('zara-period-today').click();
+        await sleep(1200);
+        const today = c.statsCalls[c.statsCalls.length - 1];
+        check('« Aujourd\'hui » : depuis minuit heure du Tchad, sans fin', /T23:00:00\.000Z$/.test(today.p_since) && today.p_until === null && Date.now() - Date.parse(today.p_since) < 24 * 3600 * 1000 + 60000 && Date.parse(today.p_since) <= Date.now(), today);
+        await c.page.getByTestId('zara-period-yesterday').click();
+        await sleep(1200);
+        const yday = c.statsCalls[c.statsCalls.length - 1];
+        check('« Hier » : de minuit a minuit (24 h exactement), fin exclue', Date.parse(yday.p_until) - Date.parse(yday.p_since) === 24 * 3600 * 1000 && Date.parse(yday.p_until) === Date.parse(today.p_since), yday);
+        await c.page.getByTestId('zara-period-7d').click();
+        await sleep(1200);
+        const w = c.statsCalls[c.statsCalls.length - 1];
+        check('« 7 jours » : aujourd\'hui + 6 jours avant', Date.parse(today.p_since) - Date.parse(w.p_since) === 6 * 24 * 3600 * 1000 && w.p_until === null, w);
+        await c.page.getByTestId('zara-period-all').click();
+        await sleep(1200);
+        const all = c.statsCalls[c.statsCalls.length - 1];
+        check('« Depuis le debut » : sans limite', all.p_since === null && all.p_until === null, all);
+        check('une demande par periode choisie, rien d\'autre (4 + la 1re)', c.statsCalls.length === 5, c.statsCalls.length);
+        await c.ctx.close();
+      }
+
+      // pas encore active (script pas applique)
+      {
+        const c = await openStats({ replies: [{ status: 404, body: { code: 'PGRST202', message: 'Could not find the function public.assistant_stats(p_since, p_until) in the schema cache' } }] });
+        await c.page.getByTestId('zara-stats-not-installed').waitFor({ timeout: 25000 });
+        const t = norm(await c.page.getByTestId('zara-stats-not-installed').innerText());
+        check('script de la base pas applique : message clair avec les etapes et le nom du fichier, pas de chiffres inventes', /pas encore activées/.test(t) && /add-assistant-stats\.sql/.test(t) && /SQL Editor/.test(t) && (await c.page.getByTestId('zara-stat-sales').count()) === 0, t);
+        await c.page.screenshot({ path: path.join(OUT, 'S2-statistiques-pas-activees.png') });
+        check('aucune erreur (statistiques pas activees)', c.errs.length === 0, c.errs);
+        await c.ctx.close();
+      }
+      // acces refuse
+      {
+        const c = await openStats({ replies: [{ status: 403, body: { code: '42501', message: 'Accès réservé aux administrateurs' } }] });
+        await c.page.getByTestId('zara-stats-error').waitFor({ timeout: 25000 });
+        check('la base refuse (pas administrateur) : « Acces refuse », pas de bouton reessayer', /Accès refusé/.test(await text(c, 'zara-stats-error')) && (await c.page.getByTestId('zara-stats-retry').count()) === 0);
+        await c.ctx.close();
+      }
+      // panne puis reessai
+      {
+        const c = await openStats({ replies: [{ status: 500, body: { code: 'XX000', message: 'service indisponible' } }, { body: STATS }] });
+        await c.page.getByTestId('zara-stats-error').waitFor({ timeout: 25000 });
+        check('panne de la base : message et bouton « Reessayer », aucun chiffre', /Impossible de lire les statistiques/.test(await text(c, 'zara-stats-error')) && /service indisponible/.test(await text(c, 'zara-stats-error')) && (await c.page.getByTestId('zara-stat-sales').count()) === 0);
+        await c.page.getByTestId('zara-stats-retry').click();
+        await c.page.getByTestId('zara-stat-sales-value').waitFor({ timeout: 15000 });
+        check('apres « Reessayer » : les chiffres s\'affichent et le message disparait', (await text(c, 'zara-stat-sales-value')) === '3' && (await c.page.getByTestId('zara-stats-error').count()) === 0);
+        await c.ctx.close();
+      }
+      // periode sans aucune donnee
+      {
+        const c = await openStats({ replies: [{ body: { conversations: [], events: [], orders: [], accounts: [], installs: [], totals: { orders: 0, orders_amount: 0, accounts: 0, installs: 0 } } }] });
+        await c.page.getByTestId('zara-stat-sales-value').waitFor({ timeout: 25000 });
+        check('periode sans donnees : tout a zero, pourcentages « — », jamais NaN ni undefined', (await text(c, 'zara-stat-sales-value')) === '0' && (await text(c, 'zara-stat-chats')).includes('Aucune conversation') && !/NaN|undefined|null/.test(norm(await c.page.getByTestId('zara-stats').innerText())) && (await c.page.getByTestId('zara-device-Autre').count()) === 0, norm(await c.page.getByTestId('zara-stats').innerText()).slice(0, 400));
+        await c.ctx.close();
+      }
+      // pas administrateur
+      {
+        const c = await openStats({ replies: [{ body: STATS }] }, false);
+        await c.page.getByText('Accès réservé aux administrateurs.').waitFor({ timeout: 25000 });
+        await sleep(800);
+        check('un client (pas administrateur) ne voit pas la page et ne demande rien a la base', (await c.page.getByTestId('zara-stat-sales').count()) === 0 && c.statsCalls.length === 0, c.statsCalls);
+        await c.ctx.close();
+      }
+      // acces depuis le menu administrateur du compte
+      {
+        const fu = accountOf({ is_admin: true, full_name: 'Admin Albasse' });
+        const c = await newVisitor(phone, { lang: 'fr', storage: { [SESSION_KEY]: fu.session }, fakeUser: fu, fakeStats: { replies: [{ body: STATS }] } });
+        await c.page.goto(`http://localhost:${port}/compte`, { waitUntil: 'load' });
+        await c.page.getByText('Espace Admin', { exact: true }).waitFor({ timeout: 25000 });
+        await c.page.getByText('Espace Admin', { exact: true }).click();
+        await c.page.getByText('Statistiques de Zara', { exact: true }).click();
+        await c.page.getByTestId('zara-stat-sales-value').waitFor({ timeout: 25000 });
+        check('menu « Espace Admin » : « Statistiques de Zara » ouvre la page', /\/admin\/statistiques-zara/.test(c.page.url()) && (await text(c, 'zara-stat-sales-value')) === '3', c.page.url());
+        check('aucune erreur (menu administrateur)', c.errs.length === 0, c.errs);
+        await c.ctx.close();
+      }
+    }
+  }
+
   // =============================================== T. PERSONNALITE : POLITESSE, COMPLIMENTS, ADRESSE ET NUMERO PERSONNELS ===============================================
   if (PARTS.includes('T')) {
     console.log('\n== T. personnalite : politesse, compliments, jamais d\'adresse ni de numero personnel (francais et arabe)');
@@ -1823,6 +2153,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('la commande est enregistree UNE fois', db.created.length === 1 && db.attempts.length === 1, db.attempts.length);
       const b = db.created[0];
       check('ce qui est enregistre : compte, statut en attente, paiement, livraison, cadeau, total', b.user_id === UID && b.status === 'pending' && b.payment_method === 'airtel_money' && b.shipping_name === 'Ahmed Hassan' && b.shipping_phone === '66123456' && b.shipping_address === 'Quartier Farcha, rue 12, près du marché' && b.shipping_city === farCity.name && b.gift_wrap === true && b.total === total && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(b.id), { ...b, items: undefined });
+      check('statistiques de Zara : la commande passee dans le chat note l\'appareil du client (Android)', b.assistant_device === 'Android', b.assistant_device);
       check('articles enregistres : le bon produit, le prix de la base, la quantite', b.items.length === 1 && b.items[0].product_id === realProduct.id && b.items[0].unit_price === price && b.items[0].quantity === 2, b.items);
       const done = await panelOf(c.page).getByText(/a bien été enregistrée/).last().innerText();
       const airtelLine = payRow.airtel_payment_url ? `Payez ici : ${payRow.airtel_payment_url}` : `Envoyez ${numRe(total)} FCFA au ${esc(payRow.airtel_number || '60 60 51 51')} \\(Airtel Money\\)`;
@@ -2017,6 +2348,31 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const done = await panelOf(c.page).getByText(/تم تسجيل طلبك رقم #/).last().innerText();
       check('confirmation arabe : numero de commande et total', done.includes(`#${db.created[0].id.slice(0, 8)}`) && new RegExp(`المبلغ المطلوب: ${numRe(price + farFee)} FCFA`).test(done), done);
       check('aucune erreur (commande en arabe)', c.errs.length === 0, c.errs);
+      await c.ctx.close();
+    }
+
+    // --- O9. statistiques de Zara : la colonne n'existe pas encore dans la base (script pas applique) -> la commande est enregistree quand meme, sans l'appareil
+    {
+      const fu = mkMember('Ahmed Hassan');
+      const db = newDb();
+      db.rejectColumn = 'assistant_device';
+      const c = await orderVisitor(fu, db, { qty: 1 });
+      await openOrderChat(c);
+      await ask(c.page, 'je veux commander', /Quelle est votre adresse de livraison/);
+      await typeIn(c.page, 'Farcha, face à la pharmacie');
+      await waitText(c.page, /Dans quelle ville doit-on vous livrer/);
+      await typeIn(c.page, homeCity.name);
+      await waitText(c.page, /Comment souhaitez-vous payer/);
+      await typeIn(c.page, 'je paie à la livraison');
+      await waitText(c.page, /Souhaitez-vous l’emballage cadeau/);
+      await typeIn(c.page, 'non merci');
+      await waitText(c.page, /Récapitulatif de votre commande/);
+      await typeIn(c.page, 'oui');
+      await waitText(c.page, /a bien été enregistrée/);
+      check('base sans la colonne de Zara : la commande est enregistree QUAND MEME (une seule fois), sans l\'appareil', db.created.length === 1 && !('assistant_device' in db.created[0]) && db.created[0].total === price + homeFee, db.created[0] && Object.keys(db.created[0]));
+      check('le client ne voit aucun echec : 1er essai avec l\'appareil refuse, 2e sans, meme numero de commande', db.attempts.length === 2 && db.attempts[0].assistant_device === 'Android' && !('assistant_device' in db.attempts[1]) && db.attempts[0].id === db.attempts[1].id, db.attempts.map((a) => Object.keys(a).includes('assistant_device')));
+      check('aucun message d\'echec dans le chat', (await panelOf(c.page).getByText(/n’a pas pu être enregistrée|problème|réessay/i).count()) === 0);
+      check('aucune erreur (commande sans colonne de Zara)', realErrs(c).length === 0, realErrs(c));
       await c.ctx.close();
     }
     }
