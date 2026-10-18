@@ -1,5 +1,6 @@
 // Le choix du visiteur sur le suivi de sa navigation (les articles qu'il regarde, pour que Zara le conseille mieux).
-// Règle : le suivi est actif tant que le visiteur ne l'a pas refusé ; le refus est respecté tout de suite et partout.
+// Règle : le suivi se fait en arrière-plan, sans message ni bouton qui dérange le visiteur ; il est actif tant que le visiteur ne l'a pas
+// refusé (page de confidentialité, ou en l'écrivant à Zara) ; le refus est respecté tout de suite et partout.
 // Les signaux « Ne pas me suivre » du navigateur (Do Not Track, Global Privacy Control) comptent comme un refus,
 // sauf si le visiteur a lui-même accepté ici. Aucun réseau : tout est testable.
 
@@ -8,7 +9,6 @@ import { deviceStore, type KeyValueStore } from './assistantAttribution';
 export type TrackingChoice = 'granted' | 'denied' | 'unset';
 
 const CHOICE_KEY = 'albasse_tracking_choice';
-const NOTICE_KEY = 'albasse_tracking_notice_seen';
 
 export interface PrivacySignals {
   doNotTrack?: string | null;
@@ -48,20 +48,4 @@ export function isTrackingAllowed(store: KeyValueStore | null = deviceStore(), s
   if (choice === 'granted') return true;
   const dnt = signals.doNotTrack;
   return !(dnt === '1' || dnt === 'yes' || signals.globalPrivacyControl === true);
-}
-
-export function noticeSeen(store: KeyValueStore | null = deviceStore()): boolean {
-  try {
-    return store?.getItem(NOTICE_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
-export function markNoticeSeen(store: KeyValueStore | null = deviceStore()): void {
-  try {
-    store?.setItem(NOTICE_KEY, '1');
-  } catch {
-    // ignore
-  }
 }

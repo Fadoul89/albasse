@@ -794,7 +794,7 @@ async function main() {
       ok('choix abime ou inconnu : traite comme « pas de choix » (jamais d\'erreur)', tc.readChoice(bad.store) === 'unset' && tc.readChoice(bad2.store) === 'unset');
       ok('stockage bloque : pas d\'erreur, le suivi suit les signaux du navigateur', tc.readChoice(null) === 'unset' && tc.isTrackingAllowed(null, {}) === true && tc.isTrackingAllowed(null, { doNotTrack: '1' }) === false);
       const b = mem();
-      ok('message d\'information : pas encore vu, puis vu une fois pour toutes', tc.noticeSeen(b.store) === false && (tc.markNoticeSeen(b.store), tc.noticeSeen(b.store)) === true && tc.noticeSeen(null) === false);
+      ok('plus de message d\'information qui derange : les fonctions du message n\'existent plus', !('noticeSeen' in tc) && !('markNoticeSeen' in tc));
     }
     ok('niveaux affiches en francais : Leger, Moyen, Eleve', bi.INTEREST_LABELS.leger === 'Léger' && bi.INTEREST_LABELS.moyen === 'Moyen' && bi.INTEREST_LABELS.eleve === 'Élevé');
   }
@@ -926,7 +926,7 @@ async function main() {
     ok('« qu\'est-ce que j\'ai regarde » et ses variantes : l\'historique', historyPhrases.every((t) => b.wantsHistory(t) && b.detectIntent(t) === 'history'), historyPhrases.filter((t) => !b.wantsHistory(t)));
     ok('suivre une COMMANDE ou un colis, une recherche de produit, un merci : jamais pris pour le suivi de navigation ni pour l\'historique', notTracking.every((t) => b.detectIntent(t) !== 'tracking' && b.detectIntent(t) !== 'history'), notTracking.filter((t) => ['tracking', 'history'].includes(b.detectIntent(t))));
     ok('« suivre ma commande » reste « orders »', b.detectIntent('suivre ma commande') === 'orders' && b.detectIntent('suivi de ma commande') === 'orders');
-    ok('les boutons de Zara (« Ne plus me suivre », « Autoriser le suivi », « Mes articles vus ») parlent bien le meme langage que le cerveau', ['fr', 'ar'].every((lang) => { const fr = lang === 'fr'; return b.trackingKind(fr ? 'ne me suis plus' : 'لا تتبعني') === 'stop' && b.trackingKind(fr ? 'tu peux me suivre' : 'يمكنك متابعتي') === 'start' && b.wantsHistory(fr ? 'qu’est-ce que j’ai regardé' : 'ماذا شاهدت'); }));
+    ok('le chat n\'a AUCUN bouton pour suivre ou ne plus suivre (le suivi reste en arriere-plan) ; seul « Confidentialite » existe, et seulement quand le client pose la question', !Object.keys(tx.texts('fr').chip).some((k) => /track|viewed/i.test(k)) && !Object.keys(tx.texts('ar').chip).some((k) => /track|viewed/i.test(k)) && !/suivi|suivre/i.test(tx.texts('fr').history.outro) && !/متابع|تتبع/.test(tx.texts('ar').history.outro));
 
     // --- un catalogue d'essai, plus le vrai
     const mk = (id: string, name: string, over: Partial<Parameters<typeof b.buildProduct>[0]> = {}): P =>
@@ -998,7 +998,7 @@ async function main() {
     const tf = tx.texts('fr'), ta = tx.texts('ar');
     ok('textes de suivi : le francais et l\'arabe disent les memes durees (90 jours)', /90/.test(tf.tracking.about) && /90/.test(ta.tracking.about));
     ok('texte « ce qui est retenu » : sans nom ni telephone, pour mieux conseiller, 90 jours, refus possible', /sans votre nom ni votre téléphone/.test(tf.tracking.about) && /mieux vous conseiller/.test(tf.tracking.about) && /90 jours/.test(tf.tracking.about) && /ne me suis plus/.test(tf.tracking.about));
-    ok('suivi refuse : Zara dit franchement qu\'elle ne sait rien et comment reactiver', /refusé/.test(tf.history.denied) && /ne retiens pas/.test(tf.history.denied) && /tu peux me suivre/.test(tf.history.denied) && /ne sais/.test(tf.tracking.aboutDenied));
+    ok('suivi desactive : Zara dit franchement qu\'elle ne sait rien, sans rien mettre en avant', /désactivé/.test(tf.history.denied) && /ne retiens pas/.test(tf.history.denied) && /ne sais/.test(tf.tracking.aboutDenied) && !/me suivre|ne me suis plus/.test(tf.history.denied + tf.tracking.aboutDenied + tf.history.signal + tf.tracking.aboutSignal));
     ok('signal « Ne pas me suivre » du navigateur : Zara dit qu\'elle le respecte', /navigateur/.test(tf.history.signal) && /respecte/.test(tf.history.signal) && /navigateur/.test(tf.tracking.aboutSignal));
     ok('« ne me suis plus » : confirme l\'arret ET l\'effacement', /ne retiens plus/.test(tf.tracking.stopped) && /effacé/.test(tf.tracking.stopped));
     ok('aucune donnee : Zara ne pretend rien savoir', /Je n’ai encore noté aucun article/.test(tf.history.none));

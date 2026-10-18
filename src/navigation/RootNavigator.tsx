@@ -12,7 +12,6 @@ import { AppDownloadBanner } from '../components/AppDownloadBanner';
 import { trackPageView } from '../lib/analytics';
 import { startShortcutInstallTracking, trackAppInstallIfNeeded } from '../lib/appInstallTracking';
 import { initBrowsingTracker } from '../lib/browsingTracker';
-import { TrackingNotice } from '../components/TrackingNotice';
 import { isIosDevice, isRunningAsInstalledPwa } from '../lib/pwaInstallPrompt';
 import { hasWebPushPermission, isWebPushSupported, subscribeToWebPush, syncWebPushSubscription } from '../lib/webPushSubscription';
 import { useAuthStore } from '../store/authStore';
@@ -249,7 +248,6 @@ export function RootNavigator() {
         </View>
         <FavoritesSync />
         <Assistant />
-        <TrackingNotice />
         <SmartPromotionPopup />
         <WheelPopup />
         <AppDownloadPopup />

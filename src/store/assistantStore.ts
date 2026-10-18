@@ -1755,10 +1755,6 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
   // -------------------------------------------------------------------------------------------
 
   const productKeyId = (key: string) => (key.startsWith('product:') ? key.slice('product:'.length) : null);
-  const lastPhrase = (fr: string, ar: string) => (get().lang === 'ar' ? ar : fr);
-  const stopTrackingChip = (): ChatAction => sayBtn(T().chip.stopTracking, lastPhrase('ne me suis plus', 'لا تتبعني'));
-  const allowTrackingChip = (): ChatAction => sayBtn(T().chip.allowTracking, lastPhrase('tu peux me suivre', 'يمكنك متابعتي'));
-  const myViewedChip = (): ChatAction => sayBtn(T().chip.myViewed, lastPhrase('qu’est-ce que j’ai regardé', 'ماذا شاهدت'));
   const privacyChip = (): ChatAction => ({ label: T().chip.privacy, kind: 'privacy' });
 
   const interestChip = (c: PlannedChip, key: string, kind: string, follow: boolean): ChatAction => ({
@@ -1876,7 +1872,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     }
     const state = trackingState();
     if (!state.allowed) {
-      await say(state.choice === 'denied' ? h.denied : h.signal, { actions: [allowTrackingChip(), privacyChip(), menuBtn()] });
+      await say(state.choice === 'denied' ? h.denied : h.signal, { actions: [menuBtn()] });
       return;
     }
     const profile = getBrowsingProfile();
@@ -1902,7 +1898,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       .map((c) => categoryLabel(get().lang, c.key, c.name as string));
     if (cats.length > 0) lines.push(h.categories(cats.join(', ')));
     lines.push(h.outro);
-    await say(lines.join('\n'), { actions: [sayBtn(T().chip.advice, 'conseil'), stopTrackingChip(), menuBtn()] });
+    await say(lines.join('\n'), { actions: [sayBtn(T().chip.advice, 'conseil'), menuBtn()] });
   }
 
   // Le suivi de navigation : ce qui est retenu, l'arrêter (tout est effacé), le reprendre.
@@ -1916,24 +1912,24 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     const state = trackingState();
     if (kind === 'stop') {
       if (state.choice === 'denied') {
-        await say(k.stoppedAlready, { actions: [allowTrackingChip(), menuBtn()] });
+        await say(k.stoppedAlready, { actions: [menuBtn()] });
         return;
       }
       setTrackingChoice('denied'); // efface ce qui était retenu sur l'appareil et demande l'effacement dans la base
-      await say(k.stopped, { actions: [privacyChip(), menuBtn()] });
+      await say(k.stopped, { actions: [menuBtn()] });
       return;
     }
     if (kind === 'start') {
       if (state.allowed) {
-        await say(k.resumedAlready, { actions: [stopTrackingChip(), menuBtn()] });
+        await say(k.resumedAlready, { actions: [menuBtn()] });
         return;
       }
       setTrackingChoice('granted');
-      await say(k.resumed, { actions: [stopTrackingChip(), privacyChip(), menuBtn()] });
+      await say(k.resumed, { actions: [menuBtn()] });
       return;
     }
-    if (state.allowed) await say(k.about, { actions: [stopTrackingChip(), myViewedChip(), privacyChip(), menuBtn()] });
-    else await say(state.choice === 'denied' ? k.aboutDenied : k.aboutSignal, { actions: [allowTrackingChip(), privacyChip(), menuBtn()] });
+    if (state.allowed) await say(k.about, { actions: [privacyChip(), menuBtn()] });
+    else await say(state.choice === 'denied' ? k.aboutDenied : k.aboutSignal, { actions: [privacyChip(), menuBtn()] });
   }
 
   // -------------------------------------------------------------------------------------------
