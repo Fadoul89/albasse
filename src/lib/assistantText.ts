@@ -116,7 +116,6 @@ export interface Texts {
     installApp: string;
     installHelp: string;
     alreadyInstalled: string;
-    privacy: string;
     tutorial: string;
     notNow: string;
     idk: string;
@@ -323,27 +322,10 @@ export interface Texts {
     no: string;
     gone: string;
   };
-  // « qu'est-ce que j'ai regardé ? » : réponses vraies, et honnêtes quand Zara ne sait pas
-  history: {
-    denied: string;
-    signal: string;
-    none: string;
-    unavailable: string;
-    intro: string;
-    times(n: number): string;
-    repeated(list: string): string;
-    categories(list: string): string;
-    outro: string;
-  };
-  // le suivi de navigation : ce qui est retenu, l'arrêter, le reprendre
+  // un client qui écrit lui-même « ne me suis plus » : Zara obéit (le suivi n'est jamais mis en avant)
   tracking: {
-    about: string;
-    aboutDenied: string;
-    aboutSignal: string;
     stopped: string;
     stoppedAlready: string;
-    resumed: string;
-    resumedAlready: string;
     unavailable: string;
   };
 }
@@ -431,7 +413,6 @@ const FR: Texts = {
     installApp: '📲 Installer Albasse Shopping',
     installHelp: '📲 Voir comment installer',
     alreadyInstalled: '✅ Oui, déjà installée',
-    privacy: '🔒 Confidentialité',
     tutorial: '🎬 Voir le tutoriel',
     notNow: 'Plus tard',
     idk: '🤷 Je ne sais pas',
@@ -782,26 +763,9 @@ const FR: Texts = {
     no: 'D’accord, pas de souci 😊 Je reste là si vous avez besoin d’aide, sans insister.',
     gone: 'Cet article n’est plus disponible pour le moment 😕',
   },
-  history: {
-    denied: 'Le suivi est désactivé sur cet appareil : je ne retiens pas les articles regardés, donc je ne peux pas vous dire ce que vous avez vu 😊',
-    signal: 'Votre navigateur demande de ne pas être suivi, et je respecte ce choix : je ne retiens pas les articles regardés 😊',
-    none: 'Je n’ai encore noté aucun article regardé sur cet appareil 😊 Dès que vous en regarderez, je pourrai vous les rappeler.',
-    unavailable: 'Je ne peux pas voir les articles que vous avez regardés depuis cet écran pour le moment 😊',
-    intro: 'Voici les derniers articles que vous avez regardés sur cet appareil 😊',
-    times: (n) => `${n} fois`,
-    repeated: (list) => `Regardés plusieurs fois : ${list}.`,
-    categories: (list) => `Catégories qui semblent vous intéresser : ${list}.`,
-    outro: 'Voulez-vous que je vous aide à choisir ? 😊',
-  },
   tracking: {
-    about:
-      'Voici ce que fait la boutique 😊 Sur cet appareil, elle retient seulement les articles que vous regardez (sans votre nom ni votre téléphone) pour que je puisse mieux vous conseiller. Ces informations sont gardées 90 jours, puis effacées.',
-    aboutDenied: 'Le suivi est désactivé sur cet appareil : la boutique ne retient pas les articles que vous regardez, et je ne sais donc rien à ce sujet 😊',
-    aboutSignal: 'Votre navigateur demande de ne pas être suivi, et je respecte ce choix : rien n’est retenu sur les articles que vous regardez 😊',
     stopped: 'C’est noté 😊 Je ne retiens plus les articles que vous regardez, et ce qui était retenu sur cet appareil est effacé.',
     stoppedAlready: 'C’est déjà le cas 😊 Le suivi est refusé : rien n’est retenu.',
-    resumed: 'Avec plaisir 😊 À partir de maintenant, je retiens les articles que vous regardez pour mieux vous conseiller (rien de personnel).',
-    resumedAlready: 'Le suivi est déjà actif sur cet appareil 😊',
     unavailable: 'Le suivi n’existe que sur le site web : ici, je ne retiens rien 😊',
   },
 };
@@ -893,7 +857,6 @@ const AR: Texts = {
     installApp: '📲 تثبيت Albasse Shopping',
     installHelp: '📲 شاهد كيفية التثبيت',
     alreadyInstalled: '✅ نعم، مثبّت بالفعل',
-    privacy: '🔒 الخصوصية',
     tutorial: '🎬 عرض الشرح',
     notNow: 'لاحقا',
     idk: '🤷 لا أعرف',
@@ -1243,26 +1206,9 @@ const AR: Texts = {
     no: 'حسنا، لا مشكلة 😊 أنا هنا إذا احتجت إلى مساعدة، دون إلحاح.',
     gone: 'هذا المنتج غير متوفر حاليا 😕',
   },
-  history: {
-    denied: 'المتابعة متوقفة على هذا الجهاز: لا أحتفظ بالمنتجات التي شوهدت، لذلك لا أستطيع أن أخبرك بما شاهدته 😊',
-    signal: 'متصفحك يطلب عدم التتبع، وأنا أحترم ذلك: لا أحتفظ بالمنتجات التي شوهدت 😊',
-    none: 'لم أسجل بعد أي منتج شاهدته على هذا الجهاز 😊 عندما تشاهد منتجات سأتمكن من تذكيرك بها.',
-    unavailable: 'لا أستطيع رؤية المنتجات التي شاهدتها من هذه الشاشة حاليا 😊',
-    intro: 'هذه آخر المنتجات التي شاهدتها على هذا الجهاز 😊',
-    times: (n) => (n === 2 ? 'مرتان' : n >= 3 && n <= 10 ? `${n} مرات` : `${n} مرة`),
-    repeated: (list) => `منتجات شاهدتها أكثر من مرة: ${list}.`,
-    categories: (list) => `الأقسام التي يبدو أنها تهمك: ${list}.`,
-    outro: 'هل تريد أن أساعدك في الاختيار؟ 😊',
-  },
   tracking: {
-    about:
-      'إليك ما يحدث 😊 على هذا الجهاز يحتفظ المتجر فقط بالمنتجات التي تشاهدها (بدون اسمك أو هاتفك) لأتمكن من نصحك بشكل أفضل. تُحفظ هذه المعلومات 90 يوما ثم تُمسح.',
-    aboutDenied: 'المتابعة متوقفة على هذا الجهاز: المتجر لا يحتفظ بالمنتجات التي تشاهدها، فلا أعرف شيئا عنها 😊',
-    aboutSignal: 'متصفحك يطلب عدم التتبع، وأنا أحترم ذلك: لا شيء محفوظ عن المنتجات التي تشاهدها 😊',
     stopped: 'تم 😊 لن أحتفظ بعد الآن بالمنتجات التي تشاهدها، وما كان محفوظا على هذا الجهاز تم مسحه.',
     stoppedAlready: 'هذا هو الحال بالفعل 😊 المتابعة مرفوضة ولا شيء محفوظ.',
-    resumed: 'بكل سرور 😊 من الآن سأحتفظ بالمنتجات التي تشاهدها لأنصحك بشكل أفضل (لا شيء شخصي).',
-    resumedAlready: 'المتابعة مفعلة بالفعل على هذا الجهاز 😊',
     unavailable: 'المتابعة موجودة فقط على موقع الويب: هنا لا أحتفظ بشيء 😊',
   },
 };

@@ -2469,74 +2469,54 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.ctx.close();
     }
 
-    // --- V4. le client n'a rien regarde / aucune donnee : Zara ne pretend rien savoir
+    // --- V4 a V7. le client ne sait JAMAIS qu'il est suivi : Zara ne parle pas du suivi d'elle-meme, quoi qu'on lui demande
+    const SUIVI_RE = /suivi|suivre|retient|retenu|retiens|regardés sur cet appareil|90 jours|confidentialité|historique|je n’ai encore noté/i;
     {
       const v = await visitor(null);
       await openZara(v);
       await sleep(2000);
       check('visiteur qui n\'a rien regarde : aucune suggestion', (await countText(v.page, /semble vous intéresser|Vous découvrez plusieurs parfums|Ce modèle vous plaît|quelques suggestions/)) === 0);
-      await sayAsk(v.page, 'Qu\'est-ce que j\'ai regardé ?', /Je n’ai encore noté aucun article regardé sur cet appareil/);
-      check('« Qu\'est-ce que j\'ai regarde ? » sans donnee : Zara l\'avoue franchement (elle n\'invente rien)', (await cardsOf(v.page).count()) === 0);
-      check('aucune erreur (historique vide)', v.errs.length === 0, v.errs);
+      const botTexts = (pg) => pg.evaluate(() => JSON.parse(sessionStorage.getItem('albasse_zara_v1') || '{"messages":[]}').messages.filter((m) => m.role === 'assistant').map((m) => m.text));
+      for (const q of ['Qu\'est-ce que j\'ai regardé ?', 'Tu me suis ?', 'tu peux me suivre', 'que sais-tu de moi']) {
+        const n0 = (await botTexts(v.page)).length;
+        await typeIn(v.page, q);
+        for (let i = 0; i < 20 && (await botTexts(v.page)).length <= n0; i++) await sleep(300);
+        await sleep(1500);
+        const added = (await botTexts(v.page)).slice(n0).join('\n');
+        check(`« ${q} » : Zara repond (jamais en silence) mais ne parle ni de suivi, ni d'historique, ni de ce qui est retenu`, added.length > 0 && !SUIVI_RE.test(added), added.slice(0, 300));
+        check(`« ${q} » : aucun bouton de suivi ni de confidentialite`, await noTrackingChips(v.page));
+      }
+      check('aucune erreur (questions sur le suivi)', v.errs.length === 0, v.errs);
       await v.ctx.close();
     }
 
-    // --- V5. historique avec des donnees, puis « ne me suis plus » ECRIT par le client : tout est efface
+    // un client qui ECRIT « ne me suis plus » est respecte (tout est efface), sans que Zara en parle d'elle-meme
     {
       const v = await visitor(profileOf([rec(clarks), rec(perfumes[0]), shoeRec()], { quiet: true }));
       await openZara(v);
       await sleep(1500);
       check('suggestions en pause (« Non merci » recent) : aucune suggestion a l\'ouverture', (await countText(v.page, /Cette paire semble vous intéresser/)) === 0);
-      await sayAsk(v.page, 'montre-moi ce que j\'ai regardé', /Voici les derniers articles que vous avez regardés sur cet appareil/);
-      const cardNames = await Promise.all((await cardsOf(v.page).all()).map(cardName));
-      check('historique : les vrais articles regardes (le plus recent d\'abord), avec leur fiche', cardNames.length === 3 && cardNames[0].startsWith(sandales.name.trim().slice(0, 12)) && cardNames.some((n) => n.startsWith(clarks.name.trim().slice(0, 12))), cardNames);
-      await waitText(v.page, new RegExp(`Regardés plusieurs fois : ${esc(sandales.name.trim())} \\(3 fois\\)\\.`));
-      check('...articles regardes plusieurs fois, avec le nombre de fois', true);
-      await waitText(v.page, new RegExp(`Catégories qui semblent vous intéresser : .*${esc(catOf(sandales).name)}`));
-      check('...categories qui semblent l\'interesser', true);
-      await v.page.screenshot({ path: path.join(OUT, 'V5-historique.png') });
-      check('boutons de l\'historique : « Conseil » et « Menu » seulement, AUCUN bouton de suivi', (await noTrackingChips(v.page)) && (await chipLabels(v.page)).some((c) => /Conseil/.test(c)), await chipLabels(v.page));
-      check('l\'historique ne parle pas de « ne me suis plus » (rien n\'est mis en avant)', !/ne me suis plus/.test(await panelOf(v.page).innerText()));
+      check('le chat n\'affiche aucun bouton de suivi', await noTrackingChips(v.page));
       await sayAsk(v.page, 'ne me suis plus', /Je ne retiens plus les articles que vous regardez, et ce qui était retenu sur cet appareil est effacé/);
       await sleep(800);
       check('le client ECRIT « ne me suis plus » : Zara obeit, le profil de l\'appareil est efface, le choix « refuse » est retenu', (await readProfile(v.page)) === null && JSON.parse(await v.page.evaluate((k) => localStorage.getItem(k), CK)).choice === 'denied');
       check('...et la base est priee d\'effacer (avec l\'identifiant anonyme)', v.forgets.length === 1 && v.forgets[0].p_visitor_id === '0f1e2d3c-4b5a-4968-8777-665544332211', v.forgets);
-      await sayAsk(v.page, 'qu\'est-ce que j\'ai regardé', /Le suivi est désactivé sur cet appareil : je ne retiens pas les articles regardés/);
-      check('apres le refus : Zara dit franchement qu\'elle ne sait rien, sans bouton de suivi', await noTrackingChips(v.page));
       await sayAsk(v.page, 'ne me suis plus', /C’est déjà le cas/);
-      check('« ne me suis plus » une 2e fois : « c\'est deja le cas »', true);
-      await sayAsk(v.page, 'tu peux me suivre', /Avec plaisir 😊 À partir de maintenant, je retiens les articles que vous regardez/);
-      await sleep(500);
-      check('le client ECRIT « tu peux me suivre » : le suivi reprend (choix « accepte » retenu)', JSON.parse(await v.page.evaluate((k) => localStorage.getItem(k), CK)).choice === 'granted');
-      await sayAsk(v.page, 'qu\'est-ce que j\'ai regardé', /Je n’ai encore noté aucun article regardé sur cet appareil/);
-      check('...et l\'ancien historique n\'est PAS revenu : Zara repart de zero', true);
-      check('aucune erreur (historique et refus)', v.errs.length === 0, v.errs);
+      check('« ne me suis plus » une 2e fois : « c\'est deja le cas », aucun bouton de suivi', await noTrackingChips(v.page));
+      check('aucune erreur (demande ecrite)', v.errs.length === 0, v.errs);
       await v.ctx.close();
     }
 
-    // --- V6. le client demande ce qui est retenu
-    {
-      const v = await visitor(null);
-      await openZara(v);
-      await sayAsk(v.page, 'Tu me suis ?', /elle retient seulement les articles que vous regardez \(sans votre nom ni votre téléphone\)/);
-      const txt = await panelOf(v.page).innerText();
-      check('« Tu me suis ? » : explication simple et vraie (articles regardes, sans nom ni telephone, 90 jours), sans mettre en avant un moyen de refuser', /90 jours/.test(txt) && !/ne me suis plus|refuser/i.test(txt) && !/espion|surveill/i.test(txt.replace(/Tu me suis \?/g, '')));
-      const chips = await chipLabels(v.page);
-      check('boutons : « Confidentialite » et « Menu » seulement (aucun bouton pour suivre ou ne plus suivre)', chips.some((x) => x.includes('Confidentialité')) && (await noTrackingChips(v.page)), chips);
-      await chip(v.page, 'Confidentialité').click();
-      await v.page.waitForFunction(() => /confidentialite/.test(location.pathname), null, { timeout: 15000 });
-      check('« Confidentialite » ouvre la page de confidentialite du site', /confidentialite/.test(new URL(v.page.url()).pathname));
-      await v.ctx.close();
-    }
-
-    // --- V7. signal « Ne pas me suivre » du navigateur
+    // signal « Ne pas me suivre » du navigateur : rien n'est note, Zara n'en parle pas
     {
       const v = await visitor(null, { initScripts: ["Object.defineProperty(navigator, 'doNotTrack', { get: () => '1' });"] });
       await openZara(v);
-      await sayAsk(v.page, 'Qu\'est-ce que j\'ai regardé ?', /Votre navigateur demande de ne pas être suivi, et je respecte ce choix/);
-      check('navigateur « Ne pas me suivre » : Zara le dit et le respecte', (await readProfile(v.page)) === null && v.browsingCalls.length === 0);
-      await sayAsk(v.page, 'tu peux me suivre', /Avec plaisir 😊 À partir de maintenant/);
-      check('...le client peut quand meme l\'autoriser lui-meme (son choix gagne)', JSON.parse(await v.page.evaluate((k) => localStorage.getItem(k), CK)).choice === 'granted');
+      const botTexts2 = (pg) => pg.evaluate(() => JSON.parse(sessionStorage.getItem('albasse_zara_v1') || '{"messages":[]}').messages.filter((m) => m.role === 'assistant').map((m) => m.text));
+      const m0 = (await botTexts2(v.page)).length;
+      await typeIn(v.page, 'Qu\'est-ce que j\'ai regardé ?');
+      await sleep(4500);
+      const said = (await botTexts2(v.page)).slice(m0).join('\n');
+      check('navigateur « Ne pas me suivre » : rien n\'est note, rien n\'est envoye, et Zara n\'en parle pas', (await readProfile(v.page)) === null && v.browsingCalls.length === 0 && !SUIVI_RE.test(said), said.slice(0, 200));
       await v.ctx.close();
     }
 
