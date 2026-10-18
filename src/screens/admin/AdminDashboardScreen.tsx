@@ -142,6 +142,17 @@ export function AdminDashboardScreen() {
               <Text style={styles.sourceLinkArrow}>→</Text>
             </Pressable>
 
+            <Pressable style={styles.sourceLinkCard} onPress={() => navigation.navigate('AdminCallbacks')} testID="dashboard-callbacks-link">
+              <Text style={styles.sourceLinkIcon}>📲</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sourceLinkTitle}>Rappels WhatsApp</Text>
+                <Text style={styles.sourceLinkSubtitle}>
+                  Les clients qui ont laissé leur numéro à Zara : à écrire au réveil
+                </Text>
+              </View>
+              <Text style={styles.sourceLinkArrow}>→</Text>
+            </Pressable>
+
             <Section title="📡 Performance par source (résumé)">
               {stats.sourcePerformance.length === 0 ? (
                 <Text style={styles.emptyText}>Pas encore de données.</Text>

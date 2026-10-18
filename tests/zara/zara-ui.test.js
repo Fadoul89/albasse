@@ -4,7 +4,8 @@
 // Parties : A (nouveau visiteur), B (contexte produit/panier), C (client connecte : chat, commande, mes commandes, admin),
 //           D (panne), E (clavier, fiche produit, admin cache, ordinateur), M (client avec compte reconnu et salue par son prenom).
 //           T (personnalite : politesse, compliments, adresse et numero personnels), O (Zara finalise l'achat dans le chat).
-//           F (programme de fidelite : grade, points, comment gagner). Choisir avec PARTS=ABCDEMTOF.
+//           F (programme de fidelite : grade, points, comment gagner). Y (conclure la vente, preuves vraies, packs), Z (rappel WhatsApp et page admin).
+//           Choisir avec PARTS=ABCDEMTOF.
 const { chromium, devices } = require('playwright');
 const { spawn } = require('child_process');
 const path = require('path');
@@ -12,7 +13,7 @@ const fs = require('fs');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const dist = process.argv[2] || '../../dist';
 const port = process.argv[3] || '4333';
-const PARTS = (process.env.PARTS || 'ALKPMRSUVWXTOFBCDE').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZTOFBCDE').toUpperCase();
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
 fs.mkdirSync(OUT, { recursive: true });
 const KEY = process.env.SUPABASE_ANON_KEY;
@@ -40,7 +41,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
 
   // Un contexte = un visiteur. Lecture seule vers la base ; le reste d'internet est coupe.
   // rank : rang du jour renvoye par la fonction de la base (null : fonction pas installee). fakeUser : compte simule (token : reponse a une connexion par mot de passe ; delay : lenteur du profil en ms). fakeOrders : { list: [...], patches: [] } = fausse table des commandes.
-  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, initScripts = [] } = {}) {
+  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, fakeSales = null, fakeCallbacks = null, initScripts = [] } = {}) {
     const ctx = await b.newContext(opts);
     if (cookies) await ctx.addCookies(cookies);
     if (lang) storage = { albasse_zara_lang: lang, ...storage };
@@ -79,6 +80,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const u = new URL(req.url());
       const m = req.method();
       if (u.hostname === 'localhost') return route.continue();
+      // WhatsApp : la page s'ouvre (vide) pour qu'on puisse lire l'adresse du lien ; rien d'autre ne sort vers internet
+      if (u.hostname === 'wa.me') return route.fulfill({ status: 200, contentType: 'text/html', body: 'wa' });
       if (u.hostname.endsWith('.supabase.co')) {
         if (m === 'OPTIONS') return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' } });
         if (blockPath && u.pathname.includes(blockPath)) return route.abort();
@@ -132,6 +135,35 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
           overviewCalls.push(JSON.parse(req.postData() || '{}'));
           const reply = fakeOverview.replies[Math.min(overviewCalls.length - 1, fakeOverview.replies.length - 1)];
           return json(route, reply.body, reply.status || 200);
+        }
+        // ventes reelles des 7 derniers jours : fakeSales.rows = lignes { product_id, orders_count } ; sans fakeSales, la fonction est « absente » (la requete est coupee)
+        if (u.pathname === '/rest/v1/rpc/assistant_product_sales' && m === 'POST') {
+          // lecture seule (une fonction de la base appelee en POST) : pas une ecriture. Sans fakeSales : le script SQL n'est « pas applique » (fonction introuvable)
+          if (fakeSales && fakeSales.abort) return route.abort();
+          if (!fakeSales) return json(route, { code: 'PGRST202', message: 'Could not find the function public.assistant_product_sales(p_days) in the schema cache' }, 404);
+          (fakeSales.calls = fakeSales.calls || []).push(JSON.parse(req.postData() || '{}'));
+          if (fakeSales.status && fakeSales.status >= 400) return json(route, fakeSales.body || { code: 'PGRST202', message: 'Could not find the function public.assistant_product_sales' }, fakeSales.status);
+          return json(route, fakeSales.rows);
+        }
+        // rappel WhatsApp : fakeCallbacks.calls = ce que la base aurait recu ; replies = reponses dans l'ordre (la derniere se repete, vrai par defaut) ;
+        // table = la liste de l'admin { rows, error } ; patches = les « Fait »
+        if (fakeCallbacks && u.pathname === '/rest/v1/rpc/assistant_request_callback' && m === 'POST') {
+          fakeCallbacks.calls = fakeCallbacks.calls || [];
+          fakeCallbacks.calls.push(JSON.parse(req.postData() || '{}'));
+          const replies = fakeCallbacks.replies || [{ body: true }];
+          const reply = replies[Math.min(fakeCallbacks.calls.length - 1, replies.length - 1)];
+          return json(route, reply.body, reply.status || 200);
+        }
+        if (fakeCallbacks && fakeCallbacks.table && u.pathname === '/rest/v1/assistant_callbacks') {
+          if (m === 'GET') return fakeCallbacks.table.error ? json(route, fakeCallbacks.table.error.body, fakeCallbacks.table.error.status) : json(route, fakeCallbacks.table.rows);
+          if (m === 'PATCH') {
+            const id = (u.searchParams.get('id') || '').replace('eq.', '');
+            const body = JSON.parse(req.postData() || '{}');
+            (fakeCallbacks.patches = fakeCallbacks.patches || []).push({ id, body });
+            const row = fakeCallbacks.table.rows.find((x) => x.id === id);
+            if (row) Object.assign(row, body);
+            return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } });
+          }
         }
         // la page « Statistiques de Zara » : fakeStats.replies = reponses a donner dans l'ordre (la derniere se repete)
         if (fakeStats && u.pathname === '/rest/v1/rpc/assistant_stats' && m === 'POST') {
@@ -388,7 +420,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     await ask(page, 'depuis quand existez-vous ?', /Nous sommes dans ce domaine depuis 2013/);
     check('« depuis quand » : Albasse Shopping, premiere plateforme du Tchad, depuis 2013', true);
     await ask(page, 'je vais réfléchir', /Pas de souci(?:, Fatimé)? 😊/);
-    check('« je vais reflechir » : on ne force pas, on garde la porte ouverte (favoris) + creer un compte', (await chipLabels(page))[0] === '👤 Créer mon compte');
+    const laterMsg = await panelOf(page).getByText(/Pas de souci(?:, Fatimé)? 😊/).last().innerText();
+    check('« je vais reflechir » : on ne force pas, on garde la porte ouverte (favoris), « Creer mon compte » et un rappel WhatsApp proposes', /favoris/.test(laterMsg) && /Prenez votre temps/.test(laterMsg) && (await chipLabels(page)).includes('👤 Créer mon compte') && (await chipLabels(page)).includes('📲 Me rappeler sur WhatsApp'), [laterMsg, await chipLabels(page)]);
     await ask(page, 'je veux retourner un article', /Nos conditions de retour/);
     const ret = await panelOf(page).getByText(/Nos conditions de retour/).last().innerText();
     check('retours : 72 h, photo ou video, frais a notre charge (article incorrect), taille a la charge du client', /72 h/.test(ret) && /photo ou une vidéo/.test(ret) && /à notre charge/.test(ret) && /à votre charge/.test(ret), ret);
@@ -2822,6 +2855,297 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await sleep(1500);
       check('le 15 decembre 2026 (aucun moment fort proche) : Zara n\'en parle pas', (await panelOf(w.page).getByText(/Black Friday|Saint-Valentin|Tabaski|Ramadan/).count()) === 0);
       await w.ctx.close();
+    }
+  }
+
+  // =============================================== Y. CONCLURE LA VENTE, PREUVES VRAIES, PACKS ===============================================
+  if (PARTS.includes('Y')) {
+    console.log('\n== Y. conclure la vente (« je reflechis »), preuves VRAIES (ventes reelles, stock), pack (l\'article qui complete)');
+    const base = `http://localhost:${port}`;
+    const visitor = (extra = {}) => newVisitor(phone, { lang: extra.lang || 'fr', storage: { albasse_zara_name: 'Ali' }, fakeSales: extra.fakeSales || null, fakeCallbacks: extra.fakeCallbacks || null });
+    const openZara = async (v) => {
+      await v.page.goto(`${base}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await v.page.getByTestId('assistant-fab').click();
+      await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?|أنشئ حسابك|حسابك/, 25000);
+    };
+    const rolex = realProduct;
+    const prods = await get('products?select=id,name,slug,price,stock,images,category_id&is_active=eq.true&limit=1000');
+    const catSlug = (id) => (cats.find((c) => c.id === id) || {}).slug;
+    const CROSS = { vetements: ['chaussures', 'montre'], 'vetements-pour-femmes': ['sacs-et-bagages', 'parfum'], chaussures: ['sacs-et-bagages', 'montre'], montre: ['parfum', 'lunettes'], parfum: ['montre', 'cosmetique'], lunettes: ['montre', 'parfum'], cosmetique: ['parfum'], 'sacs-et-bagages': ['chaussures', 'parfum'] };
+    const rolexCat = rolex ? catSlug(rolex.category_id) : null;
+    // ajoute le produit « rolex » au panier depuis la conversation (choisit la 1re taille / couleur si Zara la demande)
+    const addRolex = async (v) => {
+      await typeIn(v.page, 'rolex');
+      const card = cardsOf(v.page).filter({ hasText: /rolex/i }).first();
+      await card.waitFor({ timeout: 20000 });
+      await card.getByTestId('assistant-card-add').click();
+      for (let i = 0; i < 3; i++) {
+        const done = await panelOf(v.page).getByText(/ajouté au panier\./).count();
+        if (done) break;
+        await sleep(1200);
+        const sizeChip = panelOf(v.page).getByTestId('assistant-chip').filter({ hasText: /Taille|Couleur|^\d+$/ }).first();
+        if (await sizeChip.count()) await sizeChip.click();
+      }
+      await waitText(v.page, /ajouté au panier\./, 20000);
+    };
+    check('info : produit de test et sa categorie', !!rolex && !!rolexCat, { name: rolex && rolex.name, cat: rolexCat, stock: rolex && rolex.stock });
+
+    // --- Y1. « je reflechis » sans panier : des mots simples, jamais de chiffre invente, un rappel WhatsApp propose
+    {
+      const v = await visitor();
+      await openZara(v);
+      await ask(v.page, 'je réfléchis', /Prenez votre temps/, 20000);
+      const msg = await panelOf(v.page).getByText(/Prenez votre temps/).last().innerText();
+      check('« je reflechis » (sans panier) : « Pas de souci », puis l\'offre d\'un rappel WhatsApp par l\'equipe', /Pas de souci/.test(msg) && /l’équipe peut vous écrire sur WhatsApp/.test(msg), msg);
+      check('sans panier : rien sur le panier, aucun chiffre de commandes, aucune validite 48 h', !/panier reste enregistré/.test(msg) && !/\d/.test(msg), msg);
+      const chips = await chipLabels(v.page);
+      check('boutons : « Me rappeler sur WhatsApp », « Promotions », « Menu » (et « Creer mon compte » : visiteur sans compte)', chips.some((c) => /Me rappeler sur WhatsApp/.test(c)) && chips.some((c) => /Promotions/.test(c)) && chips.some((c) => /Menu/.test(c)) && chips.some((c) => /Créer mon compte/.test(c)), chips);
+      await v.page.screenshot({ path: path.join(OUT, 'Y1-je-reflechis.png') });
+      check('aucune erreur (je reflechis)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+
+    // --- Y2. avec des ventes REELLES (9 commandes) : preuve a l'ajout, puis pack, puis « je reflechis » avec le panier
+    if (rolex) {
+      const v = await visitor({ fakeSales: { rows: [{ product_id: rolex.id, orders_count: 9 }] } });
+      await openZara(v);
+      const before = await cardsOf(v.page).count();
+      await addRolex(v);
+      await sleep(2500);
+      const added = await panelOf(v.page).getByText(/ajouté au panier\./).last().innerText();
+      check('a l\'ajout : la preuve VRAIE (9 commandes sur 7 jours, le chiffre vient de la base)', /Cet article a été commandé 9 fois ces 7 derniers jours\./.test(added) && !/%/.test(added), added);
+      // pack : l'article qui complete
+      const packMsgs = await panelOf(v.page).getByText(/Pour compléter votre choix :/).count();
+      if (packMsgs === 1) {
+        const pack = await panelOf(v.page).getByText(/Pour compléter votre choix :/).first().innerText();
+        const tot = num((pack.match(/=\s*([\d\s  ]+)\s*FCFA/) || [])[1] || '');
+        const cards = await newCards(v.page, before);
+        const last = cards[cards.length - 1];
+        const compName = ((await last.getAttribute('aria-label')) || '').replace(/^Voir le produit ›\s*/, '').trim();
+        const comp = prods.find((x) => x.name.trim() === compName);
+        const compCat = comp ? catSlug(comp.category_id) : null;
+        check('pack : l\'article propose est d\'une categorie qui va avec ' + rolexCat + ' (' + (CROSS[rolexCat] || []).join(' / ') + '), en stock', !!comp && (CROSS[rolexCat] || []).includes(compCat) && comp.stock > 0, { compName, compCat });
+        check('pack : le total annonce = prix des deux articles, sans remise ni pourcentage', !!comp && tot === Number(rolex.price) + Number(comp.price) && !/remise|%|gratuit|offert/i.test(pack), { tot, a: rolex.price, b: comp && comp.price });
+        const chipsAfterPack = await chipLabels(v.page);
+        check('apres le pack : « Voir mon panier », « Commander » et « Emballage cadeau » restent disponibles', chipsAfterPack.some((c) => /panier/i.test(c)) && chipsAfterPack.some((c) => /Commander/.test(c)) && chipsAfterPack.some((c) => /mballage/.test(c)), chipsAfterPack);
+        await v.page.screenshot({ path: path.join(OUT, 'Y2-pack.png') });
+      } else {
+        check('pack : aucun complement en stock dans la boutique pour cette categorie (message absent, rien d\'invente)', packMsgs === 0, packMsgs);
+      }
+      await ask(v.page, 'je réfléchis', /Prenez votre temps/, 25000);
+      const later = await panelOf(v.page).getByText(/Prenez votre temps/).last().innerText();
+      check('« je reflechis » avec le panier : le panier est garde, la preuve vraie (9), la commande valable 48 h, l\'offre de rappel', /Votre panier reste enregistré sur cet appareil\./.test(later) && /commandé 9 fois ces 7 derniers jours/.test(later) && /la commande reste valable 48 h\./.test(later) && /rappel|écrire sur WhatsApp/.test(later), later);
+      const chips2 = await chipLabels(v.page);
+      check('boutons : « Commander » (en tete), « Me rappeler sur WhatsApp », « Voir mon panier »', /Commander/.test(chips2[0]) && chips2.some((c) => /Me rappeler sur WhatsApp/.test(c)) && chips2.some((c) => /panier/i.test(c)), chips2);
+      check('aucune erreur (preuve, pack, conclusion)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+
+    // --- Y3. chiffre trop faible (2) ou fonction de la base absente : AUCUNE preuve, aucune erreur
+    if (rolex) {
+      for (const [label, extra] of [['2 commandes seulement (sous le seuil de 3)', { fakeSales: { rows: [{ product_id: rolex.id, orders_count: 2 }] } }], ['fonction de la base introuvable (script pas applique)', { fakeSales: { status: 404 } }], ['aucune reponse de la base (requete coupee)', { fakeSales: { abort: true } }]]) {
+        const v = await visitor(extra);
+        await openZara(v);
+        await addRolex(v);
+        await sleep(2000);
+        const added = await panelOf(v.page).getByText(/ajouté au panier\./).last().innerText();
+        check(`${label} : aucune preuve de ventes dans le message d'ajout`, !/commandé \d+ fois/.test(added), added);
+        await ask(v.page, 'je réfléchis', /Prenez votre temps/, 25000);
+        const later = await panelOf(v.page).getByText(/Prenez votre temps/).last().innerText();
+        check(`${label} : aucune preuve dans « je reflechis » non plus, mais le panier est garde`, !/commandé \d+ fois/.test(later) && /panier reste enregistré/.test(later), later);
+        check(`${label} : aucune erreur affichee`, v.errs.length === 0 && (await panelOf(v.page).getByText(/Oups|erreur|problème/i).count()) === 0, v.errs);
+        await v.ctx.close();
+      }
+    }
+
+    // --- Y4. en arabe
+    {
+      const v = await visitor({ lang: 'ar' });
+      await v.page.goto(`${base}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await v.page.getByTestId('assistant-fab').click();
+      await waitText(v.page, /أنشئ حسابك|حسابك/, 25000);
+      await ask(v.page, 'لاحقا', /خذ وقتك/, 20000);
+      const chips = await chipLabels(v.page);
+      check('en arabe : « لاحقا » -> Zara conclut en arabe avec le bouton de rappel WhatsApp', chips.some((c) => /تواصلوا معي على واتساب/.test(c)), chips);
+      await v.ctx.close();
+    }
+  }
+
+  // =============================================== Z. RAPPEL WHATSAPP (chat + page admin) ===============================================
+  if (PARTS.includes('Z')) {
+    console.log('\n== Z. « Me rappeler sur WhatsApp » : prenom, numero, accord, demande envoyee a l\'equipe ; page admin « Rappels WhatsApp »');
+    const base = `http://localhost:${port}`;
+    const visitor = (extra = {}) => newVisitor(phone, { lang: extra.lang || 'fr', storage: extra.noName ? {} : { albasse_zara_name: 'Ali' }, fakeCallbacks: extra.fakeCallbacks || { calls: [], replies: [{ body: true }] } });
+    const openZara = async (v, welcome = /Créez votre compte gratuit(?:, Ali)?|أنشئ حسابك|حسابك/) => {
+      await v.page.goto(`${base}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await v.page.getByTestId('assistant-fab').click();
+      await waitText(v.page, welcome, 25000);
+    };
+
+    // --- Z1. le parcours complet : demande ecrite, numero, accord, envoi
+    {
+      const fc = { calls: [], replies: [{ body: true }] };
+      const v = await visitor({ fakeCallbacks: fc });
+      await openZara(v);
+      await ask(v.page, 'rappelez-moi', /Quel est votre numéro WhatsApp/, 20000);
+      await ask(v.page, '12345', /Il faut 8 chiffres/, 20000);
+      check('numero faux (12345) : Zara redemande, rien n\'est envoye', fc.calls.length === 0);
+      await ask(v.page, '66 12 34 56', /Je transmets à l’équipe : Ali, WhatsApp 66 12 34 56/, 20000);
+      const chips = await chipLabels(v.page);
+      check('confirmation : prenom et numero visibles, boutons « Oui, d\'accord », « Changer le numero », « Annuler »', chips.some((c) => /Oui, d’accord/.test(c)) && chips.some((c) => /Changer le numéro/.test(c)) && chips.some((c) => /Annuler/.test(c)), chips);
+      check('rien n\'est envoye avant l\'accord du client', fc.calls.length === 0);
+      await v.page.screenshot({ path: path.join(OUT, 'Z1-confirmation.png') });
+      await tap(v.page, 'Oui, d’accord', /C’est noté ✅ L’équipe vous écrira sur WhatsApp/, 20000);
+      check('apres l\'accord : UNE demande envoyee avec le prenom, le numero a 8 chiffres, l\'origine « chat »', fc.calls.length === 1 && fc.calls[0].p_name === 'Ali' && fc.calls[0].p_phone === '66123456' && fc.calls[0].p_source === 'chat', fc.calls);
+      check('la demande ne porte aucun mot de passe, aucun paiement : seulement prenom, numero, note, origine, appareil', Object.keys(fc.calls[0]).sort().join(',') === 'p_device,p_name,p_note,p_phone,p_source', Object.keys(fc.calls[0]));
+      await ask(v.page, 'promotions', /promotion|promo/i, 20000);
+      check('apres la demande, Zara repond normalement (le parcours est termine)', (await panelOf(v.page).getByText(/Quel est votre numéro WhatsApp/).count()) === 1 && fc.calls.length === 1);
+      check('aucune erreur (rappel)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+
+    // --- Z2. « Changer le numero », « Annuler », demande refusee par la base, base sans la fonction
+    {
+      const fc = { calls: [], replies: [{ body: true }] };
+      const v = await visitor({ fakeCallbacks: fc });
+      await openZara(v);
+      await ask(v.page, 'appelez-moi demain', /Quel est votre numéro WhatsApp/, 20000);
+      await ask(v.page, '91 23 45 67', /Je transmets à l’équipe : Ali, WhatsApp 91 23 45 67/, 20000);
+      await tap(v.page, 'Changer le numéro', /Quel est votre numéro WhatsApp/, 20000);
+      check('« Changer le numero » : Zara redemande le numero (rien d\'envoye)', fc.calls.length === 0);
+      await ask(v.page, '+235 66 12 34 56', /WhatsApp 66 12 34 56/, 20000);
+      await tap(v.page, 'Annuler', /je n’enregistre rien/, 20000);
+      check('« Annuler » : rien n\'est enregistre', fc.calls.length === 0);
+      await ask(v.page, 'livraison', /livraison|Livraison/i, 20000);
+      check('apres l\'annulation, Zara repond de nouveau normalement (elle n\'attend plus de numero)', (await panelOf(v.page).getByText(/Il faut 8 chiffres/).count()) === 0);
+      await v.ctx.close();
+
+      for (const [label, replies, re] of [['la base refuse (numero invalide pour elle)', [{ body: false }, { body: true }], /Quel est votre numéro WhatsApp/], ['script SQL pas applique (fonction introuvable)', [{ status: 404, body: { code: 'PGRST202', message: 'Could not find the function' } }], /Je n’ai pas pu enregistrer votre demande/]]) {
+        const f2 = { calls: [], replies };
+        const w = await visitor({ fakeCallbacks: f2 });
+        await openZara(w);
+        await ask(w.page, 'rappelez-moi', /Quel est votre numéro WhatsApp/, 20000);
+        await ask(w.page, '66 12 34 56', /Je transmets à l’équipe/, 20000);
+        const before = await panelOf(w.page).getByText(re).count();
+        await chip(w.page, 'Oui, d’accord').click();
+        const t0 = Date.now();
+        while ((await panelOf(w.page).getByText(re).count()) <= before && Date.now() - t0 < 20000) await sleep(200);
+        check(`${label} : Zara le dit simplement`, (await panelOf(w.page).getByText(re).count()) > before, f2.calls.length);
+        if (re.source.includes('pas pu')) {
+          const chipsF = await chipLabels(w.page);
+          check('si la demande ne peut pas partir : bouton WhatsApp pour ecrire directement a l\'equipe', chipsF.some((c) => /WhatsApp/.test(c)), chipsF);
+        }
+        check(`${label} : aucune erreur`, w.errs.length === 0, w.errs);
+        await w.ctx.close();
+      }
+    }
+
+    // --- Z3. depuis « je reflechis » : l'origine est « later » ; visiteur sans prenom : Zara le demande
+    {
+      const fc = { calls: [], replies: [{ body: true }] };
+      const v = await visitor({ fakeCallbacks: fc, noName: true });
+      await v.page.goto(`${base}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await v.page.getByTestId('assistant-fab').click();
+      await waitText(v.page, /Comment puis-je vous appeler \?/, 25000);
+      await chip(v.page, 'Passer').click();
+      await sleep(3500);
+      await ask(v.page, 'je réfléchis', /Prenez votre temps/, 25000);
+      await tap(v.page, 'Me rappeler sur WhatsApp', /Quel est votre prénom \?/, 20000);
+      await ask(v.page, 'Awa', /Merci Awa/, 20000);
+      await ask(v.page, '66 12 34 56', /Je transmets à l’équipe : Awa, WhatsApp 66 12 34 56/, 20000);
+      await tap(v.page, 'Oui, d’accord', /C’est noté ✅/, 20000);
+      check('sans prenom connu : Zara le demande, puis le numero ; l\'origine est « later »', fc.calls.length === 1 && fc.calls[0].p_name === 'Awa' && fc.calls[0].p_source === 'later', fc.calls);
+      await v.ctx.close();
+    }
+
+    // --- Z4. en arabe
+    {
+      const fc = { calls: [], replies: [{ body: true }] };
+      const v = await visitor({ lang: 'ar', fakeCallbacks: fc });
+      await v.page.goto(`${base}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await v.page.getByTestId('assistant-fab').click();
+      await waitText(v.page, /أنشئ حسابك|حسابك/, 25000);
+      await ask(v.page, 'اتصلوا بي', /ما رقم واتساب الخاص بك/, 20000);
+      await ask(v.page, '66 12 34 56', /أحول إلى الفريق: Ali، واتساب 66 12 34 56/, 20000);
+      await tap(v.page, 'نعم، موافق', /تم التسجيل ✅/, 20000);
+      check('en arabe : tout le parcours, la demande part avec le meme numero', fc.calls.length === 1 && fc.calls[0].p_phone === '66123456', fc.calls);
+      await v.ctx.close();
+    }
+
+    // --- Z5. la page admin « Rappels WhatsApp » (fausse base)
+    {
+      const uid = '22222222-2222-4222-8222-222222222222';
+      const JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyMjIyMjIyMi0yMjIyLTQyMjItODIyMi0yMjIyMjIyMjIyMjIiLCJleHAiOjQxMDI0NDQ4MDAsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.c2ln';
+      const accountOf = ({ is_admin = true } = {}) => {
+        const auth = { id: uid, aud: 'authenticated', role: 'authenticated', email: 'admin@example.com', app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' };
+        const token = { access_token: JWT, refresh_token: 'fake-refresh', token_type: 'bearer', expires_in: 3600, expires_at: 4102444800, user: auth };
+        return { auth, token, session: JSON.stringify(token), profile: { id: uid, email: 'admin@example.com', full_name: 'Admin Albasse', phone: '66123456', banned: false, role: 'admin', is_admin } };
+      };
+      const SK = 'sb-xtitsmmccpkelxfjyqyh-auth-token';
+      const iso = (msAgo) => new Date(Date.now() - msAgo).toISOString();
+      const rowsOf = () => [
+        { id: 'c1', created_at: iso(10 * 60000), name: 'Awa', phone: '66123456', note: 'Rolex (+1)', source: 'cart', device: 'Android', status: 'new' },
+        { id: 'c2', created_at: iso(5 * 3600000), name: 'Moussa', phone: '91234567', note: '', source: 'later', device: 'Autre', status: 'new' },
+        { id: 'c3', created_at: iso(2 * 86400000), name: 'Hawa', phone: '66998877', note: 'Parfum Oud', source: 'price', device: 'iPhone', status: 'done' },
+      ];
+      const openAdmin = async (fc, admin = true) => {
+        const fu = accountOf({ is_admin: admin });
+        const c = await newVisitor(phone, { lang: 'fr', storage: { [SK]: fu.session }, fakeUser: fu, fakeCallbacks: fc });
+        await c.page.goto(`${base}/admin/rappels`, { waitUntil: 'load' });
+        return c;
+      };
+      const norm = (t) => t.replace(/[\s  ]+/g, ' ').trim();
+      {
+        const fc = { calls: [], patches: [], table: { rows: rowsOf() } };
+        const c = await openAdmin(fc);
+        await c.page.getByTestId('callbacks-screen').waitFor({ timeout: 25000 });
+        await c.page.getByTestId('callback-row-c1').waitFor({ timeout: 15000 });
+        check('onglets : « A rappeler (2) » et « Faits (1) »', /À rappeler \(2\)/.test(await c.page.getByTestId('callbacks-tab-new').innerText()) && /Faits \(1\)/.test(await c.page.getByTestId('callbacks-tab-done').innerText()));
+        const r1 = norm(await c.page.getByTestId('callback-row-c1').innerText());
+        check('demande 1 : prenom, numero (+235), origine « Panier en attente », appareil, article, il y a 10 min', /Awa/.test(r1) && /\+235 66 12 34 56/.test(r1) && /Panier en attente · Android/.test(r1) && /À propos de : Rolex \(\+1\)/.test(r1) && /il y a 10 min/.test(r1), r1);
+        const r2 = norm(await c.page.getByTestId('callback-row-c2').innerText());
+        check('demande 2 : « A dit je reflechis », pas de ligne « A propos de » quand il n\'y a pas d\'article, il y a 5 h', /A dit « je réfléchis »/.test(r2) && !/À propos de/.test(r2) && /il y a 5 h/.test(r2), r2);
+        check('la demande deja faite n\'est pas dans l\'onglet « A rappeler »', (await c.page.getByTestId('callback-row-c3').count()) === 0);
+        const [pop] = await Promise.all([c.ctx.waitForEvent('page', { timeout: 10000 }), c.page.getByTestId('callback-wa-c1').click()]);
+        await pop.waitForLoadState('domcontentloaded').catch(() => {});
+        const url = pop.url();
+        check('« Ecrire sur WhatsApp » : ouvre WhatsApp avec le numero du client (+235) et un message poli deja ecrit', url.startsWith('https://wa.me/23566123456?text=') && /Bonjour Awa, ici l'équipe Albasse Shopping/.test(decodeURIComponent(url)), decodeURIComponent(url));
+        await pop.close();
+        await c.page.getByTestId('callback-done-c1').click();
+        const t0 = Date.now();
+        while ((await c.page.getByTestId('callback-row-c1').count()) > 0 && Date.now() - t0 < 10000) await sleep(200);
+        check('« Fait » : la demande part dans « Faits » et la base recoit le changement (status done)', (fc.patches || []).length === 1 && fc.patches[0].id === 'c1' && fc.patches[0].body.status === 'done' && !!fc.patches[0].body.done_at, fc.patches);
+        await c.page.getByTestId('callbacks-tab-done').click();
+        await c.page.getByTestId('callback-row-c1').waitFor({ timeout: 10000 });
+        check('onglet « Faits » : les 2 demandes traitees', (await c.page.getByTestId('callback-row-c3').count()) === 1 && (await c.page.getByTestId('callback-row-c1').count()) === 1);
+        await c.page.screenshot({ path: path.join(OUT, 'Z5-rappels-admin.png') });
+        check('aucune erreur (page admin des rappels)', c.errs.length === 0, c.errs);
+        await c.ctx.close();
+      }
+      {
+        // script SQL pas applique : un message simple qui dit quoi faire
+        const fc = { calls: [], table: { rows: [], error: { status: 404, body: { code: 'PGRST205', message: "Could not find the table 'public.assistant_callbacks' in the schema cache" } } } };
+        const c = await openAdmin(fc);
+        await c.page.getByTestId('callbacks-not-installed').waitFor({ timeout: 25000 });
+        check('table absente : message clair avec le nom du fichier a coller dans Supabase', /add-zara-sales-boost\.sql/.test(await c.page.getByTestId('callbacks-not-installed').innerText()));
+        await c.ctx.close();
+      }
+      {
+        // vide, et client non administrateur
+        const c = await openAdmin({ calls: [], table: { rows: [] } });
+        await c.page.getByTestId('callbacks-empty').waitFor({ timeout: 25000 });
+        check('aucune demande : « Aucune demande en attente pour le moment. »', /Aucune demande en attente/.test(await c.page.getByTestId('callbacks-empty').innerText()));
+        await c.ctx.close();
+        const d = await openAdmin({ calls: [], table: { rows: rowsOf() } }, false);
+        await d.page.getByText(/Accès réservé aux administrateurs/).waitFor({ timeout: 25000 });
+        check('client normal : « Acces reserve aux administrateurs », aucune demande visible', (await d.page.getByTestId('callback-row-c1').count()) === 0);
+        await d.ctx.close();
+      }
     }
   }
 

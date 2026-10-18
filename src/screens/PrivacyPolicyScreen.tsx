@@ -34,6 +34,11 @@ export function PrivacyPolicyScreen() {
             boutique. Elles sont conservées 90 jours, puis effacées.
           </Text>
           <Text style={styles.p}>
+            Si vous demandez à Zara que l'équipe vous écrive sur WhatsApp, votre prénom, votre numéro WhatsApp et les
+            articles dont vous parliez sont transmis à l'équipe, seulement après votre accord dans la conversation, et
+            uniquement pour vous répondre.
+          </Text>
+          <Text style={styles.p}>
             Pour toute question, ou pour demander l'effacement de ces informations, contactez-nous à l'adresse indiquée
             plus bas. Si votre navigateur envoie le signal « Ne pas me suivre », nous le respectons.
           </Text>

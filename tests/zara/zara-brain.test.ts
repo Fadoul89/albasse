@@ -13,6 +13,7 @@ import * as tc from '../../src/lib/trackingConsent.ts';
 import * as ai from '../../src/lib/assistantInterest.ts';
 import * as bo from '../../src/lib/browsingOverview.ts';
 import * as oc from '../../src/lib/assistantOccasions.ts';
+import * as sa from '../../src/lib/assistantSales.ts';
 import { isMissingColumn } from '../../src/lib/dbErrors.ts';
 
 const KEY = process.env.SUPABASE_ANON_KEY!;
@@ -522,6 +523,7 @@ async function main() {
     'checkout.placed': ['علي', '12345678'], 'checkout.totalToPay': [37500], 'checkout.payInitiated': ['Airtel Money', 'تم'], 'checkout.payUrl': ['https://pay.example.com'], 'checkout.payNumber': [37500, '60 60 51 51', 'Airtel Money'], 'checkout.payTeam': ['66123456', 'Airtel Money'], 'chip.useAddress': ['حي فرشا'],
     'cart.added': ['ساعة', ' (المقاس 41)', 2, 25000], 'cart.priceChanged': ['ساعة', '10 000 FCFA', '12 000 FCFA'], 'install.iosSteps': [false],
     'interest.sizesReply': ['حذاء', ['40', '41']], 'interest.colorsReply': ['حذاء', ['أسود'], ['40']], 'wholesale.prefill': ['عطر'],
+    'callback.confirm': ['علي', '66 12 34 56', 'ساعة'], 'closing.proof': [5], 'closing.pack': ['ساعة', 'عطر', 25000],
   };
   const leaks: string[] = [];
   let count = 0;
@@ -1073,6 +1075,50 @@ async function main() {
     ok('l\'emballage cadeau cite dans les messages a le meme montant que la boutique (2 000 FCFA)', ['wedding', 'mothersDay', 'valentine'].every((k) => tf2.occasion[k as oc.OccasionKey].replace(/\s/g, '').includes('2000FCFA') && ta2.occasion[k as oc.OccasionKey].replace(/\s/g, '').includes('2000FCFA')));
     ok('gros : Zara ne donne AUCUN prix de gros (pas de chiffre, pas de FCFA) et envoie vers l\'equipe sur WhatsApp', !/\d/.test(tf2.wholesale.ask + tf2.wholesale.nudge) && /WhatsApp/.test(tf2.wholesale.ask) && /واتساب/.test(ta2.wholesale.ask) && /équipe/.test(tf2.wholesale.ask));
     ok('message WhatsApp deja ecrit pour l\'equipe : article, quantite (ou cartons), ville', tf2.wholesale.prefill('Parfum Oud').includes('« Parfum Oud »') && /Quantité/.test(tf2.wholesale.prefill(null)) && /Ville/.test(tf2.wholesale.prefill(null)) && !tf2.wholesale.prefill(null).includes('«') && l.hasArabic(ta2.wholesale.prefill('عطر')));
+  }
+
+  console.log('\n== Zara vendeuse : conclure la vente, preuves vraies, packs, rappel WhatsApp');
+  {
+    const cbYes = ['rappelez-moi', 'Rappelle moi demain', 'appelez moi svp', 'contactez-moi sur whatsapp', 'écrivez-moi plus tard', 'je veux que vous me rappeliez', 'pouvez-vous me contacter', 'ecris moi', 'اتصلوا بي', 'كلموني من فضلك', 'راسلوني على واتساب'];
+    ok('« rappelez-moi » (francais et arabe) : le client demande que l\'equipe le recontacte', cbYes.every((t) => b.wantsCallback(t) && b.detectIntent(t) === 'callback'), cbYes.filter((t) => b.detectIntent(t) !== 'callback'));
+    const cbNo = ['comment vous contacter', 'numero whatsapp', 'quelle est votre adresse', 'comment vous appelez-vous', 'je m\'appelle Moise', 'je veux commander', 'livraison', 'ou etes vous', 'je réfléchis', 'plus tard'];
+    ok('pas de faux rappel : « comment vous contacter », « je m\'appelle Moise », « je réfléchis »...', cbNo.every((t) => !b.wantsCallback(t)), cbNo.filter((t) => b.wantsCallback(t)));
+    ok('« je réfléchis » reste une hesitation (Zara conclut la vente), « c\'est cher » reste une objection de prix', b.detectIntent('je réfléchis') === 'later' && b.detectIntent('plus tard') === 'later' && b.detectIntent('c\'est cher') === 'price' && b.detectIntent('numero whatsapp') === 'contact');
+    const okPhones = ['66 12 34 56', '+235 66 12 34 56', '00235 91 23 45 67', '٦٦١٢٣٤٥٦', '91234567'];
+    const badPhones = ['12345678', '6612', '', 'abcdefgh', '5512345678', '66 12 34 5'];
+    ok('numero WhatsApp du Tchad : 8 chiffres commencant par 6 ou 9 (+235 accepte), rien d\'autre', okPhones.every((t) => b.phoneFrom(t) !== null) && badPhones.every((t) => b.phoneFrom(t) === null), [okPhones.filter((t) => b.phoneFrom(t) === null), badPhones.filter((t) => b.phoneFrom(t) !== null)]);
+
+    // preuves vraies
+    const map = sa.buildSalesMap([{ product_id: 'a', orders_count: 12 }, { product_id: 'b', orders_count: 2 }, { product_id: 3, orders_count: 9 }, { product_id: 'c', orders_count: 'x' }, { product_id: 'd', orders_count: -4 }, null, { product_id: 'e', orders_count: 3.5 }]);
+    ok('les ventes venant de la base : tout ce qui est douteux est ignore (id absent, nombre faux, negatif, decimal)', map.size === 2 && map.get('a') === 12 && map.get('b') === 2, [...map.entries()]);
+    ok('reponse vide ou fonction absente : aucune vente, donc Zara ne dit AUCUN chiffre', sa.buildSalesMap(null).size === 0 && sa.buildSalesMap({ code: 'PGRST202' }).size === 0 && sa.provenSales(null, 'a') === 0 && sa.provenSales(undefined, 'a') === 0);
+    ok(`un chiffre n'est annonce qu'a partir de ${sa.MIN_SALES_PROOF} commandes (2 : rien ; 3 : annonce ; 12 : annonce)`, sa.provenSales(map, 'b') === 0 && sa.provenSales(new Map([['x', 3]]), 'x') === 3 && sa.provenSales(map, 'a') === 12 && sa.provenSales(map, 'zzz') === 0);
+    ok('l\'article le plus commande est choisi parmi ceux qui ont un chiffre solide (sinon aucun)', sa.bestSeller([{ id: 'b' }, { id: 'a' }], map)?.id === 'a' && sa.bestSeller([{ id: 'b' }, { id: 'q' }], map) === null && sa.bestSeller([], map) === null);
+    const fr = tx.texts('fr'), ar = tx.texts('ar');
+    ok('phrase de preuve : le vrai nombre, « 7 derniers jours », ni pourcentage ni promesse', /\b12\b/.test(fr.closing.proof(12)) && /7 derniers jours/.test(fr.closing.proof(12)) && !/%|garanti|meilleur|numero 1|n°\s?1/i.test(fr.closing.proof(12)) && /12/.test(ar.closing.proof(12)) && l.hasArabic(ar.closing.proof(12)));
+    ok('stock bas : seulement entre 1 et ' + sa.LOW_STOCK_MAX + ' (jamais de fausse rarete)', sa.LOW_STOCK_MAX === 5);
+
+    // packs : article qui complete, jamais celui deja au panier, jamais sans stock ni photo ; aucune remise
+    const mk = (id: string, slug: string, price: number, stock = 5, image: string | null = 'x.jpg'): P => ({ id, name: `Article ${id}`, slug: `a-${id}`, price, compareAt: null, stock, category: slug, categorySlug: slug, colors: [], sizes: [], image, createdAt: 1, nameTokens: [], catTokens: [], descTokens: [] } as unknown as P);
+    const cat = [mk('s1', 'chaussures', 30000), mk('p1', 'parfum', 12000), mk('p2', 'parfum', 18000), mk('m1', 'montre', 50000), mk('x1', 'parfum', 9000, 0), mk('x2', 'parfum', 8000, 4, null)];
+    const base = { id: 's1', categorySlug: 'chaussures', price: 30000 };
+    const c1 = sa.pickComplement(cat, base, ['s1'], null);
+    ok('pack : apres des chaussures, un article d\'une categorie qui va avec (montre : sacs-et-bagages absent), en stock et avec photo', c1?.id === 'm1', c1?.id);
+    const c2 = sa.pickComplement(cat.filter((p) => p.id !== 'm1'), { id: 's1', categorySlug: 'chaussures', price: 30000 }, ['s1'], null);
+    ok('pack : jamais d\'article epuise ou sans photo (x1 et x2 sont ecartes)', c2 === null || (c2.stock > 0 && !!c2.image), c2?.id);
+    const c3 = sa.pickComplement(cat, { id: 'm1', categorySlug: 'montre', price: 50000 }, ['m1'], new Map([['p2', 7], ['p1', 3]]));
+    ok('pack : parmi les complements, le plus commande (chiffres vrais) passe en premier', c3?.id === 'p2', c3?.id);
+    ok('pack : l\'article deja dans le panier n\'est jamais re-propose', sa.pickComplement(cat, { id: 'm1', categorySlug: 'montre', price: 50000 }, ['m1', 'p1', 'p2'], null) === null || sa.pickComplement(cat, { id: 'm1', categorySlug: 'montre', price: 50000 }, ['m1', 'p1', 'p2'], null)?.categorySlug !== 'parfum');
+    ok('pack : aucun complement pour une categorie inconnue', sa.pickComplement(cat, { id: 'z', categorySlug: 'inconnue', price: 1 }, [], null) === null);
+    ok('texte du pack : les deux articles et le total, sans remise ni pourcentage', /Article A/.test(fr.closing.pack('Article A', 'Article B', 42000)) && /42\s000 FCFA/.test(fr.closing.pack('Article A', 'Article B', 42000)) && !/remise|%|gratuit|offert|économ/i.test(fr.closing.pack('A', 'B', 42000) + fr.closing.packIntro) && l.hasArabic(ar.closing.pack('ساعة', 'عطر', 42000)));
+
+    // rappel WhatsApp
+    ok('note pour l\'equipe : articles sans doublon, court, avec « (+N) » si coupe', sa.callbackNote([]) === '' && sa.callbackNote(['Montre A', 'Montre A', ' Parfum B ']) === 'Montre A, Parfum B' && sa.callbackNote(['A'.repeat(100), 'B'.repeat(100), 'C'.repeat(100)], 150) === `${'A'.repeat(100)} (+2)` && sa.callbackNote(['A', 'B', 'C']).length < 281);
+    const confirmFr = fr.callback.confirm('Awa', '66 12 34 56', 'Montre A');
+    ok('confirmation avant d\'envoyer : prenom, numero, article et « C\'est d\'accord ? » (le client voit ce qui est transmis)', /Awa/.test(confirmFr) && /66 12 34 56/.test(confirmFr) && /Montre A/.test(confirmFr) && /d’accord \?/.test(confirmFr) && /WhatsApp/.test(confirmFr) && !/Montre A/.test(fr.callback.confirm('Awa', '66 12 34 56', '')));
+    ok('textes du rappel et de la conclusion : tous presents en francais et en arabe, aucune promesse de delai precis', [fr.callback.askName, fr.callback.done, fr.callback.failed, fr.callback.badPhone, fr.closing.later, fr.closing.cartKept, fr.closing.callbackOffer, fr.chip.callback].every((t) => t.length > 8) && [ar.callback.askName, ar.callback.done, ar.callback.failed, ar.callback.badPhone, ar.closing.later, ar.closing.cartKept, ar.closing.callbackOffer, ar.chip.callback].every((t) => l.hasArabic(t)) && !/\d+\s?(min|minutes|heures?)|dans l'heure|immédiatement/.test(fr.callback.done + fr.closing.callbackOffer));
+    ok('la validite 48 h annoncee est la vraie regle de la boutique', fr.closing.validity.includes('48 h') && ar.closing.validity.includes('48'));
+    ok('aucun paiement ni coordonnee bancaire dans les messages de conclusion et de rappel', !/airtel|moov|carte|iban|code secret|mot de passe/i.test(JSON.stringify([fr.closing, fr.callback, fr.chip.callback])));
   }
 
   console.log('\n' + (failures === 0 ? 'TOUT EST BON' : `${failures} ECHEC(S)`));

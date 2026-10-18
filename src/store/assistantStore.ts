@@ -49,7 +49,6 @@ import {
   giftWrapPitch,
   giftWrapReply,
   isBroad,
-  laterReply,
   lowStockLine,
   maxDiscountPct,
   nextQuestion,
@@ -70,7 +69,8 @@ import {
   type Parsed,
   type Range,
 } from '../lib/assistantMarketing';
-import { fetchCartStatus, fetchLoyaltyPoints, fetchPaymentNumbers, fetchProductForCart, getCatalog, getCategories, getCities, getStoreInfo, logAssistantEvent, startChatToday, toCard, type AssistantProduct } from '../lib/assistantData';
+import { fetchCartStatus, fetchLoyaltyPoints, fetchPaymentNumbers, fetchProductForCart, getCatalog, getCategories, getCities, getProductSales, getStoreInfo, logAssistantEvent, requestCallback, startChatToday, toCard, type AssistantProduct, type CallbackSource } from '../lib/assistantData';
+import { callbackNote, LOW_STOCK_MAX, pickComplement, provenSales } from '../lib/assistantSales';
 import { clearIntent, currentDevice, markIntent } from '../lib/assistantAttribution';
 import { trackShortcutInstallIfNeeded } from '../lib/appInstallTracking';
 import { occasionOf, stripOccasion, upcomingOccasion, type OccasionKey } from '../lib/assistantOccasions';
@@ -140,7 +140,10 @@ export interface ChatAction {
     | 'orderAddress'
     | 'orderPage'
     | 'interest'
-    | 'account';
+    | 'account'
+    | 'callback'
+    | 'callbackYes'
+    | 'callbackFix';
   payload?: string;
   highlight?: boolean;
 }
@@ -176,7 +179,10 @@ export type Step =
   | 'co_city'
   | 'co_pay'
   | 'co_gift'
-  | 'co_confirm';
+  | 'co_confirm'
+  | 'cb_name'
+  | 'cb_phone'
+  | 'cb_confirm';
 
 // Commande en cours dans la conversation. Le numéro est choisi une fois : si l'enregistrement est refait après une coupure, la
 // même commande n'est pas enregistrée deux fois.
@@ -381,6 +387,9 @@ interface PendingAdd {
   color: string | null;
 }
 let pendingVariant: PendingAdd | null = null;
+
+// Demande de rappel WhatsApp en cours (prénom, numéro, d'où vient la demande). Elle n'est pas gardée si la page est rechargée : le client revient au menu.
+let callbackDraft: { name: string | null; phone: string | null; source: CallbackSource } | null = null;
 
 // Proposition d'installer le raccourci : une seule fois, puis pause de 14 jours. Elle vient après deux messages du client
 // (il a commencé à discuter), jamais dès l'accueil ; entre-temps, un bouton du menu reste là pour ceux qui veulent.
@@ -722,7 +731,11 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     }
     const wrap = giftWrapPitch(lang);
     if (gift && !recentTexts(12).some((t) => t.includes(wrap))) lines.push(wrap);
-    else lines.push(lowStockLine(products.slice(1), lang) ?? freshLine(T().encouragements));
+    else {
+      // une preuve VRAIE avant l'encouragement : les commandes réelles des 7 derniers jours (seulement avec un chiffre solide)
+      const proven = first ? provenSales(await getProductSales(), first.id) : 0;
+      lines.push(lowStockLine(products.slice(1), lang) ?? (proven > 0 ? T().closing.proof(proven) : freshLine(T().encouragements)));
+    }
     // une seule fois : le bouton + des fiches produits
     if (!get().messages.some((m) => m.role === 'assistant' && m.text.includes(T().cart.tapPlus))) lines.push(T().cart.tapPlus);
     await say(lines.join('\n'), { actions });
@@ -948,7 +961,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
   // « C'est cher » : si on vient de montrer des produits, des alternatives moins chères quand il y en a.
   async function priceObjection() {
     const lastShown = [...get().messages].reverse().find((m) => m.role === 'assistant' && m.products && m.products.length > 0);
-    const actions = () => [sayBtn(T().chip.promotions, 'promotions'), sayBtn(T().chip.budget, 'budget'), wa()];
+    const actions = () => [sayBtn(T().chip.promotions, 'promotions'), sayBtn(T().chip.budget, 'budget'), callbackChip('price'), wa()];
     try {
       const catalog = await getCatalog();
       if (lastShown?.products) {
@@ -1532,6 +1545,10 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     // après chaque article choisi : Zara rappelle toujours l'emballage cadeau (avec son bouton)
     let actions = [...cartActions(), sayBtn(T().chip.wrap, 'emballage')];
     let text = `${T().cart.added(name, variantText(size, color), count, total)}\n${T().cart.wrapNudge}`;
+    // preuves VRAIES : les commandes réelles des 7 derniers jours (chiffre solide seulement) et un stock vraiment bas
+    const proven = provenSales(await getProductSales(), product.id);
+    if (proven > 0) text += `\n${T().closing.proof(proven)}`;
+    if (product.stock >= 1 && product.stock <= LOW_STOCK_MAX) text += `\n${T().lowStock(name, product.stock)}`;
     // grosse commande (beaucoup de pièces ou gros total) : Zara propose l'équipe WhatsApp pour un prix de gros, une seule fois
     const bulk = already + 1 >= BULK_MIN_QTY || total >= BULK_MIN_TOTAL;
     if (bulk && !get().messages.some((m) => m.role === 'assistant' && m.text.includes(T().wholesale.nudge))) {
@@ -1539,7 +1556,31 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       actions = [waChipPrefill(product.name), ...actions];
     }
     await say(text, { fast: true, actions });
+    await offerComplement(product, actions);
     await maybeOfferInstall(actions);
+  }
+
+  // L'article qui complète le choix (une ou deux fois par conversation), avec le total des deux. Aucune remise n'est annoncée.
+  async function offerComplement(product: Product, actions: ChatAction[]) {
+    const intro = T().closing.packIntro;
+    if (get().messages.filter((m) => m.role === 'assistant' && m.text.startsWith(intro)).length >= 2) return;
+    try {
+      const catalog = await getCatalog();
+      const base = catalog.find((c) => c.id === product.id);
+      if (!base) return;
+      const inCartIds = useCartStore.getState().items.map((i) => i.product.id);
+      const complement = pickComplement(catalog, base, inCartIds, await getProductSales(), get().lang);
+      if (!complement) return;
+      // le panier a déjà un article de cette catégorie : le client a déjà complété son choix
+      if (catalog.some((c) => inCartIds.includes(c.id) && c.categorySlug === complement.categorySlug)) return;
+      await say(`${intro}\n${T().closing.pack(shortName(base.name), shortName(complement.name), product.price + complement.price)}`, {
+        fast: true,
+        products: [toCard(complement)],
+        actions,
+      });
+    } catch {
+      // pas de pack : on ne dit rien
+    }
   }
 
   // Taille et couleur : demandées seulement s'il y a un vrai choix (une seule option = choisie d'office).
@@ -1912,6 +1953,175 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
   }
 
   // -------------------------------------------------------------------------------------------
+  // Conclure la vente : le client hésite (« je réfléchis ») ; Zara donne des faits VRAIS (stock, ventes, validité), puis
+  // propose de l'aide : commander maintenant, ou un rappel WhatsApp de l'équipe (la liste arrive dans l'admin pour le matin).
+  // -------------------------------------------------------------------------------------------
+
+  const callbackChip = (source: CallbackSource): ChatAction => ({ label: T().chip.callback, kind: 'callback', payload: source });
+  const spacedPhone = (digits: string) => digits.replace(/(\d{2})(?=\d)/g, '$1 ');
+
+  // Les articles dont on parle : le panier, sinon les derniers produits montrés.
+  function topicProducts(): { id: string | null; slug: string | null; name: string }[] {
+    const cart = useCartStore.getState().items;
+    if (cart.length > 0) return cart.map((i) => ({ id: i.product.id, slug: i.product.slug, name: i.product.name }));
+    const last = [...get().messages].reverse().find((m) => m.role === 'assistant' && m.products && m.products.length > 0);
+    return (last?.products ?? []).slice(0, 3).map((p) => ({ id: null, slug: p.slug, name: p.name }));
+  }
+
+  async function laterClosing() {
+    const cart = useCartStore.getState().items;
+    const c = T().closing;
+    const lines: string[] = [withName(c.later)];
+    const topics = topicProducts();
+    if (cart.length > 0) {
+      lines.push(c.cartKept);
+      // stock réel du panier : seulement s'il est vraiment bas
+      try {
+        const rows = await fetchCartStatus([...new Set(cart.map((i) => i.product.id))]);
+        const low = rows.filter((r) => r.is_active && r.stock >= 1 && r.stock <= LOW_STOCK_MAX).sort((a, b) => a.stock - b.stock)[0];
+        const item = low ? cart.find((i) => i.product.id === low.id) : null;
+        if (low && item) lines.push(T().lowStock(shortName(item.product.name), low.stock));
+      } catch {
+        // pas de vérification possible : on ne dit rien du stock
+      }
+    }
+    // preuve vraie : les commandes réelles de l'article principal (seulement avec un chiffre solide)
+    if (topics.length > 0) {
+      try {
+        const sales = await getProductSales();
+        let id = topics[0].id;
+        if (!id && topics[0].slug) id = (await getCatalog()).find((p) => p.slug === topics[0].slug)?.id ?? null;
+        const n = id ? provenSales(sales, id) : 0;
+        if (n > 0) lines.push(c.proof(n));
+      } catch {
+        // pas de chiffre : pas de preuve
+      }
+    }
+    if (cart.length > 0) lines.push(c.validity);
+    // visiteur sans compte et sans panier : la porte reste ouverte (favoris avec un compte gratuit)
+    else if (isGuest()) lines.push(c.favorites);
+    lines.push(c.callbackOffer);
+    const actions: ChatAction[] =
+      cart.length > 0
+        ? [checkoutChip(), callbackChip('cart'), { label: T().chip.viewCart, kind: 'cart' }]
+        : [callbackChip('later'), sayBtn(T().chip.promotions, 'promotions'), menuBtn()];
+    if (isGuest()) actions.push({ label: T().chip.createAccount, kind: 'register' });
+    await say(lines.join('\n'), { actions });
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // Rappel WhatsApp : prénom, numéro, accord du client (il voit ce qui est transmis), puis la demande part à l'équipe.
+  // -------------------------------------------------------------------------------------------
+
+  const callbackCancelChip = (): ChatAction => ({ label: T().chip.cancel, kind: 'cancel' });
+
+  async function startCallback(source: CallbackSource) {
+    const auth = useAuthStore.getState();
+    const name = get().name;
+    callbackDraft = { name, phone: auth.isAuthenticated ? phoneFrom(auth.profile?.phone ?? '') : null, source };
+    if (!name) {
+      setStep('cb_name');
+      await say(T().callback.askName, { actions: [callbackCancelChip()] });
+      return;
+    }
+    if (callbackDraft.phone) {
+      await callbackConfirm();
+      return;
+    }
+    await askCallbackPhone();
+  }
+
+  async function askCallbackPhone() {
+    if (!callbackDraft) return;
+    callbackDraft.phone = null;
+    setStep('cb_phone');
+    await say(T().callback.askPhone(callbackDraft.name ?? ''), { actions: [callbackCancelChip()] });
+  }
+
+  async function callbackConfirm() {
+    const d = callbackDraft;
+    if (!d || !d.name || !d.phone) {
+      await cancelCallback();
+      return;
+    }
+    setStep('cb_confirm');
+    const note = callbackNote(topicProducts().map((p) => shortName(p.name)));
+    await say(T().callback.confirm(d.name, spacedPhone(d.phone), note), {
+      actions: [{ label: T().chip.callbackYes, kind: 'callbackYes', highlight: true }, { label: T().chip.callbackFix, kind: 'callbackFix' }, callbackCancelChip()],
+    });
+  }
+
+  async function cancelCallback() {
+    callbackDraft = null;
+    setStep('menu');
+    await say(T().callback.cancelled, { fast: true, actions: [menuBtn(), wa()] });
+  }
+
+  async function submitCallback() {
+    const d = callbackDraft;
+    if (!d || !d.name || !d.phone) {
+      await cancelCallback();
+      return;
+    }
+    const result = await requestCallback({ name: d.name, phone: d.phone, note: callbackNote(topicProducts().map((p) => shortName(p.name))), source: d.source });
+    if (result === 'invalid') {
+      await askCallbackPhone();
+      return;
+    }
+    callbackDraft = null;
+    setStep('menu');
+    if (result === 'ok') await say(T().callback.done, { actions: [sayBtn(T().chip.promotions, 'promotions'), menuBtn()] });
+    else await say(T().callback.failed, { actions: [wa(), menuBtn()] });
+  }
+
+  // Ce que le client écrit pendant la demande ; false : ce n'était pas la réponse attendue, Zara répond à ce qu'il a écrit.
+  async function handleCallbackText(text: string, step: Step): Promise<boolean> {
+    const stop = yesNo(text) === 'no' || /annul|laisse|الغ|إلغ/.test(normalize(text));
+    if (stop) {
+      await cancelCallback();
+      return true;
+    }
+    if (!callbackDraft) {
+      setStep('menu');
+      return false;
+    }
+    if (step === 'cb_name') {
+      const name = firstNameFrom(text);
+      if (!name) {
+        callbackDraft = null;
+        setStep('menu');
+        return false;
+      }
+      callbackDraft.name = name;
+      await askCallbackPhone();
+      return true;
+    }
+    if (step === 'cb_phone') {
+      const phone = phoneFrom(text);
+      if (phone) {
+        callbackDraft.phone = phone;
+        await callbackConfirm();
+        return true;
+      }
+      if (/\d/.test(text)) {
+        await say(T().callback.badPhone, { fast: true, actions: [callbackCancelChip()] });
+        return true;
+      }
+      callbackDraft = null;
+      setStep('menu');
+      return false;
+    }
+    // cb_confirm
+    if (yesNo(text) === 'yes') {
+      await submitCallback();
+      return true;
+    }
+    await say(T().checkout.pickButton, { fast: true });
+    await callbackConfirm();
+    return true;
+  }
+
+  // -------------------------------------------------------------------------------------------
   // Aiguillage
   // -------------------------------------------------------------------------------------------
 
@@ -1926,6 +2136,9 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     switch (intent) {
       case 'wholesale':
         await say(t.wholesale.ask, { actions: [waChipPrefill(null), menuBtn()] });
+        return;
+      case 'callback':
+        await startCallback(useCartStore.getState().items.length > 0 ? 'cart' : 'chat');
         return;
       case 'bot':
         await say(t.bot, { actions: [wa(), menuBtn()] });
@@ -2104,11 +2317,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         return;
       }
       case 'later':
-        await say(withName(laterReply(get().lang)), {
-          actions: isGuest()
-            ? [{ label: t.chip.createAccount, kind: 'register', highlight: true }, sayBtn(t.chip.promotions, 'promotions'), menuBtn()]
-            : [sayBtn(t.chip.promotions, 'promotions'), menuBtn()],
-        });
+        await laterClosing();
         return;
       case 'order': {
         // « Je veux commander » avec un panier plein : Zara finalise la commande ici ; « comment commander ? » : l'explication
@@ -2211,6 +2420,8 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       setStep('menu');
     } else if (step.startsWith('co_')) {
       if (await handleOrderText(text, step)) return;
+    } else if (step.startsWith('cb_')) {
+      if (await handleCallbackText(text, step)) return;
     } else if (step === 'ask_budget') {
       const range = parseBudget(text);
       if (range) {
@@ -2357,8 +2568,24 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         userSays(action.label);
         enqueueAdd(action.payload ?? '');
         return;
+      case 'callback':
+        userSays(action.label);
+        await startCallback(action.payload === 'later' || action.payload === 'price' || action.payload === 'cart' ? action.payload : 'chat');
+        return;
+      case 'callbackYes':
+        userSays(action.label);
+        await submitCallback();
+        return;
+      case 'callbackFix':
+        userSays(action.label);
+        await askCallbackPhone();
+        return;
       case 'cancel':
         userSays(action.label);
+        if (get().step.startsWith('cb_')) {
+          await cancelCallback();
+          return;
+        }
         pendingVariant = null;
         await say(T().cart.cancelled, { fast: true, actions: [menuBtn()] });
         return;
@@ -2405,7 +2632,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
 
   // Après deux messages du client (une fois la présentation finie), si ce n'est pas déjà fait : la proposition d'installer le raccourci (une seule fois).
   async function afterTurn() {
-    if (get().step.startsWith('co_')) return; // jamais au milieu d'une commande
+    if (get().step.startsWith('co_') || get().step.startsWith('cb_')) return; // jamais au milieu d'une commande ni d'une demande de rappel
     if (userMessagesAfterIntro() >= INSTALL_OFFER_AFTER_MESSAGES) await maybeOfferInstall();
   }
 
