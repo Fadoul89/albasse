@@ -8,6 +8,7 @@ import type { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing } from '../theme';
 import { useAuthStore } from '../store/authStore';
 import { GoldButton } from '../components/GoldButton';
+import { ProfileEditor } from '../components/ProfileEditor';
 import { useCustomerMessages } from '../hooks/useCustomerMessages';
 import { useToastStore } from '../store/toastStore';
 import { supabase } from '../lib/supabase';
@@ -65,6 +66,7 @@ export function AccountScreen() {
   const showToast = useToastStore((s) => s.show);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [adminExpanded, setAdminExpanded] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
 
   const handlePickAvatar = async () => {
     if (!profile) return;
@@ -136,9 +138,20 @@ export function AccountScreen() {
         </Pressable>
         <Text style={styles.name}>{profile.full_name ?? 'Client Albasse'}</Text>
         <Text style={styles.email}>{profile.email}</Text>
+        {profile.phone ? <Text style={styles.detail}>📞 {profile.phone}</Text> : null}
+        {profile.address ? <Text style={styles.detail}>📍 {profile.address}</Text> : null}
 
         <LoyaltyCard points={profile.loyalty_points ?? 0} />
       </View>
+
+      {editingProfile ? (
+        <ProfileEditor profile={profile} onClose={() => setEditingProfile(false)} />
+      ) : (
+        <Pressable style={styles.menuItem} onPress={() => setEditingProfile(true)} testID="profile-edit-open">
+          <Text style={styles.menuIcon}>✏️</Text>
+          <Text style={styles.menuLabel}>Modifier mon profil</Text>
+        </Pressable>
+      )}
 
       {profile.is_admin && (
         <View style={styles.adminGroup}>
@@ -320,6 +333,7 @@ const styles = StyleSheet.create({
   avatarEditIcon: { fontSize: 11 },
   name: { color: colors.cream, fontFamily: fonts.bodySemiBold, fontSize: 16 },
   email: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 12, marginTop: 2 },
+  detail: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 12, marginTop: 2, textAlign: 'center' },
   loyaltyCard: {
     width: '100%',
     backgroundColor: colors.panelAlt,

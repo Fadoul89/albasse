@@ -5,6 +5,7 @@ import { attachUserToSession } from '../lib/analytics';
 import { useToastStore } from './toastStore';
 import { useFavoritesStore } from './favoritesStore';
 import type { Profile } from '../types';
+import type { ProfileChanges } from '../lib/profileEdit';
 
 export interface SignUpDetails {
   fullName: string;
@@ -30,6 +31,7 @@ interface AuthState {
   ) => Promise<{ error: string | null; needsEmailConfirmation?: boolean }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  updateProfile: (changes: ProfileChanges) => Promise<{ error: string | null }>;
   resetPassword: (email: string) => Promise<{ error: string | null }>;
   updatePassword: (newPassword: string) => Promise<{ error: string | null }>;
   signInWithGoogle: () => Promise<{ error: string | null }>;
@@ -187,6 +189,24 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       await refreshInFlight;
     } finally {
       refreshInFlight = null;
+    }
+  },
+
+  // Le client change lui-meme ses informations (sa propre ligne seulement). On ne confirme que si la base a vraiment modifie la ligne,
+  // et on garde la ligne relue sur le serveur : pas de nouvelle connexion a refaire, donc une panne de reseau ne le deconnecte pas.
+  updateProfile: async (changes) => {
+    const current = get().profile;
+    if (!current) return { error: 'Connectez-vous pour modifier votre profil.' };
+    try {
+      const { data, error } = await supabase.from('profiles').update(changes).eq('id', current.id).select('*');
+      if (error) return { error: error.message };
+      const row = (data as Profile[] | null)?.[0];
+      if (!row) return { error: "Votre profil n'a pas pu être enregistré. Merci de réessayer, ou écrivez-nous sur WhatsApp." };
+      set({ profile: { ...current, ...row } });
+      return { error: null };
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return { error: `Erreur technique inattendue : ${message}` };
     }
   },
 

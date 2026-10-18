@@ -12,7 +12,7 @@ const fs = require('fs');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const dist = process.argv[2] || '../../dist';
 const port = process.argv[3] || '4333';
-const PARTS = (process.env.PARTS || 'ALKPMTOFBCDE').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMRTOFBCDE').toUpperCase();
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
 fs.mkdirSync(OUT, { recursive: true });
 const KEY = process.env.SUPABASE_ANON_KEY;
@@ -81,6 +81,21 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
             fakeUser.servedAt = Date.now();
             return json(route, fakeUser.profile);
           });
+        }
+        // modification du profil par le client (fausse table : patches = ce que la base aurait recu ; refuseNext = la base ne change aucune ligne ; failNext = panne)
+        if (fakeUser && fakeUser.editable && u.pathname === '/rest/v1/profiles' && m === 'PATCH' && u.searchParams.get('id') === 'eq.' + fakeUser.auth.id) {
+          const body = JSON.parse(req.postData() || '{}');
+          fakeUser.patches.push(body);
+          if (fakeUser.failNext > 0) {
+            fakeUser.failNext--;
+            return json(route, { message: 'service indisponible', code: 'XX000' }, 500);
+          }
+          if (fakeUser.refuseNext > 0) {
+            fakeUser.refuseNext--;
+            return json(route, []);
+          }
+          Object.assign(fakeUser.profile, body);
+          return json(route, [fakeUser.profile]);
         }
         if (fakeOrders && u.pathname === '/rest/v1/rpc/auto_flag_stale_orders') return json(route, null);
         if (fakeOrders && u.pathname === '/rest/v1/orders') {
@@ -1242,6 +1257,174 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await sleep(1500);
       check('connecte sans prenom, prenom deja retenu sur l\'appareil : accueil par son prenom, Zara ne le redemande pas', (await countOf(c.page, /Comment puis-je vous appeler|Je vois que vous êtes connecté/)) === 0);
       check('aucune erreur (connecte sans prenom, prenom retenu)', c.errs.length === 0, c.errs);
+      await c.ctx.close();
+    }
+  }
+
+  // =============================================== R. PROFIL CLIENT MODIFIABLE : NOM, TELEPHONE, ADRESSE ===============================================
+  if (PARTS.includes('R')) {
+    console.log('\n== R. profil client modifiable : nom, telephone, WhatsApp, adresse (bouton « Modifier mon profil »)');
+    const uid = '11111111-1111-4111-8111-111111111111';
+    const JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMTExMTExMS0xMTExLTQxMTEtODExMS0xMTExMTExMTExMTEiLCJleHAiOjQxMDI0NDQ4MDAsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.c2ln';
+    const accountOf = (profile = {}, opts = {}) => {
+      const auth = { id: uid, aud: 'authenticated', role: 'authenticated', email: 'test@example.com', app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' };
+      const token = { access_token: JWT, refresh_token: 'fake-refresh', token_type: 'bearer', expires_in: 3600, expires_at: 4102444800, user: auth };
+      return { auth, token, session: JSON.stringify(token), editable: true, patches: [], ...opts, profile: { id: uid, email: 'test@example.com', full_name: 'Ahmed Hassan', phone: '66123456', whatsapp_number: null, profession: null, region: null, country: 'Tchad', address: null, loyalty_points: 0, banned: false, role: 'customer', is_admin: false, is_affiliate: false, ...profile } };
+    };
+    const openAccount = async (fu) => {
+      const c = await newVisitor(phone, { lang: 'fr', storage: { 'sb-xtitsmmccpkelxfjyqyh-auth-token': fu.session }, fakeUser: fu });
+      await c.page.goto(`http://localhost:${port}/compte`, { waitUntil: 'load' });
+      await c.page.getByTestId('profile-edit-open').waitFor({ timeout: 25000 });
+      return c;
+    };
+    const input = (c, id) => c.page.getByTestId('profile-input-' + id);
+    const fillIn = (c, id, value) => input(c, id).fill(value);
+    const save = (c) => c.page.getByText('Enregistrer', { exact: true }).click();
+    const editorOpen = (c) => c.page.getByTestId('profile-editor').count().then((n) => n === 1);
+    const pageHas = (c, re) => c.page.getByText(re).count();
+    const openEditor = async (c) => {
+      await c.page.getByTestId('profile-edit-open').click();
+      await c.page.getByTestId('profile-editor').waitFor({ timeout: 10000 });
+    };
+
+    // --- R1. le parcours complet : on ouvre, on change nom + telephone + adresse (+ WhatsApp), on enregistre ; tout est a jour partout, Zara dit le nouveau prenom
+    {
+      const fu = accountOf();
+      const c = await openAccount(fu);
+      check('page Compte : le telephone enregistre est affiche, pas d\'adresse encore', (await pageHas(c, '📞 66123456')) === 1 && (await pageHas(c, /^📍/)) === 0);
+      await openEditor(c);
+      const before = { name: await input(c, 'fullName').inputValue(), phone: await input(c, 'phone').inputValue(), wa: await input(c, 'whatsapp').inputValue(), country: await input(c, 'country').inputValue(), address: await input(c, 'address').inputValue() };
+      check('le formulaire s\'ouvre rempli avec les informations du compte', before.name === 'Ahmed Hassan' && before.phone === '66123456' && before.wa === '' && before.country === 'Tchad' && before.address === '', before);
+      await save(c);
+      await sleep(700);
+      check('rien n\'a change : « Enregistrer » ne fait rien (aucune demande envoyee a la base)', fu.patches.length === 0 && (await editorOpen(c)));
+      await fillIn(c, 'fullName', 'Fadoul Mahamat');
+      await fillIn(c, 'phone', '99221017');
+      await c.page.getByText('Même numéro que mon téléphone').click();
+      check('« Même numéro que mon téléphone » recopie le telephone dans WhatsApp', (await input(c, 'whatsapp').inputValue()) === '99221017');
+      await fillIn(c, 'address', "Quartier Chagoua, N'Djamena");
+      await c.page.screenshot({ path: path.join(OUT, 'R1-formulaire.png') });
+      await save(c);
+      await c.page.getByText('Profil mis à jour ✓').waitFor({ timeout: 10000 });
+      check('une seule demande envoyee, avec exactement les 7 informations (jamais de points, d\'admin ou d\'e-mail)', fu.patches.length === 1 && JSON.stringify(fu.patches[0]) === JSON.stringify({ full_name: 'Fadoul Mahamat', phone: '99221017', whatsapp_number: '99221017', profession: null, region: null, country: 'Tchad', address: "Quartier Chagoua, N'Djamena" }), fu.patches);
+      check('message de confirmation affiche, le formulaire se ferme', (await pageHas(c, 'Vos informations ont été mises à jour.')) >= 1 && !(await editorOpen(c)));
+      check('la carte du compte montre tout de suite le nouveau nom, telephone et adresse', (await pageHas(c, 'Fadoul Mahamat')) >= 1 && (await pageHas(c, '📞 99221017')) === 1 && (await pageHas(c, "📍 Quartier Chagoua, N'Djamena")) === 1 && (await pageHas(c, 'Ahmed Hassan')) === 0);
+      await c.page.screenshot({ path: path.join(OUT, 'R2-apres-enregistrement.png') });
+      await c.page.getByRole('button', { name: FAB_NAME }).click();
+      await waitText(c.page, WELCOME_FR('Fadoul'), 30000);
+      const oldName = await panelOf(c.page).getByText(/Salut Ahmed/).count();
+      check('Zara salue le client par son NOUVEAU prenom (Fadoul), plus par l\'ancien', oldName === 0, oldName);
+      check('aucune erreur (modification du profil)', c.errs.length === 0, c.errs);
+      await c.ctx.close();
+    }
+
+    // --- R2. numero invalide : le message s'affiche sous le champ, rien n'est envoye ; on corrige, ca s'enregistre
+    {
+      const fu = accountOf();
+      const c = await openAccount(fu);
+      await openEditor(c);
+      await fillIn(c, 'phone', '123');
+      await save(c);
+      await c.page.getByTestId('profile-error').waitFor({ timeout: 5000 });
+      const msg = await c.page.getByTestId('profile-error').innerText();
+      check('telephone trop court : message clair sous le champ, rien d\'envoye a la base', /8 à 15 chiffres/.test(msg) && fu.patches.length === 0 && (await editorOpen(c)), { msg, patches: fu.patches.length });
+      await fillIn(c, 'phone', '99221017');
+      await sleep(300);
+      check('le message disparait des que le client corrige', (await c.page.getByTestId('profile-error').count()) === 0);
+      await fillIn(c, 'whatsapp', '12');
+      await save(c);
+      await c.page.getByTestId('profile-error').waitFor({ timeout: 5000 });
+      check('WhatsApp invalide : refuse aussi, avec son message', /WhatsApp/.test(await c.page.getByTestId('profile-error').innerText()) && fu.patches.length === 0);
+      await fillIn(c, 'whatsapp', '');
+      await save(c);
+      await c.page.getByText('Profil mis à jour ✓').waitFor({ timeout: 10000 });
+      check('corrige (WhatsApp laisse vide) : enregistre, WhatsApp envoye comme « vide » (null)', fu.patches.length === 1 && fu.patches[0].phone === '99221017' && fu.patches[0].whatsapp_number === null, fu.patches);
+      await c.ctx.close();
+    }
+
+    // --- R3. nom vide : refuse
+    {
+      const fu = accountOf();
+      const c = await openAccount(fu);
+      await openEditor(c);
+      await fillIn(c, 'fullName', '   ');
+      await save(c);
+      await c.page.getByTestId('profile-error').waitFor({ timeout: 5000 });
+      check('nom vide : « Merci d\'ecrire votre nom et prenom », rien d\'envoye', /nom et prénom/.test(await c.page.getByTestId('profile-error').innerText()) && fu.patches.length === 0);
+      await c.ctx.close();
+    }
+
+    // --- R4. la base ne change aucune ligne (droit refuse) : on ne dit JAMAIS « enregistre » ; le formulaire reste, puis on reessaie
+    {
+      const fu = accountOf({}, { refuseNext: 1 });
+      const c = await openAccount(fu);
+      await openEditor(c);
+      await fillIn(c, 'address', 'Farcha');
+      await save(c);
+      await c.page.getByText('Enregistrement impossible').waitFor({ timeout: 10000 });
+      check('la base ne change rien : message d\'echec honnete, jamais « mis a jour »', (await pageHas(c, /n'a pas pu être enregistré/)) >= 1 && (await pageHas(c, 'Profil mis à jour ✓')) === 0);
+      check('le formulaire reste ouvert avec ce que le client a ecrit, la carte garde l\'ancien profil', (await editorOpen(c)) && (await input(c, 'address').inputValue()) === 'Farcha' && (await pageHas(c, /^📍 (?!Ville$)/)) === 0);
+      await save(c);
+      await c.page.getByText('Profil mis à jour ✓').waitFor({ timeout: 10000 });
+      check('il reessaie : ca s\'enregistre (2e demande identique), la carte montre l\'adresse', fu.patches.length === 2 && fu.patches[1].address === 'Farcha' && (await pageHas(c, '📍 Farcha')) === 1, fu.patches.length);
+      await c.ctx.close();
+    }
+
+    // --- R5. panne de la base (500) : message d'echec, pas de deconnexion, on reessaie
+    {
+      const fu = accountOf({}, { failNext: 1 });
+      const c = await openAccount(fu);
+      await openEditor(c);
+      await fillIn(c, 'fullName', 'Ahmed Hassan Idriss');
+      await save(c);
+      await c.page.getByText('Enregistrement impossible').waitFor({ timeout: 10000 });
+      check('panne de la base : echec annonce, le client reste connecte (page Compte toujours la)', (await pageHas(c, 'Profil mis à jour ✓')) === 0 && (await editorOpen(c)) && (await c.page.getByText('Se déconnecter').count()) === 1);
+      await save(c);
+      await c.page.getByText('Profil mis à jour ✓').waitFor({ timeout: 10000 });
+      check('apres la panne, le 2e essai enregistre le nouveau nom', fu.patches.length === 2 && fu.patches[1].full_name === 'Ahmed Hassan Idriss' && (await pageHas(c, 'Ahmed Hassan Idriss')) >= 1, fu.patches.length);
+      await c.ctx.close();
+    }
+
+    // --- R6. annuler : rien n'est envoye, le formulaire se ferme, et il se rouvre avec les vraies informations
+    {
+      const fu = accountOf();
+      const c = await openAccount(fu);
+      await openEditor(c);
+      await fillIn(c, 'fullName', 'Quelqu\'un d\'autre');
+      await c.page.getByText('Annuler', { exact: true }).click();
+      await sleep(500);
+      check('« Annuler » : le formulaire se ferme, rien n\'est envoye, l\'ancien nom reste', !(await editorOpen(c)) && fu.patches.length === 0 && (await pageHas(c, 'Ahmed Hassan')) >= 1);
+      await openEditor(c);
+      check('on rouvre : le formulaire montre le vrai nom (pas ce qui avait ete tape)', (await input(c, 'fullName').inputValue()) === 'Ahmed Hassan');
+      await c.ctx.close();
+    }
+
+    // --- R7. effacer l'adresse : envoyee comme « vide » (null), la ligne disparait de la carte
+    {
+      const fu = accountOf({ address: 'Quartier Chagoua' });
+      const c = await openAccount(fu);
+      check('adresse enregistree affichee sur la carte', (await pageHas(c, '📍 Quartier Chagoua')) === 1);
+      await openEditor(c);
+      await fillIn(c, 'address', '');
+      await save(c);
+      await c.page.getByText('Profil mis à jour ✓').waitFor({ timeout: 10000 });
+      check('adresse effacee : envoyee « vide » (null), la ligne 📍 disparait de la carte', fu.patches.length === 1 && fu.patches[0].address === null && (await pageHas(c, /^📍/)) === 0, fu.patches);
+      await c.ctx.close();
+    }
+
+    // --- R8. compte sans telephone ni adresse (inscription Google) : le client peut les ajouter
+    {
+      const fu = accountOf({ full_name: 'Fatima Idriss', phone: null, country: null });
+      const c = await openAccount(fu);
+      check('compte sans telephone ni adresse : rien d\'affiche sur la carte', (await pageHas(c, /^📞/)) === 0 && (await pageHas(c, /^📍/)) === 0);
+      await openEditor(c);
+      await fillIn(c, 'phone', '66 12 34 56');
+      await fillIn(c, 'address', 'Moursal');
+      await fillIn(c, 'profession', 'Étudiante');
+      await save(c);
+      await c.page.getByText('Profil mis à jour ✓').waitFor({ timeout: 10000 });
+      check('il ajoute telephone, adresse et profession : enregistres et affiches', fu.patches.length === 1 && fu.patches[0].phone === '66 12 34 56' && fu.patches[0].address === 'Moursal' && fu.patches[0].profession === 'Étudiante' && (await pageHas(c, '📞 66 12 34 56')) === 1 && (await pageHas(c, '📍 Moursal')) === 1, fu.patches);
+      check('aucune erreur (compte sans coordonnees)', c.errs.length === 0, c.errs);
       await c.ctx.close();
     }
   }

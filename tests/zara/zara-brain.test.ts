@@ -4,6 +4,7 @@ import * as b from '../../src/lib/assistantBrain.ts';
 import * as m from '../../src/lib/assistantMarketing.ts';
 import * as tx from '../../src/lib/assistantText.ts';
 import * as l from '../../src/lib/assistantLang.ts';
+import * as pe from '../../src/lib/profileEdit.ts';
 
 const KEY = process.env.SUPABASE_ANON_KEY!;
 const URL_SB = 'https://xtitsmmccpkelxfjyqyh.supabase.co';
@@ -495,7 +496,7 @@ async function main() {
   ok('salut a quelqu\'un deja connu : « retrouver » ; a un inconnu : pas de « retrouver » (on ne pretend pas le connaitre)', tx.texts('fr').talk.hello('hi', true).every((l) => /retrouver|revoir/.test(l)) && tx.texts('fr').talk.hello('hi', false).every((l) => !/retrouver|revoir/.test(l)));
   ok('bonsoir -> bonsoir ; salam -> salam ; bonjour -> bonjour (meme ton que le client)', tx.texts('fr').talk.hello('evening', false).every((l) => /^Bonsoir/.test(l)) && tx.texts('fr').talk.hello('salam', false).every((l) => /salam/i.test(l)) && tx.texts('fr').talk.hello('hello', false).every((l) => /^Bonjour/.test(l)));
   ok('mots d\'accueil : « Bonsoir ! », « Salut ! », « Salam ! », « Bonjour ! » (et en arabe)', tx.texts('fr').talk.helloWord('evening') === 'Bonsoir !' && tx.texts('fr').talk.helloWord('hi') === 'Salut !' && tx.texts('fr').talk.helloWord('salam') === 'Salam !' && tx.texts('fr').talk.helloWord('hello') === 'Bonjour !' && tx.texts('ar').talk.helloWord('salam') === 'وعليكم السلام!' && tx.texts('ar').talk.helloWord('evening') === 'مساء الخير!');
-  ok('les phrases d\'exemple du patron sont la (compliment, adresse, numero)', tx.texts('fr').talk.compliment[0] === 'Oh, merci beaucoup ! 🥰 Vous êtes adorable ! Je suis votre assistante virtuelle Zara, toujours là pour vous aider avec le sourire ❤️🛍️' && tx.texts('fr').talk.afterCompliment[0].startsWith('Avec grand plaisir ! 😊❤️ Je suis toujours là pour vous aider.') && tx.texts('fr').talk.personal('address')[0].startsWith('😊 Je suis votre assistante virtuelle, disponible en ligne pour vous aider ! Vous pouvez me retrouver ici sur Albasse Shopping.') && tx.texts('fr').talk.personal('phone')[0].startsWith('😊 Je n’ai pas de numéro personnel. Je travaille en ligne comme assistante virtuelle de marketing digital chez Albasse Shopping. Je suis là pour vous aider directement ici !') && tx.texts('fr').talk.personal('whatsapp')[0].startsWith('Haha 😊 Je n’ai pas de WhatsApp personnel.') && tx.texts('fr').talk.personal('live')[0].startsWith('Haha 😊 Je n’ai pas de domicile comme une personne.'));
+  ok('les phrases d\'exemple du patron sont la (compliment, adresse, numero)', tx.texts('fr').talk.compliment[0] === 'Oh, merci beaucoup ! 🥰 Vous êtes adorable ! Je suis votre assistante virtuelle Zara, toujours là pour vous aider 😊❤️🛍️' && !/sourire/.test(tx.texts('fr').talk.compliment.join(' ')) && !/ابتسامة/.test(tx.texts('ar').talk.compliment.join(' ')) && tx.texts('fr').talk.afterCompliment[0].startsWith('Avec grand plaisir ! 😊❤️ Je suis toujours là pour vous aider.') && tx.texts('fr').talk.personal('address')[0].startsWith('😊 Je suis votre assistante virtuelle, disponible en ligne pour vous aider ! Vous pouvez me retrouver ici sur Albasse Shopping.') && tx.texts('fr').talk.personal('phone')[0].startsWith('😊 Je n’ai pas de numéro personnel. Je travaille en ligne comme assistante virtuelle de marketing digital chez Albasse Shopping. Je suis là pour vous aider directement ici !') && tx.texts('fr').talk.personal('whatsapp')[0].startsWith('Haha 😊 Je n’ai pas de WhatsApp personnel.') && tx.texts('fr').talk.personal('live')[0].startsWith('Haha 😊 Je n’ai pas de domicile comme une personne.'));
 
   console.log('\n== textes arabes : tout en arabe (sauf les noms propres et les boutons du site)');
   const ALLOWED = /Albasse|Shopping|Airtel|Moov|Money|FCFA|Acheter|Ajouter|panier|Voir|produit|le\b|au|N'Djamena|Mongo|Rolex|dorée|Test|STTL|Sud|Voyage|Abou|Aziza|Liberté|Abéché|Français|Chrome|Safari|albasseshopping\.com/g;
@@ -560,6 +561,37 @@ async function main() {
   ok(`aucune lettre arabe dans les ${frCount} textes francais (sauf le bouton de langue)`, frArabic.length === 0, frArabic);
   ok('chaque texte arabe contient bien de l\'arabe (sauf chiffres et noms)', (() => { const bad: string[] = []; const w = (node: unknown, path: string) => { if (typeof node === 'string') { if (node.length > 6 && !l.hasArabic(node)) bad.push(path); } else if (Array.isArray(node)) node.forEach((x, i) => w(x, `${path}[${i}]`)); else if (node && typeof node === 'object') for (const [k, v] of Object.entries(node)) if (typeof v !== 'function') w(v, path ? `${path}.${k}` : k); }; w(tx.texts('ar'), ''); return bad.length === 0 ? true : bad; })());
   ok('textes importants : le francais et l\'arabe disent la meme chose (chiffres identiques)', ['info', 'rules', 'howToOrder', 'wrapReply', 'returns'].every((k) => { const nums = (s: string) => (s.replace(/[\s  ]/g, '').match(/\d+/g) ?? []).filter((n) => n !== '00').sort().join(','); const f = nums((tx.texts('fr') as any)[k]); const a = nums((tx.texts('ar') as any)[k]); return f === a; }), ['info', 'rules', 'howToOrder', 'wrapReply', 'returns'].map((k) => [k, (tx.texts('fr') as any)[k].replace(/[\s  ]/g, '').match(/\d+/g)?.sort().join(','), (tx.texts('ar') as any)[k].replace(/[\s  ]/g, '').match(/\d+/g)?.sort().join(',')]));
+
+  // ---- Profil client modifiable : regles de validation (les memes que l'inscription) ----
+  console.log('\n== profil client modifiable : validation');
+  {
+    const base = { fullName: 'Ahmed Hassan', phone: '66123456', whatsappNumber: '99221017', profession: 'Commerçant', region: "N'Djamena", country: 'Tchad', address: 'Quartier Chagoua' };
+    const okRes = pe.checkProfileForm(base);
+    ok('profil complet valide : les 7 champs sont envoyes tels quels', okRes.ok && JSON.stringify(okRes.changes) === JSON.stringify({ full_name: 'Ahmed Hassan', phone: '66123456', whatsapp_number: '99221017', profession: 'Commerçant', region: "N'Djamena", country: 'Tchad', address: 'Quartier Chagoua' }), okRes);
+    const spaced = pe.checkProfileForm({ ...base, fullName: '  Ahmed    Hassan ', address: '  Quartier   Chagoua  ' });
+    ok('espaces en trop enleves (nom et adresse)', spaced.ok && spaced.changes.full_name === 'Ahmed Hassan' && spaced.changes.address === 'Quartier Chagoua', spaced);
+    const noName = pe.checkProfileForm({ ...base, fullName: '   ' });
+    ok('nom vide : refuse, et le champ montre est le nom', !noName.ok && noName.field === 'fullName', noName);
+    const oneLetter = pe.checkProfileForm({ ...base, fullName: 'A' });
+    ok('nom d\'une seule lettre : refuse', !oneLetter.ok && oneLetter.field === 'fullName', oneLetter);
+    const badPhone = pe.checkProfileForm({ ...base, phone: '123' });
+    ok('telephone trop court : refuse, le champ montre est le telephone', !badPhone.ok && badPhone.field === 'phone' && /8 à 15 chiffres/.test(badPhone.message), badPhone);
+    const letters = pe.checkProfileForm({ ...base, phone: '66 12 34 ab' });
+    ok('telephone avec des lettres : refuse', !letters.ok && letters.field === 'phone', letters);
+    const plus = pe.checkProfileForm({ ...base, phone: '+235 66 12 34 56' });
+    ok('telephone avec « + » et espaces : accepte (comme a l\'inscription)', plus.ok && plus.changes.phone === '+235 66 12 34 56', plus);
+    const badWa = pe.checkProfileForm({ ...base, whatsappNumber: '12' });
+    ok('WhatsApp invalide : refuse, le champ montre est WhatsApp', !badWa.ok && badWa.field === 'whatsappNumber' && /WhatsApp/.test(badWa.message), badWa);
+    const empties = pe.checkProfileForm({ ...base, phone: '', whatsappNumber: '  ', profession: '', region: '', address: '' });
+    ok('champs facultatifs vides : acceptes et envoyes comme « vide » (null), jamais une chaine vide', empties.ok && empties.changes.phone === null && empties.changes.whatsapp_number === null && empties.changes.profession === null && empties.changes.region === null && empties.changes.address === null && empties.changes.full_name === 'Ahmed Hassan', empties);
+    const onlyKnown = pe.checkProfileForm(base);
+    ok('seules les 7 colonnes permises sont envoyees (jamais is_admin, loyalty_points, banned, e-mail...)', onlyKnown.ok && Object.keys(onlyKnown.changes).sort().join(',') === 'address,country,full_name,phone,profession,region,whatsapp_number', onlyKnown.ok && Object.keys(onlyKnown.changes));
+    const prof = { id: 'u1', email: 'a@b.c', avatar_url: null, full_name: 'Ahmed Hassan', phone: '66123456', whatsapp_number: null, profession: null, region: null, country: null, address: null } as unknown as Parameters<typeof pe.formFromProfile>[0];
+    const f = pe.formFromProfile(prof);
+    ok('formulaire rempli avec le profil (vide si la base n\'a rien)', f.fullName === 'Ahmed Hassan' && f.phone === '66123456' && f.whatsappNumber === '' && f.address === '', f);
+    ok('« Enregistrer » inactif tant que rien n\'a change', !pe.profileFormChanged(f, prof) && !pe.profileFormChanged({ ...f, fullName: '  Ahmed   Hassan ' }, prof));
+    ok('« Enregistrer » actif des qu\'une information change', pe.profileFormChanged({ ...f, address: 'Chagoua' }, prof) && pe.profileFormChanged({ ...f, phone: '66123457' }, prof));
+  }
 
   console.log('\n' + (failures === 0 ? 'TOUT EST BON' : `${failures} ECHEC(S)`));
   process.exit(failures === 0 ? 0 : 1);
