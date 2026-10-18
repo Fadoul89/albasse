@@ -348,6 +348,8 @@ export function AssistantPanel() {
       ? t.placeholder.phone
       : step === 'co_address'
       ? t.placeholder.address
+      : step === 'cb_day'
+      ? t.placeholder.day
       : t.placeholder.message;
   const lastIndex = messages.length - 1;
   const rtl = lang === 'ar';

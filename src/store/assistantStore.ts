@@ -70,7 +70,7 @@ import {
   type Range,
 } from '../lib/assistantMarketing';
 import { fetchCartStatus, fetchLoyaltyPoints, fetchPaymentNumbers, fetchProductForCart, getCatalog, getCategories, getCities, getProductSales, getStoreInfo, logAssistantEvent, requestCallback, startChatToday, toCard, type AssistantProduct, type CallbackSource } from '../lib/assistantData';
-import { callbackNote, LOW_STOCK_MAX, pickComplement, provenSales } from '../lib/assistantSales';
+import { callbackDays, callbackNote, dayFromText, LOW_STOCK_MAX, pickComplement, provenSales, type CallbackDay } from '../lib/assistantSales';
 import { clearIntent, currentDevice, markIntent } from '../lib/assistantAttribution';
 import { trackShortcutInstallIfNeeded } from '../lib/appInstallTracking';
 import { occasionOf, stripOccasion, upcomingOccasion, type OccasionKey } from '../lib/assistantOccasions';
@@ -143,7 +143,9 @@ export interface ChatAction {
     | 'account'
     | 'callback'
     | 'callbackYes'
-    | 'callbackFix';
+    | 'callbackFix'
+    | 'callbackDay'
+    | 'callbackDayFix';
   payload?: string;
   highlight?: boolean;
 }
@@ -182,6 +184,7 @@ export type Step =
   | 'co_confirm'
   | 'cb_name'
   | 'cb_phone'
+  | 'cb_day'
   | 'cb_confirm';
 
 // Commande en cours dans la conversation. Le numéro est choisi une fois : si l'enregistrement est refait après une coupure, la
@@ -389,7 +392,7 @@ interface PendingAdd {
 let pendingVariant: PendingAdd | null = null;
 
 // Demande de rappel WhatsApp en cours (prénom, numéro, d'où vient la demande). Elle n'est pas gardée si la page est rechargée : le client revient au menu.
-let callbackDraft: { name: string | null; phone: string | null; source: CallbackSource } | null = null;
+let callbackDraft: { name: string | null; phone: string | null; source: CallbackSource; day: CallbackDay | null; options: CallbackDay[] } | null = null;
 
 // Proposition d'installer le raccourci : une seule fois, puis pause de 14 jours. Elle vient après deux messages du client
 // (il a commencé à discuter), jamais dès l'accueil ; entre-temps, un bouton du menu reste là pour ceux qui veulent.
@@ -961,7 +964,9 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
   // « C'est cher » : si on vient de montrer des produits, des alternatives moins chères quand il y en a.
   async function priceObjection() {
     const lastShown = [...get().messages].reverse().find((m) => m.role === 'assistant' && m.products && m.products.length > 0);
-    const actions = () => [sayBtn(T().chip.promotions, 'promotions'), sayBtn(T().chip.budget, 'budget'), callbackChip('price'), wa()];
+    // le rappel n'est proposé qu'à celui qui hésite à commander : des articles viennent d'être montrés, ou il a un panier
+    const hesitating = !!lastShown || useCartStore.getState().items.length > 0;
+    const actions = () => [sayBtn(T().chip.promotions, 'promotions'), sayBtn(T().chip.budget, 'budget'), ...(hesitating ? [callbackChip('price')] : []), wa()];
     try {
       const catalog = await getCatalog();
       if (lastShown?.products) {
@@ -2000,11 +2005,15 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     if (cart.length > 0) lines.push(c.validity);
     // visiteur sans compte et sans panier : la porte reste ouverte (favoris avec un compte gratuit)
     else if (isGuest()) lines.push(c.favorites);
-    lines.push(c.callbackOffer);
+    // le rappel WhatsApp n'est proposé qu'au client qui hésite à commander : un panier, ou un article dont on vient de parler
+    const hesitating = cart.length > 0 || topics.length > 0;
+    if (hesitating) lines.push(c.callbackOffer);
     const actions: ChatAction[] =
       cart.length > 0
         ? [checkoutChip(), callbackChip('cart'), { label: T().chip.viewCart, kind: 'cart' }]
-        : [callbackChip('later'), sayBtn(T().chip.promotions, 'promotions'), menuBtn()];
+        : hesitating
+        ? [callbackChip('later'), sayBtn(T().chip.promotions, 'promotions'), menuBtn()]
+        : [sayBtn(T().chip.promotions, 'promotions'), menuBtn()];
     if (isGuest()) actions.push({ label: T().chip.createAccount, kind: 'register' });
     await say(lines.join('\n'), { actions });
   }
@@ -2018,14 +2027,14 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
   async function startCallback(source: CallbackSource) {
     const auth = useAuthStore.getState();
     const name = get().name;
-    callbackDraft = { name, phone: auth.isAuthenticated ? phoneFrom(auth.profile?.phone ?? '') : null, source };
+    callbackDraft = { name, phone: auth.isAuthenticated ? phoneFrom(auth.profile?.phone ?? '') : null, source, day: null, options: [] };
     if (!name) {
       setStep('cb_name');
       await say(T().callback.askName, { actions: [callbackCancelChip()] });
       return;
     }
     if (callbackDraft.phone) {
-      await callbackConfirm();
+      await askCallbackDay();
       return;
     }
     await askCallbackPhone();
@@ -2038,16 +2047,37 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     await say(T().callback.askPhone(callbackDraft.name ?? ''), { actions: [callbackCancelChip()] });
   }
 
+  // Le jour du rappel : le client choisit parmi les prochains jours ouvrables (aujourd'hui seulement s'il reste du temps à l'équipe).
+  async function askCallbackDay(badInput = false) {
+    if (!callbackDraft) return;
+    callbackDraft.day = null;
+    callbackDraft.options = callbackDays(new Date(), get().lang);
+    setStep('cb_day');
+    await say(badInput ? T().callback.badDay : T().callback.askDay, {
+      fast: badInput,
+      actions: [...callbackDraft.options.map((d) => ({ label: d.label, kind: 'callbackDay' as const, payload: d.iso })), callbackCancelChip()],
+    });
+  }
+
   async function callbackConfirm() {
     const d = callbackDraft;
     if (!d || !d.name || !d.phone) {
       await cancelCallback();
       return;
     }
+    if (!d.day) {
+      await askCallbackDay();
+      return;
+    }
     setStep('cb_confirm');
     const note = callbackNote(topicProducts().map((p) => shortName(p.name)));
-    await say(T().callback.confirm(d.name, spacedPhone(d.phone), note), {
-      actions: [{ label: T().chip.callbackYes, kind: 'callbackYes', highlight: true }, { label: T().chip.callbackFix, kind: 'callbackFix' }, callbackCancelChip()],
+    await say(T().callback.confirm(d.name, spacedPhone(d.phone), note, d.day.label), {
+      actions: [
+        { label: T().chip.callbackYes, kind: 'callbackYes', highlight: true },
+        { label: T().chip.callbackFix, kind: 'callbackFix' },
+        { label: T().chip.callbackDayFix, kind: 'callbackDayFix' },
+        callbackCancelChip(),
+      ],
     });
   }
 
@@ -2063,14 +2093,19 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       await cancelCallback();
       return;
     }
-    const result = await requestCallback({ name: d.name, phone: d.phone, note: callbackNote(topicProducts().map((p) => shortName(p.name))), source: d.source });
+    if (!d.day) {
+      await askCallbackDay();
+      return;
+    }
+    const result = await requestCallback({ name: d.name, phone: d.phone, note: callbackNote(topicProducts().map((p) => shortName(p.name))), source: d.source, day: d.day.iso });
     if (result === 'invalid') {
       await askCallbackPhone();
       return;
     }
+    const dayLabel = d.day.label;
     callbackDraft = null;
     setStep('menu');
-    if (result === 'ok') await say(T().callback.done, { actions: [sayBtn(T().chip.promotions, 'promotions'), menuBtn()] });
+    if (result === 'ok') await say(T().callback.done(dayLabel), { actions: [sayBtn(T().chip.promotions, 'promotions'), menuBtn()] });
     else await say(T().callback.failed, { actions: [wa(), menuBtn()] });
   }
 
@@ -2100,11 +2135,29 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       const phone = phoneFrom(text);
       if (phone) {
         callbackDraft.phone = phone;
-        await callbackConfirm();
+        // le jour déjà choisi (« Changer le numéro » depuis la confirmation) est gardé
+        if (callbackDraft.day) await callbackConfirm();
+        else await askCallbackDay();
         return true;
       }
       if (/\d/.test(text)) {
         await say(T().callback.badPhone, { fast: true, actions: [callbackCancelChip()] });
+        return true;
+      }
+      callbackDraft = null;
+      setStep('menu');
+      return false;
+    }
+    if (step === 'cb_day') {
+      const day = dayFromText(normalize(text), callbackDraft.options);
+      if (day) {
+        callbackDraft.day = day;
+        await callbackConfirm();
+        return true;
+      }
+      // un jour mal écrit (« 23 », « lundi dernier ») : Zara redonne les jours ; une vraie question : Zara y répond
+      if (/\d/.test(text) || normalize(text).split(' ').length <= 2) {
+        await askCallbackDay(true);
         return true;
       }
       callbackDraft = null;
@@ -2579,6 +2632,21 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       case 'callbackFix':
         userSays(action.label);
         await askCallbackPhone();
+        return;
+      case 'callbackDay': {
+        userSays(action.label);
+        const day = callbackDraft?.options.find((d) => d.iso === action.payload);
+        if (!callbackDraft || !day) {
+          await cancelCallback(); // la demande n'est plus en mémoire (page rechargée)
+          return;
+        }
+        callbackDraft.day = day;
+        await callbackConfirm();
+        return;
+      }
+      case 'callbackDayFix':
+        userSays(action.label);
+        await askCallbackDay();
         return;
       case 'cancel':
         userSays(action.label);

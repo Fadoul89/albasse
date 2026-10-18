@@ -523,7 +523,7 @@ async function main() {
     'checkout.placed': ['علي', '12345678'], 'checkout.totalToPay': [37500], 'checkout.payInitiated': ['Airtel Money', 'تم'], 'checkout.payUrl': ['https://pay.example.com'], 'checkout.payNumber': [37500, '60 60 51 51', 'Airtel Money'], 'checkout.payTeam': ['66123456', 'Airtel Money'], 'chip.useAddress': ['حي فرشا'],
     'cart.added': ['ساعة', ' (المقاس 41)', 2, 25000], 'cart.priceChanged': ['ساعة', '10 000 FCFA', '12 000 FCFA'], 'install.iosSteps': [false],
     'interest.sizesReply': ['حذاء', ['40', '41']], 'interest.colorsReply': ['حذاء', ['أسود'], ['40']], 'wholesale.prefill': ['عطر'],
-    'callback.confirm': ['علي', '66 12 34 56', 'ساعة'], 'closing.proof': [5], 'closing.pack': ['ساعة', 'عطر', 25000],
+    'callback.confirm': ['علي', '66 12 34 56', 'ساعة', 'الخميس 22 أكتوبر'], 'callback.done': ['الخميس 22 أكتوبر'], 'closing.proof': [5], 'closing.pack': ['ساعة', 'عطر', 25000],
   };
   const leaks: string[] = [];
   let count = 0;
@@ -1114,9 +1114,25 @@ async function main() {
 
     // rappel WhatsApp
     ok('note pour l\'equipe : articles sans doublon, court, avec « (+N) » si coupe', sa.callbackNote([]) === '' && sa.callbackNote(['Montre A', 'Montre A', ' Parfum B ']) === 'Montre A, Parfum B' && sa.callbackNote(['A'.repeat(100), 'B'.repeat(100), 'C'.repeat(100)], 150) === `${'A'.repeat(100)} (+2)` && sa.callbackNote(['A', 'B', 'C']).length < 281);
-    const confirmFr = fr.callback.confirm('Awa', '66 12 34 56', 'Montre A');
-    ok('confirmation avant d\'envoyer : prenom, numero, article et « C\'est d\'accord ? » (le client voit ce qui est transmis)', /Awa/.test(confirmFr) && /66 12 34 56/.test(confirmFr) && /Montre A/.test(confirmFr) && /d’accord \?/.test(confirmFr) && /WhatsApp/.test(confirmFr) && !/Montre A/.test(fr.callback.confirm('Awa', '66 12 34 56', '')));
-    ok('textes du rappel et de la conclusion : tous presents en francais et en arabe, aucune promesse de delai precis', [fr.callback.askName, fr.callback.done, fr.callback.failed, fr.callback.badPhone, fr.closing.later, fr.closing.cartKept, fr.closing.callbackOffer, fr.chip.callback].every((t) => t.length > 8) && [ar.callback.askName, ar.callback.done, ar.callback.failed, ar.callback.badPhone, ar.closing.later, ar.closing.cartKept, ar.closing.callbackOffer, ar.chip.callback].every((t) => l.hasArabic(t)) && !/\d+\s?(min|minutes|heures?)|dans l'heure|immédiatement/.test(fr.callback.done + fr.closing.callbackOffer));
+    const confirmFr = fr.callback.confirm('Awa', '66 12 34 56', 'Montre A', 'Jeudi 22 oct.');
+    ok('confirmation avant d\'envoyer : prenom, numero, article, JOUR choisi et « C\'est d\'accord ? » (le client voit ce qui est transmis)', /Awa/.test(confirmFr) && /66 12 34 56/.test(confirmFr) && /Montre A/.test(confirmFr) && /Jeudi 22 oct\./.test(confirmFr) && /d’accord \?/.test(confirmFr) && /WhatsApp/.test(confirmFr) && !/Montre A/.test(fr.callback.confirm('Awa', '66 12 34 56', '', 'Jeudi 22 oct.')));
+    const doneFr = fr.callback.done('Jeudi 22 oct.');
+    ok('pas de double point apres le jour (« oct.. »), en francais comme en arabe', !/\.\./.test(confirmFr + doneFr + fr.callback.confirm('A', '66 12 34 56', 'B', 'Demain (mardi 20 oct.)') + fr.callback.done('Demain (mardi 20 oct.)')), [confirmFr, doneFr]);
+    ok('textes du rappel et de la conclusion : tous presents en francais et en arabe, aucune promesse de delai precis', [fr.callback.askName, doneFr, fr.callback.askDay, fr.callback.badDay, fr.callback.failed, fr.callback.badPhone, fr.closing.later, fr.closing.cartKept, fr.closing.callbackOffer, fr.chip.callback, fr.chip.callbackDayFix].every((t) => t.length > 8) && [ar.callback.askName, ar.callback.done('الخميس'), ar.callback.askDay, ar.callback.badDay, ar.callback.failed, ar.callback.badPhone, ar.closing.later, ar.closing.cartKept, ar.closing.callbackOffer, ar.chip.callback, ar.chip.callbackDayFix].every((t) => l.hasArabic(t)) && /Jeudi 22 oct\./.test(doneFr) && !/\d+\s?(min|minutes|heures?)|dans l'heure|immédiatement/.test(doneFr + fr.closing.callbackOffer));
+
+    // jour du rappel : les prochains jours ouvrables (heure du Tchad = UTC+1), jamais le dimanche, « aujourd'hui » seulement avant 15 h
+    const lundiMatin = sa.callbackDays(new Date('2026-10-19T08:00:00Z'), 'fr');
+    ok('jours proposes (lundi 9 h) : aujourd\'hui, demain, puis 3 autres jours', lundiMatin.length === 5 && lundiMatin[0].iso === '2026-10-19' && /^Aujourd’hui \(lundi 19 oct\.\)$/.test(lundiMatin[0].label) && lundiMatin[1].iso === '2026-10-20' && /^Demain \(mardi 20 oct\.\)$/.test(lundiMatin[1].label) && lundiMatin[4].iso === '2026-10-23' && lundiMatin[4].label === 'Vendredi 23 oct.', lundiMatin.map((d) => d.label));
+    const lundiSoir = sa.callbackDays(new Date('2026-10-19T14:30:00Z'), 'fr');
+    ok('apres 15 h (heure du Tchad) : « aujourd\'hui » n\'est plus propose', lundiSoir[0].iso === '2026-10-20' && lundiSoir.every((d) => d.offset >= 1), lundiSoir.map((d) => d.iso));
+    const samedi = sa.callbackDays(new Date('2026-10-24T08:00:00Z'), 'fr');
+    ok('le dimanche est saute (samedi 24 -> lundi 26)', samedi[0].iso === '2026-10-24' && samedi[1].iso === '2026-10-26' && samedi.every((d) => d.weekday !== 0), samedi.map((d) => d.iso));
+    ok('le fuseau du Tchad compte (23 h 30 UTC = deja le lendemain a N\'Djamena)', sa.chadDayIso(new Date('2026-10-19T23:30:00Z')) === '2026-10-20' && sa.chadDayIso(new Date('2026-10-19T12:00:00Z')) === '2026-10-19');
+    ok('jours en arabe : noms arabes, pas de mot francais', sa.callbackDays(new Date('2026-10-19T08:00:00Z'), 'ar').every((d) => l.hasArabic(d.label) && !/[a-z]/i.test(d.label)));
+    ok('libelle d\'un jour de la base (AAAA-MM-JJ) : « vendredi 23 oct. », sans dependre du fuseau de l\'appareil', sa.dayLabelOf('2026-10-23') === 'vendredi 23 oct.' && sa.dayLabelOf('2026-10-25') === 'dimanche 25 oct.' && sa.dayLabelOf('n\'importe quoi') === 'n\'importe quoi');
+    const pick = (t: string) => sa.dayFromText(t, lundiMatin)?.iso ?? null;
+    ok('jour ecrit par le client : demain, aujourd\'hui, un nom de jour, « le 23 », en arabe', pick('demain') === '2026-10-20' && pick('aujourd hui') === '2026-10-19' && pick('jeudi') === '2026-10-22' && pick('le 23') === '2026-10-23' && pick('vendredi 23') === '2026-10-23' && pick('غدا') === '2026-10-20' && pick('اليوم') === '2026-10-19' && pick('الخميس') === '2026-10-22', ['demain', 'jeudi', 'le 23'].map(pick));
+    ok('jour ecrit hors de la liste ou illisible : rien n\'est devine (dimanche, le 30, bonjour)', pick('dimanche') === null && pick('le 30') === null && pick('bonjour') === null && pick('') === null);
     ok('la validite 48 h annoncee est la vraie regle de la boutique', fr.closing.validity.includes('48 h') && ar.closing.validity.includes('48'));
     ok('aucun paiement ni coordonnee bancaire dans les messages de conclusion et de rappel', !/airtel|moov|carte|iban|code secret|mot de passe/i.test(JSON.stringify([fr.closing, fr.callback, fr.chip.callback])));
   }

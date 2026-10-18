@@ -307,12 +307,14 @@ export async function getProductSales(): Promise<SalesMap> {
 export type CallbackSource = 'later' | 'price' | 'cart' | 'chat';
 export type CallbackResult = 'ok' | 'invalid' | 'error';
 
-export async function requestCallback(input: { name: string; phone: string; note: string; source: CallbackSource }, device: DeviceLabel = currentDevice()): Promise<CallbackResult> {
+export async function requestCallback(input: { name: string; phone: string; note: string; source: CallbackSource; day?: string | null }, device: DeviceLabel = currentDevice()): Promise<CallbackResult> {
   try {
-    const { data, error } = await withTimeout(
-      Promise.resolve(supabase.rpc('assistant_request_callback', { p_name: input.name, p_phone: input.phone, p_note: input.note, p_source: input.source, p_device: device })),
-      TIMEOUT_MS
-    );
+    const base = { p_name: input.name, p_phone: input.phone, p_note: input.note, p_source: input.source, p_device: device };
+    // le jour choisi (AAAA-MM-JJ) ; l'ancienne fonction de la base (sans jour) est refusée comme « introuvable » : on redemande sans le jour, une seule fois
+    let { data, error } = await withTimeout(Promise.resolve(supabase.rpc('assistant_request_callback', input.day ? { ...base, p_day: input.day } : base)), TIMEOUT_MS);
+    if (error && input.day && (error as { code?: string }).code === 'PGRST202') {
+      ({ data, error } = await withTimeout(Promise.resolve(supabase.rpc('assistant_request_callback', base)), TIMEOUT_MS));
+    }
     if (error) return 'error';
     return data === true ? 'ok' : 'invalid';
   } catch {
@@ -330,6 +332,7 @@ export interface CallbackRow {
   source: CallbackSource;
   device: string;
   status: 'new' | 'done';
+  wanted_day: string | null; // AAAA-MM-JJ : le jour que le client a choisi (vide : pas de jour)
 }
 
 export type CallbackListResult = { ok: true; rows: CallbackRow[] } | { ok: false; reason: 'missing' | 'forbidden' | 'error'; message: string };
@@ -337,7 +340,7 @@ export type CallbackListResult = { ok: true; rows: CallbackRow[] } | { ok: false
 export async function fetchCallbacks(): Promise<CallbackListResult> {
   try {
     const { data, error, status } = await withTimeout(
-      Promise.resolve(supabase.from('assistant_callbacks').select('id,created_at,name,phone,note,source,device,status').order('created_at', { ascending: false }).limit(300)),
+      Promise.resolve(supabase.from('assistant_callbacks').select('*').order('created_at', { ascending: false }).limit(300)),
       15000
     );
     if (error) {
@@ -346,9 +349,19 @@ export async function fetchCallbacks(): Promise<CallbackListResult> {
       if (status === 401 || status === 403 || code === '42501') return { ok: false, reason: 'forbidden', message: error.message };
       return { ok: false, reason: 'error', message: error.message };
     }
-    return { ok: true, rows: ((data ?? []) as CallbackRow[]).map((r) => ({ ...r, note: r.note ?? '' })) };
+    return { ok: true, rows: ((data ?? []) as CallbackRow[]).map((r) => ({ ...r, note: r.note ?? '', wanted_day: r.wanted_day ?? null })) };
   } catch (e) {
     return { ok: false, reason: 'error', message: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+// Supprime une demande pour de bon (administrateur seulement). Vrai seulement si la ligne a vraiment disparu de la base.
+export async function deleteCallback(id: string): Promise<boolean> {
+  try {
+    const { data, error } = await withTimeout(Promise.resolve(supabase.from('assistant_callbacks').delete().eq('id', id).select('id')), TIMEOUT_MS);
+    return !error && (data ?? []).length > 0;
+  } catch {
+    return false;
   }
 }
 

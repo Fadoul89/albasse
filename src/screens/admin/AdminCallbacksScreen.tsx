@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, ScrollView, Pressable, RefreshControl, Linking 
 import { useAuthStore } from '../../store/authStore';
 import { colors, fonts, radius, spacing } from '../../theme';
 import { ScreenHeader } from '../../components/ScreenHeader';
-import { fetchCallbacks, setCallbackDone, type CallbackListResult, type CallbackRow, type CallbackSource } from '../../lib/assistantData';
+import { deleteCallback, fetchCallbacks, setCallbackDone, type CallbackListResult, type CallbackRow, type CallbackSource } from '../../lib/assistantData';
+import { chadDayIso, dayLabelOf } from '../../lib/assistantSales';
 
 // « Rappels WhatsApp » : les clients qui ont laissé leur numéro à Zara (avec leur accord). On les écrit au réveil.
 const SOURCE_LABELS: Record<CallbackSource, string> = {
@@ -25,6 +26,21 @@ function ago(iso: string, now = Date.now()): string {
   return `il y a ${d} jour${d > 1 ? 's' : ''}`;
 }
 
+// Le jour choisi par le client : à faire aujourd'hui, en retard, ou à venir. Sans jour (anciennes demandes) : rien à afficher.
+type DayState = 'late' | 'today' | 'soon';
+function dayState(row: CallbackRow, today: string): DayState | null {
+  if (!row.wanted_day) return null;
+  return row.wanted_day < today ? 'late' : row.wanted_day === today ? 'today' : 'soon';
+}
+
+// À rappeler en premier : les jours déjà passés, puis aujourd'hui, puis les jours à venir ; les demandes sans jour viennent après (les plus récentes d'abord).
+function byDay(a: CallbackRow, b: CallbackRow): number {
+  if (a.wanted_day && b.wanted_day) return a.wanted_day.localeCompare(b.wanted_day) || a.created_at.localeCompare(b.created_at);
+  if (a.wanted_day) return -1;
+  if (b.wanted_day) return 1;
+  return b.created_at.localeCompare(a.created_at);
+}
+
 const whatsappLink = (row: CallbackRow) =>
   `https://wa.me/235${row.phone}?text=${encodeURIComponent(`Bonjour ${row.name}, ici l'équipe Albasse Shopping 😊 Vous avez demandé que nous vous écrivions. Comment pouvons-nous vous aider ?`)}`;
 
@@ -36,6 +52,9 @@ export function AdminCallbacksScreen() {
   const [loading, setLoading] = useState(true);
   const [result, setResult] = useState<CallbackListResult | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // suppression en deux temps : « 🗑 » puis « Oui, supprimer » (pas de fenetre du navigateur)
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState(false);
   const latest = useRef(0);
 
   const load = useCallback(async () => {
@@ -58,6 +77,16 @@ export function AdminCallbacksScreen() {
     if (ok) await load();
   };
 
+  const remove = async (row: CallbackRow) => {
+    setBusy(row.id);
+    setDeleteError(false);
+    const ok = await deleteCallback(row.id);
+    setBusy(null);
+    setConfirming(null);
+    if (ok) await load();
+    else setDeleteError(true);
+  };
+
   if (!profile?.is_admin) {
     return (
       <View style={styles.screen}>
@@ -68,7 +97,8 @@ export function AdminCallbacksScreen() {
   }
 
   const rows = result && result.ok ? result.rows : [];
-  const pending = rows.filter((r) => r.status === 'new');
+  const today = chadDayIso();
+  const pending = rows.filter((r) => r.status === 'new').sort(byDay);
   const done = rows.filter((r) => r.status === 'done');
   const shown = tab === 'new' ? pending : done;
 
@@ -82,6 +112,12 @@ export function AdminCallbacksScreen() {
         </Text>
 
         {loading && !result ? <Text style={styles.loading}>Chargement…</Text> : null}
+
+        {deleteError ? (
+          <Text style={styles.deleteError} testID="callbacks-delete-error">
+            La suppression n’a pas marché. Réessayez dans un instant.
+          </Text>
+        ) : null}
 
         {result && !result.ok ? <Problem reason={result.reason} message={result.message} onRetry={load} /> : null}
 
@@ -112,6 +148,15 @@ export function AdminCallbacksScreen() {
                     {row.device && row.device !== 'Autre' ? ` · ${row.device}` : ''}
                   </Text>
                   {row.note ? <Text style={styles.noteLine}>À propos de : {row.note}</Text> : null}
+                  {row.wanted_day ? (
+                    <View style={[styles.dayBox, row.status === 'new' && dayState(row, today) === 'today' && styles.dayBoxToday, row.status === 'new' && dayState(row, today) === 'late' && styles.dayBoxLate]} testID={`callback-day-${row.id}`}>
+                      <Text style={styles.dayText}>
+                        📅 À rappeler : {dayLabelOf(row.wanted_day)}
+                        {row.status === 'new' && dayState(row, today) === 'today' ? ' — aujourd’hui !' : ''}
+                        {row.status === 'new' && dayState(row, today) === 'late' ? ' — en retard' : ''}
+                      </Text>
+                    </View>
+                  ) : null}
                   <View style={styles.actions}>
                     <Pressable style={styles.waBtn} onPress={() => Linking.openURL(whatsappLink(row))} testID={`callback-wa-${row.id}`}>
                       <Text style={styles.waText}>💬 Écrire sur WhatsApp</Text>
@@ -122,7 +167,32 @@ export function AdminCallbacksScreen() {
                     <Pressable style={styles.doneBtn} disabled={busy === row.id} onPress={() => toggle(row)} testID={`callback-done-${row.id}`}>
                       <Text style={styles.doneText}>{row.status === 'new' ? '✅ Fait' : 'Remettre'}</Text>
                     </Pressable>
+                    <Pressable
+                      style={styles.trashBtn}
+                      onPress={() => {
+                        setDeleteError(false);
+                        setConfirming(confirming === row.id ? null : row.id);
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Supprimer cette demande"
+                      testID={`callback-delete-${row.id}`}
+                    >
+                      <Text style={styles.callText}>🗑</Text>
+                    </Pressable>
                   </View>
+                  {confirming === row.id ? (
+                    <View style={styles.confirmBox} testID={`callback-confirm-${row.id}`}>
+                      <Text style={styles.confirmText}>Supprimer cette demande pour toujours ?</Text>
+                      <View style={styles.actions}>
+                        <Pressable style={styles.confirmYes} disabled={busy === row.id} onPress={() => remove(row)} testID={`callback-delete-yes-${row.id}`}>
+                          <Text style={styles.confirmYesText}>Oui, supprimer</Text>
+                        </Pressable>
+                        <Pressable style={styles.callBtn} onPress={() => setConfirming(null)} testID={`callback-delete-no-${row.id}`}>
+                          <Text style={styles.doneText}>Non</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  ) : null}
                 </View>
               ))
             )}
@@ -142,7 +212,8 @@ function Problem({ reason, message, onRetry }: { reason: 'missing' | 'forbidden'
           La boutique marche normalement, mais la base n'a pas encore la liste des rappels. Pour l'activer :{'\n'}
           1. Ouvrez Supabase, puis « SQL Editor » et « New query ».{'\n'}
           2. Collez le contenu du fichier add-zara-sales-boost.sql, puis appuyez sur « Run ».{'\n'}
-          3. Revenez ici et tirez la page vers le bas pour l'actualiser.
+          3. Faites de même avec add-zara-callback-day.sql (le jour de rappel choisi par le client).{'\n'}
+          4. Revenez ici et tirez la page vers le bas pour l'actualiser.
         </Text>
       </View>
     );
@@ -177,6 +248,10 @@ const styles = StyleSheet.create({
   phone: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 15 },
   source: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 12 },
   noteLine: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 12, lineHeight: 17 },
+  dayBox: { alignSelf: 'flex-start', marginTop: 4, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 10, paddingVertical: 5 },
+  dayBoxToday: { borderColor: colors.gold, backgroundColor: 'rgba(212,175,55,0.14)' },
+  dayBoxLate: { borderColor: colors.error, backgroundColor: 'rgba(220,70,70,0.12)' },
+  dayText: { color: colors.cream, fontFamily: fonts.bodySemiBold, fontSize: 13 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
   waBtn: { backgroundColor: colors.success, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 9 },
   waText: { color: colors.cream, fontFamily: fonts.bodyBold, fontSize: 13 },
@@ -184,6 +259,12 @@ const styles = StyleSheet.create({
   callText: { fontSize: 14 },
   doneBtn: { borderRadius: radius.pill, borderWidth: 1, borderColor: colors.gold, paddingHorizontal: 14, paddingVertical: 9 },
   doneText: { color: colors.gold, fontFamily: fonts.bodySemiBold, fontSize: 13 },
+  trashBtn: { borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 9 },
+  confirmBox: { marginTop: 6, borderRadius: radius.md, borderWidth: 1, borderColor: colors.error, padding: spacing.sm, gap: 6 },
+  confirmText: { color: colors.cream, fontFamily: fonts.bodySemiBold, fontSize: 13 },
+  confirmYes: { backgroundColor: colors.error, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 9 },
+  confirmYesText: { color: colors.cream, fontFamily: fonts.bodyBold, fontSize: 13 },
+  deleteError: { color: colors.error, fontFamily: fonts.bodySemiBold, fontSize: 13, textAlign: 'center', marginBottom: spacing.sm },
   problem: { backgroundColor: colors.panel, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.gold, padding: spacing.md, gap: 8 },
   problemTitle: { color: colors.goldLight, fontFamily: fonts.bodyBold, fontSize: 15 },
   problemText: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 13, lineHeight: 20 },
