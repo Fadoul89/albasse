@@ -1098,6 +1098,33 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('aucune erreur (iPhone, arabe)', v.errs.length === 0, v.errs);
       await v.ctx.close();
     }
+    // Visiteur tout neuf (iPhone, ni langue ni prenom retenus) : choisir la langue et « Passer » ne comptent pas ; la question vient apres 2 vrais messages
+    {
+      const v = await newVisitor(iphone, { lang: null });
+      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await v.page.getByRole('button', { name: FAB_NAME }).click();
+      await waitText(v.page, /Choisissez votre langue/);
+      await tap(v.page, 'Français', /Bienvenue chez Albasse Shopping/);
+      await waitText(v.page, /Comment puis-je vous appeler/);
+      await chip(v.page, 'Passer').click();
+      await waitText(v.page, /Créez votre compte gratuit/);
+      await sleep(2500);
+      const menu = await chipLabels(v.page);
+      check('visiteur tout neuf : la langue et « Passer » ne comptent pas, la question n\'arrive pas pendant la presentation (le menu reste)', (await panelOf(v.page).getByText(/Avez-vous déjà installé l’application/).count()) === 0 && menu.includes('🔥 Promotions') && menu.includes('📲 Voir comment installer'), menu);
+      await tap(v.page, 'Promotions', /promotion|promo|offre/i);
+      await sleep(2500);
+      check('apres UN vrai message : toujours pas de question', (await panelOf(v.page).getByText(/Avez-vous déjà installé l’application/).count()) === 0);
+      await ask(v.page, 'conseil', /Je suis là pour vous conseiller\. Que cherchez-vous \?/);
+      await waitText(v.page, /Avez-vous déjà installé l’application Albasse Shopping/);
+      check('apres DEUX vrais messages : la question arrive (iPhone : « Voir comment installer »)', (await chipLabels(v.page)).join('|') === '📲 Voir comment installer|✅ Oui, déjà installée|Plus tard', await chipLabels(v.page));
+      await chip(v.page, 'Plus tard').click();
+      await waitText(v.page, /je ne vous le propose plus pour le moment/);
+      const back = await chipLabels(v.page);
+      check('« Plus tard » : Zara rend les boutons habituels (promotions, categories, menu), le client n\'est jamais bloque', back.includes('🏠 Menu') && back.includes('🔥 Promotions'), back);
+      check('aucune erreur (visiteur tout neuf)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
     // Android sans invite disponible : pas de bouton, seulement l'explication quand le client la demande
     {
       const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
