@@ -3,6 +3,7 @@ import { getCurrentSessionId, getCurrentReferrerSource } from './analytics';
 import { trackTikTokEvent } from './tiktokPixel';
 import { currentDevice } from './assistantAttribution';
 import { isMissingColumn } from './dbErrors';
+import { trackCartEvent } from './browsingTracker';
 import type { CartItem, Order, OrderItem, PaymentMethod } from '../types';
 
 export interface CreateOrderInput {
@@ -98,6 +99,8 @@ export async function createOrder(input: CreateOrderInput): Promise<{ order: Ord
   // Numéro déjà enregistré par un essai précédent (réponse perdue) : la commande existe bien, on ne la refait pas.
   const alreadySaved = !!input.id && (error as { code?: string } | null)?.code === '23505';
   if (error && !alreadySaved) return { order: null, error: error.message };
+  // pour le suivi de Zara : ces articles sont achetés (ils ne seront plus proposés comme « à regarder »)
+  for (const i of input.items) trackCartEvent({ id: i.product.id, name: i.product.name, slug: i.product.slug, categoryId: i.product.category_id }, 'purchase');
   trackTikTokEvent('PlaceAnOrder', { value: input.total, currency: 'XAF', content_id: contentIds, contents });
   trackTikTokEvent('CompletePayment', { value: input.total, currency: 'XAF', content_id: contentIds, contents });
   return { order, error: null };

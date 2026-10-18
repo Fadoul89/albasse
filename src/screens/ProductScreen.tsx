@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -12,16 +12,18 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import type { RouteProp } from '@react-navigation/native';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing } from '../theme';
 import { useProductBySlug, useProducts } from '../hooks/useProducts';
 import { useReviews } from '../hooks/useReviews';
+import { useCategories } from '../hooks/useCategories';
 import { useCartStore } from '../store/cartStore';
 import { useToastStore } from '../store/toastStore';
 import { useAuthStore } from '../store/authStore';
 import { trackProductView, trackAddToCart } from '../lib/analytics';
+import { endProductView, enrichProductMeta, startProductView, trackVariant } from '../lib/browsingTracker';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { StarRating } from '../components/StarRating';
 import { GoldButton } from '../components/GoldButton';
@@ -59,6 +61,29 @@ export function ProductScreen({ route }: Props) {
   useEffect(() => {
     if (product) trackProductView(product.id);
   }, [product?.id]);
+
+  // Suivi pour Zara (seulement si le visiteur ne l'a pas refusé) : le temps ACTIF commence quand la fiche est à l'écran
+  // et s'arrête quand on la quitte (autre page, retour, autre produit).
+  const { categories } = useCategories();
+  const category = categories.find((c) => c.id === product?.category_id);
+  const meta = useMemo(
+    () => (product ? { id: product.id, name: product.name, slug: product.slug, categoryId: product.category_id, categorySlug: category?.slug ?? null, categoryName: category?.name ?? null } : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [product?.id, product?.name, product?.slug, category?.slug, category?.name]
+  );
+  const watchId = meta?.id;
+  useFocusEffect(
+    useCallback(() => {
+      if (!meta) return undefined;
+      startProductView(meta);
+      return () => endProductView('leave');
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [watchId])
+  );
+  useEffect(() => {
+    if (meta?.categorySlug) enrichProductMeta(meta);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meta?.categorySlug]);
 
   useEffect(() => {
     if (Platform.OS === 'web' && product) {
@@ -218,7 +243,14 @@ export function ProductScreen({ route }: Props) {
         {product.images.length > 1 && (
           <ScrollView horizontal contentContainerStyle={styles.thumbRow} showsHorizontalScrollIndicator={false}>
             {product.images.map((uri, i) => (
-              <Pressable key={uri} onPress={() => setActiveImage(i)}>
+              <Pressable
+                key={uri}
+                testID={`product-thumb-${i}`}
+                onPress={() => {
+                  setActiveImage(i);
+                  if (meta) trackVariant(meta, 'image', String(i));
+                }}
+              >
                 <Image
                   source={{ uri }}
                   style={[styles.thumb, i === activeImage && styles.thumbActive]}
@@ -268,6 +300,7 @@ export function ProductScreen({ route }: Props) {
                     onPress={() => {
                       setColor(c);
                       setColorChosen(true);
+                      if (meta) trackVariant(meta, 'color', c);
                     }}
                   >
                     <Text style={[styles.optionText, color === c && styles.optionTextActive]}>{c}</Text>
@@ -288,6 +321,7 @@ export function ProductScreen({ route }: Props) {
                     onPress={() => {
                       setSize(s);
                       setSizeChosen(true);
+                      if (meta) trackVariant(meta, 'size', s);
                     }}
                   >
                     <Text style={[styles.optionText, size === s && styles.optionTextActive]}>{s}</Text>

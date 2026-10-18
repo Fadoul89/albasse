@@ -1,12 +1,20 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, TextInput, StyleSheet, FlatList } from 'react-native';
 import { colors, fonts, spacing } from '../theme';
 import { useProducts } from '../hooks/useProducts';
 import { ProductCard } from '../components/ProductCard';
+import { trackSearchQuery } from '../lib/browsingTracker';
 
 export function SearchScreen() {
   const { products } = useProducts();
   const [query, setQuery] = useState('');
+
+  // Suivi pour Zara : la recherche est notée une seconde après la dernière lettre (jamais lettre après lettre)
+  useEffect(() => {
+    if (!query.trim()) return undefined;
+    const t = setTimeout(() => trackSearchQuery(query), 1000);
+    return () => clearTimeout(t);
+  }, [query]);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return products;

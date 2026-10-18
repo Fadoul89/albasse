@@ -12,7 +12,7 @@ export function PrivacyPolicyScreen() {
       <ScreenHeader title="Politique de confidentialité" showBack />
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.shopName}>🏪 {settings.shop_name}</Text>
-        <Text style={styles.updated}>Dernière mise à jour : Août 2026</Text>
+        <Text style={styles.updated}>Dernière mise à jour : Octobre 2026</Text>
 
         <Section title="1. Données que nous collectons">
           <Text style={styles.p}>
@@ -23,6 +23,20 @@ export function PrivacyPolicyScreen() {
           <Text style={styles.p}>
             Nous mesurons aussi votre navigation sur le site (pages consultées, produits vus, temps passé) à des
             fins statistiques internes, afin d'améliorer l'expérience d'achat.
+          </Text>
+          <Text style={styles.p}>
+            Pour que notre assistante Zara puisse vous conseiller, nous retenons aussi les articles que vous regardez :
+            le nombre de fois où vous ouvrez une fiche, le temps pendant lequel vous la consultez réellement (un onglet
+            laissé ouvert ou un téléphone en veille ne compte pas), les couleurs, tailles et photos que vous touchez,
+            les articles ajoutés ou retirés du panier, les catégories ouvertes et vos recherches. Ces informations sont
+            liées à un identifiant anonyme de votre appareil (ou à votre compte si vous êtes connecté), jamais à votre
+            nom, et servent seulement à vous proposer des articles disponibles qui peuvent vous plaire et à améliorer la
+            boutique. Elles sont conservées 90 jours, puis effacées.
+          </Text>
+          <Text style={styles.p}>
+            Vous pouvez refuser ce suivi à tout moment : touchez « Refuser » dans le message d'information, ou écrivez à
+            Zara « ne me suis plus ». Votre choix est respecté immédiatement et ce qui était retenu est effacé. Si votre
+            navigateur envoie le signal « Ne pas me suivre », nous le respectons aussi.
           </Text>
         </Section>
 

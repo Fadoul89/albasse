@@ -7,6 +7,7 @@ import { useProducts } from '../hooks/useProducts';
 import { useCategories } from '../hooks/useCategories';
 import { ProductCard } from '../components/ProductCard';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { trackCategoryView, trackSearchQuery } from '../lib/browsingTracker';
 
 interface Props {
   route: RouteProp<RootStackParamList, 'Category'>;
@@ -29,6 +30,18 @@ export function CategoryScreen({ route }: Props) {
       document.title = `${name} — Albasse Shopping`;
     }
   }, [name]);
+
+  // Suivi pour Zara : la catégorie ouverte, et ce que le visiteur y cherche
+  const categorySlug = category?.slug;
+  useEffect(() => {
+    if (categorySlug) trackCategoryView(categorySlug, category?.name ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categorySlug]);
+  useEffect(() => {
+    if (!query.trim()) return undefined;
+    const t = setTimeout(() => trackSearchQuery(query), 1000);
+    return () => clearTimeout(t);
+  }, [query]);
 
   const filtered = useMemo(() => {
     return products.filter((p) => {
