@@ -553,13 +553,14 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
   }
 
   // Le prénom est demandé une seule fois. Un visiteur qui a déjà un compte peut se connecter : Zara le reconnaîtra.
+  // Un client déjà connecté dont le compte n'a pas de prénom est reconnu comme connecté (jamais invité à « se connecter »).
   async function askName() {
     setStep('ask_name');
     const guest = isGuest();
     const actions: ChatAction[] = [{ label: T().chip.skip, kind: 'skip' }];
     if (guest) actions.push({ label: T().chip.login, kind: 'login' });
     actions.push(langAction());
-    await say(guest ? T().askNameGuest : T().askName, { actions });
+    await say(guest ? T().askNameGuest : memberIdentity() ? T().askName : T().askNameMember, { actions });
   }
 
   // Après le bonjour : on demande le prénom (une seule fois), sinon on enchaîne.

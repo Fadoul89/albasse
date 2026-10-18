@@ -58,6 +58,7 @@ export interface Texts {
   teaserMember(name: string): string;
   askName: string;
   askNameGuest: string;
+  askNameMember: string;
   nice(name: string): string;
   footer: string;
   placeholder: { message: string; name: string; city: string; amount: string; fullName: string; phone: string; address: string };
@@ -310,6 +311,7 @@ const FR: Texts = {
   teaserMember: (name) => `Salut ${name} ! 😍👋 ${ASSISTANT_NAME} est à votre service 🛍️`,
   askName: 'Comment puis-je vous appeler ?',
   askNameGuest: 'Comment puis-je vous appeler ? Si vous avez déjà un compte, connectez-vous : je vous reconnaîtrai 😊',
+  askNameMember: 'Je vois que vous êtes connecté(e) 😊 Votre compte n’a pas encore de prénom : comment puis-je vous appeler ?',
   nice: (name) => `Enchantée ${name} ! 😊`,
   footer: `${ASSISTANT_NAME} est une assistante automatique. Pour une commande ou un souci, écrivez-nous sur WhatsApp.`,
   placeholder: { message: 'Écrivez votre message…', name: 'Écrivez votre prénom…', city: 'Écrivez votre ville…', amount: 'Écrivez un montant…', fullName: 'Écrivez votre nom complet…', phone: 'Ex. 66123456', address: 'Quartier, rue, repère…' },
@@ -712,6 +714,7 @@ const AR: Texts = {
   teaserMember: (name) => `مرحباً ${name}! 😍👋 زارا كينغز في خدمتك 🛍️`,
   askName: 'كيف يمكنني أن أناديك؟',
   askNameGuest: 'كيف يمكنني أن أناديك؟ إذا كان لديك حساب، سجّل الدخول وسأتعرف عليك 😊',
+  askNameMember: 'أرى أنك مسجّل الدخول 😊 حسابك لا يحتوي على اسم بعد، فكيف يمكنني أن أناديك؟',
   nice: (name) => `سعدت بمعرفتك يا ${name}! 😊`,
   footer: 'زارا كينغز مساعدة آلية. لأي طلب أو مشكلة، راسلنا على واتساب.',
   placeholder: { message: 'اكتب رسالتك…', name: 'اكتب اسمك الأول…', city: 'اكتب مدينتك…', amount: 'اكتب مبلغا…', fullName: 'اكتب اسمك الكامل…', phone: 'مثال: 66123456', address: 'الحي، الشارع، معلم قريب…' },
