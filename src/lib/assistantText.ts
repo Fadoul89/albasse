@@ -115,6 +115,7 @@ export interface Texts {
     cancel: string;
     installApp: string;
     installHelp: string;
+    alreadyInstalled: string;
     tutorial: string;
     notNow: string;
     idk: string;
@@ -285,6 +286,10 @@ export interface Texts {
   };
   // installation de l'application (raccourci sur l'écran d'accueil)
   install: {
+    ask: string;
+    yes: string;
+    photoHint: string;
+    photoAlt: string;
     offer: string;
     accepted: string;
     declined: string;
@@ -376,8 +381,9 @@ const FR: Texts = {
     checkout: '✅ Commander',
     moreItems: '🛍️ Autres articles',
     cancel: 'Annuler',
-    installApp: '📲 Installer AlbasseShopping',
-    installHelp: '📲 Ajouter à l’écran d’accueil',
+    installApp: '📲 Installer Albasse Shopping',
+    installHelp: '📲 Voir comment installer',
+    alreadyInstalled: '✅ Oui, déjà installée',
     tutorial: '🎬 Voir le tutoriel',
     notNow: 'Plus tard',
     idk: '🤷 Je ne sais pas',
@@ -683,11 +689,15 @@ const FR: Texts = {
     },
   },
   install: {
-    offer: 'Pour retrouver facilement AlbasseShopping, vous pouvez ajouter notre boutique à l’écran d’accueil de votre téléphone 📲',
-    accepted: '🎉 C’est installé ! Retrouvez AlbasseShopping sur votre écran d’accueil.',
+    ask: 'Avez-vous déjà installé l’application Albasse Shopping sur votre téléphone ? 📲\nElle s’ajoute à votre écran d’accueil : commandez plus vite et suivez vos commandes en un toucher.',
+    yes: 'Parfait, merci ! 🎉 Vous faites déjà partie de la famille Albasse Shopping 😊',
+    photoHint: '📸 Voici la photo pas à pas. Touchez-la pour l’agrandir.',
+    photoAlt: 'Comment installer Albasse Shopping sur iPhone : 1. Touchez Partager, 2. Touchez En voir plus, 3. Touchez Sur l’écran d’accueil, puis l’application est prête',
+    offer: 'Pour retrouver facilement Albasse Shopping, vous pouvez ajouter notre boutique à l’écran d’accueil de votre téléphone 📲',
+    accepted: '🎉 C’est installé ! Retrouvez Albasse Shopping sur votre écran d’accueil.',
     declined: 'Pas de souci 😊 Vous pourrez le faire plus tard : le site reste utilisable comme maintenant.',
     later: 'D’accord, je ne vous le propose plus pour le moment 😊',
-    already: 'AlbasseShopping est déjà installé sur votre téléphone 🎉',
+    already: 'Albasse Shopping est déjà installé sur votre téléphone 🎉',
     iosSteps: (safari) =>
       `${safari ? '' : '⚠️ Ouvrez d’abord albasseshopping.com dans Safari (l’installation ne marche pas depuis ce navigateur).\n'}Sur iPhone :\n1. Touchez « Partager » (le carré avec une flèche) en bas de l’écran\n2. Faites défiler et touchez « Sur l’écran d’accueil »\n3. Touchez « Ajouter »`,
     androidManual: 'Pour installer : touchez les trois points (⋮) en haut à droite de Chrome, puis « Installer l’application » ou « Ajouter à l’écran d’accueil » (selon votre version).',
@@ -779,8 +789,9 @@ const AR: Texts = {
     checkout: '✅ إتمام الطلب',
     moreItems: '🛍️ منتجات أخرى',
     cancel: 'إلغاء',
-    installApp: '📲 تثبيت AlbasseShopping',
-    installHelp: '📲 إضافة إلى الشاشة الرئيسية',
+    installApp: '📲 تثبيت Albasse Shopping',
+    installHelp: '📲 شاهد كيفية التثبيت',
+    alreadyInstalled: '✅ نعم، مثبّت بالفعل',
     tutorial: '🎬 عرض الشرح',
     notNow: 'لاحقا',
     idk: '🤷 لا أعرف',
@@ -1085,11 +1096,15 @@ const AR: Texts = {
     },
   },
   install: {
-    offer: 'لتجد AlbasseShopping بسهولة، يمكنك إضافة متجرنا إلى الشاشة الرئيسية لهاتفك 📲',
-    accepted: '🎉 تم التثبيت! ستجد AlbasseShopping على شاشتك الرئيسية.',
+    ask: 'هل قمت بتثبيت تطبيق Albasse Shopping على هاتفك؟ 📲\nيُضاف إلى شاشتك الرئيسية: اطلب أسرع وتابع طلباتك بلمسة واحدة.',
+    yes: 'رائع، شكراً لك! 🎉 أنت بالفعل من عائلة Albasse Shopping 😊',
+    photoHint: '📸 هذه صورة الخطوات. المسها لتكبيرها.',
+    photoAlt: 'كيفية تثبيت Albasse Shopping على الآيفون: 1. اضغط مشاركة، 2. اضغط عرض المزيد، 3. اضغط إضافة إلى الشاشة الرئيسية، ثم يصبح التطبيق جاهزاً',
+    offer: 'لتجد Albasse Shopping بسهولة، يمكنك إضافة متجرنا إلى الشاشة الرئيسية لهاتفك 📲',
+    accepted: '🎉 تم التثبيت! ستجد Albasse Shopping على شاشتك الرئيسية.',
     declined: 'لا مشكلة 😊 يمكنك فعل ذلك لاحقا، والموقع يبقى قابلا للاستخدام كما هو.',
     later: 'حسنا، لن أقترح عليك ذلك الآن 😊',
-    already: 'AlbasseShopping مثبت بالفعل على هاتفك 🎉',
+    already: 'Albasse Shopping مثبت بالفعل على هاتفك 🎉',
     iosSteps: (safari) =>
       `${safari ? '' : '⚠️ افتح أولا albasseshopping.com في متصفح Safari (التثبيت لا يعمل من هذا المتصفح).\n'}على الآيفون:\n1. اضغط «مشاركة» (المربع مع السهم) أسفل الشاشة\n2. مرر لأسفل واضغط «إضافة إلى الشاشة الرئيسية»\n3. اضغط «إضافة»`,
     androidManual: 'للتثبيت: اضغط على النقاط الثلاث (⋮) أعلى يمين Chrome ثم «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية» حسب إصدارك.',

@@ -121,6 +121,7 @@ export interface ChatAction {
     | 'cancel'
     | 'checkout'
     | 'install'
+    | 'installYes'
     | 'installHelp'
     | 'iosGuide'
     | 'installLater'
@@ -144,7 +145,14 @@ export interface ChatMessage {
   lang?: Lang; // langue du message de Zara (sens d'écriture) ; sans valeur : français
   cart?: boolean; // affiche le panier (en direct, le même que celui du site) sous le message
   products?: AssistantProduct[];
+  image?: ChatImage; // une photo sous le message (ex. comment installer sur iPhone)
   actions?: ChatAction[];
+}
+
+export interface ChatImage {
+  src: string;
+  alt: string;
+  ratio: number; // largeur / hauteur
 }
 
 export type Step =
@@ -367,9 +375,13 @@ interface PendingAdd {
 }
 let pendingVariant: PendingAdd | null = null;
 
-// Proposition d'installer le raccourci : une seule fois, puis pause de 14 jours.
+// Proposition d'installer le raccourci : une seule fois, puis pause de 14 jours. Elle vient après deux messages du client
+// (il a commencé à discuter), jamais dès l'accueil ; entre-temps, un bouton du menu reste là pour ceux qui veulent.
 const INSTALL_KEY = 'albasse_zara_install';
 const INSTALL_PAUSE_MS = 14 * 24 * 3600 * 1000;
+const INSTALL_OFFER_AFTER_MESSAGES = 2;
+// La photo « comment installer sur iPhone » : 4 images du tutoriel vidéo (Partager, En voir plus, Sur l'écran d'accueil, C'est prêt).
+const IOS_INSTALL_PHOTO = { src: '/ios-installer-photo.jpg', ratio: 1120 / 1960 };
 
 // Mots qui ne désignent pas un produit dans « ajoute aussi ce parfum ».
 const ADD_NOISE = new Set([
@@ -450,7 +462,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     }
   }
 
-  async function say(text: string, extra: { products?: AssistantProduct[]; actions?: ChatAction[]; lang?: Lang; cart?: boolean; fast?: boolean } = {}) {
+  async function say(text: string, extra: { products?: AssistantProduct[]; image?: ChatImage; actions?: ChatAction[]; lang?: Lang; cart?: boolean; fast?: boolean } = {}) {
     const { lang, fast, ...rest } = extra;
     await sleep(fast ? 120 : typingDelay(text));
     push({ id: newId(), role: 'assistant', text, lang: lang ?? get().lang, ...rest });
@@ -501,6 +513,8 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     actions.push(sayBtn(c.promotions, 'promotions'), sayBtn(c.news, 'nouveautés'), sayBtn(c.advice, 'conseil'), sayBtn(c.categories, 'catégories'), sayBtn(c.delivery, 'livraison'));
     if (useCartStore.getState().items.length > 0) actions.push({ label: c.cart, kind: 'cart' });
     if (!isGuest()) actions.push({ label: c.orders, kind: 'orders' }, sayBtn(c.points, T().loyalty.mineQuery));
+    const install = installMenuChip();
+    if (install) actions.push(install);
     actions.push(wa(), langAction());
     return actions;
   };
@@ -1623,13 +1637,23 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       // ignore : la proposition pourra revenir
     }
   }
-  function installPaused(): boolean {
+  function installRecord(): { at: number; outcome: string } | null {
     try {
       const raw = window.localStorage.getItem(INSTALL_KEY);
-      return raw ? Date.now() - Number(JSON.parse(raw).at) < INSTALL_PAUSE_MS : false;
+      return raw ? (JSON.parse(raw) as { at: number; outcome: string }) : null;
     } catch {
-      return false;
+      return null;
     }
+  }
+  function installPaused(): boolean {
+    const record = installRecord();
+    return record ? Date.now() - Number(record.at) < INSTALL_PAUSE_MS : false;
+  }
+  // Le client a dit « Plus tard » (pendant 14 jours) ou a déjà installé : on ne lui remet pas le bouton dans le menu.
+  function installDeclined(): boolean {
+    const record = installRecord();
+    if (!record) return false;
+    return record.outcome === 'accepted' || (record.outcome === 'dismissed' && Date.now() - Number(record.at) < INSTALL_PAUSE_MS);
   }
   const alreadyInstalled = () => isRunningAsInstalledPwa() || isRunningInsideApp();
   // L'installation d'iPhone ne marche que depuis Safari (pas depuis Chrome, Facebook, Instagram...).
@@ -1639,6 +1663,16 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     { label: T().chip.notNow, kind: 'installLater' },
   ];
 
+  // Le bouton du menu pour les clients qui n'ont pas encore installé : iPhone (aide pas à pas) ; Android seulement quand Chrome permet
+  // réellement l'installation (il ne la permet plus une fois l'application installée) ; jamais sur ordinateur ni dans l'application.
+  function installMenuChip(): ChatAction | null {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return null;
+    if (alreadyInstalled() || installDeclined()) return null;
+    if (isIosDevice()) return { label: T().chip.installHelp, kind: 'installHelp' };
+    if (isAndroidDevice() && isPwaInstallPromptAvailable()) return { label: T().chip.installApp, kind: 'install' };
+    return null;
+  }
+
   // `extra` : les boutons déjà affichés (ex. ceux du panier) restent disponibles sous la proposition.
   async function maybeOfferInstall(extra: ChatAction[] = []) {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
@@ -1647,7 +1681,9 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     // iPhone : l'aide pas à pas ; Android : le bouton seulement quand Chrome permet réellement l'installation
     if (!ios && !(isAndroidDevice() && isPwaInstallPromptAvailable())) return;
     recordInstall('asked'); // on ne le redit pas, même si le client l'ignore
-    await say(T().install.offer, { actions: [...extra, ...installChips(ios)] });
+    // « Avez-vous déjà installé l'application ? » : le bouton pour installer, « Oui, déjà installée », « Plus tard »
+    const [install, later] = installChips(ios);
+    await say(T().install.ask, { actions: [...extra, install, { label: T().chip.alreadyInstalled, kind: 'installYes' }, later] });
   }
 
   // Le visiteur le demande lui-même (« comment installer l'application ? ») : réponse tout de suite.
@@ -1668,8 +1704,11 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     await say(T().install.desktop, { actions: afterAnswerActions() });
   }
 
+  // iPhone : les étapes écrites, avec la photo « comment installer » juste dessous (touchée, elle s'ouvre en grand).
   async function installSteps() {
-    await say(T().install.iosSteps(isSafariIos()), { actions: [{ label: T().chip.tutorial, kind: 'iosGuide' }, menuBtn()] });
+    const image: ChatImage | undefined = Platform.OS === 'web' ? { ...IOS_INSTALL_PHOTO, alt: T().install.photoAlt } : undefined;
+    const text = `${T().install.iosSteps(isSafariIos())}${image ? `\n\n${T().install.photoHint}` : ''}`;
+    await say(text, { image, actions: [{ label: T().chip.tutorial, kind: 'iosGuide' }, menuBtn()] });
   }
 
   // Appelée directement par le toucher du client : la boîte d'installation de Chrome n'apparaît qu'après un geste volontaire.
@@ -2127,6 +2166,11 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       case 'install':
         await installNow();
         return;
+      case 'installYes':
+        userSays(action.label);
+        recordInstall('accepted'); // il l'a déjà : on ne lui propose plus rien, ni le bouton dans le menu
+        await say(T().install.yes, { fast: true, actions: afterAnswerActions() });
+        return;
       case 'installHelp':
         userSays(action.label);
         await installSteps();
@@ -2147,10 +2191,10 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     }
   }
 
-  // Après six messages du client, si ce n'est pas déjà fait : la proposition d'installer le raccourci (une seule fois).
+  // Après deux messages du client, si ce n'est pas déjà fait : la proposition d'installer le raccourci (une seule fois).
   async function afterTurn() {
     if (get().step.startsWith('co_')) return; // jamais au milieu d'une commande
-    if (get().messages.filter((m) => m.role === 'user').length >= 6) await maybeOfferInstall();
+    if (get().messages.filter((m) => m.role === 'user').length >= INSTALL_OFFER_AFTER_MESSAGES) await maybeOfferInstall();
   }
 
   return {
