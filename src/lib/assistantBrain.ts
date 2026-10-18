@@ -284,6 +284,14 @@ export function firstNameOfFullName(fullName: string | null | undefined): string
 // Ce que veut le visiteur
 // ---------------------------------------------------------------------------------------------
 
+// « Rappelez-moi », « écrivez-moi sur WhatsApp » : le client demande que l'équipe le recontacte (jamais « comment vous contacter »).
+const CALLBACK_RE =
+  /\brappel\w* moi\b|\bme rappel\w*|\bappel\w* moi\b|\bcontacte\w* moi\b|\brecontacte\w* moi\b|\bme (re)?contacter\b|\becri\w* moi\b|\bme joindre\b|\bjoignez moi\b|\bwhatsapp moi\b|اتصلوا بي|اتصل بي|اتصلو بي|كلموني|كلمني|راسلوني|راسلني|تواصلوا معي|تواصل معي|ذكروني|ارجو الاتصال بي/;
+
+export function wantsCallback(text: string): boolean {
+  return CALLBACK_RE.test(normalize(text));
+}
+
 export type Intent =
   | 'bot'
   | 'compliment'
@@ -317,6 +325,7 @@ export type Intent =
   | 'install'
   | 'tracking'
   | 'wholesale'
+  | 'callback'
   | 'search';
 
 const has = (tokens: string[], words: string[]) => words.some((w) => tokens.includes(w));
@@ -470,6 +479,7 @@ export function detectIntent(text: string): Intent {
   // le suivi de navigation passe avant « suivre ma commande » et les autres sujets
   if (trackingKind(text)) return 'tracking';
   if (wantsWholesale(text)) return 'wholesale';
+  if (wantsCallback(text)) return 'callback';
   if (personalKind(text)) return 'personal';
   if (LOYALTY_RE.test(n)) return 'loyalty';
   // installer l'application / ajouter à l'écran d'accueil

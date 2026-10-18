@@ -3,6 +3,7 @@ import { buildProduct, type CatalogProduct, type City } from './assistantBrain';
 import { currentDevice, type DeviceLabel } from './assistantAttribution';
 import { buildZaraStats, classifyStatsError, periodBounds, type StatsPeriod, type StatsFailure, type ZaraStats } from './assistantStats';
 import { buildBrowsingOverview, type BrowsingOverview } from './browsingOverview';
+import { buildSalesMap, SALES_WINDOW_DAYS, type SalesMap } from './assistantSales';
 import type { Product } from '../types';
 
 // Donnees publiques lues pour Zara (catalogue, villes, categories, infos de la boutique), gardees
@@ -281,4 +282,84 @@ export async function fetchCartStatus(ids: string[]): Promise<CartProductStatus[
     stock: Number(r.stock ?? 0),
     is_active: !!r.is_active,
   }));
+}
+
+// Ventes réelles des derniers jours, par article (chiffres globaux, aucune donnée de client). Gardées 5 minutes.
+// Sans la fonction de la base (script pas encore appliqué), ou en cas de panne : une liste vide, et Zara ne dit AUCUN chiffre.
+const loadSales = cached<SalesMap>(async () => {
+  const { data, error } = await supabase.rpc('assistant_product_sales', { p_days: SALES_WINDOW_DAYS });
+  // script de la base pas encore appliqué : liste vide, et on ne redemande pas avant 5 minutes (aucun chiffre n'est dit)
+  if (error && (error as { code?: string }).code === 'PGRST202') return new Map();
+  if (error) throw error;
+  return buildSalesMap(data);
+});
+
+export async function getProductSales(): Promise<SalesMap> {
+  try {
+    return await loadSales();
+  } catch {
+    return new Map();
+  }
+}
+
+// « Me rappeler sur WhatsApp » : la demande part à l'équipe (fonction `assistant_request_callback`, qui vérifie le numéro).
+// 'ok' : enregistrée ; 'invalid' : numéro ou prénom refusé ; 'error' : fonction absente ou panne (Zara renvoie alors vers WhatsApp).
+export type CallbackSource = 'later' | 'price' | 'cart' | 'chat';
+export type CallbackResult = 'ok' | 'invalid' | 'error';
+
+export async function requestCallback(input: { name: string; phone: string; note: string; source: CallbackSource }, device: DeviceLabel = currentDevice()): Promise<CallbackResult> {
+  try {
+    const { data, error } = await withTimeout(
+      Promise.resolve(supabase.rpc('assistant_request_callback', { p_name: input.name, p_phone: input.phone, p_note: input.note, p_source: input.source, p_device: device })),
+      TIMEOUT_MS
+    );
+    if (error) return 'error';
+    return data === true ? 'ok' : 'invalid';
+  } catch {
+    return 'error';
+  }
+}
+
+// La liste « Rappels WhatsApp » de l'admin (la base refuse tout autre que l'administrateur).
+export interface CallbackRow {
+  id: string;
+  created_at: string;
+  name: string;
+  phone: string;
+  note: string;
+  source: CallbackSource;
+  device: string;
+  status: 'new' | 'done';
+}
+
+export type CallbackListResult = { ok: true; rows: CallbackRow[] } | { ok: false; reason: 'missing' | 'forbidden' | 'error'; message: string };
+
+export async function fetchCallbacks(): Promise<CallbackListResult> {
+  try {
+    const { data, error, status } = await withTimeout(
+      Promise.resolve(supabase.from('assistant_callbacks').select('id,created_at,name,phone,note,source,device,status').order('created_at', { ascending: false }).limit(300)),
+      15000
+    );
+    if (error) {
+      const code = (error as { code?: string }).code;
+      if (code === 'PGRST205' || code === '42P01') return { ok: false, reason: 'missing', message: error.message };
+      if (status === 401 || status === 403 || code === '42501') return { ok: false, reason: 'forbidden', message: error.message };
+      return { ok: false, reason: 'error', message: error.message };
+    }
+    return { ok: true, rows: ((data ?? []) as CallbackRow[]).map((r) => ({ ...r, note: r.note ?? '' })) };
+  } catch (e) {
+    return { ok: false, reason: 'error', message: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+export async function setCallbackDone(id: string, done: boolean): Promise<boolean> {
+  try {
+    const { error } = await withTimeout(
+      Promise.resolve(supabase.from('assistant_callbacks').update({ status: done ? 'done' : 'new', done_at: done ? new Date().toISOString() : null }).eq('id', id)),
+      TIMEOUT_MS
+    );
+    return !error;
+  } catch {
+    return false;
+  }
 }

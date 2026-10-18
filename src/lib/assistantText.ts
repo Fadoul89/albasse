@@ -118,6 +118,9 @@ export interface Texts {
     alreadyInstalled: string;
     tutorial: string;
     notNow: string;
+    callback: string;
+    callbackYes: string;
+    callbackFix: string;
     idk: string;
     anyBudget: string;
     giftWho: Record<Who, string>;
@@ -332,6 +335,27 @@ export interface Texts {
     valentine: string;
     blackFriday: string;
   };
+  // conclure la vente : le client hésite (« je réfléchis »), Zara répond avec des faits vrais puis propose de l'aide
+  closing: {
+    later: string;
+    favorites: string;
+    cartKept: string;
+    callbackOffer: string;
+    validity: string;
+    proof(n: number): string;
+    packIntro: string;
+    pack(first: string, second: string, total: number): string;
+  };
+  // rappel WhatsApp : prénom, numéro, accord du client ; ensuite la demande part à l'équipe (liste dans l'admin)
+  callback: {
+    askName: string;
+    askPhone(name: string): string;
+    badPhone: string;
+    confirm(name: string, phone: string, note: string): string;
+    done: string;
+    failed: string;
+    cancelled: string;
+  };
   // achat en gros : Zara ne donne aucun prix de gros, elle passe la main à l'équipe sur WhatsApp
   wholesale: {
     ask: string;
@@ -432,6 +456,9 @@ const FR: Texts = {
     alreadyInstalled: '✅ Oui, déjà installée',
     tutorial: '🎬 Voir le tutoriel',
     notNow: 'Plus tard',
+    callback: '📲 Me rappeler sur WhatsApp',
+    callbackYes: 'Oui, d’accord',
+    callbackFix: 'Changer le numéro',
     idk: '🤷 Je ne sais pas',
     anyBudget: 'Peu importe',
     giftWho: { elle: '👩 Pour elle', lui: '👨 Pour lui', enfant: '👶 Pour un enfant' },
@@ -789,6 +816,25 @@ const FR: Texts = {
     valentine: '❤️ Saint-Valentin : une belle idée pour la personne qui compte ! Parfums, montres, bijoux… je vous conseille. L’emballage cadeau est possible (2 000 FCFA par commande).',
     blackFriday: '🖤 Black Friday : je vous montre les vraies promotions en cours dans la boutique, avec les prix et les stocks réels.',
   },
+  closing: {
+    later: 'Pas de souci{nom} 😊 Prenez votre temps.',
+    favorites: '❤️ Touchez le cœur sur un produit pour le retrouver dans vos favoris (avec un compte gratuit).',
+    cartKept: '🛒 Votre panier reste enregistré sur cet appareil.',
+    callbackOffer: 'Si vous préférez, l’équipe peut vous écrire sur WhatsApp quand vous serez prêt(e) 📲',
+    validity: `⏳ Si vous commandez, la commande reste valable ${ORDER_VALIDITY_HOURS} h.`,
+    proof: (n) => `👍 Cet article a été commandé ${n} fois ces 7 derniers jours.`,
+    packIntro: '💡 Pour compléter votre choix :',
+    pack: (first, second, total) => `Ensemble : « ${first} » + « ${second} » = ${fcfa(total)}.`,
+  },
+  callback: {
+    askName: 'Avec plaisir 😊 Quel est votre prénom ?',
+    askPhone: (name) => `Merci ${name} 🙏 Quel est votre numéro WhatsApp ? (exemple : 66 12 34 56)`,
+    badPhone: 'Je n’ai pas bien compris ce numéro 🙏 Il faut 8 chiffres (exemple : 66 12 34 56).',
+    confirm: (name, phone, note) => `Je transmets à l’équipe : ${name}, WhatsApp ${phone}${note ? ` (à propos de : ${note})` : ''}.\nElle vous écrira sur WhatsApp à ce sujet. C’est d’accord ?`,
+    done: 'C’est noté ✅ L’équipe vous écrira sur WhatsApp dès que possible. Merci de votre confiance 🙏',
+    failed: 'Je n’ai pas pu enregistrer votre demande 😕 Écrivez-nous directement sur WhatsApp : l’équipe vous répondra.',
+    cancelled: 'D’accord, je n’enregistre rien 😊',
+  },
   wholesale: {
     ask: '📦 Pour les achats en gros (cartons, grandes quantités), les prix sont donnés directement par notre équipe 😊 Écrivez-nous sur WhatsApp avec : l’article, la quantité (ou le nombre de cartons) et votre ville.',
     nudge: '📦 Grosse commande ? Notre équipe peut vous faire un prix et organiser la livraison : écrivez-nous sur WhatsApp. Vous pouvez aussi continuer ici.',
@@ -891,6 +937,9 @@ const AR: Texts = {
     alreadyInstalled: '✅ نعم، مثبّت بالفعل',
     tutorial: '🎬 عرض الشرح',
     notNow: 'لاحقا',
+    callback: '📲 تواصلوا معي على واتساب',
+    callbackYes: 'نعم، موافق',
+    callbackFix: 'تغيير الرقم',
     idk: '🤷 لا أعرف',
     anyBudget: 'لا يهم',
     giftWho: { elle: '👩 لها', lui: '👨 له', enfant: '👶 لطفل' },
@@ -1246,6 +1295,25 @@ const AR: Texts = {
     mothersDay: '💐 عيد الأم: لفتة جميلة لها! عطور ومجوهرات وملابس… أقترح عليك أفكارا. تغليف الهدايا متاح (2 000 FCFA لكل طلب).',
     valentine: '❤️ عيد الحب: فكرة جميلة لمن يهمك أمره! عطور وساعات ومجوهرات… أنصحك. تغليف الهدايا متاح (2 000 FCFA لكل طلب).',
     blackFriday: '🖤 الجمعة السوداء: أعرض لك العروض الحقيقية الجارية في المتجر، بالأسعار والمخزون الحقيقيين.',
+  },
+  closing: {
+    later: 'لا مشكلة{nom} 😊 خذ وقتك.',
+    favorites: '❤️ اضغط على القلب في أي منتج لتجده في مفضلتك (بحساب مجاني).',
+    cartKept: '🛒 سلتك محفوظة على هذا الجهاز.',
+    callbackOffer: 'إذا أحببت، يمكن للفريق أن يراسلك على واتساب عندما تكون جاهزا 📲',
+    validity: `⏳ إذا طلبت، يبقى الطلب صالحا لمدة ${ORDER_VALIDITY_HOURS} ساعة.`,
+    proof: (n) => `👍 تم طلب هذا المنتج ${n} مرات خلال الأيام السبعة الأخيرة.`,
+    packIntro: '💡 لتكمل اختيارك:',
+    pack: (first, second, total) => `معا: «${first}» + «${second}» = ${fcfa(total)}.`,
+  },
+  callback: {
+    askName: 'بكل سرور 😊 ما اسمك الأول؟',
+    askPhone: (name) => `شكرا ${name} 🙏 ما رقم واتساب الخاص بك؟ (مثال: 66 12 34 56)`,
+    badPhone: 'لم أفهم هذا الرقم جيدا 🙏 يجب أن يكون 8 أرقام (مثال: 66 12 34 56).',
+    confirm: (name, phone, note) => `أحول إلى الفريق: ${name}، واتساب ${phone}${note ? ` (بخصوص: ${note})` : ''}.\nسيراسلك الفريق على واتساب بخصوص ذلك. هل أنت موافق؟`,
+    done: 'تم التسجيل ✅ سيراسلك الفريق على واتساب في أقرب وقت. شكرا لثقتك 🙏',
+    failed: 'لم أتمكن من تسجيل طلبك 😕 راسلنا مباشرة على واتساب وسيرد عليك الفريق.',
+    cancelled: 'حسنا، لن أسجل شيئا 😊',
   },
   wholesale: {
     ask: '📦 لمشتريات الجملة (كراتين وكميات كبيرة) يقدم فريقنا الأسعار مباشرة 😊 راسلنا على واتساب مع: المنتج والكمية (أو عدد الكراتين) ومدينتك.',

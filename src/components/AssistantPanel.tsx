@@ -336,7 +336,7 @@ export function AssistantPanel() {
     : { left: 0, right: 0, top: area?.top ?? 0, height: area?.height ?? height };
 
   const placeholder =
-    step === 'ask_name'
+    step === 'ask_name' || step === 'cb_name'
       ? t.placeholder.name
       : step === 'ask_city' || step === 'co_city'
       ? t.placeholder.city
@@ -344,7 +344,7 @@ export function AssistantPanel() {
       ? t.placeholder.amount
       : step === 'co_name'
       ? t.placeholder.fullName
-      : step === 'co_phone'
+      : step === 'co_phone' || step === 'cb_phone'
       ? t.placeholder.phone
       : step === 'co_address'
       ? t.placeholder.address
@@ -443,7 +443,7 @@ export function AssistantPanel() {
           style={[styles.input, rtlStyle(rtl)]}
           maxLength={300}
           returnKeyType="send"
-          keyboardType={step === 'co_phone' ? 'phone-pad' : 'default'}
+          keyboardType={step === 'co_phone' || step === 'cb_phone' ? 'phone-pad' : 'default'}
           blurOnSubmit={false}
           onSubmitEditing={() => submit(draft)}
           accessibilityLabel={t.ui.input}
