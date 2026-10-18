@@ -1,6 +1,8 @@
 import { supabase, isSupabaseConfigured } from './supabase';
 import { getCurrentSessionId, getCurrentReferrerSource } from './analytics';
 import { trackTikTokEvent } from './tiktokPixel';
+import { currentDevice } from './assistantAttribution';
+import { isMissingColumn } from './dbErrors';
 import type { CartItem, Order, OrderItem, PaymentMethod } from '../types';
 
 export interface CreateOrderInput {
@@ -15,6 +17,8 @@ export interface CreateOrderInput {
   giftWrap?: boolean;
   // Numéro de commande choisi à l'avance : si on réessaie après une coupure de réseau, la même commande n'est pas enregistrée deux fois.
   id?: string;
+  // Commande passée par Zara dans le chat : la commande note l'appareil du client (statistiques de Zara).
+  viaAssistant?: boolean;
 }
 
 export function generateOrderId(): string {
@@ -68,7 +72,7 @@ export async function createOrder(input: CreateOrderInput): Promise<{ order: Ord
   // Pas de .select() apres l'insertion : un client invite (sans compte) n'a
   // pas le droit de relire les commandes en base (confidentialite), donc on
   // renvoie directement l'objet construit ci-dessus plutot que de le relire.
-  const { error } = await supabase.from('orders').insert({
+  const row = {
     id: order.id,
     user_id: order.user_id,
     items: order.items,
@@ -83,7 +87,13 @@ export async function createOrder(input: CreateOrderInput): Promise<{ order: Ord
     referrer_source: order.referrer_source,
     // le champ n'est envoye que si le service est choisi : les commandes normales ne changent pas
     ...(order.gift_wrap ? { gift_wrap: true } : {}),
-  });
+  };
+  const payload: Record<string, unknown> = input.viaAssistant ? { ...row, assistant_device: currentDevice() } : row;
+  let { error } = await supabase.from('orders').insert(payload);
+  // La colonne des statistiques de Zara n'existe pas encore dans la base : la commande ne doit JAMAIS échouer pour ça, on la refait sans.
+  if (input.viaAssistant && error && isMissingColumn(error, 'assistant_device')) {
+    ({ error } = await supabase.from('orders').insert(row));
+  }
 
   // Numéro déjà enregistré par un essai précédent (réponse perdue) : la commande existe bien, on ne la refait pas.
   const alreadySaved = !!input.id && (error as { code?: string } | null)?.code === '23505';

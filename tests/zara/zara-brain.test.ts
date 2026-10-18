@@ -5,6 +5,9 @@ import * as m from '../../src/lib/assistantMarketing.ts';
 import * as tx from '../../src/lib/assistantText.ts';
 import * as l from '../../src/lib/assistantLang.ts';
 import * as pe from '../../src/lib/profileEdit.ts';
+import * as at from '../../src/lib/assistantAttribution.ts';
+import * as st from '../../src/lib/assistantStats.ts';
+import { isMissingColumn } from '../../src/lib/dbErrors.ts';
 
 const KEY = process.env.SUPABASE_ANON_KEY!;
 const URL_SB = 'https://xtitsmmccpkelxfjyqyh.supabase.co';
@@ -563,6 +566,87 @@ async function main() {
   ok(`aucune lettre arabe dans les ${frCount} textes francais (sauf le bouton de langue)`, frArabic.length === 0, frArabic);
   ok('chaque texte arabe contient bien de l\'arabe (sauf chiffres et noms)', (() => { const bad: string[] = []; const w = (node: unknown, path: string) => { if (typeof node === 'string') { if (node.length > 6 && !l.hasArabic(node)) bad.push(path); } else if (Array.isArray(node)) node.forEach((x, i) => w(x, `${path}[${i}]`)); else if (node && typeof node === 'object') for (const [k, v] of Object.entries(node)) if (typeof v !== 'function') w(v, path ? `${path}.${k}` : k); }; w(tx.texts('ar'), ''); return bad.length === 0 ? true : bad; })());
   ok('textes importants : le francais et l\'arabe disent la meme chose (chiffres identiques)', ['info', 'rules', 'howToOrder', 'wrapReply', 'returns'].every((k) => { const nums = (s: string) => (s.replace(/[\s  ]/g, '').match(/\d+/g) ?? []).filter((n) => n !== '00').sort().join(','); const f = nums((tx.texts('fr') as any)[k]); const a = nums((tx.texts('ar') as any)[k]); return f === a; }), ['info', 'rules', 'howToOrder', 'wrapReply', 'returns'].map((k) => [k, (tx.texts('fr') as any)[k].replace(/[\s  ]/g, '').match(/\d+/g)?.sort().join(','), (tx.texts('ar') as any)[k].replace(/[\s  ]/g, '').match(/\d+/g)?.sort().join(',')]));
+
+  // ---- Statistiques de Zara : appareil, memoire « vient de Zara », chiffres, periodes ----
+  console.log('\n== statistiques de Zara : appareils, attribution, chiffres, periodes');
+  {
+    const UA = {
+      iphone: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+      ipad: 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+      android: 'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+      androidTablet: 'Mozilla/5.0 (Linux; Android 13; SM-X700) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      windows: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      mac: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
+    };
+    ok('Zara reconnait l\'appareil : iPhone, Android (telephone), Tablette (iPad et tablette Android), PC (Windows, Mac, inconnu)', at.deviceFromUserAgent(UA.iphone) === 'iPhone' && at.deviceFromUserAgent(UA.android) === 'Android' && at.deviceFromUserAgent(UA.ipad) === 'Tablette' && at.deviceFromUserAgent(UA.androidTablet) === 'Tablette' && at.deviceFromUserAgent(UA.windows) === 'PC' && at.deviceFromUserAgent(UA.mac) === 'PC' && at.deviceFromUserAgent('') === 'PC' && at.deviceFromUserAgent(null) === 'PC' && at.deviceFromUserAgent(undefined) === 'PC');
+
+    // memoire de « il vient de toucher un bouton de Zara » (stockage simule)
+    const mem = () => { const m = new Map<string, string>(); return { m, store: { getItem: (k: string) => (m.has(k) ? (m.get(k) as string) : null), setItem: (k: string, v: string) => void m.set(k, v), removeItem: (k: string) => void m.delete(k) } }; };
+    const T0 = Date.UTC(2026, 9, 18, 8, 0, 0);
+    const MIN = 60 * 1000, DAY = 24 * 60 * MIN;
+    const a = mem();
+    at.markIntent('signup', 'Android', a.store, T0);
+    ok('« Creer mon compte » touche chez Zara : retenu avec l\'appareil, valable 3 jours', at.readIntent('signup', a.store, T0 + 2 * DAY)?.device === 'Android' && at.readIntent('signup', a.store, T0 + 3 * DAY - MIN)?.device === 'Android' && at.readIntent('signup', a.store, T0 + 3 * DAY + MIN) === null);
+    const b = mem();
+    at.markIntent('install', 'iPhone', b.store, T0);
+    ok('« Installer » touche chez Zara : valable 30 minutes seulement', at.readIntent('install', b.store, T0 + 29 * MIN)?.device === 'iPhone' && at.readIntent('install', b.store, T0 + 31 * MIN) === null);
+    ok('les deux memoires sont separees (compte / installation)', at.readIntent('install', a.store, T0) === null && at.readIntent('signup', b.store, T0) === null);
+    at.clearIntent('signup', a.store);
+    ok('une fois compte, la memoire est effacee (un seul compte compte)', at.readIntent('signup', a.store, T0) === null && a.m.size === 0);
+    const bad = mem();
+    bad.m.set('albasse_zara_signup_intent', '{pas du json');
+    const bad2 = mem(); bad2.m.set('albasse_zara_signup_intent', JSON.stringify({ at: T0, device: 'Windows Phone' }));
+    const bad3 = mem(); bad3.m.set('albasse_zara_signup_intent', JSON.stringify({ at: T0 + 10 * DAY, device: 'iPhone' }));
+    const bad4 = mem(); bad4.m.set('albasse_zara_signup_intent', JSON.stringify({ device: 'iPhone' }));
+    ok('memoire abimee, appareil inconnu, date dans le futur ou sans date : ignorees, jamais d\'erreur', at.readIntent('signup', bad.store, T0) === null && at.readIntent('signup', bad2.store, T0) === null && at.readIntent('signup', bad3.store, T0) === null && at.readIntent('signup', bad4.store, T0) === null);
+    let threw = false;
+    try { at.markIntent('signup', 'PC', null, T0); at.clearIntent('signup', null); threw = at.readIntent('signup', null, T0) !== null; } catch { threw = true; }
+    ok('stockage bloque (navigation privee) : rien ne plante, rien n\'est compte', !threw);
+    const broken = { getItem: () => { throw new Error('bloque'); }, setItem: () => { throw new Error('bloque'); }, removeItem: () => { throw new Error('bloque'); } };
+    let threw2 = false;
+    try { at.markIntent('install', 'PC', broken, T0); at.clearIntent('install', broken); at.readIntent('install', broken, T0); } catch { threw2 = true; }
+    ok('stockage qui lance des erreurs : rien ne plante', !threw2);
+
+    // chiffres : meme jeu de donnees que le test de la base
+    const raw = {
+      conversations: [{ device: 'iPhone', n: 1 }, { device: 'Android', n: 1 }, { device: 'Autre', n: 2 }],
+      events: [{ event: 'install_question', device: 'iPhone', n: 1 }, { event: 'install_question', device: 'Android', n: 1 }, { event: 'install_ios_guide', device: 'iPhone', n: 1 }, { event: 'install_already', device: 'Android', n: 1 }, { event: 'install_later', device: 'Autre', n: 1 }],
+      orders: [{ device: 'Android', status: 'pending', n: 1, amount: 10000 }, { device: 'Android', status: 'delivered', n: 1, amount: 20000 }, { device: 'iPhone', status: 'paid', n: 1, amount: 5000 }, { device: 'Android', status: 'cancelled', n: 1, amount: 3000 }],
+      accounts: [{ device: 'Android', n: 2 }, { device: 'iPhone', n: 1 }],
+      installs: [{ device: 'Android', n: 1 }, { device: 'iPhone', n: 1 }],
+      totals: { orders: 4, orders_amount: 42000, accounts: 5, installs: 3 },
+    };
+    const z = st.buildZaraStats(raw);
+    ok('ventes de Zara : 3 commandes (l\'annulee n\'est pas une vente), 35 000 FCFA, dont 1 livree de 20 000 ; 1 annulee signalee', z.sales.count === 3 && z.sales.amount === 35000 && z.sales.delivered.count === 1 && z.sales.delivered.amount === 20000 && z.sales.cancelled === 1, z.sales);
+    ok('ventes par appareil : Android 2 (30 000), iPhone 1 (5 000)', z.sales.byDevice.Android.count === 2 && z.sales.byDevice.Android.amount === 30000 && z.sales.byDevice.iPhone.count === 1 && z.sales.byDevice.iPhone.amount === 5000 && z.sales.byDevice.PC.count === 0, z.sales.byDevice);
+    ok('comptes grace a Zara : 3 (Android 2, iPhone 1) ; installations : 2 (Android 1, iPhone 1)', z.accounts.count === 3 && z.accounts.byDevice.Android === 2 && z.accounts.byDevice.iPhone === 1 && z.installs.count === 2 && z.installs.byDevice.Android === 1 && z.installs.byDevice.iPhone === 1, [z.accounts, z.installs.byDevice]);
+    ok('conversations : 4 (iPhone 1, Android 1, autre 2)', z.conversations.total === 4 && z.conversations.byDevice.iPhone === 1 && z.conversations.byDevice.Android === 1 && z.conversations.byDevice.Autre === 2);
+    ok('parcours d\'installation : 2 questions, 1 deja installee, 1 plus tard, 1 aide iPhone', z.installs.questions === 2 && z.installs.alreadyInstalled === 1 && z.installs.later === 1 && z.installs.iosGuides === 1, z.installs);
+    ok('part de Zara dans la boutique : 75 % des commandes (3 sur 4), 60 % des comptes (3 sur 5), 66,7 % des installations (2 sur 3)', z.shares.orders === 75 && z.shares.accounts === 60 && z.shares.installs === 66.7, z.shares);
+    ok('3 ventes pour 4 conversations = 75 ventes pour 100 conversations', z.ordersPer100Chats === 75, z.ordersPer100Chats);
+    const zEmpty = st.buildZaraStats(null);
+    const zEmpty2 = st.buildZaraStats({});
+    const allZero = (x: st.ZaraStats) => x.sales.count === 0 && x.sales.amount === 0 && x.accounts.count === 0 && x.installs.count === 0 && x.conversations.total === 0 && x.shares.orders === null && x.shares.accounts === null && x.shares.installs === null && x.ordersPer100Chats === null;
+    ok('aucune donnee (rien recu, periode vide) : tout a zero, pourcentages vides, jamais NaN', allZero(zEmpty) && allZero(zEmpty2) && JSON.stringify(zEmpty).indexOf('NaN') === -1 && JSON.stringify(zEmpty).indexOf('null') !== -1);
+    const zStr = st.buildZaraStats({ orders: [{ device: 'Windows Phone', status: 'delivered', n: '2', amount: '12500.5' }, { device: 'iPhone', status: 'paid', n: 'abc', amount: null as unknown as number }], conversations: [{ device: 'PC', n: '7' }] });
+    ok('nombres recus en texte acceptes ; appareil inconnu = « Autre » ; valeur illisible = 0', zStr.sales.count === 2 && zStr.sales.amount === 12500.5 && zStr.sales.byDevice.Autre.count === 2 && zStr.sales.byDevice.iPhone.count === 0 && zStr.conversations.byDevice.PC === 7, zStr.sales);
+    ok('appareils affiches : iPhone, Android, Tablette, PC (Ordinateur), Autre', st.DEVICES.join('|') === 'iPhone|Android|Tablette|PC|Autre' && st.DEVICE_LABELS.PC === 'Ordinateur');
+
+    // periodes : « aujourd'hui » commence a minuit a N'Djamena (UTC+1)
+    const at0 = Date.UTC(2026, 9, 18, 5, 30, 0); // 06:30 a N'Djamena, le 18 octobre
+    const pb = (p: st.StatsPeriod, now = at0) => st.periodBounds(p, now);
+    ok('periode « Aujourd\'hui » : depuis minuit heure du Tchad (23:00 UTC la veille)', pb('today').since === '2026-10-17T23:00:00.000Z' && pb('today').until === null, pb('today'));
+    ok('periode « Hier » : de minuit a minuit, fin exclue', pb('yesterday').since === '2026-10-16T23:00:00.000Z' && pb('yesterday').until === '2026-10-17T23:00:00.000Z', pb('yesterday'));
+    ok('periode « 7 jours » = aujourd\'hui + 6 jours avant ; « 30 jours » = aujourd\'hui + 29', pb('7d').since === '2026-10-11T23:00:00.000Z' && pb('30d').since === '2026-09-18T23:00:00.000Z', [pb('7d'), pb('30d')]);
+    ok('periode « Ce mois » : depuis le 1er a minuit heure du Tchad', pb('month').since === '2026-09-30T23:00:00.000Z', pb('month'));
+    ok('periode « Depuis le debut » : sans limite', pb('all').since === null && pb('all').until === null);
+    ok('juste apres minuit a N\'Djamena (00:30 le 18) : toujours le 18 ; juste avant (23:30 le 17) : le 17', pb('today', Date.UTC(2026, 9, 17, 23, 30, 0)).since === '2026-10-17T23:00:00.000Z' && pb('today', Date.UTC(2026, 9, 17, 22, 30, 0)).since === '2026-10-16T23:00:00.000Z');
+    ok('changement de mois et d\'annee : 1er janvier a minuit heure du Tchad = 31 decembre 23:00 UTC', pb('month', Date.UTC(2027, 0, 15, 10, 0, 0)).since === '2026-12-31T23:00:00.000Z');
+    ok('periodes proposees : aujourd\'hui, hier, 7 jours, 30 jours, ce mois, depuis le debut (en francais)', st.PERIOD_ORDER.join('|') === 'today|yesterday|7d|30d|month|all' && st.PERIOD_LABELS.all === 'Depuis le début' && st.PERIOD_LABELS.today === "Aujourd'hui");
+
+    ok('erreur de la base : fonction absente = « pas encore active », droit refuse = « acces refuse », reste = erreur', st.classifyStatsError({ code: 'PGRST202' }) === 'not_installed' && st.classifyStatsError({ code: '42883' }) === 'not_installed' && st.classifyStatsError({ status: 404 }) === 'not_installed' && st.classifyStatsError({ code: '42501' }) === 'forbidden' && st.classifyStatsError({ code: 'XX000', message: 'boom' }) === 'error' && st.classifyStatsError(null) === 'error' && st.classifyStatsError(undefined) === 'error');
+    ok('colonne absente (script pas applique) reconnue : PGRST204 ou 42703 + nom de la colonne ; autre erreur non', isMissingColumn({ code: 'PGRST204', message: "Could not find the 'assistant_device' column of 'orders' in the schema cache" }, 'assistant_device') && isMissingColumn({ code: '42703', message: 'column "via_assistant" of relation "app_installs" does not exist' }, 'via_assistant') && !isMissingColumn({ code: 'PGRST204', message: "Could not find the 'gift_wrap' column" }, 'assistant_device') && !isMissingColumn({ code: '23505', message: 'assistant_device duplicate' }, 'assistant_device') && !isMissingColumn(null, 'assistant_device'));
+  }
 
   // ---- Profil client modifiable : regles de validation (les memes que l'inscription) ----
   console.log('\n== profil client modifiable : validation');

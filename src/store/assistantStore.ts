@@ -70,7 +70,9 @@ import {
   type Parsed,
   type Range,
 } from '../lib/assistantMarketing';
-import { fetchCartStatus, fetchLoyaltyPoints, fetchPaymentNumbers, fetchProductForCart, getCatalog, getCategories, getCities, getStoreInfo, startChatToday, toCard, type AssistantProduct } from '../lib/assistantData';
+import { fetchCartStatus, fetchLoyaltyPoints, fetchPaymentNumbers, fetchProductForCart, getCatalog, getCategories, getCities, getStoreInfo, logAssistantEvent, startChatToday, toCard, type AssistantProduct } from '../lib/assistantData';
+import { clearIntent, currentDevice, markIntent } from '../lib/assistantAttribution';
+import { trackShortcutInstallIfNeeded } from '../lib/appInstallTracking';
 import { createOrder, generateOrderId } from '../lib/orders';
 import { trackTikTokEvent } from '../lib/tiktokPixel';
 import { initiatePayment } from '../lib/payments';
@@ -1344,6 +1346,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         shippingAddress: d.address,
         shippingCity: d.city.name,
         giftWrap: d.giftWrap,
+        viaAssistant: true, // la commande note l'appareil : statistiques de Zara
       });
     } catch (e) {
       created = { order: null, error: e instanceof Error ? e.message : String(e) };
@@ -1681,6 +1684,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     // iPhone : l'aide pas à pas ; Android : le bouton seulement quand Chrome permet réellement l'installation
     if (!ios && !(isAndroidDevice() && isPwaInstallPromptAvailable())) return;
     recordInstall('asked'); // on ne le redit pas, même si le client l'ignore
+    logAssistantEvent('install_question');
     // « Avez-vous déjà installé l'application ? » : le bouton pour installer, « Oui, déjà installée », « Plus tard »
     const [install, later] = installChips(ios);
     await say(T().install.ask, { actions: [...extra, install, { label: T().chip.alreadyInstalled, kind: 'installYes' }, later] });
@@ -1708,18 +1712,23 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
   async function installSteps() {
     const image: ChatImage | undefined = Platform.OS === 'web' ? { ...IOS_INSTALL_PHOTO, alt: T().install.photoAlt } : undefined;
     const text = `${T().install.iosSteps(isSafariIos())}${image ? `\n\n${T().install.photoHint}` : ''}`;
+    logAssistantEvent('install_ios_guide');
     await say(text, { image, actions: [{ label: T().chip.tutorial, kind: 'iosGuide' }, menuBtn()] });
   }
 
   // Appelée directement par le toucher du client : la boîte d'installation de Chrome n'apparaît qu'après un geste volontaire.
   async function installNow() {
     userSays(T().chip.installApp);
+    // Il vient de toucher « Installer » chez Zara : si l'installation se fait, elle est comptée « grâce à Zara ».
+    markIntent('install', currentDevice());
     const outcome = await triggerPwaInstallPrompt();
     if (outcome === 'accepted') {
       recordInstall('accepted');
+      trackShortcutInstallIfNeeded();
       await say(T().install.accepted, { fast: true });
       return;
     }
+    clearIntent('install'); // pas installé : ce qu'il fera plus tard n'est plus « grâce à Zara »
     if (outcome === 'dismissed') {
       recordInstall('dismissed');
       await say(T().install.declined, { fast: true });
@@ -2169,6 +2178,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       case 'installYes':
         userSays(action.label);
         recordInstall('accepted'); // il l'a déjà : on ne lui propose plus rien, ni le bouton dans le menu
+        logAssistantEvent('install_already');
         await say(T().install.yes, { fast: true, actions: afterAnswerActions() });
         return;
       case 'installHelp':
@@ -2181,6 +2191,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       case 'installLater':
         userSays(action.label);
         recordInstall('dismissed');
+        logAssistantEvent('install_later');
         await say(T().install.later, { fast: true, actions: afterAnswerActions() });
         return;
       case 'say':

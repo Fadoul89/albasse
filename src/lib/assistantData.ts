@@ -1,5 +1,7 @@
 import { supabase } from './supabase';
 import { buildProduct, type CatalogProduct, type City } from './assistantBrain';
+import { currentDevice, type DeviceLabel } from './assistantAttribution';
+import { buildZaraStats, classifyStatsError, periodBounds, type StatsPeriod, type StatsFailure, type ZaraStats } from './assistantStats';
 import type { Product } from '../types';
 
 // Donnees publiques lues pour Zara (catalogue, villes, categories, infos de la boutique), gardees
@@ -170,13 +172,47 @@ export async function fetchProductForCart(slug: string): Promise<Product | null>
 // « Vous êtes mon Nᵉ client aujourd'hui » : la fonction `assistant_chat_start` (add-assistant-client-counter.sql) note une
 // nouvelle conversation et renvoie son rang du jour. Tant qu'elle n'est pas installée, ou en cas de panne : null, et Zara
 // ne dit AUCUN nombre (jamais de nombre inventé).
-export async function startChatToday(): Promise<number | null> {
+export async function startChatToday(device: DeviceLabel = currentDevice()): Promise<number | null> {
   try {
-    const { data, error } = await withTimeout(Promise.resolve(supabase.rpc('assistant_chat_start')), 3000);
+    // La conversation note aussi le type d'appareil (iPhone, Android...) pour les statistiques de Zara.
+    let { data, error } = await withTimeout(Promise.resolve(supabase.rpc('assistant_chat_start', { p_device: device })), 3000);
+    // Ancienne version de la fonction (sans appareil) : on refait l'appel sans, une seule fois. Jamais après une simple lenteur.
+    if (error && (error as { code?: string }).code === 'PGRST202') {
+      ({ data, error } = await withTimeout(Promise.resolve(supabase.rpc('assistant_chat_start')), 3000));
+    }
     const n = Number(data);
     return !error && Number.isInteger(n) && n > 0 ? n : null;
   } catch {
     return null;
+  }
+}
+
+// Les gestes de Zara autour de l'installation, pour ses statistiques (aucun texte, aucune donnée personnelle : le nom du geste
+// et le type d'appareil). Silencieux : une statistique ne doit jamais gêner le client, ni afficher une erreur.
+export type AssistantEvent = 'install_question' | 'install_already' | 'install_later' | 'install_ios_guide';
+
+export function logAssistantEvent(event: AssistantEvent, device: DeviceLabel = currentDevice()): void {
+  try {
+    void Promise.resolve(supabase.rpc('assistant_log_event', { p_event: event, p_device: device })).then(
+      () => undefined,
+      () => undefined
+    );
+  } catch {
+    // ignore
+  }
+}
+
+// Les chiffres de la page « Statistiques de Zara » (administrateur seulement : la base refuse les autres).
+export type AssistantStatsResult = { ok: true; stats: ZaraStats } | { ok: false; reason: StatsFailure; message: string };
+
+export async function fetchAssistantStats(period: StatsPeriod): Promise<AssistantStatsResult> {
+  try {
+    const { since, until } = periodBounds(period);
+    const { data, error, status } = await withTimeout(Promise.resolve(supabase.rpc('assistant_stats', { p_since: since, p_until: until })), 15000);
+    if (error) return { ok: false, reason: classifyStatsError({ code: (error as { code?: string }).code, message: error.message, status }), message: error.message };
+    return { ok: true, stats: buildZaraStats(data as Parameters<typeof buildZaraStats>[0]) };
+  } catch (e) {
+    return { ok: false, reason: 'error', message: e instanceof Error ? e.message : String(e) };
   }
 }
 

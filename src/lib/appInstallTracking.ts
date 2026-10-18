@@ -1,6 +1,8 @@
 import { supabase, isSupabaseConfigured } from './supabase';
 import { isRunningInsideApp } from './runningInApp';
 import { isRunningAsInstalledPwa } from './pwaInstallPrompt';
+import { clearIntent, deviceFromUserAgent, readIntent } from './assistantAttribution';
+import { isMissingColumn } from './dbErrors';
 
 const FLAG_KEY = 'albasse_app_install_tracked';
 
@@ -45,12 +47,7 @@ function detectBrowser(): string {
 }
 
 function detectDeviceType(): string {
-  if (typeof navigator === 'undefined') return 'PC';
-  const ua = navigator.userAgent;
-  if (/iPad/i.test(ua)) return 'Tablette';
-  if (/iPhone|iPod/i.test(ua)) return 'iPhone';
-  if (/Android/i.test(ua)) return /Mobile/i.test(ua) ? 'Android' : 'Tablette';
-  return 'PC';
+  return deviceFromUserAgent(typeof navigator === 'undefined' ? '' : navigator.userAgent);
 }
 
 // Compte une installation quand le visiteur accepte la boite de dialogue
@@ -62,13 +59,21 @@ export function trackShortcutInstallIfNeeded() {
     if (window.localStorage.getItem(SHORTCUT_FLAG_KEY)) return;
     const deviceId = generateDeviceId();
     window.localStorage.setItem(SHORTCUT_FLAG_KEY, deviceId);
-    supabase
-      .from('app_installs')
-      .insert({
-        device_id: deviceId,
-        install_type: 'shortcut',
-        browser: detectBrowser(),
-        device_type: detectDeviceType(),
+    const row = {
+      device_id: deviceId,
+      install_type: 'shortcut',
+      browser: detectBrowser(),
+      device_type: detectDeviceType(),
+    };
+    // Le client vient de toucher « Installer » dans le chat de Zara : l'installation est comptée « grâce à Zara ».
+    const viaAssistant = !!readIntent('install');
+    if (viaAssistant) clearIntent('install');
+    const payload: Record<string, unknown> = viaAssistant ? { ...row, via_assistant: true } : row;
+    Promise.resolve(supabase.from('app_installs').insert(payload))
+      .then(async ({ error }) => {
+        // La colonne des statistiques de Zara n'existe pas encore dans la base : l'installation est comptée quand même.
+        if (viaAssistant && error && isMissingColumn(error, 'via_assistant')) return supabase.from('app_installs').insert(row);
+        return { error };
       })
       .then(({ error }) => {
         if (error) console.error('Erreur suivi installation raccourci:', error.message);
