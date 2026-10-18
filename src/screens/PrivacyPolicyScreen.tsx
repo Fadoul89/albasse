@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Platform } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useStoreSettings } from '../hooks/useStoreSettings';
 import { colors, fonts, radius, spacing } from '../theme';
 import { ScreenHeader } from '../components/ScreenHeader';
-import { setTrackingChoice, trackingState } from '../lib/browsingTracker';
 
 export function PrivacyPolicyScreen() {
   const { settings } = useStoreSettings();
@@ -35,11 +34,9 @@ export function PrivacyPolicyScreen() {
             boutique. Elles sont conservées 90 jours, puis effacées.
           </Text>
           <Text style={styles.p}>
-            Vous pouvez refuser ce suivi à tout moment avec le bouton ci-dessous, ou en écrivant à Zara « ne me suis
-            plus ». Votre choix est respecté immédiatement et ce qui était retenu est effacé. Si votre navigateur envoie
-            le signal « Ne pas me suivre », nous le respectons aussi.
+            Pour toute question, ou pour demander l'effacement de ces informations, contactez-nous à l'adresse indiquée
+            plus bas. Si votre navigateur envoie le signal « Ne pas me suivre », nous le respectons.
           </Text>
-          <TrackingSetting />
         </Section>
 
         <Section title="2. Utilisation des données">
@@ -86,30 +83,6 @@ export function PrivacyPolicyScreen() {
   );
 }
 
-// Le réglage du suivi des articles regardés, sur cet appareil : discret, ici seulement (aucun message qui dérange ailleurs sur le site).
-function TrackingSetting() {
-  const [state, setState] = useState(() => (Platform.OS === 'web' ? trackingState() : null));
-  const [justRefused, setJustRefused] = useState(false);
-  if (!state) return null;
-  const toggle = () => {
-    const refuse = state.allowed;
-    setTrackingChoice(refuse ? 'denied' : 'granted'); // refuser efface aussi ce qui était retenu sur l'appareil et dans la base
-    setJustRefused(refuse);
-    setState(trackingState());
-  };
-  return (
-    <View style={styles.setting} testID="privacy-tracking">
-      <Text style={styles.settingText} testID="privacy-tracking-state">
-        {state.allowed ? 'Le suivi des articles regardés est actif sur cet appareil.' : 'Le suivi des articles regardés est désactivé sur cet appareil.'}
-      </Text>
-      <Pressable style={styles.settingButton} onPress={toggle} accessibilityRole="button" testID="privacy-tracking-toggle">
-        <Text style={styles.settingButtonText}>{state.allowed ? 'Refuser le suivi' : 'Autoriser le suivi'}</Text>
-      </Pressable>
-      {justRefused && !state.allowed ? <Text style={styles.settingText}>C'est fait : ce qui était retenu sur cet appareil est effacé.</Text> : null}
-    </View>
-  );
-}
-
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <View style={styles.section}>
@@ -120,10 +93,6 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 const styles = StyleSheet.create({
-  setting: { backgroundColor: colors.panel, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.sm, gap: 8, marginTop: spacing.xs },
-  settingText: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 13, lineHeight: 19 },
-  settingButton: { alignSelf: 'flex-start', paddingHorizontal: 16, paddingVertical: 8, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.gold },
-  settingButtonText: { color: colors.gold, fontFamily: fonts.bodySemiBold, fontSize: 13 },
   screen: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.md, paddingBottom: 60 },
   shopName: { color: colors.goldLight, fontFamily: fonts.display, fontSize: 20, textAlign: 'center', marginBottom: 4 },
