@@ -121,6 +121,7 @@ export interface ChatAction {
     | 'cancel'
     | 'checkout'
     | 'install'
+    | 'installYes'
     | 'installHelp'
     | 'iosGuide'
     | 'installLater'
@@ -144,7 +145,14 @@ export interface ChatMessage {
   lang?: Lang; // langue du message de Zara (sens d'écriture) ; sans valeur : français
   cart?: boolean; // affiche le panier (en direct, le même que celui du site) sous le message
   products?: AssistantProduct[];
+  image?: ChatImage; // une photo sous le message (ex. comment installer sur iPhone)
   actions?: ChatAction[];
+}
+
+export interface ChatImage {
+  src: string;
+  alt: string;
+  ratio: number; // largeur / hauteur
 }
 
 export type Step =
@@ -372,6 +380,8 @@ let pendingVariant: PendingAdd | null = null;
 const INSTALL_KEY = 'albasse_zara_install';
 const INSTALL_PAUSE_MS = 14 * 24 * 3600 * 1000;
 const INSTALL_OFFER_AFTER_MESSAGES = 2;
+// La photo « comment installer sur iPhone » : 4 images du tutoriel vidéo (Partager, En voir plus, Sur l'écran d'accueil, C'est prêt).
+const IOS_INSTALL_PHOTO = { src: '/ios-installer-photo.jpg', ratio: 1120 / 1960 };
 
 // Mots qui ne désignent pas un produit dans « ajoute aussi ce parfum ».
 const ADD_NOISE = new Set([
@@ -452,7 +462,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     }
   }
 
-  async function say(text: string, extra: { products?: AssistantProduct[]; actions?: ChatAction[]; lang?: Lang; cart?: boolean; fast?: boolean } = {}) {
+  async function say(text: string, extra: { products?: AssistantProduct[]; image?: ChatImage; actions?: ChatAction[]; lang?: Lang; cart?: boolean; fast?: boolean } = {}) {
     const { lang, fast, ...rest } = extra;
     await sleep(fast ? 120 : typingDelay(text));
     push({ id: newId(), role: 'assistant', text, lang: lang ?? get().lang, ...rest });
@@ -1671,7 +1681,9 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     // iPhone : l'aide pas à pas ; Android : le bouton seulement quand Chrome permet réellement l'installation
     if (!ios && !(isAndroidDevice() && isPwaInstallPromptAvailable())) return;
     recordInstall('asked'); // on ne le redit pas, même si le client l'ignore
-    await say(T().install.offer, { actions: [...extra, ...installChips(ios)] });
+    // « Avez-vous déjà installé l'application ? » : le bouton pour installer, « Oui, déjà installée », « Plus tard »
+    const [install, later] = installChips(ios);
+    await say(T().install.ask, { actions: [...extra, install, { label: T().chip.alreadyInstalled, kind: 'installYes' }, later] });
   }
 
   // Le visiteur le demande lui-même (« comment installer l'application ? ») : réponse tout de suite.
@@ -1692,8 +1704,11 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     await say(T().install.desktop, { actions: afterAnswerActions() });
   }
 
+  // iPhone : les étapes écrites, avec la photo « comment installer » juste dessous (touchée, elle s'ouvre en grand).
   async function installSteps() {
-    await say(T().install.iosSteps(isSafariIos()), { actions: [{ label: T().chip.tutorial, kind: 'iosGuide' }, menuBtn()] });
+    const image: ChatImage | undefined = Platform.OS === 'web' ? { ...IOS_INSTALL_PHOTO, alt: T().install.photoAlt } : undefined;
+    const text = `${T().install.iosSteps(isSafariIos())}${image ? `\n\n${T().install.photoHint}` : ''}`;
+    await say(text, { image, actions: [{ label: T().chip.tutorial, kind: 'iosGuide' }, menuBtn()] });
   }
 
   // Appelée directement par le toucher du client : la boîte d'installation de Chrome n'apparaît qu'après un geste volontaire.
@@ -2150,6 +2165,11 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         return;
       case 'install':
         await installNow();
+        return;
+      case 'installYes':
+        userSays(action.label);
+        recordInstall('accepted'); // il l'a déjà : on ne lui propose plus rien, ni le bouton dans le menu
+        await say(T().install.yes, { fast: true, actions: afterAnswerActions() });
         return;
       case 'installHelp':
         userSays(action.label);

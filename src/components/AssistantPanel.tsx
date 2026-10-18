@@ -18,7 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts, radius, spacing } from '../theme';
 import { navigationRef } from '../navigation/navigationRef';
-import { useAssistantStore, type ChatAction, type ChatMessage } from '../store/assistantStore';
+import { useAssistantStore, type ChatAction, type ChatImage, type ChatMessage } from '../store/assistantStore';
 import type { AssistantProduct } from '../lib/assistantData';
 import { hasArabic, type Lang } from '../lib/assistantLang';
 import { CartBar, ChatCart } from './AssistantCart';
@@ -160,6 +160,15 @@ function ActionChips({ actions, onChoose }: { actions: ChatAction[]; onChoose: (
   );
 }
 
+// Une photo envoyée par Zara (ex. comment installer sur iPhone) : touchée, elle s'ouvre en grand dans un nouvel onglet.
+function ChatPhoto({ image }: { image: ChatImage }) {
+  return (
+    <Pressable onPress={() => Linking.openURL(image.src)} accessibilityRole="imagebutton" accessibilityLabel={image.alt} testID="assistant-photo">
+      <Image source={{ uri: image.src }} style={[styles.photo, { aspectRatio: image.ratio }]} contentFit="cover" accessibilityLabel={image.alt} />
+    </Pressable>
+  );
+}
+
 function Bubble({
   message,
   showActions,
@@ -202,6 +211,7 @@ function Bubble({
               </Text>
             </View>
           )}
+          {!mine && message.image ? <ChatPhoto image={message.image} /> : null}
           {!mine && message.products && message.products.length > 0 ? <ProductCards products={message.products} lang={lang} onOpen={onOpenProduct} onAdd={onAdd} /> : null}
           {!mine && message.cart ? <ChatCart lang={lang} city={city} onCheckout={onCheckout} onOpenFull={onOpenFull} /> : null}
         </View>
@@ -522,6 +532,7 @@ const styles = StyleSheet.create({
   rowMine: { justifyContent: 'flex-end' },
   smallAvatar: { width: 30, height: 30, borderRadius: 15, borderWidth: 1, borderColor: colors.gold },
   bubbleColumn: { maxWidth: '82%', flexShrink: 1, gap: 8 },
+  photo: { width: 280, maxWidth: '100%', borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panel },
   bubble: { borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10 },
   bubbleBot: { backgroundColor: colors.panelAlt, borderBottomLeftRadius: 5, borderWidth: 1, borderColor: colors.border },
   bubbleMine: { borderBottomRightRadius: 5 },
