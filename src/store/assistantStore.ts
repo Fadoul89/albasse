@@ -367,9 +367,11 @@ interface PendingAdd {
 }
 let pendingVariant: PendingAdd | null = null;
 
-// Proposition d'installer le raccourci : une seule fois, puis pause de 14 jours.
+// Proposition d'installer le raccourci : une seule fois, puis pause de 14 jours. Elle vient après deux messages du client
+// (il a commencé à discuter), jamais dès l'accueil ; entre-temps, un bouton du menu reste là pour ceux qui veulent.
 const INSTALL_KEY = 'albasse_zara_install';
 const INSTALL_PAUSE_MS = 14 * 24 * 3600 * 1000;
+const INSTALL_OFFER_AFTER_MESSAGES = 2;
 
 // Mots qui ne désignent pas un produit dans « ajoute aussi ce parfum ».
 const ADD_NOISE = new Set([
@@ -501,6 +503,8 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     actions.push(sayBtn(c.promotions, 'promotions'), sayBtn(c.news, 'nouveautés'), sayBtn(c.advice, 'conseil'), sayBtn(c.categories, 'catégories'), sayBtn(c.delivery, 'livraison'));
     if (useCartStore.getState().items.length > 0) actions.push({ label: c.cart, kind: 'cart' });
     if (!isGuest()) actions.push({ label: c.orders, kind: 'orders' }, sayBtn(c.points, T().loyalty.mineQuery));
+    const install = installMenuChip();
+    if (install) actions.push(install);
     actions.push(wa(), langAction());
     return actions;
   };
@@ -1623,13 +1627,23 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       // ignore : la proposition pourra revenir
     }
   }
-  function installPaused(): boolean {
+  function installRecord(): { at: number; outcome: string } | null {
     try {
       const raw = window.localStorage.getItem(INSTALL_KEY);
-      return raw ? Date.now() - Number(JSON.parse(raw).at) < INSTALL_PAUSE_MS : false;
+      return raw ? (JSON.parse(raw) as { at: number; outcome: string }) : null;
     } catch {
-      return false;
+      return null;
     }
+  }
+  function installPaused(): boolean {
+    const record = installRecord();
+    return record ? Date.now() - Number(record.at) < INSTALL_PAUSE_MS : false;
+  }
+  // Le client a dit « Plus tard » (pendant 14 jours) ou a déjà installé : on ne lui remet pas le bouton dans le menu.
+  function installDeclined(): boolean {
+    const record = installRecord();
+    if (!record) return false;
+    return record.outcome === 'accepted' || (record.outcome === 'dismissed' && Date.now() - Number(record.at) < INSTALL_PAUSE_MS);
   }
   const alreadyInstalled = () => isRunningAsInstalledPwa() || isRunningInsideApp();
   // L'installation d'iPhone ne marche que depuis Safari (pas depuis Chrome, Facebook, Instagram...).
@@ -1638,6 +1652,16 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     ios ? { label: T().chip.installHelp, kind: 'installHelp', highlight: true } : { label: T().chip.installApp, kind: 'install', highlight: true },
     { label: T().chip.notNow, kind: 'installLater' },
   ];
+
+  // Le bouton du menu pour les clients qui n'ont pas encore installé : iPhone (aide pas à pas) ; Android seulement quand Chrome permet
+  // réellement l'installation (il ne la permet plus une fois l'application installée) ; jamais sur ordinateur ni dans l'application.
+  function installMenuChip(): ChatAction | null {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return null;
+    if (alreadyInstalled() || installDeclined()) return null;
+    if (isIosDevice()) return { label: T().chip.installHelp, kind: 'installHelp' };
+    if (isAndroidDevice() && isPwaInstallPromptAvailable()) return { label: T().chip.installApp, kind: 'install' };
+    return null;
+  }
 
   // `extra` : les boutons déjà affichés (ex. ceux du panier) restent disponibles sous la proposition.
   async function maybeOfferInstall(extra: ChatAction[] = []) {
@@ -2147,10 +2171,10 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     }
   }
 
-  // Après six messages du client, si ce n'est pas déjà fait : la proposition d'installer le raccourci (une seule fois).
+  // Après deux messages du client, si ce n'est pas déjà fait : la proposition d'installer le raccourci (une seule fois).
   async function afterTurn() {
     if (get().step.startsWith('co_')) return; // jamais au milieu d'une commande
-    if (get().messages.filter((m) => m.role === 'user').length >= 6) await maybeOfferInstall();
+    if (get().messages.filter((m) => m.role === 'user').length >= INSTALL_OFFER_AFTER_MESSAGES) await maybeOfferInstall();
   }
 
   return {
