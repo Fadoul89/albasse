@@ -131,6 +131,15 @@ export function AdminDashboardScreen() {
               <Text style={styles.sourceLinkArrow}>→</Text>
             </Pressable>
 
+            <Pressable style={styles.sourceLinkCard} onPress={() => navigation.navigate('AdminMorning')} testID="dashboard-morning-link">
+              <Text style={styles.sourceLinkIcon}>☀️</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sourceLinkTitle}>Le matin avec Zara</Text>
+                <Text style={styles.sourceLinkSubtitle}>Ce qui s'est passé pendant la nuit et ce qu'il faut faire en premier</Text>
+              </View>
+              <Text style={styles.sourceLinkArrow}>→</Text>
+            </Pressable>
+
             <Pressable style={styles.sourceLinkCard} onPress={() => navigation.navigate('AdminBrowsing')} testID="dashboard-browsing-link">
               <Text style={styles.sourceLinkIcon}>🔎</Text>
               <View style={{ flex: 1 }}>

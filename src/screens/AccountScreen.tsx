@@ -30,6 +30,7 @@ type AdminRoute = Extract<
   | 'AdminZaraStats'
   | 'AdminBrowsing'
   | 'AdminCallbacks'
+  | 'AdminMorning'
   | 'AdminAbandonedCarts'
   | 'AdminStoreSettings'
   | 'AdminMessages'
@@ -41,6 +42,7 @@ type AdminRoute = Extract<
 
 const ADMIN_MENU_ITEMS: { icon: string; label: string; route: AdminRoute }[] = [
   { icon: '📊', label: 'Tableau de bord', route: 'AdminDashboard' },
+  { icon: '☀️', label: 'Le matin avec Zara', route: 'AdminMorning' },
   { icon: '🔔', label: 'Notifications', route: 'AdminNotifications' },
   { icon: '🛠️', label: 'Produits', route: 'AdminProducts' },
   { icon: '🏷️', label: 'Catégories', route: 'AdminCategories' },

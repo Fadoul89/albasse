@@ -14,6 +14,7 @@ import * as ai from '../../src/lib/assistantInterest.ts';
 import * as bo from '../../src/lib/browsingOverview.ts';
 import * as oc from '../../src/lib/assistantOccasions.ts';
 import * as sa from '../../src/lib/assistantSales.ts';
+import * as mr from '../../src/lib/morningReport.ts';
 import { isMissingColumn } from '../../src/lib/dbErrors.ts';
 
 const KEY = process.env.SUPABASE_ANON_KEY!;
@@ -1135,6 +1136,89 @@ async function main() {
     ok('jour ecrit hors de la liste ou illisible : rien n\'est devine (dimanche, le 30, bonjour)', pick('dimanche') === null && pick('le 30') === null && pick('bonjour') === null && pick('') === null);
     ok('la validite 48 h annoncee est la vraie regle de la boutique', fr.closing.validity.includes('48 h') && ar.closing.validity.includes('48'));
     ok('aucun paiement ni coordonnee bancaire dans les messages de conclusion et de rappel', !/airtel|moov|carte|iban|code secret|mot de passe/i.test(JSON.stringify([fr.closing, fr.callback, fr.chip.callback])));
+  }
+
+  console.log('\n== Rapport du matin de Zara : vrais chiffres, rien d\'invente, ce qui manque est dit');
+  {
+    const HOUR = 3600 * 1000;
+    const now = Date.parse('2026-10-20T07:00:00Z'); // mardi 20 octobre, 8 h a N'Djamena
+    ok('« cette nuit » commence hier 18 h (heure du Tchad) : 17 h UTC la veille', mr.morningSince('night', now) === '2026-10-19T17:00:00.000Z', mr.morningSince('night', now));
+    ok('« dernieres 24 h » : exactement 24 h avant', mr.morningSince('day', now) === '2026-10-19T07:00:00.000Z', mr.morningSince('day', now));
+    ok('« cette nuit » apres minuit a N\'Djamena (23 h 30 UTC) : toujours depuis hier 18 h du jour qui vient de commencer', mr.morningSince('night', Date.parse('2026-10-20T23:30:00Z')) === '2026-10-20T17:00:00.000Z', mr.morningSince('night', Date.parse('2026-10-20T23:30:00Z')));
+    const since = mr.morningSince('night', now);
+    const stats = st.buildZaraStats({
+      conversations: [{ device: 'Android', n: 6 }],
+      orders: [{ device: 'Android', status: 'pending', n: 1, amount: 10000 }, { device: 'iPhone', status: 'paid', n: 1, amount: 5000 }, { device: 'Android', status: 'cancelled', n: 1, amount: 3000 }],
+      accounts: [{ device: 'Android', n: 2 }],
+      installs: [{ device: 'iPhone', n: 1 }],
+      totals: { orders: 4, orders_amount: 42000, accounts: 5, installs: 3 },
+    });
+    const browsing = bo.buildBrowsingOverview({
+      rows: [
+        { visitor_ref: 'V-1', product_id: 'p1', product_name: 'Rolex', cart_status: 'in_cart', interest: 'eleve' },
+        { visitor_ref: 'V-2', product_id: 'p1', product_name: 'Rolex', cart_status: 'in_cart', interest: 'moyen' },
+        { visitor_ref: 'V-1', product_id: 'p2', product_name: 'Parfum Oud', cart_status: 'in_cart', interest: 'eleve' },
+        { visitor_ref: 'V-3', product_id: 'p3', product_name: 'Sac', cart_status: 'none', interest: 'leger' },
+        { visitor_ref: 'V-4', product_id: 'p3', product_name: 'Sac', cart_status: 'purchased', interest: 'eleve' },
+      ],
+      top_products: [
+        { product_id: 'p1', product_name: 'Rolex', views: 10, visitors: 4 },
+        { product_id: 'p2', product_name: 'Parfum Oud', views: 6, visitors: 3 },
+        { product_id: 'p3', product_name: 'Sac', views: 4, visitors: 2 },
+        { product_id: 'p4', product_name: 'Montre rare', views: 3, visitors: 1 },
+      ],
+      top_searches: [{ query: 'montre', n: 5 }, { query: 'parfum', n: 2 }],
+      totals: { visitors: 7, rows: 5 },
+    });
+    const orders: mr.MorningOrder[] = [
+      { id: 'o1', status: 'pending', total: 10000, created_at: new Date(now - 5 * HOUR).toISOString() },
+      { id: 'o2', status: 'processing', total: 5000, created_at: new Date(now - 30 * HOUR).toISOString() },
+      { id: 'o3', status: 'delivered', total: 7000, created_at: new Date(now - 3 * HOUR).toISOString() },
+      { id: 'o4', status: 'pending', total: 99999, created_at: new Date(now - HOUR).toISOString(), is_flagged_fake: true },
+      { id: 'o5', status: 'cancelled', total: 4000, created_at: new Date(now - HOUR).toISOString() },
+    ];
+    const callbacks: mr.MorningCallback[] = [
+      { status: 'new', wanted_day: '2026-10-19', created_at: new Date(now - 48 * HOUR).toISOString() },
+      { status: 'new', wanted_day: '2026-10-20', created_at: new Date(now - 2 * HOUR).toISOString() },
+      { status: 'new', wanted_day: '2026-10-23', created_at: new Date(now - 3 * HOUR).toISOString() },
+      { status: 'new', wanted_day: null, created_at: new Date(now - 4 * HOUR).toISOString() },
+      { status: 'done', wanted_day: '2026-10-19', created_at: new Date(now - 60 * HOUR).toISOString() },
+    ];
+    const catalog = [{ id: 'p1', name: 'Rolex', stock: 80 }, { id: 'p2', name: 'Parfum Oud', stock: 3 }, { id: 'p3', name: 'Sac', stock: 5 }, { id: 'p4', name: 'Montre rare', stock: 0 }];
+    const r = mr.buildMorningReport({ now, since, stats, browsing, orders, callbacks, catalog, abandonedCarts: 2 });
+
+    ok('ventes : les chiffres de la boutique viennent tels quels de la base (4 commandes, 42 000 FCFA), dont 2 par Zara (15 000) = 50 %', !!r.sales && r.sales.orders === 4 && r.sales.amount === 42000 && r.sales.zaraOrders === 2 && r.sales.zaraAmount === 15000 && r.sales.zaraShare === 50, r.sales);
+    ok('commandes a traiter : en attente, payee, en preparation ; ni livree, ni annulee, ni fausse (2 commandes, 15 000 FCFA, la plus ancienne attend 30 h)', !!r.toProcess && r.toProcess.count === 2 && r.toProcess.amount === 15000 && r.toProcess.oldestHours === 30, r.toProcess);
+    ok('rappels WhatsApp : 4 en attente, 1 en retard + 1 d\'aujourd\'hui = 2 a faire, 3 arrives pendant la periode (le « fait » et l\'ancien ne comptent pas)', !!r.callbacks && r.callbacks.pending === 4 && r.callbacks.late === 1 && r.callbacks.today === 1 && r.callbacks.due === 2 && r.callbacks.newSince === 3, r.callbacks);
+    ok('presque achete : 2 visiteurs avec un panier non commande (V-1 compte une fois), Rolex 2 visiteurs en tete, puis Parfum Oud ; 2 paniers de clients connectes', !!r.carts && r.carts.visitors === 2 && r.carts.products[0].name === 'Rolex' && r.carts.products[0].visitors === 2 && r.carts.products[1].name === 'Parfum Oud' && r.carts.products.length === 2 && r.carts.abandoned === 2, r.carts);
+    ok('les plus regardes : avec le VRAI stock (Rolex 80, Parfum Oud 3 = presque epuise, Sac 5 = presque epuise, Montre rare 0 = epuise)', !!r.watched && r.watched.products.length === 4 && r.watched.products[0].stock === 80 && !r.watched.products[0].lowStock && r.watched.products[1].lowStock && r.watched.products[2].lowStock && r.watched.products[3].soldOut && !r.watched.products[3].lowStock, r.watched?.products);
+    ok('3 articles tres regardes presque epuises ou epuises ; 2 recherches ; 7 visiteurs suivis', !!r.watched && r.watched.lowStockCount === 3 && r.watched.searches.length === 2 && r.watched.searches[0].query === 'montre' && r.visitors === 7, [r.watched?.lowStockCount, r.visitors]);
+    ok('Zara : 6 conversations, 2 comptes, 1 installation', !!r.zara && r.zara.conversations === 6 && r.zara.accounts === 2 && r.zara.installs === 1, r.zara);
+    ok('« a faire en premier » : rappels, commandes, paniers abandonnes, stock (dans cet ordre), chacun avec son ecran', r.todo.map((t) => t.key).join(',') === 'callbacks,orders,carts,stock' && r.todo.map((t) => t.route).join(',') === 'AdminCallbacks,AdminOrders,AdminAbandonedCarts,AdminBrowsing', r.todo);
+    ok('textes simples et vrais : « 2 rappels WhatsApp a faire aujourd\'hui (dont 1 en retard) », « 2 commandes a traiter (la plus ancienne attend 30 h) »', r.todo[0].text === '2 rappels WhatsApp à faire aujourd’hui (dont 1 en retard)' && r.todo[1].text === '2 commandes à traiter (la plus ancienne attend 30 h)', r.todo.map((t) => t.text));
+
+    // rien d'urgent : aucune ligne « a faire » inventee
+    const calm = mr.buildMorningReport({
+      now, since,
+      stats: st.buildZaraStats({ totals: { orders: 0, orders_amount: 0, accounts: 0, installs: 0 } }),
+      browsing: bo.buildBrowsingOverview({ rows: [], top_products: [{ product_id: 'p1', product_name: 'Rolex', views: 2, visitors: 1 }], totals: { visitors: 1, rows: 0 } }),
+      orders: [{ id: 'x', status: 'delivered', total: 1000, created_at: new Date(now - HOUR).toISOString() }],
+      callbacks: [{ status: 'new', wanted_day: '2026-10-25', created_at: new Date(now - 100 * HOUR).toISOString() }, { status: 'done', wanted_day: null, created_at: new Date(now - HOUR).toISOString() }],
+      catalog, abandonedCarts: 0,
+    });
+    ok('rien d\'urgent : seulement le rappel a venir (jour futur), pas de commande, pas de panier, pas de stock bas -> 1 ligne « en attente »', calm.todo.length === 1 && calm.todo[0].key === 'callbacks' && /1 rappel WhatsApp en attente/.test(calm.todo[0].text) && calm.callbacks?.due === 0, calm.todo);
+    const nothing = mr.buildMorningReport({ now, since, stats: st.buildZaraStats(null), browsing: bo.buildBrowsingOverview({}), orders: [], callbacks: [], catalog: [], abandonedCarts: 0 });
+    ok('vraiment rien : aucune ligne « a faire », des zeros partout, aucun nombre invente', nothing.todo.length === 0 && nothing.sales?.orders === 0 && nothing.toProcess?.count === 0 && nothing.callbacks?.pending === 0 && nothing.carts?.visitors === 0 && nothing.watched?.products.length === 0 && nothing.zara?.conversations === 0);
+
+    // morceaux manquants : le rapport dit « indisponible » (null) au lieu d'inventer
+    const down = mr.buildMorningReport({ now, since, stats: null, browsing: null, orders: null, callbacks: null, catalog: null, abandonedCarts: null });
+    ok('tout est en panne : chaque morceau vaut null (jamais un zero invente), aucune ligne « a faire »', down.sales === null && down.toProcess === null && down.callbacks === null && down.carts === null && down.watched === null && down.zara === null && down.visitors === null && down.todo.length === 0, down);
+    const partial = mr.buildMorningReport({ now, since, stats, browsing: null, orders, callbacks: null, catalog: null, abandonedCarts: 3 });
+    ok('seul le suivi de navigation manque : ventes et commandes restent ; les paniers de clients connectes (3) restent ; les articles regardes sont « indisponibles »', !!partial.sales && !!partial.toProcess && partial.watched === null && partial.callbacks === null && partial.carts?.abandoned === 3 && partial.carts?.visitors === 0 && partial.todo.map((t) => t.key).join(',') === 'orders,carts', partial.todo);
+    const noCatalog = mr.buildMorningReport({ now, since, stats, browsing, orders, callbacks, catalog: null, abandonedCarts: 0 });
+    ok('catalogue illisible : le stock reste inconnu (null), aucun article n\'est dit « presque epuise » a tort', !!noCatalog.watched && noCatalog.watched.products.every((p) => p.stock === null && !p.lowStock && !p.soldOut) && noCatalog.watched.lowStockCount === 0 && !noCatalog.todo.some((t) => t.key === 'stock'), noCatalog.watched?.products);
+    ok('pluriel : « 1 commande », « 2 commandes », « 1 panier abandonné », « 3 paniers abandonnés »', mr.plural(1, 'commande') === '1 commande' && mr.plural(2, 'commande') === '2 commandes' && mr.plural(1, 'panier abandonné', 'paniers abandonnés') === '1 panier abandonné' && mr.plural(3, 'panier abandonné', 'paniers abandonnés') === '3 paniers abandonnés');
+    ok('valeurs douteuses de la base : total non numerique ou date illisible ne cassent rien', (() => { const x = mr.buildMorningReport({ now, since, stats: null, browsing: null, orders: [{ id: 'z', status: 'pending', total: 'abc' as unknown as number, created_at: 'pas une date' }], callbacks: [{ status: 'new', wanted_day: null, created_at: 'pas une date' }], catalog: null, abandonedCarts: null }); return x.toProcess?.count === 1 && x.toProcess.amount === 0 && x.toProcess.oldestHours === null && x.callbacks?.newSince === 0; })());
   }
 
   console.log('\n' + (failures === 0 ? 'TOUT EST BON' : `${failures} ECHEC(S)`));

@@ -38,6 +38,7 @@ import { AdminSourcePerformanceScreen } from '../screens/admin/AdminSourcePerfor
 import { AdminZaraStatsScreen } from '../screens/admin/AdminZaraStatsScreen';
 import { AdminBrowsingScreen } from '../screens/admin/AdminBrowsingScreen';
 import { AdminCallbacksScreen } from '../screens/admin/AdminCallbacksScreen';
+import { AdminMorningScreen } from '../screens/admin/AdminMorningScreen';
 import { AdminAbandonedCartsScreen } from '../screens/admin/AdminAbandonedCartsScreen';
 import { AdminNotificationsScreen } from '../screens/admin/AdminNotificationsScreen';
 import { AdminPromotionsScreen } from '../screens/admin/AdminPromotionsScreen';
@@ -97,6 +98,7 @@ const linking: LinkingOptions<RootStackParamList> = {
       AdminZaraStats: 'admin/statistiques-zara',
       AdminBrowsing: 'admin/suivi-navigation',
       AdminCallbacks: 'admin/rappels',
+      AdminMorning: 'admin/matin',
       AdminAbandonedCarts: 'admin/paniers-abandonnes',
       AdminNotifications: 'admin/notifications',
       AdminPromotions: 'admin/promotions',
@@ -224,6 +226,7 @@ export function RootNavigator() {
             <Stack.Screen name="AdminZaraStats" component={AdminZaraStatsScreen} />
             <Stack.Screen name="AdminBrowsing" component={AdminBrowsingScreen} />
             <Stack.Screen name="AdminCallbacks" component={AdminCallbacksScreen} />
+            <Stack.Screen name="AdminMorning" component={AdminMorningScreen} />
             <Stack.Screen name="AdminAbandonedCarts" component={AdminAbandonedCartsScreen} />
             <Stack.Screen name="AdminNotifications" component={AdminNotificationsScreen} />
             <Stack.Screen name="AdminPromotions" component={AdminPromotionsScreen} />

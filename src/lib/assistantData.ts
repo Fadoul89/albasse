@@ -4,6 +4,7 @@ import { currentDevice, type DeviceLabel } from './assistantAttribution';
 import { buildZaraStats, classifyStatsError, periodBounds, type StatsPeriod, type StatsFailure, type ZaraStats } from './assistantStats';
 import { buildBrowsingOverview, type BrowsingOverview } from './browsingOverview';
 import { buildSalesMap, SALES_WINDOW_DAYS, type SalesMap } from './assistantSales';
+import { ORDERS_TO_PROCESS, type MorningOrder } from './morningReport';
 import type { Product } from '../types';
 
 // Donnees publiques lues pour Zara (catalogue, villes, categories, infos de la boutique), gardees
@@ -208,8 +209,12 @@ export function logAssistantEvent(event: AssistantEvent, device: DeviceLabel = c
 export type AssistantStatsResult = { ok: true; stats: ZaraStats } | { ok: false; reason: StatsFailure; message: string };
 
 export async function fetchAssistantStats(period: StatsPeriod): Promise<AssistantStatsResult> {
+  const { since, until } = periodBounds(period);
+  return fetchAssistantStatsRange(since, until);
+}
+
+export async function fetchAssistantStatsRange(since: string | null, until: string | null): Promise<AssistantStatsResult> {
   try {
-    const { since, until } = periodBounds(period);
     const { data, error, status } = await withTimeout(Promise.resolve(supabase.rpc('assistant_stats', { p_since: since, p_until: until })), 15000);
     if (error) return { ok: false, reason: classifyStatsError({ code: (error as { code?: string }).code, message: error.message, status }), message: error.message };
     return { ok: true, stats: buildZaraStats(data as Parameters<typeof buildZaraStats>[0]) };
@@ -222,8 +227,11 @@ export async function fetchAssistantStats(period: StatsPeriod): Promise<Assistan
 export type BrowsingOverviewResult = { ok: true; overview: BrowsingOverview } | { ok: false; reason: StatsFailure; message: string };
 
 export async function fetchBrowsingOverview(period: StatsPeriod): Promise<BrowsingOverviewResult> {
+  return fetchBrowsingOverviewSince(periodBounds(period).since);
+}
+
+export async function fetchBrowsingOverviewSince(since: string | null): Promise<BrowsingOverviewResult> {
   try {
-    const { since } = periodBounds(period);
     const { data, error, status } = await withTimeout(Promise.resolve(supabase.rpc('browsing_overview', { p_since: since, p_limit: 300 })), 15000);
     if (error) return { ok: false, reason: classifyStatsError({ code: (error as { code?: string }).code, message: error.message, status }), message: error.message };
     return { ok: true, overview: buildBrowsingOverview(data) };
@@ -375,4 +383,47 @@ export async function setCallbackDone(id: string, done: boolean): Promise<boolea
   } catch {
     return false;
   }
+}
+
+// Les morceaux du « Rapport du matin » (administrateur seulement). Chaque morceau est lu à part : s'il manque (script pas appliqué, panne), il vaut null
+// et le rapport le dit au lieu d'inventer un chiffre.
+export interface MorningSources {
+  stats: ZaraStats | null;
+  browsing: BrowsingOverview | null;
+  orders: MorningOrder[] | null;
+  callbacks: CallbackRow[] | null;
+  catalog: { id: string; name: string; stock: number }[] | null;
+}
+
+export async function fetchMorningSources(since: string): Promise<MorningSources> {
+  const safe = async <T,>(job: () => Promise<T | null>): Promise<T | null> => {
+    try {
+      return await job();
+    } catch {
+      return null;
+    }
+  };
+  const [stats, browsing, orders, callbacks, catalog] = await Promise.all([
+    safe(async () => {
+      const r = await fetchAssistantStatsRange(since, null);
+      return r.ok ? r.stats : null;
+    }),
+    safe(async () => {
+      const r = await fetchBrowsingOverviewSince(since);
+      return r.ok ? r.overview : null;
+    }),
+    safe(async () => {
+      const { data, error } = await withTimeout(
+        Promise.resolve(supabase.from('orders').select('id,status,total,created_at,is_flagged_fake').in('status', [...ORDERS_TO_PROCESS]).order('created_at', { ascending: true }).limit(500)),
+        15000
+      );
+      return error ? null : ((data ?? []) as MorningOrder[]);
+    }),
+    safe(async () => {
+      const r = await fetchCallbacks();
+      return r.ok ? r.rows : null;
+    }),
+    safe(async () => (await getCatalog()).map((p) => ({ id: p.id, name: p.name, stock: p.stock }))),
+  ]);
+  return { stats, browsing, orders, callbacks, catalog };
 }
