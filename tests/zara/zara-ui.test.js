@@ -12,7 +12,7 @@ const fs = require('fs');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const dist = process.argv[2] || '../../dist';
 const port = process.argv[3] || '4333';
-const PARTS = (process.env.PARTS || 'ALKPMRSUVWTOFBCDE').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMRSUVWXTOFBCDE').toUpperCase();
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
 fs.mkdirSync(OUT, { recursive: true });
 const KEY = process.env.SUPABASE_ANON_KEY;
@@ -2668,6 +2668,160 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         check('aucune erreur (menu administrateur)', c.errs.length === 0, c.errs);
         await c.ctx.close();
       }
+    }
+  }
+
+  // =============================================== X. MOMENTS FORTS ET ACHATS EN GROS ===============================================
+  if (PARTS.includes('X')) {
+    console.log('\n== X. moments forts (Tabaski, Ramadan, mariage, fete des meres, Black Friday, Saint-Valentin) et achats en gros vers WhatsApp');
+    const base = `http://localhost:${port}`;
+    const visitor = (extra = {}) => newVisitor(phone, { lang: extra.lang || 'fr', storage: { albasse_zara_name: 'Ali' }, initScripts: extra.initScripts || [] });
+    const openZara = async (v) => {
+      await v.page.goto(`${base}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await v.page.getByTestId('assistant-fab').click();
+      await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?|أنشئ حسابك|حسابك/, 25000);
+    };
+    const sayAskX = (pg, text, re) => ask(pg, text, re, 20000);
+    const prodsAll = await get('products?select=id,name,price,compare_at_price,stock&limit=1000');
+
+    // --- X1. moments forts en francais : un mot adapte, puis Zara continue (un visiteur neuf pour chaque sujet)
+    {
+      const one = async (q, re) => {
+        const v = await visitor();
+        await openZara(v);
+        await sayAskX(v.page, q, re);
+        await sleep(1500);
+        return v;
+      };
+      let v = await one('tabaski', /Tabaski : un beau moment en famille/);
+      await waitText(v.page, /C’est pour qui \?/);
+      check('Tabaski : un mot adapte puis la question « pour qui ? » (conseil cadeau), aucune remise annoncee', !/remise|%/.test(await panelOf(v.page).getByText(/Tabaski : un beau moment en famille/).first().innerText()));
+      await v.page.screenshot({ path: path.join(OUT, 'X1-tabaski.png') });
+      check('aucune erreur (Tabaski)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+      v = await one('fête des mères', /Fête des mères : une belle attention pour elle/);
+      check('fete des meres : le message avec l\'emballage cadeau (2 000 FCFA), et Zara sait deja que c\'est pour « elle » (elle ne demande pas pour qui)', (await panelOf(v.page).getByText(/C’est pour qui \?/).count()) === 0 && /2\s000 FCFA par commande/.test(await panelOf(v.page).getByText(/Fête des mères : une belle attention pour elle/).first().innerText()));
+      await v.ctx.close();
+      v = await one('Saint-Valentin', /Saint-Valentin : une belle idée pour la personne qui compte/);
+      check('Saint-Valentin : le message, puis « pour qui ? »', (await panelOf(v.page).getByText(/C’est pour qui \?/).count()) === 1);
+      await v.ctx.close();
+      v = await one('un cadeau de mariage', /Un mariage ! Tenues, montres, parfums/);
+      await v.ctx.close();
+      v = await one('Ramadan Karim', /Ramadan Karim ! Tenues, parfums, cadeaux/);
+      await v.ctx.close();
+      v = await one('Korité', /Aïd Moubarak ! Pour la fête/);
+      check('mariage, Ramadan, Korite : un message adapte chacun', true);
+      await v.ctx.close();
+    }
+
+    // --- X2. un article precis pour un moment fort : Zara montre de vrais articles
+    {
+      const v = await visitor();
+      await openZara(v);
+      const before = await cardsOf(v.page).count();
+      await sayAskX(v.page, 'parfum pour la fête des mères', /Fête des mères : une belle attention pour elle/);
+      await sleep(3000);
+      const added = await newCards(v.page, before);
+      const names = await Promise.all(added.map(async (c) => ((await c.getAttribute('aria-label')) || '').replace(/^Voir le produit ›\s*/, '').trim()));
+      check('« parfum pour la fete des meres » : de vrais parfums en stock (ou la question suivante), jamais une recherche « fete des meres »', (await panelOf(v.page).getByText(/Je n’ai rien trouvé|n’ai pas trouvé/).count()) === 0, names);
+      await v.ctx.close();
+    }
+
+    // --- X3. Black Friday : les VRAIES promotions
+    {
+      const v = await visitor();
+      await openZara(v);
+      const before = await cardsOf(v.page).count();
+      await sayAskX(v.page, 'Black Friday', /Black Friday : je vous montre les vraies promotions en cours/);
+      await sleep(3000);
+      const added = await newCards(v.page, before);
+      const checks = await Promise.all(added.map(async (c) => {
+        const n = ((await c.getAttribute('aria-label')) || '').replace(/^Voir le produit ›\s*/, '').trim();
+        const pr = prodsAll.find((x) => n.startsWith(x.name.trim().slice(0, 12)));
+        return !!pr && pr.stock > 0 && Number(pr.compare_at_price) > Number(pr.price);
+      }));
+      check('Black Friday : des articles reellement en promotion dans la base (ancien prix > prix) et en stock', added.length >= 1 && checks.every(Boolean), checks);
+      await v.page.screenshot({ path: path.join(OUT, 'X3-black-friday.png') });
+      await v.ctx.close();
+    }
+
+    // --- X4. en arabe
+    {
+      const v = await visitor({ lang: 'ar' });
+      await openZara(v);
+      await sayAskX(v.page, 'رمضان', /رمضان كريم! ملابس وعطور وهدايا/);
+      await sayAskX(v.page, 'عيد الأم', /عيد الأم: لفتة جميلة لها/);
+      await sayAskX(v.page, 'الجمعة السوداء', /الجمعة السوداء: أعرض لك العروض الحقيقية/);
+      check('arabe : les moments forts sont compris et repondus en arabe', true);
+      await v.ctx.close();
+    }
+
+    // --- X5. gros / cartons : Zara passe la main a l'equipe sur WhatsApp, sans jamais donner de prix de gros
+    {
+      const v = await visitor();
+      await v.ctx.route('https://wa.me/**', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<html><body>whatsapp</body></html>' }));
+      await openZara(v);
+      for (const q of ['prix en gros', 'combien le carton ?', 'je veux 50 pièces']) {
+        await sayAskX(v.page, q, /Pour les achats en gros \(cartons, grandes quantités\), les prix sont donnés directement par notre équipe/);
+      }
+      const reply = await panelOf(v.page).getByText(/Pour les achats en gros/).last().innerText();
+      check('gros : Zara renvoie vers l\'equipe, SANS aucun prix ni chiffre', !/\d/.test(reply) && /WhatsApp/.test(reply), reply.slice(0, 200));
+      const chips = await chipLabels(v.page);
+      check('boutons : « Parler a l\'equipe (gros) » et « Menu »', chips.some((c) => /Parler à l’équipe \(gros\)/.test(c)) && chips.some((c) => /Menu/.test(c)), chips);
+      const [popup] = await Promise.all([v.ctx.waitForEvent('page', { timeout: 10000 }), chip(v.page, 'Parler à l’équipe (gros)').click()]);
+      await popup.waitForLoadState('domcontentloaded').catch(() => {});
+      const url = popup.url();
+      check('le bouton ouvre WhatsApp avec le numero de la boutique et un message deja ecrit (article, quantite, ville)', url.startsWith('https://wa.me/23560605151?text=') && /prix de gros/.test(decodeURIComponent(url)) && /Quantité/.test(decodeURIComponent(url)) && /Ville/.test(decodeURIComponent(url)), decodeURIComponent(url));
+      await popup.close();
+      // petites quantites : pas du gros
+      await sayAskX(v.page, '2 parfums', /C’est pour qui \?|Quel type|Voici ce que j’ai trouvé/);
+      check('« 2 parfums » : une recherche normale, jamais l\'equipe du gros', (await panelOf(v.page).getByText(/Pour les achats en gros/).count()) === 3);
+      check('aucune erreur (gros)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+
+    // --- X6. grosse commande dans le panier : Zara propose l'equipe, une seule fois, sans bloquer la commande
+    {
+      const v = await visitor();
+      await v.ctx.route('https://wa.me/**', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<html><body>whatsapp</body></html>' }));
+      await openZara(v);
+      const big = prodsAll.find((x) => /^armoire$/i.test(x.name.trim()));
+      await typeIn(v.page, 'armoire');
+      const card = cardsOf(v.page).filter({ hasText: /armoire/i }).first();
+      await card.waitFor({ timeout: 20000 });
+      await card.getByTestId('assistant-card-add').click();
+      await waitText(v.page, /ajouté au panier\./);
+      check('1er article a 280 000 FCFA (sous le seuil de 500 000) : aucune proposition d\'equipe', (await panelOf(v.page).getByText(/Grosse commande \?/).count()) === 0, big && big.price);
+      await sleep(1500);
+      await card.getByTestId('assistant-card-add').click();
+      await waitText(v.page, /Grosse commande \? Notre équipe peut vous faire un prix/);
+      const chips = await chipLabels(v.page);
+      check('total de 560 000 FCFA (seuil 500 000) : Zara propose l\'equipe WhatsApp (bouton en tete) ET garde « Commander »', chips[0].includes('Parler à l’équipe (gros)') && chips.some((c) => /Commander/.test(c)), chips);
+      await sleep(1500);
+      await card.getByTestId('assistant-card-add').click();
+      await sleep(2500);
+      check('la proposition n\'est faite qu\'une fois par conversation (pas a chaque ajout)', (await panelOf(v.page).getByText(/Grosse commande \?/).count()) === 1);
+      check('aucune erreur (grosse commande)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+
+    // --- X7. un moment fort qui approche : Zara en parle d'elle-meme, une fois (date simulee)
+    {
+      const v = await visitor();
+      await v.ctx.clock.setFixedTime(new Date('2026-11-10T09:00:00Z'));
+      await openZara(v);
+      await waitText(v.page, /Black Friday : je vous montre les vraies promotions en cours/);
+      const texts = await panelOf(v.page).innerText();
+      check('le 10 novembre 2026 (17 jours avant le Black Friday) : Zara en parle d\'elle-meme, avant les infos importantes, une seule fois', (texts.match(/Black Friday : je vous montre/g) || []).length === 1 && texts.indexOf('Black Friday : je vous montre') < texts.indexOf('À savoir avant de commander'));
+      await v.page.screenshot({ path: path.join(OUT, 'X7-moment-fort-proactif.png') });
+      await v.ctx.close();
+      const w = await visitor();
+      await w.ctx.clock.setFixedTime(new Date('2026-12-15T09:00:00Z'));
+      await openZara(w);
+      await sleep(1500);
+      check('le 15 decembre 2026 (aucun moment fort proche) : Zara n\'en parle pas', (await panelOf(w.page).getByText(/Black Friday|Saint-Valentin|Tabaski|Ramadan/).count()) === 0);
+      await w.ctx.close();
     }
   }
 

@@ -292,7 +292,8 @@ export function AssistantPanel() {
   const onChoose = (action: ChatAction) => {
     switch (action.kind) {
       case 'whatsapp':
-        Linking.openURL(WHATSAPP_URL);
+        // avec un message déjà écrit pour l'équipe (prix de gros...) si le bouton en porte un
+        Linking.openURL(action.payload ? `${WHATSAPP_URL}?text=${encodeURIComponent(action.payload)}` : WHATSAPP_URL);
         return;
       case 'register':
         markIntent('signup', currentDevice()); // si le compte se crée, il sera compté « grâce à Zara »

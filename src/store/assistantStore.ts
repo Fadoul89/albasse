@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { GIFT_WRAP_FEE, HOME_CITY, PAYMENT } from '../constants/shopRules';
+import { BULK_MIN_QTY, BULK_MIN_TOTAL, GIFT_WRAP_FEE, HOME_CITY, PAYMENT } from '../constants/shopRules';
 import {
   addressFrom,
   cityReply,
@@ -73,6 +73,7 @@ import {
 import { fetchCartStatus, fetchLoyaltyPoints, fetchPaymentNumbers, fetchProductForCart, getCatalog, getCategories, getCities, getStoreInfo, logAssistantEvent, startChatToday, toCard, type AssistantProduct } from '../lib/assistantData';
 import { clearIntent, currentDevice, markIntent } from '../lib/assistantAttribution';
 import { trackShortcutInstallIfNeeded } from '../lib/appInstallTracking';
+import { occasionOf, stripOccasion, upcomingOccasion, type OccasionKey } from '../lib/assistantOccasions';
 import { availability, familyPicks, isFamily, moreInCategory, perfumesInStock, planSuggestion, similarProducts, type PlannedChip } from '../lib/assistantInterest';
 import * as bi from '../lib/browsingInsights';
 import { getBrowsingProfile, recordSuggestion, setTrackingChoice, trackingState } from '../lib/browsingTracker';
@@ -570,6 +571,9 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
   // puis l'invitation à créer un compte (visiteur) ou le menu (client connecté).
   async function onboarding() {
     const spoke = await contextMessages();
+    // un moment fort approche (Tabaski, Ramadan, Black Friday...) : un seul mot, une fois par conversation
+    const occasion = upcomingOccasion(Date.now());
+    if (occasion) await say(T().occasion[occasion]);
     await say(T().info);
     if (isGuest()) await accountInvitation();
     else await showMenu(T().menuIntro);
@@ -1526,8 +1530,15 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     cart.addItem(product, 1, color, size);
     const { count, total } = cartTotals();
     // après chaque article choisi : Zara rappelle toujours l'emballage cadeau (avec son bouton)
-    const actions = [...cartActions(), sayBtn(T().chip.wrap, 'emballage')];
-    await say(`${T().cart.added(name, variantText(size, color), count, total)}\n${T().cart.wrapNudge}`, { fast: true, actions });
+    let actions = [...cartActions(), sayBtn(T().chip.wrap, 'emballage')];
+    let text = `${T().cart.added(name, variantText(size, color), count, total)}\n${T().cart.wrapNudge}`;
+    // grosse commande (beaucoup de pièces ou gros total) : Zara propose l'équipe WhatsApp pour un prix de gros, une seule fois
+    const bulk = already + 1 >= BULK_MIN_QTY || total >= BULK_MIN_TOTAL;
+    if (bulk && !get().messages.some((m) => m.role === 'assistant' && m.text.includes(T().wholesale.nudge))) {
+      text += `\n${T().wholesale.nudge}`;
+      actions = [waChipPrefill(product.name), ...actions];
+    }
+    await say(text, { fast: true, actions });
     await maybeOfferInstall(actions);
   }
 
@@ -1878,13 +1889,44 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
   }
 
   // -------------------------------------------------------------------------------------------
+  // Moments forts et achats en gros
+  // -------------------------------------------------------------------------------------------
+
+  // Le bouton WhatsApp avec le message déjà écrit pour l'équipe (article, quantité, ville à compléter).
+  const waChipPrefill = (product: string | null): ChatAction => ({ label: T().wholesale.chip, kind: 'whatsapp', payload: T().wholesale.prefill(product), highlight: true });
+
+  // Le client parle d'un moment fort : un mot adapté, puis Zara continue avec ce qu'il cherche (idées cadeau, vrais articles ou vraies promotions).
+  async function occasionReply(key: OccasionKey, text: string) {
+    await say(T().occasion[key]);
+    if (key === 'blackFriday') {
+      await promoReply(); // seulement les vraies promotions de la boutique
+      return;
+    }
+    const rest = stripOccasion(text);
+    const parsed = parseNeed(rest);
+    if (parsed.rest.length > 0) {
+      await searchReply(rest, parsed); // « parfum oud pour le mariage » : un article précis
+      return;
+    }
+    await startNeed({ ...parsed, gift: true, who: parsed.who ?? (key === 'mothersDay' ? 'elle' : undefined) }, parseBudget(rest));
+  }
+
+  // -------------------------------------------------------------------------------------------
   // Aiguillage
   // -------------------------------------------------------------------------------------------
 
   async function route(text: string) {
     const intent = detectIntent(text);
     const t = T();
+    const occasion = occasionOf(text);
+    if (occasion && (intent === 'gift' || intent === 'search' || intent === 'advice')) {
+      await occasionReply(occasion, text);
+      return;
+    }
     switch (intent) {
+      case 'wholesale':
+        await say(t.wholesale.ask, { actions: [waChipPrefill(null), menuBtn()] });
+        return;
       case 'bot':
         await say(t.bot, { actions: [wa(), menuBtn()] });
         return;
