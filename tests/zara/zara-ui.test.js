@@ -12,7 +12,7 @@ const fs = require('fs');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const dist = process.argv[2] || '../../dist';
 const port = process.argv[3] || '4333';
-const PARTS = (process.env.PARTS || 'ALKPMRSTOFBCDE').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMRSUVWTOFBCDE').toUpperCase();
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
 fs.mkdirSync(OUT, { recursive: true });
 const KEY = process.env.SUPABASE_ANON_KEY;
@@ -40,10 +40,11 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
 
   // Un contexte = un visiteur. Lecture seule vers la base ; le reste d'internet est coupe.
   // rank : rang du jour renvoye par la fonction de la base (null : fonction pas installee). fakeUser : compte simule (token : reponse a une connexion par mot de passe ; delay : lenteur du profil en ms). fakeOrders : { list: [...], patches: [] } = fausse table des commandes.
-  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null } = {}) {
+  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, initScripts = [] } = {}) {
     const ctx = await b.newContext(opts);
     if (cookies) await ctx.addCookies(cookies);
     if (lang) storage = { albasse_zara_lang: lang, ...storage };
+    for (const code of initScripts) await ctx.addInitScript(code);
     await ctx.addInitScript(([entries, sessionEntries]) => {
       try {
         localStorage.setItem('albasse_app_banner_dismissed', '1');
@@ -63,6 +64,14 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const events = [];
     const installs = [];
     const statsCalls = [];
+    // suivi de navigation : chaque envoi recu (browsingCalls), ce que la base aurait COMPTE (browsingApplied : un numero d'envoi deja recu est ignore),
+    // les demandes d'effacement (forgets). fakeBrowsing.replies = reponses scriptees dans l'ordre : { status, body } ou { abort: true }
+    const browsingCalls = [];
+    const overviewCalls = [];
+    const net = { offline: false }; // net.offline = true : aucune requete de suivi n'arrive a la base
+    const browsingApplied = [];
+    const forgets = [];
+    const seenBatches = new Set();
     const json = (route, body, status = 200) =>
       route.fulfill({ status, headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' }, body: JSON.stringify(body) });
     await ctx.route('**/*', (route) => {
@@ -92,6 +101,37 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
           // noStatsColumns : le script de la base n'est pas applique, la colonne via_assistant n'existe pas
           if (noStatsColumns && body.via_assistant !== undefined) return json(route, { code: 'PGRST204', message: "Could not find the 'via_assistant' column of 'app_installs' in the schema cache" }, 400);
           return route.fulfill({ status: 201, headers: { 'access-control-allow-origin': '*' }, body: '' });
+        }
+        if (u.pathname === '/rest/v1/rpc/track_browsing' && m === 'POST') {
+          if (net.offline) return route.abort('internetdisconnected'); // pas de reseau : la base ne recoit rien
+          const body = JSON.parse(req.postData() || '{}');
+          browsingCalls.push(body);
+          const scripted = fakeBrowsing && fakeBrowsing.replies && fakeBrowsing.replies.length ? fakeBrowsing.replies.shift() : null;
+          if (scripted && scripted.applyThenFail) {
+            // la base a bien recu et compte l'envoi, mais la reponse se perd (coupure) : le site croit que ca a echoue
+            if (!seenBatches.has(body.p_batch_id)) {
+              seenBatches.add(body.p_batch_id);
+              browsingApplied.push(body);
+            }
+            return route.abort();
+          }
+          if (scripted && scripted.abort) return route.abort();
+          if (scripted) return json(route, scripted.body || {}, scripted.status || 200);
+          if (!seenBatches.has(body.p_batch_id)) {
+            seenBatches.add(body.p_batch_id);
+            browsingApplied.push(body);
+          }
+          return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } });
+        }
+        if (u.pathname === '/rest/v1/rpc/forget_browsing' && m === 'POST') {
+          forgets.push(JSON.parse(req.postData() || '{}'));
+          return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } });
+        }
+        // le tableau de suivi de navigation (administrateur) : fakeOverview.replies = reponses a donner dans l'ordre (la derniere se repete)
+        if (fakeOverview && u.pathname === '/rest/v1/rpc/browsing_overview' && m === 'POST') {
+          overviewCalls.push(JSON.parse(req.postData() || '{}'));
+          const reply = fakeOverview.replies[Math.min(overviewCalls.length - 1, fakeOverview.replies.length - 1)];
+          return json(route, reply.body, reply.status || 200);
         }
         // la page « Statistiques de Zara » : fakeStats.replies = reponses a donner dans l'ordre (la derniere se repete)
         if (fakeStats && u.pathname === '/rest/v1/rpc/assistant_stats' && m === 'POST') {
@@ -171,7 +211,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     page.on('console', (msg) => {
       if (msg.type() === 'error' && !/Failed to load resource|net::ERR|Erreur creation session visiteur/.test(msg.text())) errs.push(msg.text());
     });
-    return { ctx, page, errs, writes, rpcCalls, chatStarts, events, installs, statsCalls };
+    return { ctx, page, errs, writes, rpcCalls, chatStarts, events, installs, statsCalls, browsingCalls, browsingApplied, forgets, net, overviewCalls };
   }
 
   const panelOf = (p) => p.getByTestId('assistant-panel');
@@ -1937,6 +1977,727 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         await c.page.getByText('Statistiques de Zara', { exact: true }).click();
         await c.page.getByTestId('zara-stat-sales-value').waitFor({ timeout: 25000 });
         check('menu « Espace Admin » : « Statistiques de Zara » ouvre la page', /\/admin\/statistiques-zara/.test(c.page.url()) && (await text(c, 'zara-stat-sales-value')) === '3', c.page.url());
+        check('aucune erreur (menu administrateur)', c.errs.length === 0, c.errs);
+        await c.ctx.close();
+      }
+    }
+  }
+
+  // =============================================== U. INTELLIGENCE COMMERCIALE : SUIVI DE NAVIGATION ===============================================
+  if (PARTS.includes('U')) {
+    console.log('\n== U. suivi de navigation pour Zara : temps ACTIF, variantes, panier, recherches, consentement, envoi fiable');
+    const base = `http://localhost:${port}`;
+    const PK = 'albasse_browsing_profile_v1';
+    const OK = 'albasse_browsing_outbox_v1';
+    const readProfile = (pg) => pg.evaluate((k) => JSON.parse(localStorage.getItem(k) || 'null'), PK);
+    const readOutbox = (pg) => pg.evaluate((k) => JSON.parse(localStorage.getItem(k) || 'null'), OK);
+    const ls = (pg, k) => pg.evaluate((key) => localStorage.getItem(key), k);
+    const sandales = (await get('products?select=id,name,slug,category_id,images,sizes,colors&slug=eq.sandales-al-madjaz&limit=1'))[0];
+    const clarks = (await get('products?select=id,name,slug&slug=eq.clarks-moccasin&limit=1'))[0];
+    const cats = await get('categories?select=id,name,slug');
+    const sandalesCat = cats.find((c) => c.id === sandales.category_id);
+    console.log('info  suivi : produit', sandales.name.trim(), '| categorie', sandalesCat && sandalesCat.name, '| tailles', sandales.sizes.join(','), '| couleurs', sandales.colors.join(','));
+    const sleepSec = (n) => sleep(n * 1000);
+    const touch = (pg, i = 0) => pg.mouse.move(120 + i * 7, 320 + i * 3);
+    const openProduct = async (v, slug = sandales.slug) => {
+      await v.page.goto(`${base}/produit/${slug}`, { waitUntil: 'load' });
+      await v.page.waitForFunction((k) => { try { const p = JSON.parse(localStorage.getItem(k) || 'null'); return !!p && Object.keys(p.products).length > 0; } catch (e) { return false; } }, PK, { timeout: 25000 });
+    };
+    const hide = (pg) => pg.evaluate(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' }); document.dispatchEvent(new Event('visibilitychange')); });
+    const show = (pg) => pg.evaluate(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' }); document.dispatchEvent(new Event('visibilitychange')); });
+    const fresh = () => newVisitor(phone, { lang: 'fr', storage: { albasse_zara_name: 'Ali' } });
+
+    // --- U1. une fiche regardee : consultation, temps ACTIF, categorie ; le temps est garde meme quand on ferme la page
+    {
+      const v = await fresh();
+      await openProduct(v);
+      for (let i = 0; i < 4; i++) { await touch(v.page, i); await sleepSec(1.8); }
+      check('suivi en arriere-plan : aucun message, aucune fenetre, aucun bouton ne previent le visiteur pendant qu\'il regarde les fiches', (await v.page.getByTestId('tracking-notice').count()) === 0 && !/retient les articles|Refuser|suivi/i.test(await v.page.locator('body').innerText()));
+      await v.page.screenshot({ path: path.join(OUT, 'U1-fiche-et-information.png') });
+      await v.page.goto(`${base}/`, { waitUntil: 'load' }); // fermeture de la fiche (la page se recharge)
+      await sleepSec(1);
+      const p = await readProfile(v.page);
+      const rec = p && p.products[sandales.id];
+      check('consultation notee : 1 vue, 1 visite, nom et categorie du produit, ordre de consultation', !!rec && rec.views === 1 && rec.sessions === 1 && rec.name.trim() === sandales.name.trim() && rec.categoryName === (sandalesCat && sandalesCat.name) && rec.categorySlug === (sandalesCat && sandalesCat.slug) && p.order.join() === sandales.id && !!p.categories[sandalesCat.slug], rec);
+      check('temps ACTIF note meme si la page est fermee/rechargee (environ 6 a 9 secondes, avec la derniere duree)', !!rec && rec.activeSeconds >= 5 && rec.activeSeconds <= 10 && rec.lastDurationSeconds >= 5 && rec.lastDurationSeconds <= 10, rec && [rec.activeSeconds, rec.lastDurationSeconds]);
+      check('le profil ne contient aucune donnee personnelle (ni nom du client, ni telephone, ni e-mail)', !/Ali|@|66123456/.test(JSON.stringify(p).replace(/"name":"[^"]*"/g, '')) && /^[0-9a-f-]{36}$/.test(p.visitorId), p.visitorId);
+      await v.page.getByRole('button', { name: FAB_NAME }).waitFor({ timeout: 10000 });
+      check('aucune erreur (suivi d\'une fiche)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+
+    // --- U2. le temps ACTIF : un onglet cache ne compte pas
+    {
+      const v = await fresh();
+      await openProduct(v);
+      await touch(v.page, 1);
+      await sleepSec(3);
+      await hide(v.page);
+      await sleepSec(6);
+      await show(v.page);
+      await touch(v.page, 2);
+      await sleepSec(2);
+      await v.page.goto(`${base}/`, { waitUntil: 'load' });
+      const rec = (await readProfile(v.page)).products[sandales.id];
+      check('onglet cache pendant 6 secondes : ces 6 secondes ne comptent PAS (temps actif entre 4 et 8 s au lieu de 11+)', rec.activeSeconds >= 4 && rec.activeSeconds <= 8, rec.activeSeconds);
+      check('l\'onglet qui se cache envoie tout de suite ce qui est note (courrier pour la base)', v.browsingCalls.length >= 1 && v.browsingCalls[0].p_items.some((i) => i.product_id === sandales.id), v.browsingCalls.length);
+      await v.ctx.close();
+    }
+
+    // --- U3. retour sur un article apres en avoir regarde un autre ; recherches ; la meme fiche rouverte tout de suite = actualisation
+    {
+      const v = await fresh();
+      await v.page.goto(`${base}/recherche`, { waitUntil: 'load' });
+      const box = v.page.getByPlaceholder('Rechercher un produit…');
+      await box.waitFor({ timeout: 25000 });
+      await box.fill('sandales');
+      await v.page.getByText(/Sandales AL madjaz/i).first().click();
+      await v.page.waitForFunction((k) => { const p = JSON.parse(localStorage.getItem(k) || 'null'); return p && Object.keys(p.products).length > 0; }, PK, { timeout: 25000 });
+      await touch(v.page, 1);
+      await sleepSec(3.5);
+      await v.page.goBack();
+      await box.waitFor({ timeout: 15000 });
+      await box.fill('clarks');
+      await v.page.getByText(/Clarks moccasin/i).first().click();
+      await sleepSec(1);
+      await touch(v.page, 2);
+      await sleepSec(3);
+      await v.page.goBack();
+      await box.waitFor({ timeout: 15000 });
+      await box.fill('sandales');
+      await v.page.getByText(/Sandales AL madjaz/i).first().click();
+      await sleepSec(1.5);
+      await touch(v.page, 3);
+      await sleepSec(2);
+      await v.page.goBack();
+      await box.waitFor({ timeout: 15000 });
+      await sleepSec(1.5);
+      const p = await readProfile(v.page);
+      const a = p.products[sandales.id], b = p.products[clarks.id];
+      check('les 2 articles sont suivis : sandales 2 vues, clarks 1 vue', !!a && !!b && a.views === 2 && b.views === 1, [a && a.views, b && b.views]);
+      check('retour sur les sandales apres avoir regarde des Clarks : « retour apres d\'autres produits » = 1', a.returnsAfterOthers === 1 && b.returnsAfterOthers === 0, [a.returnsAfterOthers, b.returnsAfterOthers]);
+      check('chaque fiche a son propre temps actif (changer de fiche arrete le temps de la precedente)', a.activeSeconds >= 4 && a.activeSeconds <= 11 && b.activeSeconds >= 2 && b.activeSeconds <= 6, [a.activeSeconds, b.activeSeconds]);
+      check('ordre de consultation : clarks puis sandales (la derniere en dernier)', p.order.join() === `${clarks.id},${sandales.id}`, p.order);
+      check('recherches notees (« sandales », « clarks », « sandales »), jamais lettre apres lettre', p.searches.map((s) => s.q).join() === 'sandales,clarks,sandales', p.searches);
+      check('niveau d\'interet estime apres ce parcours : les sandales sont au moins « moyen » (retour apres un autre produit)', a.returnsAfterOthers >= 1 && a.views >= 2);
+      check('aucune erreur (retours entre fiches)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+
+    // --- U4. actualisation de la page : la MEME consultation (pas deux vues), le temps continue
+    {
+      const v = await fresh();
+      await openProduct(v);
+      await touch(v.page, 1);
+      await sleepSec(2.5);
+      await v.page.reload({ waitUntil: 'load' });
+      await sleepSec(3);
+      await touch(v.page, 2);
+      await sleepSec(1.5);
+      await v.page.goto(`${base}/`, { waitUntil: 'load' });
+      const rec = (await readProfile(v.page)).products[sandales.id];
+      check('page actualisee moins de 8 secondes apres : toujours 1 SEULE vue (pas deux)', rec.views === 1 && rec.sessions === 1, rec);
+      check('le temps actif des deux chargements s\'additionne (environ 5 a 9 s)', rec.activeSeconds >= 4 && rec.activeSeconds <= 10, rec.activeSeconds);
+      await v.ctx.close();
+    }
+
+    // --- U5. images, tailles, couleurs, panier
+    {
+      const v = await fresh();
+      await openProduct(v);
+      await v.page.getByTestId('product-thumb-1').click();
+      await v.page.getByTestId('product-thumb-2').click();
+      await v.page.getByText(sandales.sizes[1], { exact: true }).click();
+      await v.page.getByText(sandales.sizes[2], { exact: true }).click();
+      await v.page.getByText(sandales.sizes[1], { exact: true }).click();
+      await v.page.getByText(sandales.colors[0], { exact: true }).click();
+      await v.page.getByText(sandales.colors[1], { exact: true }).click();
+      await sleepSec(1);
+      let rec = (await readProfile(v.page)).products[sandales.id];
+      check('clics notes : 2 images, 3 clics de taille (2 tailles differentes), 2 clics de couleur (2 couleurs differentes)', rec.imageClicks === 2 && rec.sizeClicks === 3 && rec.sizes.join() === `${sandales.sizes[1]},${sandales.sizes[2]}` && rec.colorClicks === 2 && rec.colors.join() === `${sandales.colors[0]},${sandales.colors[1]}`, rec);
+      await v.page.getByText('Ajouter au panier', { exact: true }).click();
+      await sleepSec(1);
+      rec = (await readProfile(v.page)).products[sandales.id];
+      check('« Ajouter au panier » : l\'article est au panier', rec.cartStatus === 'in_cart' && rec.cartChangedAt > 0, rec.cartStatus);
+      await v.page.goto(`${base}/panier`, { waitUntil: 'load' });
+      await v.page.getByText('Retirer', { exact: true }).first().click();
+      await sleepSec(1);
+      rec = (await readProfile(v.page)).products[sandales.id];
+      check('article retire du panier : statut « retire »', rec.cartStatus === 'removed', rec.cartStatus);
+      check('aucune erreur (variantes et panier)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+
+    // --- U6. categories et recherche dans une categorie ; une recherche qui ressemble a un numero ou a un e-mail n'est jamais gardee
+    {
+      const v = await fresh();
+      await v.page.goto(`${base}/categorie/parfum`, { waitUntil: 'load' });
+      const box = v.page.getByPlaceholder(/Rechercher/).first();
+      await box.waitFor({ timeout: 25000 });
+      await sleepSec(1);
+      await box.fill('oud');
+      await sleepSec(1.6);
+      await box.fill('66123456');
+      await sleepSec(1.6);
+      await box.fill('moi@exemple.com');
+      await sleepSec(1.6);
+      await v.page.goto(`${base}/`, { waitUntil: 'load' });
+      await sleepSec(1);
+      const p = await readProfile(v.page);
+      check('categorie ouverte : notee (1 ouverture de « Parfum »)', p && p.categories.parfum && p.categories.parfum.views === 1 && /Parfum/.test(p.categories.parfum.name), p && p.categories);
+      check('recherche dans la categorie : « oud » notee ; un numero de telephone ou une adresse e-mail ne sont JAMAIS gardes', p.searches.map((s) => s.q).join() === 'oud', p.searches);
+      await v.ctx.close();
+    }
+
+    // --- U7. Zara ajoute un article au panier : note aussi ; la commande passee l'enregistre comme achete
+    {
+      const v = await fresh();
+      await v.page.goto(`${base}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await v.page.getByRole('button', { name: FAB_NAME }).click();
+      await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?/);
+      await ask(v.page, 'Rolex', /Voici ce que j’ai trouvé pour « Rolex »/);
+      const card = cardsOf(v.page).filter({ hasText: 'Rolex' }).first();
+      await card.waitFor({ timeout: 10000 });
+      await card.getByTestId('assistant-card-add').click();
+      await waitText(v.page, /ajouté au panier/);
+      await sleepSec(1);
+      const rec = (await readProfile(v.page)).products[realProduct.id];
+      check('article ajoute au panier depuis le chat de Zara : note « au panier » (meme chemin que le site)', !!rec && rec.cartStatus === 'in_cart' && rec.views === 0, rec && rec.cartStatus);
+      await v.ctx.close();
+    }
+
+    // --- U8. choix du visiteur : discret (page de confidentialite), signal « Ne pas me suivre » du navigateur
+    {
+      const r = await fresh();
+      await openProduct(r);
+      await sleepSec(1.5);
+      const rid = await ls(r.page, 'albasse_visitor_id');
+      check('le suivi est actif des la 1re fiche, sans rien demander (et sans aucune fenetre)', (await readProfile(r.page)) !== null && (await r.page.getByTestId('tracking-notice').count()) === 0);
+      await r.page.goto(`${base}/confidentialite`, { waitUntil: 'load' });
+      await r.page.getByTestId('privacy-tracking-toggle').waitFor({ timeout: 25000 });
+      check('page de confidentialite : « Le suivi ... est actif » avec le bouton « Refuser le suivi »', /est actif sur cet appareil/.test(await r.page.getByTestId('privacy-tracking-state').innerText()) && /Refuser le suivi/.test(await r.page.getByTestId('privacy-tracking-toggle').innerText()));
+      await r.page.screenshot({ path: path.join(OUT, 'U8-confidentialite-reglage.png') });
+      const callsBefore = r.browsingCalls.length;
+      await r.page.getByTestId('privacy-tracking-toggle').click();
+      await sleepSec(1);
+      check('« Refuser le suivi » : le profil du telephone est efface, le courrier en attente aussi, le choix est retenu', (await readProfile(r.page)) === null && (await readOutbox(r.page)) === null && JSON.parse(await ls(r.page, 'albasse_tracking_choice')).choice === 'denied');
+      check('« Refuser le suivi » : la base est priee d\'effacer ce qui existait deja (avec l\'identifiant anonyme du visiteur)', r.forgets.length === 1 && r.forgets[0].p_visitor_id === rid && /^[0-9a-f-]{36}$/.test(rid), r.forgets);
+      check('la page confirme : « desactive » et « efface »', /désactivé sur cet appareil/.test(await r.page.getByTestId('privacy-tracking-state').innerText()) && (await r.page.getByText(/ce qui était retenu sur cet appareil est effacé/).count()) === 1 && /Autoriser le suivi/.test(await r.page.getByTestId('privacy-tracking-toggle').innerText()));
+      await r.page.goto(`${base}/produit/${clarks.slug}`, { waitUntil: 'load' });
+      await sleepSec(5);
+      check('apres le refus : plus rien n\'est note, plus rien n\'est envoye', (await readProfile(r.page)) === null && r.browsingCalls.length === callsBefore, [await readProfile(r.page), r.browsingCalls.length, callsBefore]);
+      await r.page.goto(`${base}/confidentialite`, { waitUntil: 'load' });
+      await r.page.getByTestId('privacy-tracking-toggle').waitFor({ timeout: 25000 });
+      check('le choix est retenu apres rechargement : « desactive »', /désactivé sur cet appareil/.test(await r.page.getByTestId('privacy-tracking-state').innerText()));
+      await r.page.getByTestId('privacy-tracking-toggle').click();
+      await sleepSec(0.5);
+      await r.page.goto(`${base}/produit/${clarks.slug}`, { waitUntil: 'load' });
+      await r.page.waitForFunction((k) => { const p = JSON.parse(localStorage.getItem(k) || 'null'); return !!p && Object.keys(p.products).length > 0; }, PK, { timeout: 25000 });
+      check('« Autoriser le suivi » : le suivi reprend (de zero, l\'ancien historique n\'est pas revenu)', JSON.parse(await ls(r.page, 'albasse_tracking_choice')).choice === 'granted' && Object.keys((await readProfile(r.page)).products).join() === clarks.id);
+      check('aucune erreur (refus du suivi)', r.errs.length === 0, r.errs);
+      await r.ctx.close();
+
+      const d = await newVisitor(phone, { lang: 'fr', storage: { albasse_zara_name: 'Ali' }, initScripts: ["Object.defineProperty(navigator, 'doNotTrack', { get: () => '1' });"] });
+      await d.page.goto(`${base}/produit/${sandales.slug}`, { waitUntil: 'load' });
+      await sleepSec(5);
+      check('signal « Ne pas me suivre » du navigateur : rien n\'est note, rien n\'est envoye, aucune fenetre', (await readProfile(d.page)) === null && d.browsingCalls.length === 0 && (await d.page.getByTestId('tracking-notice').count()) === 0);
+      await d.page.goto(`${base}/confidentialite`, { waitUntil: 'load' });
+      await d.page.getByTestId('privacy-tracking-toggle').waitFor({ timeout: 25000 });
+      check('...et la page de confidentialite montre « desactive » (le signal est respecte)', /désactivé sur cet appareil/.test(await d.page.getByTestId('privacy-tracking-state').innerText()));
+      await d.ctx.close();
+    }
+
+    // --- U9. envoi vers la base : seulement des differences, un numero d'envoi unique, rien de perdu, rien compte deux fois
+    {
+      const v = await fresh();
+      await openProduct(v);
+      await touch(v.page, 1);
+      await sleepSec(5.5);
+      await hide(v.page);
+      await sleepSec(1);
+      const vid = await ls(v.page, 'albasse_visitor_id');
+      const c1 = v.browsingCalls[0];
+      check('1er envoi : identifiant anonyme du visiteur, numero d\'envoi unique, la fiche avec ses chiffres (1 vue, quelques secondes actives)', !!c1 && c1.p_visitor_id === vid && /^[0-9a-f-]{36}$/.test(c1.p_batch_id) && c1.p_items.length === 1 && c1.p_items[0].product_id === sandales.id && c1.p_items[0].views === 1 && c1.p_items[0].active_seconds >= 4 && c1.p_items[0].cart_status === 'none' && c1.p_items[0].interest === 'leger' && c1.p_items[0].category_slug === sandalesCat.slug, c1 && c1.p_items);
+      check('l\'envoi ne contient que des chiffres et des noms d\'articles (jamais le nom du client, son telephone, son adresse)', !/Ali|66123456|@/.test(JSON.stringify(c1).replace(/"name":"[^"]*"/g, '')));
+      check('la base a compte cet envoi une fois', v.browsingApplied.length === 1);
+      await show(v.page);
+      await touch(v.page, 2);
+      await sleepSec(9); // plus de 8 s : rouvrir la fiche est une nouvelle consultation
+      await v.page.goto(`${base}/produit/${sandales.slug}`, { waitUntil: 'load' });
+      await v.page.waitForFunction((k) => { const p = JSON.parse(localStorage.getItem(k) || 'null'); return p && p.products && Object.values(p.products)[0].views >= 2; }, PK, { timeout: 25000 });
+      await touch(v.page, 3);
+      await sleepSec(3);
+      await hide(v.page);
+      for (let i = 0; i < 20 && v.browsingApplied.length < 3; i++) await sleep(250);
+      const rec = (await readProfile(v.page)).products[sandales.id];
+      const sent = v.browsingApplied.flatMap((c) => c.p_items.filter((x) => x.product_id === sandales.id));
+      const sumViews = sent.reduce((n, x) => n + x.views, 0);
+      const sumSeconds = sent.reduce((n, x) => n + x.active_seconds, 0);
+      check('apres 2 consultations : les envois cumules donnent exactement 2 vues (seulement des DIFFERENCES, jamais le total deja envoye)', rec.views === 2 && sumViews === 2 && sent.every((x) => x.views <= 1), [rec.views, sent.map((x) => x.views), v.browsingCalls.map((c) => c.p_items.map((x) => [x.views, x.active_seconds]))]);
+      check('le temps actif envoye au total correspond au temps du telephone (a 3 secondes pres), sans doublon', Math.abs(sumSeconds - rec.activeSeconds) <= 3 && sent.every((x) => x.active_seconds <= 14), [sumSeconds, rec.activeSeconds, sent.map((x) => x.active_seconds)]);
+      check('numeros d\'envoi tous differents', new Set(v.browsingCalls.map((c) => c.p_batch_id)).size === v.browsingCalls.length);
+      await v.ctx.close();
+    }
+    {
+      // connexion qui coupe : le courrier attend sur le telephone, repart avec le MEME numero, la base ne le compte qu'une fois
+      const v = await newVisitor(phone, { lang: 'fr', storage: { albasse_zara_name: 'Ali' }, fakeBrowsing: { replies: [{ status: 500, body: { code: 'XX000', message: 'service indisponible' } }] } });
+      await openProduct(v);
+      await touch(v.page, 1);
+      await sleepSec(4);
+      await hide(v.page);
+      await sleepSec(1.5);
+      const box = await readOutbox(v.page);
+      check('envoi qui echoue : le courrier reste sur le telephone (avec son numero), la base n\'a rien compte', v.browsingCalls.length === 1 && !!box && box.id === v.browsingCalls[0].p_batch_id && v.browsingApplied.length === 0, box && box.id);
+      await show(v.page);
+      await v.page.evaluate(() => window.dispatchEvent(new Event('online')));
+      await sleepSec(1.5);
+      for (let i = 0; i < 12 && (await readOutbox(v.page)) !== null; i++) await sleep(250);
+      const firstId0 = v.browsingCalls[0].p_batch_id;
+      check('connexion revenue : le MEME courrier repart (meme numero) et la base le compte une fois', v.browsingCalls.length >= 2 && v.browsingCalls[1].p_batch_id === firstId0 && v.browsingApplied.filter((c) => c.p_batch_id === firstId0).length === 1 && (await readOutbox(v.page)) === null, v.browsingCalls.map((c) => c.p_batch_id));
+      await v.page.evaluate(() => window.dispatchEvent(new Event('online')));
+      await sleepSec(1);
+      await sleepSec(1);
+      const firstId = v.browsingCalls[0].p_batch_id;
+      check('apres ca : le courrier deja recu n\'est plus jamais renvoye (un envoi ulterieur, s\'il y en a un, porte un autre numero et seulement du temps en plus)', v.browsingCalls.slice(2).every((c) => c.p_batch_id !== firstId && c.p_items.every((x) => x.views === 0)) && v.browsingApplied.reduce((n, c) => n + c.p_items.reduce((m, x) => m + x.views, 0), 0) === 1, v.browsingCalls.map((c) => [c.p_batch_id.slice(0, 4), c.p_items.map((x) => x.views)]));
+      check('aucune erreur (envoi qui echoue puis repart)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+    {
+      // la base recoit mais la reponse se perd : le site renvoie, la base reconnait le numero -> compte UNE fois
+      const v = await newVisitor(phone, { lang: 'fr', storage: { albasse_zara_name: 'Ali' }, fakeBrowsing: { replies: [{ applyThenFail: true }] } });
+      await openProduct(v);
+      await touch(v.page, 1);
+      await sleepSec(4);
+      await hide(v.page);
+      await sleepSec(1.5);
+      await show(v.page);
+      await v.page.evaluate(() => window.dispatchEvent(new Event('online')));
+      await sleepSec(1.5);
+      const lostId = v.browsingCalls[0].p_batch_id;
+      check('reponse perdue : le site renvoie le meme courrier, la base le reconnait et ne compte PAS deux fois (1 seule vue au total)', v.browsingCalls.length >= 2 && v.browsingCalls[1].p_batch_id === lostId && v.browsingApplied.filter((c) => c.p_batch_id === lostId).length === 1 && v.browsingApplied.reduce((n, c) => n + c.p_items.reduce((m, x) => m + x.views, 0), 0) === 1, [v.browsingCalls.length, v.browsingApplied.length]);
+      await v.ctx.close();
+    }
+    {
+      // telephone hors connexion pendant la consultation
+      const v = await fresh();
+      await v.page.goto(`${base}/produit/${sandales.slug}`, { waitUntil: 'load' });
+      await v.page.waitForFunction((k) => { const p = JSON.parse(localStorage.getItem(k) || 'null'); return p && Object.keys(p.products).length > 0; }, PK, { timeout: 25000 });
+      v.net.offline = true;
+      await v.ctx.setOffline(true);
+      await touch(v.page, 1);
+      await sleepSec(4);
+      await hide(v.page);
+      await sleepSec(1.5);
+      const callsOffline = v.browsingCalls.length;
+      check('hors connexion : rien n\'arrive a la base, mais le profil du telephone est a jour et le courrier est garde', v.browsingApplied.length === 0 && !!(await readOutbox(v.page)) && (await readProfile(v.page)).products[sandales.id].activeSeconds >= 3, callsOffline);
+      v.net.offline = false;
+      await v.ctx.setOffline(false);
+      await show(v.page);
+      await v.page.evaluate(() => window.dispatchEvent(new Event('online')));
+      await sleepSec(2);
+      check('connexion revenue : le courrier arrive, une seule fois, avec le temps passe hors connexion', v.browsingApplied.length === 1 && v.browsingApplied[0].p_items[0].active_seconds >= 3 && (await readOutbox(v.page)) === null, v.browsingApplied.length);
+      await v.ctx.close();
+    }
+    {
+      // page rechargee avec un courrier en attente : il repart tout seul
+      const v = await newVisitor(phone, { lang: 'fr', storage: { albasse_zara_name: 'Ali' }, fakeBrowsing: { replies: [{ abort: true }] } });
+      await openProduct(v);
+      await touch(v.page, 1);
+      await sleepSec(4);
+      await hide(v.page);
+      await sleepSec(1.5);
+      const waiting = await readOutbox(v.page);
+      check('envoi coupe : un courrier est en attente', !!waiting && v.browsingApplied.length === 0);
+      v.net.offline = true; // la page qui se ferme n'arrive pas a envoyer non plus
+      await v.page.goto(`${base}/`, { waitUntil: 'load' });
+      v.net.offline = false;
+      for (let i = 0; i < 30 && v.browsingApplied.length === 0; i++) await sleep(500);
+      check('a la visite suivante : le courrier en attente repart tout seul avec le meme numero et est compte une fois', v.browsingApplied.length === 1 && v.browsingApplied[0].p_batch_id === waiting.id && (await readOutbox(v.page)) === null, [v.browsingApplied.length, v.browsingCalls.length]);
+      await v.ctx.close();
+    }
+    {
+      // la base n'a pas encore le script : on se tait, rien ne casse
+      const v = await newVisitor(phone, { lang: 'fr', storage: { albasse_zara_name: 'Ali' }, fakeBrowsing: { replies: [{ status: 404, body: { code: 'PGRST202', message: 'Could not find the function public.track_browsing in the schema cache' } }] } });
+      await openProduct(v);
+      await touch(v.page, 1);
+      await sleepSec(3);
+      for (let i = 0; i < 3; i++) { await hide(v.page); await sleepSec(0.6); await show(v.page); await touch(v.page, i); await sleepSec(0.6); }
+      check('base sans le script : UN seul essai (ensuite on se tait 10 minutes), le profil du telephone continue de marcher', v.browsingCalls.length === 1 && (await readProfile(v.page)).products[sandales.id].views === 1, v.browsingCalls.length);
+      check('aucune erreur visible (base sans le script de suivi)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+
+    // --- U10. duree de conservation : ce qui a plus de 90 jours est efface au chargement
+    {
+      const now = Date.now();
+      const mk = (id, name, daysAgo) => ({ id, name, slug: id, categoryId: null, categorySlug: 'divers', categoryName: 'Divers', views: 2, sessions: 1, activeSeconds: 30, lastDurationSeconds: 10, firstViewedAt: now - daysAgo * 86400000, lastViewedAt: now - daysAgo * 86400000, lastSessionKey: 's1', imageClicks: 0, sizeClicks: 0, colorClicks: 0, sizes: [], colors: [], returnsAfterOthers: 0, cartStatus: 'none', cartChangedAt: null, orderedAt: null, lastSuggestionAt: null, lastSuggestionKind: null });
+      const old = { version: 1, visitorId: 'visiteur-de-test-0001', createdAt: now - 120 * 86400000, updatedAt: now - 3 * 86400000, products: { vieux: mk('vieux', 'Vieux produit', 100), recent: mk('recent', 'Produit recent', 3) }, order: ['vieux', 'recent'], categories: { divers: { key: 'divers', name: 'Divers', views: 1, productIds: ['vieux', 'recent'], lastViewedAt: now - 3 * 86400000 } }, searches: [{ q: 'vieille recherche', at: now - 100 * 86400000 }, { q: 'recherche recente', at: now - 3 * 86400000 }], suggestions: [], quietUntil: 0, lastStart: null, lastActivityAt: now - 3 * 86400000, sessionKey: 's1', sessionStartedAt: now - 3 * 86400000, synced: {}, searchesSyncedAt: 0 };
+      const v = await newVisitor(phone, { lang: 'fr', storage: { albasse_zara_name: 'Ali', [PK]: JSON.stringify(old) } });
+      await v.page.goto(`${base}/produit/${sandales.slug}`, { waitUntil: 'load' });
+      await v.page.waitForFunction(([k, id]) => { const p = JSON.parse(localStorage.getItem(k) || 'null'); return p && !!p.products[id]; }, [PK, sandales.id], { timeout: 25000 });
+      const p = await readProfile(v.page);
+      check('duree de conservation 90 jours : le produit vu il y a 100 jours est efface, celui d\'il y a 3 jours reste', !p.products.vieux && !!p.products.recent && !!p.products[sandales.id] && !p.order.includes('vieux') && p.searches.map((s) => s.q).join() === 'recherche recente', [Object.keys(p.products), p.searches]);
+      await v.ctx.close();
+    }
+
+    // --- U11. la politique de confidentialite explique le suivi (quoi, pourquoi, combien de temps, comment refuser)
+    {
+      const v = await fresh();
+      await v.page.goto(`${base}/confidentialite`, { waitUntil: 'load' });
+      await v.page.getByText(/nous retenons aussi les articles que vous regardez/).waitFor({ timeout: 25000 });
+      const txt = await v.page.locator('body').innerText();
+      check('information : la politique de confidentialite parle des articles regardes, des 90 jours, du refus (« ne me suis plus ») et du signal du navigateur', /nous retenons aussi les articles que vous regardez/.test(txt) && /conservées 90 jours/.test(txt) && /ne me suis plus/.test(txt) && /Ne pas me suivre/.test(txt) && /bouton ci-dessous/.test(txt));
+      check('aucune erreur (page de confidentialite)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+  }
+
+  // =============================================== V. ZARA INTELLIGENTE : SUGGESTIONS DISCRETES, HISTORIQUE, CHOIX DU SUIVI ===============================================
+  if (PARTS.includes('V')) {
+    console.log('\n== V. Zara suggere sans insister (vrais articles), dit la verite sur ce qu\'elle sait, respecte le refus du suivi');
+    const base = `http://localhost:${port}`;
+    const PK = 'albasse_browsing_profile_v1';
+    const CK = 'albasse_tracking_choice';
+    const readProfile = (pg) => pg.evaluate((k) => JSON.parse(localStorage.getItem(k) || 'null'), PK);
+    const prods = await get('products?select=id,name,slug,price,stock,category_id,description,sizes,colors&limit=1000');
+    const cats = await get('categories?select=id,name,slug');
+    const byName = (re) => prods.find((p) => re.test(p.name));
+    const sandales = byName(/Sandales AL madjaz/i);
+    const clarks = byName(/Clarks moccasin/i);
+    const catOf = (p) => cats.find((c) => c.id === p.category_id);
+    const perfumeCat = cats.find((c) => c.slug === 'parfum');
+    const perfumes = prods.filter((p) => p.category_id === perfumeCat.id && p.stock > 0).slice(0, 3);
+    const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const fold = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    const now0 = Date.now();
+    const DAY = 86400000;
+    const rec = (p, over = {}) => ({ id: p.id, name: p.name.trim(), slug: p.slug, categoryId: p.category_id, categorySlug: catOf(p).slug, categoryName: catOf(p).name, views: 1, sessions: 1, activeSeconds: 12, lastDurationSeconds: 12, firstViewedAt: now0 - 3 * DAY, lastViewedAt: now0 - 3 * DAY + 60000, lastSessionKey: 's0', imageClicks: 0, sizeClicks: 0, colorClicks: 0, sizes: [], colors: [], returnsAfterOthers: 0, cartStatus: 'none', cartChangedAt: null, orderedAt: null, lastSuggestionAt: null, lastSuggestionKind: null, ...over });
+    const profileOf = (records, { quiet = false } = {}) => {
+      const products = {};
+      const categories = {};
+      records.forEach((r, i) => {
+        products[r.id] = { ...r, lastViewedAt: now0 - 3 * DAY + (i + 1) * 60000 };
+        const c = categories[r.categorySlug] || { key: r.categorySlug, name: r.categoryName, views: 1, productIds: [], lastViewedAt: now0 - 3 * DAY };
+        c.productIds.push(r.id);
+        categories[r.categorySlug] = c;
+      });
+      return { version: 1, visitorId: '0f1e2d3c-4b5a-4968-8777-665544332211', createdAt: now0 - 10 * DAY, updatedAt: now0 - 3 * DAY, products, order: records.map((r) => r.id), categories, searches: [], suggestions: [], quietUntil: quiet ? now0 + 5 * DAY : 0, lastStart: null, lastActivityAt: now0 - 3 * DAY, sessionKey: 's0', sessionStartedAt: now0 - 3 * DAY, synced: {}, searchesSyncedAt: 0 };
+    };
+    // la sandale regardee 3 fois (dont un retour apres d'autres articles), avec plusieurs tailles essayees : interet eleve
+    const shoeRec = () => rec(sandales, { views: 3, sessions: 2, returnsAfterOthers: 1, sizeClicks: 2, sizes: [sandales.sizes[0], sandales.sizes[1]], imageClicks: 3, activeSeconds: 70, lastDurationSeconds: 25 });
+    const shoeProfile = (o) => profileOf([rec(clarks), shoeRec()], o);
+    const perfumeProfile = () => profileOf(perfumes.map((p) => rec(p)));
+    const visitor = (profile, extra = {}) => newVisitor(phone, { lang: extra.lang || 'fr', storage: { albasse_zara_name: 'Ali', ...(profile ? { [PK]: JSON.stringify(profile) } : {}), ...(extra.storage || {}) }, initScripts: extra.initScripts || [], fakeBrowsing: extra.fakeBrowsing || null });
+    const openZara = async (v, wait = /Créez votre compte gratuit(?:, Ali)?|أنشئ حسابك/) => {
+      await v.page.goto(`${base}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await v.page.getByTestId('assistant-fab').click();
+      await waitText(v.page, wait, 25000);
+    };
+    // le nom d'une carte produit : son libelle d'accessibilite (« Voir <nom> »), la 1re ligne du texte etant le badge de remise
+    const cardName = async (c) => ((await c.getAttribute('aria-label')) || '').replace(/^Voir le produit ›\s*/, '').trim();
+    const countText = (pg, re) => panelOf(pg).getByText(re).count();
+    const sayAsk = async (pg, text, re) => ask(pg, text, re, 20000);
+    // le suivi reste en arriere-plan : le chat ne propose JAMAIS de bouton pour « suivre » ou « ne plus suivre »
+    const TRACK_CHIP = /suivre|suivi|Ne plus me|Autoriser|Mes articles vus|تتبع|متابع/i;
+    const noTrackingChips = async (pg) => !(await chipLabels(pg)).some((c) => TRACK_CHIP.test(c));
+    console.log('info  suggestions : sandales', sandales.name.trim(), '| parfums', perfumes.map((p) => p.name.trim()).join(' / '));
+
+    // --- V1. la chaussure qui revient : Zara propose les tailles, puis des modeles similaires (vrais articles)
+    {
+      const v = await visitor(shoeProfile());
+      await openZara(v);
+      await waitText(v.page, /Cette paire semble vous intéresser/, 20000);
+      const chips = await chipLabels(v.page);
+      check('chaussure regardee 3 fois : Zara propose discretement, avec le message exact du patron', (await countText(v.page, '😊 Cette paire semble vous intéresser ! Voulez-vous revoir les tailles disponibles ou découvrir des modèles similaires ?')) === 1);
+      check('boutons : « Voir les tailles », « Modeles similaires », « Non merci » (et le menu), aucun bouton de suivi', (await noTrackingChips(v.page)) && chips.some((c) => /Voir les tailles/.test(c)) && chips.some((c) => /Modèles similaires/.test(c)) && chips.some((c) => c === 'Non merci') && chips.some((c) => /Menu/.test(c)), chips);
+      await v.page.screenshot({ path: path.join(OUT, 'V1-suggestion-chaussure.png') });
+      let p = await readProfile(v.page);
+      check('suggestion notee dans le profil : « montree », sur la bonne chaussure', p.suggestions.length === 1 && p.suggestions[0].outcome === 'shown' && p.suggestions[0].key === `product:${sandales.id}` && p.suggestions[0].kind === 'product_revisit' && p.products[sandales.id].lastSuggestionKind === 'product_revisit', p.suggestions);
+      await tap(v.page, 'Voir les tailles', /Voici les tailles proposées pour/);
+      check('« Voir les tailles » : les VRAIES tailles de la fiche', (await countText(v.page, `Voici les tailles proposées pour « ${sandales.name.trim()} » : ${sandales.sizes.join(', ')}`)) === 1, sandales.sizes);
+      const sizesCards = await cardsOf(v.page).allInnerTexts();
+      check('...avec la fiche de cette chaussure et son vrai prix', sizesCards.some((x) => x.includes(sandales.name.trim())) && num(sizesCards.find((x) => x.includes(sandales.name.trim())).match(/([\d\s  ]+)FCFA/)?.[1] || '') > 0);
+      p = await readProfile(v.page);
+      check('suggestion acceptee : notee UNE fois', p.suggestions.filter((s) => s.outcome === 'accepted').length === 1, p.suggestions.map((s) => s.outcome));
+      const before = await cardsOf(v.page).count();
+      await tap(v.page, 'Modèles similaires', /Voici des modèles similaires, disponibles en ce moment/);
+      const added = await newCards(v.page, before);
+      check('« Modeles similaires » : des vraies chaussures en stock de la meme categorie, jamais la meme', added.length >= 1);
+      const names = await Promise.all(added.map(cardName));
+      const sameCat = names.every((n) => { const pr = prods.find((x) => n.startsWith(x.name.trim().slice(0, 12))); return !!pr && pr.category_id === sandales.category_id && pr.stock > 0 && pr.id !== sandales.id; });
+      check('...meme categorie, en stock, autre article', sameCat, names);
+      p = await readProfile(v.page);
+      check('...et l\'acceptation n\'est pas comptee une 2e fois', p.suggestions.filter((s) => s.outcome === 'accepted').length === 1);
+      // fermer puis rouvrir : pas de 2e suggestion dans la meme visite
+      await panelOf(v.page).getByRole('button', { name: 'Fermer' }).first().click();
+      await sleep(600);
+      await v.page.getByTestId('assistant-fab').click();
+      await sleep(2500);
+      check('une seule suggestion par visite : en rouvrant Zara, rien de nouveau', (await countText(v.page, /Cette paire semble vous intéresser/)) === 1 && p.suggestions.filter((s) => s.outcome === 'shown').length === 1);
+      await sleep(9500); // l'envoi vers la base se fait avec la suggestion
+      check('la suggestion part vers la base avec le reste (type de suggestion)', JSON.stringify(v.browsingCalls).includes('product_revisit'), v.browsingCalls.length);
+      check('aucune erreur (suggestion chaussure)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+
+    // --- V2. « Non merci » : Zara se tait 7 jours
+    {
+      const v = await visitor(shoeProfile());
+      await openZara(v);
+      await waitText(v.page, /Cette paire semble vous intéresser/, 20000);
+      await tap(v.page, 'Non merci', /D’accord, pas de souci 😊 Je reste là si vous avez besoin d’aide, sans insister/);
+      const p = await readProfile(v.page);
+      check('« Non merci » : Zara repond poliment et ne propose rien d\'autre', (await cardsOf(v.page).count()) === 0 && p.suggestions.some((s) => s.outcome === 'dismissed'));
+      check('...et se tait pendant 7 jours', p.quietUntil > Date.now() + 6.9 * DAY && p.quietUntil < Date.now() + 7.1 * DAY, (p.quietUntil - Date.now()) / DAY);
+      await v.ctx.close();
+      // une nouvelle visite (nouvel onglet, meme appareil : le profil est garde, la conversation non)
+      const w = await visitor(p);
+      await openZara(w);
+      await sleep(2500);
+      check('nouvelle visite apres « Non merci » : aucune suggestion', (await countText(w.page, /Cette paire semble vous intéresser/)) === 0);
+      await w.ctx.close();
+    }
+
+    // --- V3. plusieurs parfums regardes : Zara demande la famille de parfum et ne propose que ce que les fiches annoncent
+    {
+      const v = await visitor(perfumeProfile());
+      await openZara(v);
+      await waitText(v.page, /Vous découvrez plusieurs parfums/, 20000);
+      const chips = await chipLabels(v.page);
+      check('3 parfums regardes : le message exact du patron avec les 4 familles', (await countText(v.page, '🥰 Vous découvrez plusieurs parfums. Préférez-vous une fragrance fraîche, boisée, sucrée ou intense ? Je peux vous aider à choisir.')) === 1 && ['Fraîche', 'Boisée', 'Sucrée', 'Intense'].every((f) => chips.some((c) => c.includes(f))) && chips.some((c) => c === 'Non merci'), chips);
+      await v.page.screenshot({ path: path.join(OUT, 'V3-suggestion-parfums.png') });
+      const before = await cardsOf(v.page).count();
+      await tap(v.page, 'Boisée', /Voici les parfums dont la fiche annonce une fragrance boisée/);
+      const added = await newCards(v.page, before);
+      const names = await Promise.all(added.map(cardName));
+      const woodWords = /\b(bois|boise|boisee|boisees|cedre|santal|vetiver|oud|agar|wood|woody)\b/;
+      const allWoody = names.length >= 1 && names.every((n) => { const pr = prods.find((x) => n.startsWith(x.name.trim().slice(0, 12))); return !!pr && pr.stock > 0 && woodWords.test(fold(`${pr.name} ${pr.description}`)); });
+      check('« Boisee » : seulement des parfums en stock dont la fiche parle de bois, de cedre, de santal, d\'oud...', allWoody, names);
+      check('...et les prix sont ceux de la boutique', (await Promise.all(added.map(async (c) => { const n = await cardName(c); const pr = prods.find((x) => n.startsWith(x.name.trim().slice(0, 12))); return pr && (await cardPrice(c)) === Math.round(Number(pr.price)); }))).every(Boolean));
+      const p = await readProfile(v.page);
+      check('suggestion « parfums » notee : montree puis acceptee', p.suggestions.some((s) => s.kind === 'perfume_browse' && s.outcome === 'shown') && p.suggestions.some((s) => s.kind === 'perfume_browse' && s.outcome === 'accepted'), p.suggestions);
+      check('aucune erreur (suggestion parfums)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+
+    // --- V4. le client n'a rien regarde / aucune donnee : Zara ne pretend rien savoir
+    {
+      const v = await visitor(null);
+      await openZara(v);
+      await sleep(2000);
+      check('visiteur qui n\'a rien regarde : aucune suggestion', (await countText(v.page, /semble vous intéresser|Vous découvrez plusieurs parfums|Ce modèle vous plaît|quelques suggestions/)) === 0);
+      await sayAsk(v.page, 'Qu\'est-ce que j\'ai regardé ?', /Je n’ai encore noté aucun article regardé sur cet appareil/);
+      check('« Qu\'est-ce que j\'ai regarde ? » sans donnee : Zara l\'avoue franchement (elle n\'invente rien)', (await cardsOf(v.page).count()) === 0);
+      check('aucune erreur (historique vide)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+
+    // --- V5. historique avec des donnees, puis « ne me suis plus » ECRIT par le client : tout est efface
+    {
+      const v = await visitor(profileOf([rec(clarks), rec(perfumes[0]), shoeRec()], { quiet: true }));
+      await openZara(v);
+      await sleep(1500);
+      check('suggestions en pause (« Non merci » recent) : aucune suggestion a l\'ouverture', (await countText(v.page, /Cette paire semble vous intéresser/)) === 0);
+      await sayAsk(v.page, 'montre-moi ce que j\'ai regardé', /Voici les derniers articles que vous avez regardés sur cet appareil/);
+      const cardNames = await Promise.all((await cardsOf(v.page).all()).map(cardName));
+      check('historique : les vrais articles regardes (le plus recent d\'abord), avec leur fiche', cardNames.length === 3 && cardNames[0].startsWith(sandales.name.trim().slice(0, 12)) && cardNames.some((n) => n.startsWith(clarks.name.trim().slice(0, 12))), cardNames);
+      await waitText(v.page, new RegExp(`Regardés plusieurs fois : ${esc(sandales.name.trim())} \\(3 fois\\)\\.`));
+      check('...articles regardes plusieurs fois, avec le nombre de fois', true);
+      await waitText(v.page, new RegExp(`Catégories qui semblent vous intéresser : .*${esc(catOf(sandales).name)}`));
+      check('...categories qui semblent l\'interesser', true);
+      await v.page.screenshot({ path: path.join(OUT, 'V5-historique.png') });
+      check('boutons de l\'historique : « Conseil » et « Menu » seulement, AUCUN bouton de suivi', (await noTrackingChips(v.page)) && (await chipLabels(v.page)).some((c) => /Conseil/.test(c)), await chipLabels(v.page));
+      check('l\'historique ne parle pas de « ne me suis plus » (rien n\'est mis en avant)', !/ne me suis plus/.test(await panelOf(v.page).innerText()));
+      await sayAsk(v.page, 'ne me suis plus', /Je ne retiens plus les articles que vous regardez, et ce qui était retenu sur cet appareil est effacé/);
+      await sleep(800);
+      check('le client ECRIT « ne me suis plus » : Zara obeit, le profil de l\'appareil est efface, le choix « refuse » est retenu', (await readProfile(v.page)) === null && JSON.parse(await v.page.evaluate((k) => localStorage.getItem(k), CK)).choice === 'denied');
+      check('...et la base est priee d\'effacer (avec l\'identifiant anonyme)', v.forgets.length === 1 && v.forgets[0].p_visitor_id === '0f1e2d3c-4b5a-4968-8777-665544332211', v.forgets);
+      await sayAsk(v.page, 'qu\'est-ce que j\'ai regardé', /Le suivi est désactivé sur cet appareil : je ne retiens pas les articles regardés/);
+      check('apres le refus : Zara dit franchement qu\'elle ne sait rien, sans bouton de suivi', await noTrackingChips(v.page));
+      await sayAsk(v.page, 'ne me suis plus', /C’est déjà le cas/);
+      check('« ne me suis plus » une 2e fois : « c\'est deja le cas »', true);
+      await sayAsk(v.page, 'tu peux me suivre', /Avec plaisir 😊 À partir de maintenant, je retiens les articles que vous regardez/);
+      await sleep(500);
+      check('le client ECRIT « tu peux me suivre » : le suivi reprend (choix « accepte » retenu)', JSON.parse(await v.page.evaluate((k) => localStorage.getItem(k), CK)).choice === 'granted');
+      await sayAsk(v.page, 'qu\'est-ce que j\'ai regardé', /Je n’ai encore noté aucun article regardé sur cet appareil/);
+      check('...et l\'ancien historique n\'est PAS revenu : Zara repart de zero', true);
+      check('aucune erreur (historique et refus)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+
+    // --- V6. le client demande ce qui est retenu
+    {
+      const v = await visitor(null);
+      await openZara(v);
+      await sayAsk(v.page, 'Tu me suis ?', /elle retient seulement les articles que vous regardez \(sans votre nom ni votre téléphone\)/);
+      const txt = await panelOf(v.page).innerText();
+      check('« Tu me suis ? » : explication simple (articles regardes, sans nom ni telephone, 90 jours, refus possible)', /90 jours/.test(txt) && /ne me suis plus/.test(txt) && !/espion|surveill/i.test(txt.replace(/Tu me suis \?/g, '')));
+      const chips = await chipLabels(v.page);
+      check('boutons : « Confidentialite » et « Menu » seulement (aucun bouton pour suivre ou ne plus suivre)', chips.some((x) => x.includes('Confidentialité')) && (await noTrackingChips(v.page)), chips);
+      await chip(v.page, 'Confidentialité').click();
+      await v.page.waitForFunction(() => /confidentialite/.test(location.pathname), null, { timeout: 15000 });
+      check('« Confidentialite » ouvre la page de confidentialite du site', /confidentialite/.test(new URL(v.page.url()).pathname));
+      await v.ctx.close();
+    }
+
+    // --- V7. signal « Ne pas me suivre » du navigateur
+    {
+      const v = await visitor(null, { initScripts: ["Object.defineProperty(navigator, 'doNotTrack', { get: () => '1' });"] });
+      await openZara(v);
+      await sayAsk(v.page, 'Qu\'est-ce que j\'ai regardé ?', /Votre navigateur demande de ne pas être suivi, et je respecte ce choix/);
+      check('navigateur « Ne pas me suivre » : Zara le dit et le respecte', (await readProfile(v.page)) === null && v.browsingCalls.length === 0);
+      await sayAsk(v.page, 'tu peux me suivre', /Avec plaisir 😊 À partir de maintenant/);
+      check('...le client peut quand meme l\'autoriser lui-meme (son choix gagne)', JSON.parse(await v.page.evaluate((k) => localStorage.getItem(k), CK)).choice === 'granted');
+      await v.ctx.close();
+    }
+
+    // --- V8. en arabe
+    {
+      const v = await visitor(shoeProfile(), { lang: 'ar' });
+      await openZara(v, /أنشئ حسابك|حسابك/);
+      await waitText(v.page, /يبدو أن هذا الحذاء أعجبك/, 20000);
+      const chips = await chipLabels(v.page);
+      check('arabe : la suggestion et ses boutons sont en arabe', chips.some((c) => /عرض المقاسات/.test(c)) && chips.some((c) => /لا شكراً/.test(c)), chips);
+      await tap(v.page, 'عرض المقاسات', /هذه المقاسات المعروضة/);
+      await sayAsk(v.page, 'لا تتبعني', /لن أحتفظ بعد الآن بالمنتجات التي تشاهدها/);
+      check('arabe : « لا تتبعني » arrete le suivi et efface', (await readProfile(v.page)) === null && v.forgets.length === 1);
+      await v.ctx.close();
+    }
+
+    // --- V9. Zara parle deja du produit regarde : pas de suggestion par-dessus
+    {
+      const v = await visitor(shoeProfile());
+      await v.page.goto(`${base}/produit/${sandales.slug}`, { waitUntil: 'load' });
+      await sleep(3500);
+      await v.page.getByTestId('assistant-fab').click();
+      await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?/, 25000);
+      await sleep(2500);
+      check('Zara a deja parle du produit regarde : aucune suggestion en plus', (await countText(v.page, /Cette paire semble vous intéresser/)) === 0);
+      await v.ctx.close();
+    }
+  }
+
+  // =============================================== W. ADMIN : TABLEAU DE SUIVI DE NAVIGATION ===============================================
+  if (PARTS.includes('W')) {
+    console.log('\n== W. page administrateur « Suivi de navigation » (fausse base : aucune vraie donnee)');
+    const base = `http://localhost:${port}`;
+    const uid = '22222222-2222-4222-8222-222222222222';
+    const JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyMjIyMjIyMi0yMjIyLTQyMjItODIyMi0yMjIyMjIyMjIyMjIiLCJleHAiOjQxMDI0NDQ4MDAsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.c2ln';
+    const accountOf = ({ is_admin = true } = {}) => {
+      const auth = { id: uid, aud: 'authenticated', role: 'authenticated', email: 'admin@example.com', app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' };
+      const token = { access_token: JWT, refresh_token: 'fake-refresh', token_type: 'bearer', expires_in: 3600, expires_at: 4102444800, user: auth };
+      return { auth, token, session: JSON.stringify(token), profile: { id: uid, email: 'admin@example.com', full_name: 'Admin Albasse', phone: '66123456', banned: false, role: 'admin', is_admin } };
+    };
+    const SK = 'sb-xtitsmmccpkelxfjyqyh-auth-token';
+    const NOW = Date.now();
+    const iso = (msAgo) => new Date(NOW - msAgo).toISOString();
+    const OVERVIEW = {
+      rows: [
+        { visitor_ref: 'V-a1b2c3', account_ref: null, session_id: null, product_id: 'p1', product_name: 'Sandales AL madjaz', category_name: 'Chaussures', views: 4, sessions: 2, active_seconds: 185, last_duration_seconds: 62, last_viewed_at: iso(5 * 60000), variant_clicks: 7, cart_status: 'in_cart', order_status: null, interest: 'eleve', last_suggestion_kind: 'product_revisit', last_suggestion_at: iso(3 * 60000) },
+        { visitor_ref: 'V-d4e5f6', account_ref: 'C-9f8e7d6c', session_id: 's-1', product_id: 'p2', product_name: 'Parfum Aqua', category_name: 'Parfum', views: 2, sessions: 1, active_seconds: 45, last_duration_seconds: 30, last_viewed_at: iso(3 * 3600000), variant_clicks: 0, cart_status: 'purchased', order_status: 'delivered', interest: 'moyen', last_suggestion_kind: 'perfume_browse', last_suggestion_at: iso(2 * 3600000) },
+        { visitor_ref: 'V-0a0b0c', account_ref: null, session_id: null, product_id: 'p3', product_name: 'Chemise bleue', category_name: 'Vêtements', views: 1, sessions: 1, active_seconds: 8, last_duration_seconds: 8, last_viewed_at: iso(2 * 86400000), variant_clicks: 0, cart_status: 'none', order_status: null, interest: 'leger', last_suggestion_kind: null, last_suggestion_at: null },
+      ],
+      top_products: [{ product_id: 'p1', product_name: 'Sandales AL madjaz', category_name: 'Chaussures', views: 9, active_seconds: 420, visitors: 3, high_interest: 2 }, { product_id: 'p2', product_name: 'Parfum Aqua', category_name: 'Parfum', views: 5, active_seconds: 100, visitors: 2, high_interest: 0 }],
+      top_categories: [{ category: 'Chaussures', views: 11, visitors: 4 }, { category: 'Parfum', views: 6, visitors: 3 }],
+      top_searches: [{ query: 'sandales', n: 6 }, { query: 'parfum oud', n: 3 }],
+      levels: { eleve: 1, moyen: 1, leger: 1 },
+      totals: { visitors: 3, rows: 3 },
+    };
+    const open = async (fakeOverview, admin = true) => {
+      const fu = accountOf({ is_admin: admin });
+      const c = await newVisitor(phone, { lang: 'fr', storage: SK ? { [SK]: fu.session } : {}, fakeUser: fu, fakeOverview });
+      await c.page.goto(`${base}/admin/suivi-navigation`, { waitUntil: 'load' });
+      return c;
+    };
+    const norm = (s) => s.replace(/[\s  ]+/g, ' ').trim();
+    const text = async (c, id) => norm(await c.page.getByTestId(id).innerText());
+
+    {
+      // --- W1. les chiffres, les lignes, les filtres
+      {
+        const c = await open({ replies: [{ body: OVERVIEW }] });
+        await c.page.getByTestId('browsing-levels').waitFor({ timeout: 25000 });
+        check('niveaux d\'interet : 3 visiteurs, 1 eleve, 1 moyen, 1 leger', (await text(c, 'browsing-level-visitors')).startsWith('3') && (await text(c, 'browsing-level-eleve')).startsWith('1') && (await text(c, 'browsing-level-moyen')).startsWith('1') && (await text(c, 'browsing-level-leger')).startsWith('1'));
+        check('articles les plus regardes : Sandales en tete (9 vues, 3 visiteurs, 7 min au total, 2 interets eleves)', /1 Sandales AL madjaz Chaussures · 3 visiteur\(s\) · 7 min 00 s au total · 2 intérêt élevé 9/.test(await text(c, 'browsing-top-product-0')), await text(c, 'browsing-top-product-0'));
+        check('categories et recherches les plus frequentes', /Chaussures 4 visiteur\(s\) 11/.test(await text(c, 'browsing-top-categories')) && /« sandales » 6/.test(await text(c, 'browsing-top-searches')) && /« parfum oud » 3/.test(await text(c, 'browsing-top-searches')));
+        const r0 = await text(c, 'browsing-row-0');
+        check('ligne 1 : visiteur anonyme, produit, categorie, vues, temps actif, derniere visite, clics, panier, suggestion', /Sandales AL madjaz/.test(r0) && /Chaussures · Visiteur V-a1b2c3/.test(r0) && /Élevé/.test(r0) && /VUES 4/.test(r0) && /VISITES 2/.test(r0) && /TEMPS ACTIF 3 min 05 s/.test(r0) && /DERNIÈRE VISITE 1 min 02 s · il y a 5 min/.test(r0) && /CLICS \(PHOTOS, TAILLES, COULEURS\) 7/.test(r0) && /PANIER Au panier/.test(r0) && /COMMANDE —/.test(r0) && /Tailles \/ modèles similaires · il y a 3 min/.test(r0), r0);
+        check('ligne 1 : visiteur sans compte -> pas de numero de session', /SESSION sans compte/.test(r0));
+        const r1 = await text(c, 'browsing-row-1');
+        check('ligne 2 : client connecte (code C-, jamais son nom), achete, commande livree, suggestion « parfums »', /Parfum · Compte C-9f8e7d6c/.test(r1) && /SESSION s-1/.test(r1) && !/Admin|Ahmed|@/.test(r1) && /Moyen/.test(r1) && /PANIER Acheté/.test(r1) && /COMMANDE Livrée/.test(r1) && /Familles de parfums · il y a 2 h/.test(r1), r1);
+        const r2 = await text(c, 'browsing-row-2');
+        check('ligne 3 : interet leger, 8 s, vue il y a 2 jours, aucune suggestion', /Léger/.test(r2) && /TEMPS ACTIF 8 s/.test(r2) && /il y a 2 j/.test(r2) && /DERNIÈRE SUGGESTION DE ZARA —/.test(r2), r2);
+        check('la page explique comment lire (temps actif, estimation, jamais une certitude, 90 jours)', (await c.page.getByText(/le temps passé seul ne suffit jamais/).count()) === 1 && (await c.page.getByText(/effacées après 90 jours/).count()) === 1);
+        await c.page.screenshot({ path: path.join(OUT, 'W1-suivi-navigation.png') });
+        await c.page.getByTestId('browsing-filter-eleve').click();
+        check('filtre « Eleve » : seulement la ligne a interet eleve', (await c.page.getByTestId('browsing-row-0').count()) === 1 && (await c.page.getByTestId('browsing-row-1').count()) === 0 && /Sandales/.test(await text(c, 'browsing-row-0')));
+        await c.page.getByTestId('browsing-filter-leger').click();
+        check('filtre « Leger » : la chemise', /Chemise bleue/.test(await text(c, 'browsing-row-0')) && (await c.page.getByTestId('browsing-row-1').count()) === 0);
+        await c.page.getByTestId('browsing-filter-all').click();
+        check('filtre « Tous » : les 3 lignes', (await c.page.getByTestId('browsing-row-2').count()) === 1);
+        const body0 = c.overviewCalls[0] || {};
+        check('periode par defaut « 30 jours » : demande avec une date de debut, 300 lignes au plus', typeof body0.p_since === 'string' && body0.p_limit === 300, body0);
+        await c.page.getByTestId('browsing-period-all').click();
+        await sleep(1200);
+        check('periode « Tout » : demande sans date de debut', c.overviewCalls.length >= 2 && c.overviewCalls[c.overviewCalls.length - 1].p_since === null, c.overviewCalls.map((x) => x.p_since));
+        check('aucune erreur (tableau de suivi)', c.errs.length === 0, c.errs);
+        await c.ctx.close();
+      }
+
+      // --- W2. rien a montrer / script pas applique / refus / panne
+      {
+        const c = await open({ replies: [{ body: { rows: [], top_products: [], top_categories: [], top_searches: [], levels: {}, totals: { visitors: 0, rows: 0 } } }] });
+        await c.page.getByTestId('browsing-empty').waitFor({ timeout: 25000 });
+        check('aucun article regarde : message clair, niveaux a zero, pas de tableau vide', (await text(c, 'browsing-level-visitors')).startsWith('0') && (await c.page.getByTestId('browsing-top-products').count()) === 0);
+        await c.ctx.close();
+      }
+      {
+        const c = await open({ replies: [{ status: 404, body: { code: 'PGRST202', message: 'Could not find the function public.browsing_overview(p_limit, p_since) in the schema cache' } }] });
+        await c.page.getByTestId('browsing-not-installed').waitFor({ timeout: 25000 });
+        check('script pas encore applique : « pas encore active » avec les 3 etapes (add-browsing-intelligence.sql), la boutique marche', /add-browsing-intelligence\.sql/.test(await text(c, 'browsing-not-installed')) && /Zara utilise déjà ce que le téléphone du client a retenu/.test(await text(c, 'browsing-not-installed')));
+        await c.ctx.close();
+      }
+      {
+        const c = await open({ replies: [{ status: 403, body: { code: '42501', message: 'Accès réservé aux administrateurs' } }] });
+        await c.page.getByTestId('browsing-error').waitFor({ timeout: 25000 });
+        check('acces refuse par la base : « Acces refuse »', /Accès refusé/.test(await text(c, 'browsing-error')));
+        await c.ctx.close();
+      }
+      {
+        const c = await open({ replies: [{ status: 500, body: { code: 'XX000', message: 'service indisponible' } }, { body: OVERVIEW }] });
+        await c.page.getByTestId('browsing-error').waitFor({ timeout: 25000 });
+        check('panne : message + bouton « Reessayer »', /service indisponible/.test(await text(c, 'browsing-error')));
+        await c.page.getByTestId('browsing-retry').click();
+        await c.page.getByTestId('browsing-levels').waitFor({ timeout: 15000 });
+        check('« Reessayer » : les donnees s\'affichent', (await text(c, 'browsing-level-visitors')).startsWith('3'));
+        await c.ctx.close();
+      }
+      {
+        const c = await open({ replies: [{ body: OVERVIEW }] }, false);
+        await c.page.getByText('Accès réservé aux administrateurs.').waitFor({ timeout: 25000 });
+        check('client NON administrateur : page refusee, aucune demande envoyee a la base', c.overviewCalls.length === 0);
+        await c.ctx.close();
+      }
+      // donnees abimees : l'ecran ne casse pas
+      {
+        const c = await open({ replies: [{ body: { rows: [{ visitor_ref: null, product_id: 5, views: 'abc', interest: 'bizarre', cart_status: 'x' }, null, 'texte'], levels: 'x', totals: null, top_products: 'x' } }] });
+        await c.page.getByTestId('browsing-row-0').waitFor({ timeout: 25000 });
+        check('donnees incompletes ou abimees : l\'ecran s\'affiche quand meme (valeurs sures), sans erreur', /Article sans nom/.test(await text(c, 'browsing-row-0')) && /VUES 0/.test(await text(c, 'browsing-row-0')) && /Léger/.test(await text(c, 'browsing-row-0')) && c.errs.length === 0, c.errs);
+        await c.ctx.close();
+      }
+      // le lien depuis le tableau de bord et le menu du compte
+      {
+        const fu = accountOf();
+        const c = await newVisitor(phone, { lang: 'fr', storage: { [SK]: fu.session }, fakeUser: fu, fakeOverview: { replies: [{ body: OVERVIEW }] } });
+        await c.page.goto(`${base}/compte`, { waitUntil: 'load' });
+        await c.page.getByText('Espace Admin', { exact: true }).waitFor({ timeout: 25000 });
+        await c.page.getByText('Espace Admin', { exact: true }).click();
+        await c.page.getByText('Suivi de navigation', { exact: true }).waitFor({ timeout: 10000 });
+        await c.page.getByText('Suivi de navigation', { exact: true }).click();
+        await c.page.getByTestId('browsing-levels').waitFor({ timeout: 25000 });
+        check('menu « Espace Admin » : « Suivi de navigation » ouvre le tableau de suivi', /suivi-navigation/.test(new URL(c.page.url()).pathname));
         check('aucune erreur (menu administrateur)', c.errs.length === 0, c.errs);
         await c.ctx.close();
       }

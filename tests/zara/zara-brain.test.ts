@@ -7,6 +7,11 @@ import * as l from '../../src/lib/assistantLang.ts';
 import * as pe from '../../src/lib/profileEdit.ts';
 import * as at from '../../src/lib/assistantAttribution.ts';
 import * as st from '../../src/lib/assistantStats.ts';
+import * as bi from '../../src/lib/browsingInsights.ts';
+import * as ac from '../../src/lib/activeTimer.ts';
+import * as tc from '../../src/lib/trackingConsent.ts';
+import * as ai from '../../src/lib/assistantInterest.ts';
+import * as bo from '../../src/lib/browsingOverview.ts';
 import { isMissingColumn } from '../../src/lib/dbErrors.ts';
 
 const KEY = process.env.SUPABASE_ANON_KEY!;
@@ -515,6 +520,7 @@ async function main() {
     'checkout.askPay': [true], 'checkout.methodLabel': ['airtel_money'], 'checkout.recap': [{ lines: [{ name: 'ساعة', variant: '', qty: 2, subtotal: 25000 }], city: 'موندو', fee: 2500, gift: true, total: 37500, name: 'علي', phone: '66123456', address: 'حي فرشا', method: 'airtel_money' }],
     'checkout.placed': ['علي', '12345678'], 'checkout.totalToPay': [37500], 'checkout.payInitiated': ['Airtel Money', 'تم'], 'checkout.payUrl': ['https://pay.example.com'], 'checkout.payNumber': [37500, '60 60 51 51', 'Airtel Money'], 'checkout.payTeam': ['66123456', 'Airtel Money'], 'chip.useAddress': ['حي فرشا'],
     'cart.added': ['ساعة', ' (المقاس 41)', 2, 25000], 'cart.priceChanged': ['ساعة', '10 000 FCFA', '12 000 FCFA'], 'install.iosSteps': [false],
+    'interest.sizesReply': ['حذاء', ['40', '41']], 'interest.colorsReply': ['حذاء', ['أسود'], ['40']],
   };
   const leaks: string[] = [];
   let count = 0;
@@ -554,6 +560,7 @@ async function main() {
     'loyalty.mine': [{ points: 30, tier: 'argent', next: { key: 'or', missing: 20 } }], 'loyalty.orderPoints': [5],
     'checkout.askPay': [true], 'checkout.methodLabel': ['airtel_money'], 'checkout.recap': [{ lines: [{ name: 'Montre', variant: '', qty: 2, subtotal: 25000 }], city: 'Moundou', fee: 2500, gift: true, total: 37500, name: 'Ali', phone: '66123456', address: 'Farcha', method: 'airtel_money' }],
     'checkout.placed': ['Ali', 'ABCD1234'], 'checkout.totalToPay': [37500], 'checkout.payInitiated': ['Airtel Money', 'ok'], 'checkout.payUrl': ['https://pay.example.com'], 'checkout.payNumber': [37500, '60 60 51 51', 'Airtel Money'], 'checkout.payTeam': ['66123456', 'Airtel Money'], 'chip.useAddress': ['Farcha'],
+    'interest.sizesReply': ['Sandale', ['40', '41']], 'interest.colorsReply': ['Sandale', ['Noir'], ['40']],
   };
   for (const k of Object.keys(sampleArgs)) delete sampleArgs[k];
   Object.assign(sampleArgs, frSample);
@@ -566,6 +573,231 @@ async function main() {
   ok(`aucune lettre arabe dans les ${frCount} textes francais (sauf le bouton de langue)`, frArabic.length === 0, frArabic);
   ok('chaque texte arabe contient bien de l\'arabe (sauf chiffres et noms)', (() => { const bad: string[] = []; const w = (node: unknown, path: string) => { if (typeof node === 'string') { if (node.length > 6 && !l.hasArabic(node)) bad.push(path); } else if (Array.isArray(node)) node.forEach((x, i) => w(x, `${path}[${i}]`)); else if (node && typeof node === 'object') for (const [k, v] of Object.entries(node)) if (typeof v !== 'function') w(v, path ? `${path}.${k}` : k); }; w(tx.texts('ar'), ''); return bad.length === 0 ? true : bad; })());
   ok('textes importants : le francais et l\'arabe disent la meme chose (chiffres identiques)', ['info', 'rules', 'howToOrder', 'wrapReply', 'returns'].every((k) => { const nums = (s: string) => (s.replace(/[\s  ]/g, '').match(/\d+/g) ?? []).filter((n) => n !== '00').sort().join(','); const f = nums((tx.texts('fr') as any)[k]); const a = nums((tx.texts('ar') as any)[k]); return f === a; }), ['info', 'rules', 'howToOrder', 'wrapReply', 'returns'].map((k) => [k, (tx.texts('fr') as any)[k].replace(/[\s  ]/g, '').match(/\d+/g)?.sort().join(','), (tx.texts('ar') as any)[k].replace(/[\s  ]/g, '').match(/\d+/g)?.sort().join(',')]));
+
+  // ---- Intelligence commerciale de Zara : profil de navigation, niveaux d'interet, suggestions discretes ----
+  console.log('\n== intelligence commerciale : suivi de navigation, interet, suggestions, envoi sans double comptage');
+  {
+    const T0 = Date.UTC(2026, 9, 18, 8, 0, 0);
+    const SEC = 1000, MIN = 60 * SEC, HOUR = 60 * MIN, DAY = 24 * HOUR;
+    const shoe = { id: 'p-shoe', name: 'Chaussures noires', slug: 'chaussures-noires', categoryId: 'c1', categorySlug: 'chaussures', categoryName: 'Chaussures' };
+    const shirt = { id: 'p-shirt', name: 'Chemise bleue', slug: 'chemise-bleue', categoryId: 'c2', categorySlug: 'vetements', categoryName: 'Vêtements' };
+    const perf = (n: number) => ({ id: `p-perf${n}`, name: `Parfum ${n}`, slug: `parfum-${n}`, categoryId: 'c3', categorySlug: 'parfums', categoryName: 'Parfums' });
+    const fresh = () => bi.emptyProfile('visiteur-test', T0);
+    const view = (p: bi.BrowsingProfile, m: bi.ProductMeta, at: number) => bi.applyProductView(p, m, at);
+
+    // --- consultations
+    let a = view(fresh(), shoe, T0);
+    ok('1re consultation : 1 vue, 1 visite, produit et categorie retenus', a.counted && a.profile.products['p-shoe'].views === 1 && a.profile.products['p-shoe'].sessions === 1 && a.profile.categories['chaussures'].productIds.join() === 'p-shoe' && a.profile.order.join() === 'p-shoe', a.profile.products['p-shoe']);
+    const reload = view(a.profile, shoe, T0 + 5 * SEC);
+    ok('actualisation de la page (meme fiche rouverte en moins de 8 s) : la MEME consultation, rien n\'est recompte', !reload.counted && reload.profile.products['p-shoe'].views === 1);
+    const again = view(a.profile, shoe, T0 + 20 * SEC);
+    ok('meme fiche rouverte 20 s plus tard : une nouvelle consultation (2 vues) mais pas « retour apres d\'autres produits »', again.counted && again.profile.products['p-shoe'].views === 2 && again.profile.products['p-shoe'].returnsAfterOthers === 0);
+    const b = view(a.profile, shirt, T0 + 30 * SEC);
+    const back = view(b.profile, shoe, T0 + 60 * SEC);
+    ok('retour sur la chaussure apres avoir regarde une chemise : « retour apres d\'autres produits » compte 1', back.profile.products['p-shoe'].returnsAfterOthers === 1 && back.profile.products['p-shoe'].views === 2 && back.profile.order.join() === 'p-shirt,p-shoe');
+    const nextVisit = view(back.profile, shoe, T0 + 3 * HOUR);
+    ok('visite differente (plus de 30 min plus tard) : le produit est compte dans 2 visites', back.profile.products['p-shoe'].sessions === 1 && nextVisit.profile.products['p-shoe'].sessions === 2 && nextVisit.profile.sessionKey !== back.profile.sessionKey, [back.profile.products['p-shoe'].sessions, nextVisit.profile.products['p-shoe'].sessions]);
+    const sameVisit = view(back.profile, shoe, T0 + 10 * MIN);
+    ok('dans la meme visite (moins de 30 min) : toujours 1 visite', sameVisit.profile.products['p-shoe'].sessions === 1 && sameVisit.profile.sessionKey === back.profile.sessionKey);
+    // le profil n'est pas modifie en place (fonctions pures)
+    ok('les fonctions ne modifient jamais le profil recu (pas d\'effet de bord)', a.profile.products['p-shoe'].views === 1 && fresh().order.length === 0 && JSON.stringify(a.profile).includes('"views":1'));
+
+    // --- temps ACTIF
+    let t = bi.applyActiveTime(a.profile, shoe, 12, 12, T0 + 12 * SEC);
+    t = bi.applyActiveTime(t, shoe, 8, 20, T0 + 20 * SEC);
+    ok('temps actif cumule (12 s puis 8 s = 20 s), duree de la derniere consultation = 20 s', Math.round(t.products['p-shoe'].activeSeconds) === 20 && t.products['p-shoe'].lastDurationSeconds === 20);
+    const huge = bi.applyActiveTime(a.profile, shoe, 99999, 99999, T0 + SEC);
+    ok('un seul ajout de plus d\'une heure n\'est jamais du temps actif (plafonne a 3 600 s)', huge.products['p-shoe'].activeSeconds === 3600);
+    ok('temps nul ou negatif : ignore', bi.applyActiveTime(a.profile, shoe, 0, 0, T0) === a.profile && bi.applyActiveTime(a.profile, shoe, -5, -5, T0) === a.profile);
+
+    // --- variantes
+    let v = a.profile;
+    for (const [k, val] of [['image', null], ['image', null], ['size', '41'], ['size', '42'], ['size', '41'], ['color', 'Noir'], ['color', 'Marron']] as const) v = bi.applyVariantClick(v, shoe, k, val, T0 + 5 * SEC);
+    const rec = v.products['p-shoe'];
+    ok('clics : 2 images, 3 clics de taille (2 tailles distinctes), 2 clics de couleur (2 couleurs distinctes)', rec.imageClicks === 2 && rec.sizeClicks === 3 && rec.sizes.join() === '41,42' && rec.colorClicks === 2 && rec.colors.join() === 'Noir,Marron', rec);
+    let many = a.profile;
+    for (let i = 0; i < 30; i++) many = bi.applyVariantClick(many, shoe, 'size', `T${i}`, T0);
+    ok('liste des tailles essayees plafonnee (12 valeurs)', many.products['p-shoe'].sizes.length === 12 && many.products['p-shoe'].sizeClicks === 30);
+
+    // --- panier / achat
+    let c = bi.applyCartEvent(a.profile, shoe, 'add', T0 + 40 * SEC);
+    ok('ajout au panier : statut « au panier »', c.products['p-shoe'].cartStatus === 'in_cart' && c.products['p-shoe'].cartChangedAt === T0 + 40 * SEC);
+    c = bi.applyCartEvent(c, shoe, 'remove', T0 + 50 * SEC);
+    ok('retire du panier : statut « retire »', c.products['p-shoe'].cartStatus === 'removed');
+    c = bi.applyCartEvent(c, shoe, 'purchase', T0 + 60 * SEC);
+    ok('achat : statut « achete » avec la date de commande', c.products['p-shoe'].cartStatus === 'purchased' && c.products['p-shoe'].orderedAt === T0 + 60 * SEC);
+    const afterBuy = bi.applyCartEvent(c, shoe, 'remove', T0 + 70 * SEC);
+    ok('apres un achat, « retire du panier » ne defait pas la commande', afterBuy.products['p-shoe'].cartStatus === 'purchased');
+    const unseen = bi.applyCartEvent(fresh(), shirt, 'add', T0);
+    ok('article ajoute depuis le chat de Zara sans avoir ouvert sa fiche : un enregistrement est cree (0 vue, au panier)', unseen.products['p-shirt'].views === 0 && unseen.products['p-shirt'].cartStatus === 'in_cart' && unseen.products['p-shirt'].name === 'Chemise bleue');
+
+    // --- recherches
+    ok('recherche : mise en minuscules, espaces nettoyes', bi.sanitizeSearch('  Parfum   ROUGE ') === 'parfum rouge');
+    ok('recherche : jamais un telephone, une adresse e-mail, un lien, ni un texte trop court ou trop long', bi.sanitizeSearch('66123456') === null && bi.sanitizeSearch('+235 66 12 34 56') === null && bi.sanitizeSearch('moi@mail.com') === null && bi.sanitizeSearch('https://x.com') === null && bi.sanitizeSearch('a') === null && bi.sanitizeSearch('x'.repeat(61)) === null && bi.sanitizeSearch('montre 2') === 'montre 2');
+    let sr = fresh();
+    for (const [q, dt] of [['p', 0], ['pa', 1000], ['par', 2000], ['parf', 3000], ['parfum', 4000]] as const) sr = bi.applySearch(sr, q, T0 + dt);
+    ok('recherche qui se complete lettre apres lettre : UNE seule entree (« parfum »)', sr.searches.map((x) => x.q).join() === 'parfum', sr.searches);
+    sr = bi.applySearch(sr, 'chemise', T0 + 60 * SEC);
+    sr = bi.applySearch(sr, 'chemise', T0 + 61 * SEC);
+    ok('deux recherches differentes gardees, la meme recherche repetee n\'est pas doublee', sr.searches.map((x) => x.q).join() === 'parfum,chemise');
+    let flood = fresh();
+    for (let i = 0; i < 40; i++) flood = bi.applySearch(flood, `recherche numero ${i}`, T0 + i * MIN);
+    ok('historique des recherches plafonne a 20', flood.searches.length === 20 && flood.searches[19].q === 'recherche numero 39');
+
+    // --- niveau d'interet : plusieurs signaux, jamais le temps seul
+    const R = (over: Partial<bi.ProductRecord> = {}): bi.ProductRecord => ({ ...(bi.applyProductView(fresh(), shoe, T0).profile.products['p-shoe']), ...over });
+    const lvl = (over: Partial<bi.ProductRecord>) => bi.estimateInterest(R(over)).level;
+    ok('INTERET LEGER : une seule consultation, rapide', lvl({}) === 'leger');
+    ok('le temps passe SEUL n\'est jamais une preuve : 5 minutes, 1 heure = toujours « leger »', lvl({ activeSeconds: 300 }) === 'leger' && lvl({ activeSeconds: 3600 }) === 'leger');
+    ok('INTERET MOYEN : il revient sur la fiche (2 vues)', lvl({ views: 2 }) === 'moyen');
+    ok('INTERET MOYEN : du temps passe A EXAMINER (temps + photos, ou temps + taille/couleur, ou photos + variante)', lvl({ activeSeconds: 40, imageClicks: 2 }) === 'moyen' && lvl({ activeSeconds: 40, colorClicks: 1 }) === 'moyen' && lvl({ imageClicks: 2, sizeClicks: 1 }) === 'moyen');
+    ok('INTERET MOYEN : un signal fort seul (3 vues, ou retour apres d\'autres produits, ou 2 tailles essayees)', lvl({ views: 3 }) === 'moyen' && lvl({ returnsAfterOthers: 1 }) === 'moyen' && lvl({ sizes: ['41', '42'], sizeClicks: 2 }) === 'moyen');
+    ok('INTERET ELEVE : l\'article est ajoute au panier (ou deja achete)', lvl({ cartStatus: 'in_cart' }) === 'eleve' && lvl({ cartStatus: 'purchased' }) === 'eleve');
+    ok('« retire du panier » n\'est pas un signal d\'interet eleve a lui seul', lvl({ cartStatus: 'removed' }) === 'leger');
+    ok('INTERET ELEVE : deux signaux forts (3 vues + retour apres d\'autres produits)', lvl({ views: 3, returnsAfterOthers: 1 }) === 'eleve');
+    ok('INTERET ELEVE : un signal fort confirme par du temps ou des photos (3 vues + 35 s ; retour + 2 photos)', lvl({ views: 3, activeSeconds: 35 }) === 'eleve' && lvl({ returnsAfterOthers: 1, imageClicks: 2 }) === 'eleve');
+    ok('INTERET ELEVE : plusieurs variantes + plusieurs consultations (2 couleurs, 2 tailles, 3 vues)', lvl({ views: 3, colors: ['Noir', 'Marron'], colorClicks: 2 }) === 'eleve');
+    ok('2 visites avec 2 vues chacune = « plusieurs consultations » (signal fort)', lvl({ views: 2, sessions: 2 }) === 'moyen' && bi.strongSignals(R({ views: 2, sessions: 2 })).repeat === true);
+    ok('les raisons sont donnees (tableau de suivi) : panier, plusieurs consultations, retour, variantes, temps, photos', bi.estimateInterest(R({ cartStatus: 'in_cart', views: 3, returnsAfterOthers: 1, sizes: ['a', 'b'], activeSeconds: 60, imageClicks: 3 })).signals.join('|') === 'panier|plusieurs consultations|retour après d’autres produits|plusieurs variantes|temps passé|photos examinées');
+
+    // --- interet par categorie
+    let cat = fresh();
+    cat = view(cat, perf(1), T0).profile;
+    cat = view(cat, perf(2), T0 + MIN).profile;
+    ok('categorie : 2 produits regardes = interet leger', bi.categoryInterest(cat, 'parfums')?.level === 'leger' && bi.categoryInterest(cat, 'parfums')?.distinctProducts === 2);
+    cat = view(cat, perf(3), T0 + 2 * MIN).profile;
+    ok('categorie : 3 produits differents = interet moyen', bi.categoryInterest(cat, 'parfums')?.level === 'moyen' && bi.categoryInterest(cat, 'parfums')?.distinctProducts === 3);
+    const catHigh = bi.applyCartEvent(cat, perf(2), 'add', T0 + 3 * MIN);
+    ok('categorie : 3 produits dont un au panier = interet eleve', bi.categoryInterest(catHigh, 'parfums')?.level === 'eleve');
+    ok('categorie inconnue : rien', bi.categoryInterest(cat, 'jouets') === null);
+    ok('categories qui interessent le plus : parfums en tete', bi.topCategories(cat)[0]?.key === 'parfums');
+
+    // --- suggestions discretes
+    const ctx = (now: number, allowed = true) => ({ now, allowed });
+    ok('suggestion : AUCUNE tant que le suivi n\'est pas autorise', bi.pickSuggestion(back.profile, ctx(T0 + 2 * MIN, false)) === null);
+    ok('suggestion : aucune si le client n\'a presque rien regarde', bi.pickSuggestion(a.profile, ctx(T0 + MIN)) === null);
+    ok('suggestion : le temps passe seul ne declenche rien', bi.pickSuggestion(bi.applyActiveTime(a.profile, shoe, 900, 900, T0), ctx(T0 + 20 * MIN)) === null);
+    const sg1 = bi.pickSuggestion(back.profile, ctx(T0 + 2 * MIN));
+    ok('suggestion : la chaussure revient apres une chemise -> « product_revisit » pour CETTE chaussure', !!sg1 && sg1.kind === 'product_revisit' && sg1.productId === 'p-shoe' && sg1.key === 'product:p-shoe' && sg1.type === 'shoes', sg1);
+    ok('suggestion : un article au panier n\'est pas propose (Zara a deja son rappel de panier)', bi.pickSuggestion(bi.applyCartEvent(back.profile, shoe, 'add', T0 + 61 * SEC), ctx(T0 + 2 * MIN)) === null);
+    let colors = view(fresh(), shirt, T0).profile;
+    colors = bi.applyVariantClick(colors, shirt, 'color', 'Bleu', T0 + 10 * SEC);
+    colors = bi.applyVariantClick(colors, shirt, 'color', 'Blanc', T0 + 20 * SEC);
+    const sgColors = bi.pickSuggestion(colors, ctx(T0 + MIN));
+    ok('suggestion : plusieurs couleurs d\'un meme vetement -> « variants » (couleurs et tailles)', !!sgColors && sgColors.kind === 'variants' && sgColors.type === 'clothing' && sgColors.productId === 'p-shirt', sgColors);
+    const sgPerf = bi.pickSuggestion(cat, ctx(T0 + 5 * MIN));
+    ok('suggestion : 3 parfums regardes -> « perfume_browse » (fraiche, boisee, sucree, intense)', !!sgPerf && sgPerf.kind === 'perfume_browse' && sgPerf.categoryKey === 'parfums' && sgPerf.type === 'perfume', sgPerf);
+    let shoes3 = fresh();
+    for (let i = 1; i <= 3; i++) shoes3 = view(shoes3, { id: `p-s${i}`, name: `Sandale ${i}`, categoryId: 'c9', categorySlug: 'sandales', categoryName: 'Sandales' }, T0 + i * MIN).profile;
+    const sgCat = bi.pickSuggestion(shoes3, ctx(T0 + 10 * MIN));
+    ok('suggestion : 3 articles d\'une meme categorie -> « category_browse »', !!sgCat && sgCat.kind === 'category_browse' && sgCat.key === 'cat:sandales', sgCat);
+    // priorite : l'article qui revient passe avant la categorie
+    const both = bi.applyProductView(bi.applyProductView(bi.applyProductView(cat, perf(1), T0 + 3 * MIN).profile, perf(2), T0 + 4 * MIN).profile, perf(1), T0 + 5 * MIN).profile;
+    ok('priorite : un article qui revient passe avant une suggestion de categorie', bi.pickSuggestion(both, ctx(T0 + 6 * MIN))?.kind === 'product_revisit');
+
+    // pas a chaque clic : delai, une par visite, deux par jour, meme sujet 24 h, refus 7 jours
+    const shown = bi.applySuggestion(back.profile, 'product:p-shoe', 'product_revisit', 'shown', T0 + 2 * MIN, 'p-shoe');
+    ok('apres une suggestion montree : plus aucune a moins de 30 minutes', bi.pickSuggestion(shown, ctx(T0 + 20 * MIN)) === null);
+    ok('...ni dans la meme visite (une seule par visite)', bi.pickSuggestion(shown, ctx(T0 + 31 * MIN)) === null);
+    ok('la derniere suggestion est retenue sur le produit (type et date)', shown.products['p-shoe'].lastSuggestionKind === 'product_revisit' && shown.products['p-shoe'].lastSuggestionAt === T0 + 2 * MIN);
+    // nouvelle visite 3 h plus tard, meme sujet : pas repete avant 24 h
+    const later = view(shown, shoe, T0 + 3 * HOUR).profile;
+    ok('nouvelle visite 3 h plus tard : la MEME suggestion n\'est pas repetee avant 24 h', bi.pickSuggestion(later, ctx(T0 + 3 * HOUR + MIN)) === null);
+    const nextDay = view(shown, shoe, T0 + DAY + 3 * HOUR).profile;
+    ok('le lendemain, nouvelle visite : la suggestion peut revenir', bi.pickSuggestion(nextDay, ctx(T0 + DAY + 3 * HOUR + MIN))?.productId === 'p-shoe');
+    let two = bi.applySuggestion(fresh(), 'product:x', 'product_revisit', 'shown', T0 - 5 * HOUR);
+    two = bi.applySuggestion(two, 'product:y', 'product_revisit', 'accepted', T0 - 2 * HOUR);
+    const richProfile = view(view(view(two, shoe, T0 + HOUR).profile, shirt, T0 + HOUR + MIN).profile, shoe, T0 + HOUR + 2 * MIN).profile;
+    ok('au plus 2 suggestions par jour', bi.pickSuggestion(richProfile, ctx(T0 + HOUR + 3 * MIN)) === null);
+    const refused = bi.applySuggestion(back.profile, 'product:p-shoe', 'product_revisit', 'dismissed', T0 + 3 * MIN, 'p-shoe');
+    ok('« Non merci » : plus aucune suggestion pendant 7 jours (le client est respecte)', refused.quietUntil === T0 + 3 * MIN + 7 * DAY && bi.pickSuggestion(refused, ctx(T0 + 6 * DAY)) === null);
+    ok('...et apres 7 jours, une nouvelle visite peut en recevoir une (autre sujet ou nouvelle consultation)', bi.pickSuggestion(view(view(view(refused, shoe, T0 + 8 * DAY).profile, shirt, T0 + 8 * DAY + MIN).profile, shoe, T0 + 8 * DAY + 2 * MIN).profile, ctx(T0 + 8 * DAY + 3 * MIN)) !== null);
+
+    // --- types de produits
+    ok('type de produit : chaussures, parfums, vetements, autre', bi.productTypeOf('Sandale cuir') === 'shoes' && bi.productTypeOf('Nike Air', 'chaussures') === 'shoes' && bi.productTypeOf('Eau de parfum Oud') === 'perfume' && bi.productTypeOf('Khamrah', 'parfums') === 'perfume' && bi.productTypeOf('Chemise bleue') === 'clothing' && bi.productTypeOf('Costume homme') === 'clothing' && bi.productTypeOf('Montre Rolex') === 'other' && bi.productTypeOf(null) === 'other');
+
+    // --- ce que Zara peut demander
+    const hist = view(view(view(fresh(), shoe, T0).profile, shirt, T0 + MIN).profile, perf(1), T0 + 2 * MIN).profile;
+    ok('Zara demande « articles consultes recemment » : du plus recent au plus ancien', bi.recentProducts(hist, 5, T0 + 5 * MIN).map((r) => r.id).join() === 'p-perf1,p-shirt,p-shoe');
+    ok('...limite au nombre demande et aux 14 derniers jours', bi.recentProducts(hist, 2, T0 + 5 * MIN).length === 2 && bi.recentProducts(hist, 5, T0 + 15 * DAY).length === 0);
+    ok('Zara demande « articles consultes plusieurs fois » et « secondes passees sur la fiche »', bi.repeatedProducts(back.profile).map((r) => r.id).join() === 'p-shoe' && bi.secondsOn(t, 'p-shoe') === 20 && bi.secondsOn(t, 'inconnu') === 0);
+
+    // --- limites et vie privee
+    let big = fresh();
+    for (let i = 0; i < 80; i++) big = view(big, { id: `p${i}`, name: `Article ${i}`, categorySlug: 'divers' }, T0 + i * MIN).profile;
+    ok('au plus 60 produits retenus (les plus anciens sont oublies) et 40 dans l\'ordre de consultation', Object.keys(big.products).length === 60 && !big.products['p0'] && !!big.products['p79'] && big.order.length === 40);
+    const old = view(view(fresh(), shoe, T0 - 100 * DAY).profile, shirt, T0 - DAY).profile;
+    const pruned = bi.pruneProfile(old, T0);
+    ok('duree de conservation 90 jours : le produit vu il y a 100 jours est efface, celui d\'hier reste', !pruned.products['p-shoe'] && !!pruned.products['p-shirt'] && !pruned.order.includes('p-shoe') && !pruned.categories['chaussures'] && !!pruned.categories['vetements']);
+    ok('recherches et suggestions de plus de 90 jours effacees aussi', bi.pruneProfile(bi.applySearch(fresh(), 'montre', T0 - 100 * DAY), T0).searches.length === 0 && bi.pruneProfile(bi.applySuggestion(fresh(), 'cat:x', 'category_browse', 'shown', T0 - 100 * DAY), T0).suggestions.length === 0);
+
+    // --- envoi vers la base : seulement la difference, jamais de double comptage
+    let d1 = bi.applyActiveTime(view(fresh(), shoe, T0).profile, shoe, 14, 14, T0 + 14 * SEC);
+    d1 = bi.applyVariantClick(d1, shoe, 'size', '41', T0 + 15 * SEC);
+    let first = bi.pendingDeltas(d1);
+    ok('1er envoi : toutes les valeurs (1 vue, 14 s, 1 clic de taille, interet leger, pas de panier)', first.deltas.length === 1 && first.deltas[0].views === 1 && first.deltas[0].activeSeconds === 14 && first.deltas[0].sizeClicks === 1 && first.deltas[0].interest === 'leger' && first.deltas[0].cartStatus === 'none' && first.deltas[0].lastDurationSeconds === 14, first.deltas[0]);
+    ok('envoi qui echoue (rien note comme parti) : la meme difference est renvoyee, rien n\'est perdu', JSON.stringify(bi.pendingDeltas(d1).deltas) === JSON.stringify(first.deltas));
+    const acked = bi.markSynced(d1, first.snapshots);
+    ok('apres un envoi reussi : plus rien a envoyer (aucun double comptage, meme si on appelle deux fois)', bi.pendingDeltas(acked).deltas.length === 0 && bi.pendingDeltas(bi.markSynced(acked, first.snapshots)).deltas.length === 0);
+    const more = bi.applyActiveTime(bi.applyCartEvent(acked, shoe, 'add', T0 + 40 * SEC), shoe, 6, 20, T0 + 40 * SEC);
+    const second = bi.pendingDeltas(more);
+    ok('apres un nouveau geste : seulement la difference (6 s de plus, au panier, interet eleve), 0 vue de plus', second.deltas.length === 1 && second.deltas[0].views === 0 && second.deltas[0].activeSeconds === 6 && second.deltas[0].cartStatus === 'in_cart' && second.deltas[0].interest === 'eleve', second.deltas[0]);
+    const cartOnly = bi.pendingDeltas(bi.markSynced(more, second.snapshots));
+    const cartRemoved = bi.pendingDeltas(bi.applyCartEvent(bi.markSynced(more, second.snapshots), shoe, 'remove', T0 + 50 * SEC));
+    ok('un simple changement de panier (sans compteur) est envoye aussi', cartOnly.deltas.length === 0 && cartRemoved.deltas.length === 1 && cartRemoved.deltas[0].cartStatus === 'removed' && cartRemoved.deltas[0].views === 0);
+    ok('jamais de valeur negative dans ce qui part', [...first.deltas, ...second.deltas, ...cartRemoved.deltas].every((x) => x.views >= 0 && x.activeSeconds >= 0 && x.imageClicks >= 0 && x.sizeClicks >= 0 && x.colorClicks >= 0));
+
+    // --- enregistrement sur le telephone
+    const round = bi.parseProfile(bi.serializeProfile(back.profile), T0);
+    ok('profil enregistre puis relu : identique', !!round && JSON.stringify(round) === JSON.stringify(back.profile));
+    ok('profil abime, d\'une autre version ou sans produits : ignore sans erreur (profil vide)', bi.parseProfile('{pas du json', T0) === null && bi.parseProfile('', T0) === null && bi.parseProfile(null, T0) === null && bi.parseProfile(JSON.stringify({ version: 2, visitorId: 'x', products: {} }), T0) === null && bi.parseProfile(JSON.stringify({ version: 1, visitorId: 'x' }), T0) === null);
+    const partial = bi.parseProfile(JSON.stringify({ version: 1, visitorId: 'abc', products: {} }), T0);
+    ok('profil incomplet complete avec des valeurs sures (listes vides, pas de suggestion bloquee)', !!partial && partial.order.length === 0 && partial.searches.length === 0 && partial.suggestions.length === 0 && partial.quietUntil === 0 && partial.visitorId === 'abc' && typeof partial.sessionKey === 'string');
+    // --- recherches envoyees vers la base : seulement les nouvelles, une seule fois
+    let sx = bi.applySearch(bi.applySearch(fresh(), 'parfum oud', T0), 'chemise', T0 + MIN);
+    const sPending = bi.pendingDeltas(sx);
+    ok('recherches pas encore parties : toutes les deux (sans produit consulte, il y a quand meme un envoi)', sPending.searches.map((x) => x.q).join() === 'parfum oud,chemise' && sPending.searchesUpTo === T0 + MIN && sPending.deltas.length === 0);
+    const sAcked = bi.markSynced(sx, sPending.snapshots, sPending.searchesUpTo);
+    ok('apres un envoi reussi : plus aucune recherche a envoyer ; une nouvelle recherche part seule', bi.pendingDeltas(sAcked).searches.length === 0 && bi.pendingDeltas(bi.applySearch(sAcked, 'montre', T0 + 5 * MIN)).searches.map((x) => x.q).join() === 'montre');
+    ok('envoi qui echoue : les memes recherches repartent plus tard (rien de perdu)', bi.pendingDeltas(sx).searches.length === 2);
+
+    // --- chronometre du temps ACTIF
+    {
+      const now0 = T0;
+      const tm = new ac.ActiveTimer(now0);
+      for (let i = 1; i <= 10; i++) tm.tick(now0 + i * 1000, true);
+      ok('10 secondes actives = 10 s', tm.seconds === 10);
+      for (let i = 11; i <= 20; i++) tm.tick(now0 + i * 1000, false);
+      ok('onglet cache ou client inactif : le temps ne compte pas (toujours 10 s)', tm.seconds === 10);
+      tm.tick(now0 + 3600 * 1000, true);
+      ok('un « trou » d\'une heure (telephone en veille, onglet gele) compte 2 secondes au plus, jamais toute l\'heure', tm.seconds === 12, tm.seconds);
+      tm.tick(now0 + 3600 * 1000 - 5000, true);
+      ok('une horloge qui recule n\'ajoute rien', tm.seconds === 12);
+      const base = { visible: true, focused: true, lastInteractionAt: now0, now: now0 + 10_000 };
+      ok('actif : onglet visible, fenetre au premier plan, geste il y a moins d\'une minute', ac.isActive(base) === true);
+      ok('inactif : onglet cache', ac.isActive({ ...base, visible: false }) === false);
+      ok('inactif : fenetre pas au premier plan', ac.isActive({ ...base, focused: false }) === false);
+      ok('inactif : aucun geste depuis 1 minute (page laissee ouverte)', ac.isActive({ ...base, now: now0 + 59_999 }) === true && ac.isActive({ ...base, now: now0 + 60_000 }) === false);
+    }
+
+    // --- choix du visiteur : refuser le suivi
+    {
+      const mem = () => { const m = new Map<string, string>(); return { m, store: { getItem: (k: string) => (m.has(k) ? (m.get(k) as string) : null), setItem: (k: string, v: string) => void m.set(k, v), removeItem: (k: string) => void m.delete(k) } }; };
+      const a = mem();
+      ok('sans choix et sans signal du navigateur : le suivi est actif (le visiteur est informe et peut refuser)', tc.readChoice(a.store) === 'unset' && tc.isTrackingAllowed(a.store, {}) === true);
+      ok('signal « Ne pas me suivre » du navigateur (Do Not Track = 1 ou Global Privacy Control) : suivi refuse', tc.isTrackingAllowed(a.store, { doNotTrack: '1' }) === false && tc.isTrackingAllowed(a.store, { doNotTrack: 'yes' }) === false && tc.isTrackingAllowed(a.store, { globalPrivacyControl: true }) === false && tc.isTrackingAllowed(a.store, { doNotTrack: '0' }) === true && tc.isTrackingAllowed(a.store, { doNotTrack: null }) === true);
+      tc.writeChoice('denied', a.store, T0);
+      ok('« Refuser » : le suivi s\'arrete (meme sans signal du navigateur) et le choix est retenu', tc.readChoice(a.store) === 'denied' && tc.isTrackingAllowed(a.store, {}) === false);
+      tc.writeChoice('granted', a.store, T0);
+      ok('le visiteur accepte lui-meme : le suivi repart, MEME si son navigateur dit « Ne pas me suivre » (son choix gagne)', tc.readChoice(a.store) === 'granted' && tc.isTrackingAllowed(a.store, { doNotTrack: '1' }) === true);
+      const bad = mem(); bad.m.set('albasse_tracking_choice', '{abime'); const bad2 = mem(); bad2.m.set('albasse_tracking_choice', JSON.stringify({ choice: 'peut-etre' }));
+      ok('choix abime ou inconnu : traite comme « pas de choix » (jamais d\'erreur)', tc.readChoice(bad.store) === 'unset' && tc.readChoice(bad2.store) === 'unset');
+      ok('stockage bloque : pas d\'erreur, le suivi suit les signaux du navigateur', tc.readChoice(null) === 'unset' && tc.isTrackingAllowed(null, {}) === true && tc.isTrackingAllowed(null, { doNotTrack: '1' }) === false);
+      const b = mem();
+      ok('plus de message d\'information qui derange : les fonctions du message n\'existent plus', !('noticeSeen' in tc) && !('markNoticeSeen' in tc));
+    }
+    ok('niveaux affiches en francais : Leger, Moyen, Eleve', bi.INTEREST_LABELS.leger === 'Léger' && bi.INTEREST_LABELS.moyen === 'Moyen' && bi.INTEREST_LABELS.eleve === 'Élevé');
+  }
 
   // ---- Statistiques de Zara : appareil, memoire « vient de Zara », chiffres, periodes ----
   console.log('\n== statistiques de Zara : appareils, attribution, chiffres, periodes');
@@ -677,6 +909,144 @@ async function main() {
     ok('formulaire rempli avec le profil (vide si la base n\'a rien)', f.fullName === 'Ahmed Hassan' && f.phone === '66123456' && f.whatsappNumber === '' && f.address === '', f);
     ok('« Enregistrer » inactif tant que rien n\'a change', !pe.profileFormChanged(f, prof) && !pe.profileFormChanged({ ...f, fullName: '  Ahmed   Hassan ' }, prof));
     ok('« Enregistrer » actif des qu\'une information change', pe.profileFormChanged({ ...f, address: 'Chagoua' }, prof) && pe.profileFormChanged({ ...f, phone: '66123457' }, prof));
+  }
+
+  // ---- Zara : suggestions discretes, historique, choix du suivi ----
+  console.log('\n== Zara intelligence : suivi (arreter, reprendre, expliquer), « qu\'est-ce que j\'ai regarde », suggestions avec le vrai catalogue');
+  {
+    // --- comprendre le client
+    const stopPhrases = ['ne me suis plus', 'Arrête de me suivre', 'ne me suivez plus', 'je ne veux pas être suivi', 'refuse le suivi', 'désactive le suivi', 'supprime mon historique', 'ne retiens pas ce que je regarde', 'efface mes données', 'arrête le suivi', 'لا تتبعني', 'توقف عن متابعتي', 'امسح سجل التصفح'];
+    const startPhrases = ['tu peux me suivre', 'vous pouvez me suivre', 'active le suivi', 'autorise le suivi', 'ok pour le suivi', 'تابعني', 'فعل التتبع', 'يمكنك متابعتي'];
+    const aboutPhrases = ['tu me suis ?', 'vous me suivez ?', 'tu retiens quoi', 'que sais-tu de moi', "qu'est-ce que tu sais sur moi", 'mes données', 'vie privée', 'suivi de navigation', 'هل تتبعني', 'ماذا تعرف عني', 'الخصوصية'];
+    const historyPhrases = ["qu'est-ce que j'ai regardé", "quels articles j'ai vus", "montre-moi ce que j'ai regardé", 'mes derniers articles vus', 'historique de navigation', "rappelle-moi ce que j'ai consulté", 'ماذا شاهدت', 'المنتجات التي شاهدتها', 'سجل التصفح'];
+    const notTracking = ['suivre ma commande', 'suivi de ma commande', 'où est mon colis', "je n'ai pas de suivi de ma commande", 'arrêter le suivi de ma commande', 'je veux suivre mon colis', 'parfum pour homme', 'montre-moi des sandales', 'rolex', 'chaussures noires', "j'ai regardé des chaussures, vous avez quoi", 'tracking colis', 'mes commandes', 'طلباتي', 'تتبع طلبي', 'merci', 'oui', 'combien coûte la livraison', 'cherche des produits'];
+    ok('« ne me suis plus » et ses variantes (francais, arabe) : arreter le suivi', stopPhrases.every((t) => b.trackingKind(t) === 'stop' && b.detectIntent(t) === 'tracking'), stopPhrases.filter((t) => b.trackingKind(t) !== 'stop'));
+    ok('« tu peux me suivre » et ses variantes : reprendre le suivi', startPhrases.every((t) => b.trackingKind(t) === 'start' && b.detectIntent(t) === 'tracking'), startPhrases.filter((t) => b.trackingKind(t) !== 'start'));
+    ok('« tu me suis ? », « que sais-tu de moi », « vie privee » : expliquer ce qui est retenu', aboutPhrases.every((t) => b.trackingKind(t) === 'about' && b.detectIntent(t) === 'tracking'), aboutPhrases.filter((t) => b.trackingKind(t) !== 'about'));
+    ok('« qu\'est-ce que j\'ai regarde » et ses variantes : l\'historique', historyPhrases.every((t) => b.wantsHistory(t) && b.detectIntent(t) === 'history'), historyPhrases.filter((t) => !b.wantsHistory(t)));
+    ok('suivre une COMMANDE ou un colis, une recherche de produit, un merci : jamais pris pour le suivi de navigation ni pour l\'historique', notTracking.every((t) => b.detectIntent(t) !== 'tracking' && b.detectIntent(t) !== 'history'), notTracking.filter((t) => ['tracking', 'history'].includes(b.detectIntent(t))));
+    ok('« suivre ma commande » reste « orders »', b.detectIntent('suivre ma commande') === 'orders' && b.detectIntent('suivi de ma commande') === 'orders');
+    ok('le chat n\'a AUCUN bouton pour suivre ou ne plus suivre (le suivi reste en arriere-plan) ; seul « Confidentialite » existe, et seulement quand le client pose la question', !Object.keys(tx.texts('fr').chip).some((k) => /track|viewed/i.test(k)) && !Object.keys(tx.texts('ar').chip).some((k) => /track|viewed/i.test(k)) && !/suivi|suivre/i.test(tx.texts('fr').history.outro) && !/متابع|تتبع/.test(tx.texts('ar').history.outro));
+
+    // --- un catalogue d'essai, plus le vrai
+    const mk = (id: string, name: string, over: Partial<Parameters<typeof b.buildProduct>[0]> = {}): P =>
+      b.buildProduct({ id, name, slug: id, price: 20000, compare_at_price: null, stock: 5, category: 'Chaussures', category_slug: 'chaussures', colors: ['Noir', 'Marron'], sizes: ['40', '41', '42'], description: '', image: 'x.jpg', created_at: '2026-01-01T00:00:00Z', ...over });
+    const sandale = mk('p-shoe', 'Sandale cuir', { price: 15000 });
+    const sandale2 = mk('p-shoe2', 'Sandale été', { price: 16000, created_at: '2026-03-01T00:00:00Z' });
+    const sandale3 = mk('p-shoe3', 'Sandale luxe', { price: 40000 });
+    const sandaleOut = mk('p-shoe4', 'Sandale rupture', { price: 15500, stock: 0 });
+    const chemise = mk('p-shirt', 'Chemise bleue', { category: 'Vêtements', category_slug: 'vetements', colors: ['Bleu', 'Blanc'], sizes: ['M', 'L'] });
+    const montre = mk('p-watch', 'Montre acier', { category: 'Montres', category_slug: 'montres', colors: [], sizes: [] });
+    const parfumFrais = mk('p-pf1', 'Parfum Aqua', { category: 'Parfum', category_slug: 'parfum', colors: [], sizes: [], description: 'Une fragrance fraîche aux notes d’agrumes.' });
+    const parfumBois = mk('p-pf2', 'Parfum Santal', { category: 'Parfum', category_slug: 'parfum', colors: [], sizes: [], description: 'Notes boisées de santal et de cèdre.' });
+    const parfumNeutre = mk('p-pf3', 'Parfum Royal', { category: 'Parfum', category_slug: 'parfum', colors: [], sizes: [], description: '' });
+    const parfumRupture = mk('p-pf4', 'Parfum Intense Noir', { category: 'Parfum', category_slug: 'parfum', colors: [], sizes: [], description: 'Intense', stock: 0 });
+    const demo: P[] = [sandale, sandale2, sandale3, sandaleOut, chemise, montre, parfumFrais, parfumBois, parfumNeutre, parfumRupture];
+
+    // --- familles de parfums : seulement ce que la fiche DIT
+    ok('famille de parfum : « fraiche » seulement si la fiche le dit (description ou nom)', ai.matchesFamily(parfumFrais, 'fresh') && !ai.matchesFamily(parfumFrais, 'woody') && ai.matchesFamily(parfumBois, 'woody') && !ai.matchesFamily(parfumBois, 'fresh'));
+    ok('un parfum sans description n\'est range dans AUCUNE famille (rien n\'est devine)', ai.FAMILIES.every((f) => !ai.matchesFamily(parfumNeutre, f)));
+    ok('familles proposees : fraiche, boisee, sucree, intense, rien d\'autre', ai.FAMILIES.join() === 'fresh,woody,sweet,intense' && ai.isFamily('fresh') && !ai.isFamily('floral') && !ai.isFamily('') && !ai.isFamily(undefined));
+    ok('parfums proposes pour une famille : en stock et annonces par la fiche', ai.familyPicks(demo, 'fresh').map((p) => p.id).join() === 'p-pf1' && ai.familyPicks(demo, 'woody').map((p) => p.id).join() === 'p-pf2');
+    ok('parfum en rupture : jamais propose, meme si sa fiche dit « intense »', ai.familyPicks(demo, 'intense').length === 0 && !ai.perfumesInStock(demo).some((p) => p.id === 'p-pf4'));
+    ok('parfums en stock : seulement les parfums, du plus recent au plus ancien', ai.perfumesInStock(demo).every((p) => ['p-pf1', 'p-pf2', 'p-pf3'].includes(p.id)) && ai.perfumesInStock(demo).length === 3);
+
+    // --- articles similaires et autres articles de la categorie
+    ok('modeles similaires : meme categorie, en stock, sans l\'article lui-meme, les plus proches en prix d\'abord', ai.similarProducts(demo, sandale).map((p) => p.id).join() === 'p-shoe2,p-shoe3', ai.similarProducts(demo, sandale).map((p) => p.id));
+    ok('modeles similaires : un article en rupture n\'est jamais propose', !ai.similarProducts(demo, sandale, 10).some((p) => p.id === 'p-shoe4'));
+    ok('modeles similaires : aucun autre dans la categorie = liste vide (Zara le dit)', ai.similarProducts(demo, montre).length === 0 && ai.similarProducts(demo, chemise).length === 0);
+    ok('autres articles de la categorie : sans ceux deja regardes', ai.moreInCategory(demo, 'chaussures', ['p-shoe']).map((p) => p.id).sort().join() === 'p-shoe2,p-shoe3' && ai.moreInCategory(demo, 'chaussures', ['p-shoe', 'p-shoe2', 'p-shoe3']).length === 0 && ai.moreInCategory(demo, 'inconnu', []).length === 0);
+    const av = ai.availability(demo);
+    ok('disponibilite : article en stock oui, en rupture ou inconnu non ; categorie avec d\'autres articles a montrer', av.available('p-shoe') && !av.available('p-shoe4') && !av.available('nope') && av.categoryHasMore('chaussures', ['p-shoe']) && !av.categoryHasMore('chaussures', ['p-shoe', 'p-shoe2', 'p-shoe3']) && !av.categoryHasMore('montres', ['p-watch']));
+
+    // --- le choix de la suggestion tient compte de ce que la boutique peut vraiment proposer
+    const T0 = Date.UTC(2026, 9, 18, 8, 0, 0), MIN = 60000;
+    const shoeMeta = { id: 'p-shoe4', name: 'Sandale rupture', categoryId: 'c1', categorySlug: 'chaussures', categoryName: 'Chaussures' };
+    const meta2 = { id: 'p-shoe', name: 'Sandale cuir', categoryId: 'c1', categorySlug: 'chaussures', categoryName: 'Chaussures' };
+    const otherMeta = { id: 'p-shirt', name: 'Chemise bleue', categoryId: 'c2', categorySlug: 'vetements', categoryName: 'Vêtements' };
+    const seenTwice = (m: typeof shoeMeta) => { let p = bi.emptyProfile('v', T0); p = bi.applyProductView(p, m, T0).profile; p = bi.applyProductView(p, otherMeta, T0 + MIN).profile; return bi.applyProductView(p, m, T0 + 3 * MIN).profile; };
+    ok('suggestion : l\'article qui revient est EN RUPTURE -> on ne le propose pas', bi.pickSuggestion(seenTwice(shoeMeta), { now: T0 + 5 * MIN, allowed: true, ...av }) === null);
+    ok('...mais sans verification du stock (ancien comportement), il serait propose', bi.pickSuggestion(seenTwice(shoeMeta), { now: T0 + 5 * MIN, allowed: true })?.productId === 'p-shoe4');
+    const pick = bi.pickSuggestion(seenTwice(meta2), { now: T0 + 5 * MIN, allowed: true, ...av });
+    ok('suggestion : l\'article qui revient est en stock -> propose', pick?.productId === 'p-shoe' && pick.type === 'shoes', pick);
+    let cat3 = bi.emptyProfile('v', T0);
+    for (const [i, id] of ['p-shoe', 'p-shoe2', 'p-shoe3'].entries()) cat3 = bi.applyProductView(cat3, { id, name: `Sandale ${i}`, categorySlug: 'chaussures', categoryName: 'Chaussures' }, T0 + i * MIN).profile;
+    ok('suggestion de categorie : tous les articles de la categorie ont deja ete vus -> rien a montrer, donc pas de suggestion', bi.pickSuggestion(cat3, { now: T0 + 6 * MIN, allowed: true, ...av }) === null && bi.pickSuggestion(cat3, { now: T0 + 6 * MIN, allowed: true })?.kind === 'category_browse');
+
+    // --- les messages (textes de l'exemple du patron) et leurs boutons
+    const sug = (over: Partial<bi.Suggestion>): bi.Suggestion => ({ kind: 'product_revisit', key: 'product:p-shoe', productId: 'p-shoe', categoryKey: 'chaussures', type: 'shoes', level: 'eleve', ...over });
+    const shoes = ai.planSuggestion(sug({}), demo, 'fr');
+    ok('chaussures : le message exact du patron, avec « Voir les tailles », « Modeles similaires », « Non merci »', shoes?.text === '😊 Cette paire semble vous intéresser ! Voulez-vous revoir les tailles disponibles ou découvrir des modèles similaires ?' && shoes.chips.map((c) => c.op).join() === 'sizes,similar,no', shoes);
+    const cloth = ai.planSuggestion(sug({ kind: 'variants', key: 'product:p-shirt', productId: 'p-shirt', type: 'clothing' }), demo, 'fr');
+    ok('vetement : « Ce modele vous plait ? 👕 Je peux vous presenter les couleurs et les tailles disponibles. » avec le bouton couleurs et tailles', cloth?.text === 'Ce modèle vous plaît ? 👕 Je peux vous présenter les couleurs et les tailles disponibles.' && cloth.chips.map((c) => c.op).join() === 'colors,similar,no', cloth);
+    const perf = ai.planSuggestion(sug({ kind: 'perfume_browse', key: 'cat:parfum', productId: null, categoryKey: 'parfum', type: 'perfume' }), demo, 'fr');
+    ok('plusieurs parfums : le message du patron et les 4 familles (fraiche, boisee, sucree, intense) + « Non merci »', perf?.text === '🥰 Vous découvrez plusieurs parfums. Préférez-vous une fragrance fraîche, boisée, sucrée ou intense ? Je peux vous aider à choisir.' && perf.chips.map((c) => `${c.op}:${c.arg}`).join() === 'family:fresh,family:woody,family:sweet,family:intense,no:', perf);
+    const catPlan = ai.planSuggestion(sug({ kind: 'category_browse', key: 'cat:chaussures', productId: null, categoryKey: 'chaussures', type: 'shoes' }), demo, 'fr');
+    ok('categorie : « J\'ai quelques suggestions qui pourraient vous plaire ! 🛍️ Voulez-vous voir d\'autres articles dans cette categorie ? »', catPlan?.text === 'J’ai quelques suggestions qui pourraient vous plaire ! 🛍️ Voulez-vous voir d’autres articles dans cette catégorie ?' && catPlan.chips.map((c) => `${c.op}:${c.arg}`).join() === 'more:chaussures,no:', catPlan);
+    const perfOne = ai.planSuggestion(sug({ key: 'product:p-pf1', productId: 'p-pf1', type: 'perfume', categoryKey: 'parfum' }), demo, 'fr');
+    ok('un parfum qui revient : proposer des parfums du meme genre', !!perfOne && /parfum/i.test(perfOne.text) && perfOne.chips.map((c) => c.op).join() === 'similar,no');
+    const watch = ai.planSuggestion(sug({ key: 'product:p-watch', productId: 'p-watch', type: 'other', categoryKey: 'montres' }), demo, 'fr');
+    ok('autre article sans tailles ni couleurs : seulement « modeles similaires » et « Non merci » (rien d\'invente)', !!watch && watch.chips.map((c) => c.op).join() === 'similar,no');
+    ok('article sans taille : pas de bouton « Voir les tailles »', ai.planSuggestion(sug({ key: 'product:p-watch', productId: 'p-watch', type: 'shoes' }), demo, 'fr')?.chips.map((c) => c.op).join() === 'similar,no');
+    ok('article en rupture, inconnu ou sans produit : aucun message', ai.planSuggestion(sug({ key: 'product:p-shoe4', productId: 'p-shoe4' }), demo, 'fr') === null && ai.planSuggestion(sug({ productId: 'inconnu' }), demo, 'fr') === null && ai.planSuggestion(sug({ productId: null }), demo, 'fr') === null);
+    ok('aucun parfum en stock : pas de suggestion « parfums »', ai.planSuggestion(sug({ kind: 'perfume_browse', productId: null, type: 'perfume' }), [sandale], 'fr') === null);
+    const arShoes = ai.planSuggestion(sug({}), demo, 'ar');
+    ok('arabe : le message et les boutons sont en arabe', !!arShoes && l.hasArabic(arShoes.text) && arShoes.chips.every((c) => l.hasArabic(c.label)), arShoes);
+    ok('aucun message de suggestion ne parle de suivi, de donnees ou de « je vous observe » (rien d\'alarmant)', [shoes, cloth, perf, catPlan, perfOne, watch, arShoes].every((x) => !!x && !/suivi|surveill|observ|donn[ée]es|trac|متابع|مراقب|تتبع/i.test(x.text)));
+
+    // --- les textes du suivi : verite, pas d'alarme
+    const tf = tx.texts('fr'), ta = tx.texts('ar');
+    ok('textes de suivi : le francais et l\'arabe disent les memes durees (90 jours)', /90/.test(tf.tracking.about) && /90/.test(ta.tracking.about));
+    ok('texte « ce qui est retenu » : sans nom ni telephone, pour mieux conseiller, 90 jours, refus possible', /sans votre nom ni votre téléphone/.test(tf.tracking.about) && /mieux vous conseiller/.test(tf.tracking.about) && /90 jours/.test(tf.tracking.about) && /ne me suis plus/.test(tf.tracking.about));
+    ok('suivi desactive : Zara dit franchement qu\'elle ne sait rien, sans rien mettre en avant', /désactivé/.test(tf.history.denied) && /ne retiens pas/.test(tf.history.denied) && /ne sais/.test(tf.tracking.aboutDenied) && !/me suivre|ne me suis plus/.test(tf.history.denied + tf.tracking.aboutDenied + tf.history.signal + tf.tracking.aboutSignal));
+    ok('signal « Ne pas me suivre » du navigateur : Zara dit qu\'elle le respecte', /navigateur/.test(tf.history.signal) && /respecte/.test(tf.history.signal) && /navigateur/.test(tf.tracking.aboutSignal));
+    ok('« ne me suis plus » : confirme l\'arret ET l\'effacement', /ne retiens plus/.test(tf.tracking.stopped) && /effacé/.test(tf.tracking.stopped));
+    ok('aucune donnee : Zara ne pretend rien savoir', /Je n’ai encore noté aucun article/.test(tf.history.none));
+    ok('nombre de fois (arabe) : deux, de trois a dix, plus', ta.history.times(2) === 'مرتان' && ta.history.times(3) === '3 مرات' && ta.history.times(11) === '11 مرة' && tf.history.times(3) === '3 fois');
+    ok('reponses sur les tailles et les couleurs : seulement ce que la fiche propose (jamais « stock par taille »)', tf.interest.sizesReply('Sandale', ['40', '41']) === 'Voici les tailles proposées pour « Sandale » : 40, 41 😊 Touchez le bouton + de la fiche pour l’ajouter à votre panier.' && !/stock/i.test(tf.interest.sizesReply('Sandale', ['40'])) && tf.interest.colorsReply('Sandale', ['Noir'], []) === 'Voici ce que propose « Sandale » 😊\n🎨 Couleurs : Noir');
+    ok('famille introuvable : Zara dit qu\'elle prefere ne rien inventer', /ne rien inventer/.test(tf.interest.familyNone('fraîche')) && /ألا أخترع/.test(ta.interest.familyNone('منعشة')));
+
+    // --- sur le VRAI catalogue
+    const realPerf = ai.perfumesInStock(catalog);
+    const counts = Object.fromEntries(ai.FAMILIES.map((f) => [f, ai.familyPicks(catalog, f, 99).length]));
+    console.log('info  vrai catalogue :', realPerf.length, 'parfums en stock ; annonces par leur fiche :', JSON.stringify(counts));
+    ok('vrai catalogue : chaque parfum propose pour une famille est en stock, avec un prix, et sa fiche cite bien la famille', ai.FAMILIES.every((f) => ai.familyPicks(catalog, f, 99).every((p) => p.stock > 0 && p.price > 0 && ai.matchesFamily(p, f))));
+    const realShoe = catalog.find((p) => p.stock > 0 && p.price > 0 && b.normalize(p.category).includes('chaussure'));
+    if (realShoe) {
+      const sim = ai.similarProducts(catalog, realShoe, 4);
+      ok(`vrai catalogue : modeles similaires a « ${realShoe.name} » -> ${sim.length} articles de la meme categorie, en stock`, sim.every((p) => p.categorySlug === realShoe.categorySlug && p.stock > 0 && p.id !== realShoe.id));
+      const planReal = ai.planSuggestion({ kind: 'product_revisit', key: `product:${realShoe.id}`, productId: realShoe.id, categoryKey: realShoe.categorySlug, type: bi.productTypeOf(realShoe.name, realShoe.categorySlug, realShoe.category), level: 'eleve' }, catalog, 'fr');
+      ok('vrai catalogue : une suggestion pour une vraie chaussure en stock existe et propose les tailles reelles', !!planReal && planReal.chips.some((c) => c.op === 'sizes') === realShoe.sizes.length > 0, planReal && planReal.chips.map((c) => c.op));
+    }
+  }
+
+  // ---- Tableau de suivi (administrateur) : lecture sure de la reponse de la base, textes lisibles ----
+  console.log('\n== tableau de suivi : lecture de la base, filtres, durees');
+  {
+    const raw = {
+      rows: [
+        { visitor_ref: 'V-a1b2c3', account_ref: 'C-12345678', session_id: 's1', product_id: 'p1', product_name: 'Sandale', category_name: 'Chaussures', views: 4, sessions: 2, active_seconds: 185, last_duration_seconds: 62, last_viewed_at: '2026-10-18T08:00:00Z', variant_clicks: 7, cart_status: 'in_cart', order_status: 'paid', interest: 'eleve', last_suggestion_kind: 'product_revisit', last_suggestion_at: '2026-10-18T08:05:00Z' },
+        { visitor_ref: 'V-0a0b0c', product_id: 'p3', product_name: 'Chemise', views: 1, interest: 'leger' },
+      ],
+      top_products: [{ product_id: 'p1', product_name: 'Sandale', category_name: 'Chaussures', views: 9, active_seconds: 420, visitors: 3, high_interest: 2 }],
+      top_categories: [{ category: 'Chaussures', views: 11, visitors: 4 }, { views: 2 }],
+      top_searches: [{ query: 'sandales', n: 6 }, { query: '', n: 3 }],
+      levels: { eleve: 1, moyen: 0, leger: 2 },
+      totals: { visitors: 3, rows: 2 },
+    };
+    const ov = bo.buildBrowsingOverview(raw);
+    ok('lecture : la ligne complete est bien reprise (champs de la base -> champs de l\'ecran)', ov.rows[0].visitorRef === 'V-a1b2c3' && ov.rows[0].accountRef === 'C-12345678' && ov.rows[0].productName === 'Sandale' && ov.rows[0].activeSeconds === 185 && ov.rows[0].lastDurationSeconds === 62 && ov.rows[0].variantClicks === 7 && ov.rows[0].cartStatus === 'in_cart' && ov.rows[0].orderStatus === 'paid' && ov.rows[0].interest === 'eleve' && ov.rows[0].lastSuggestionKind === 'product_revisit', ov.rows[0]);
+    ok('lecture : une ligne incomplete recoit des valeurs sures (0, « pas au panier », interet leger, aucune suggestion)', ov.rows[1].views === 1 && ov.rows[1].sessions === 0 && ov.rows[1].cartStatus === 'none' && ov.rows[1].accountRef === null && ov.rows[1].orderStatus === null && ov.rows[1].lastSuggestionKind === null && ov.rows[1].interest === 'leger');
+    ok('lecture : classements, niveaux et totaux', ov.topProducts[0].highInterest === 2 && ov.topCategories[0].category === 'Chaussures' && ov.topCategories[1].category === 'Sans catégorie' && ov.topSearches.length === 1 && ov.topSearches[0].query === 'sandales' && ov.levels.eleve === 1 && ov.levels.leger === 2 && ov.totals.visitors === 3);
+    const junk = bo.buildBrowsingOverview({ rows: [{ visitor_ref: null, product_id: 5, views: 'abc', interest: 'bizarre', cart_status: 'x', last_suggestion_kind: 'inconnu' }, null, 'texte'], levels: 'x', totals: null, top_products: 'x' });
+    ok('donnees abimees (nombres illisibles, valeurs inconnues, lignes vides) : jamais d\'erreur, valeurs sures', junk.rows.length === 1 && junk.rows[0].views === 0 && junk.rows[0].interest === 'leger' && junk.rows[0].cartStatus === 'none' && junk.rows[0].lastSuggestionKind === null && junk.rows[0].productName === 'Article sans nom' && junk.totals.visitors === 0 && junk.topProducts.length === 0);
+    ok('reponse vide, nulle ou inattendue : tout est vide, rien ne casse', [null, undefined, 5, 'x', [], {}].every((x) => { const e = bo.buildBrowsingOverview(x); return e.rows.length === 0 && e.levels.eleve === 0 && e.totals.rows === 0; }));
+    ok('filtre par niveau d\'interet', bo.filterRows(ov.rows, 'all').length === 2 && bo.filterRows(ov.rows, 'eleve').length === 1 && bo.filterRows(ov.rows, 'moyen').length === 0 && bo.filterRows(ov.rows, 'leger')[0].productId === 'p3');
+    ok('durees : secondes, minutes, heures', [[8, '8 s'], [59, '59 s'], [60, '1 min 00 s'], [75, '1 min 15 s'], [185, '3 min 05 s'], [3600, '1 h 00 min'], [3725, '1 h 02 min'], [-5, '0 s'], [8.6, '9 s']].every(([n, txt]) => bo.formatSeconds(n as number) === txt), [8, 75, 185, 3600].map((n) => bo.formatSeconds(n)));
+    const NOW = Date.UTC(2026, 9, 18, 12, 0, 0);
+    const ago = (ms: number) => bo.formatAgo(new Date(NOW - ms).toISOString(), NOW);
+    ok('« il y a ... » : a l\'instant, minutes, heures, jours, date au-dela de 30 jours, vide si inconnu', ago(20000) === 'à l’instant' && ago(5 * 60000) === 'il y a 5 min' && ago(3 * 3600000) === 'il y a 3 h' && ago(2 * 86400000) === 'il y a 2 j' && /2026|2025/.test(ago(60 * 86400000)) && bo.formatAgo(null, NOW) === '—' && bo.formatAgo('pas une date', NOW) === '—', [ago(20000), ago(5 * 60000), ago(3 * 3600000), ago(2 * 86400000), ago(60 * 86400000)]);
+    ok('libelles lisibles : panier, commande, suggestions, niveaux (sans jargon)', bo.CART_LABELS.in_cart === 'Au panier' && bo.CART_LABELS.purchased === 'Acheté' && bo.ORDER_STATUS_LABELS.delivered === 'Livrée' && bo.SUGGESTION_LABELS.perfume_browse === 'Familles de parfums' && bi.INTEREST_LABELS.eleve === 'Élevé' && bo.INTEREST_FILTERS.join() === 'all,eleve,moyen,leger');
   }
 
   console.log('\n' + (failures === 0 ? 'TOUT EST BON' : `${failures} ECHEC(S)`));

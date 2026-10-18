@@ -325,6 +325,9 @@ export function AssistantPanel() {
       case 'policy':
         go(() => navigationRef.navigate('ReturnPolicy'));
         return;
+      case 'privacy':
+        go(() => navigationRef.navigate('PrivacyPolicy'));
+        return;
       default:
         choose(action);
     }

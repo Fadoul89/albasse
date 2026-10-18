@@ -2,6 +2,7 @@ import { supabase } from './supabase';
 import { buildProduct, type CatalogProduct, type City } from './assistantBrain';
 import { currentDevice, type DeviceLabel } from './assistantAttribution';
 import { buildZaraStats, classifyStatsError, periodBounds, type StatsPeriod, type StatsFailure, type ZaraStats } from './assistantStats';
+import { buildBrowsingOverview, type BrowsingOverview } from './browsingOverview';
 import type { Product } from '../types';
 
 // Donnees publiques lues pour Zara (catalogue, villes, categories, infos de la boutique), gardees
@@ -211,6 +212,20 @@ export async function fetchAssistantStats(period: StatsPeriod): Promise<Assistan
     const { data, error, status } = await withTimeout(Promise.resolve(supabase.rpc('assistant_stats', { p_since: since, p_until: until })), 15000);
     if (error) return { ok: false, reason: classifyStatsError({ code: (error as { code?: string }).code, message: error.message, status }), message: error.message };
     return { ok: true, stats: buildZaraStats(data as Parameters<typeof buildZaraStats>[0]) };
+  } catch (e) {
+    return { ok: false, reason: 'error', message: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+// Le tableau de suivi de navigation (administrateur seulement : la base refuse les autres).
+export type BrowsingOverviewResult = { ok: true; overview: BrowsingOverview } | { ok: false; reason: StatsFailure; message: string };
+
+export async function fetchBrowsingOverview(period: StatsPeriod): Promise<BrowsingOverviewResult> {
+  try {
+    const { since } = periodBounds(period);
+    const { data, error, status } = await withTimeout(Promise.resolve(supabase.rpc('browsing_overview', { p_since: since, p_limit: 300 })), 15000);
+    if (error) return { ok: false, reason: classifyStatsError({ code: (error as { code?: string }).code, message: error.message, status }), message: error.message };
+    return { ok: true, overview: buildBrowsingOverview(data) };
   } catch (e) {
     return { ok: false, reason: 'error', message: e instanceof Error ? e.message : String(e) };
   }

@@ -116,6 +116,7 @@ export interface Texts {
     installApp: string;
     installHelp: string;
     alreadyInstalled: string;
+    privacy: string;
     tutorial: string;
     notNow: string;
     idk: string;
@@ -299,6 +300,51 @@ export interface Texts {
     androidManual: string;
     desktop: string;
   };
+  // suggestions discrètes d'après les articles regardés (jamais à chaque clic, jamais sans raison vraie)
+  interest: {
+    shoes: string;
+    clothing: string;
+    perfumeOne: string;
+    perfumeBrowse: string;
+    other: string;
+    category: string;
+    chip: { sizes: string; colors: string; similar: string; similarPerfume: string; more: string; noThanks: string; family: Record<'fresh' | 'woody' | 'sweet' | 'intense', string> };
+    familyLabel: Record<'fresh' | 'woody' | 'sweet' | 'intense', string>;
+    sizesReply(name: string, sizes: string[]): string;
+    noSizes(name: string): string;
+    colorsReply(name: string, colors: string[], sizes: string[]): string;
+    similarIntro: string;
+    similarNone: string;
+    familyIntro(label: string): string;
+    familyNone(label: string): string;
+    moreIntro(category: string): string;
+    moreNone: string;
+    no: string;
+    gone: string;
+  };
+  // « qu'est-ce que j'ai regardé ? » : réponses vraies, et honnêtes quand Zara ne sait pas
+  history: {
+    denied: string;
+    signal: string;
+    none: string;
+    unavailable: string;
+    intro: string;
+    times(n: number): string;
+    repeated(list: string): string;
+    categories(list: string): string;
+    outro: string;
+  };
+  // le suivi de navigation : ce qui est retenu, l'arrêter, le reprendre
+  tracking: {
+    about: string;
+    aboutDenied: string;
+    aboutSignal: string;
+    stopped: string;
+    stoppedAlready: string;
+    resumed: string;
+    resumedAlready: string;
+    unavailable: string;
+  };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -384,6 +430,7 @@ const FR: Texts = {
     installApp: '📲 Installer Albasse Shopping',
     installHelp: '📲 Voir comment installer',
     alreadyInstalled: '✅ Oui, déjà installée',
+    privacy: '🔒 Confidentialité',
     tutorial: '🎬 Voir le tutoriel',
     notNow: 'Plus tard',
     idk: '🤷 Je ne sais pas',
@@ -703,6 +750,58 @@ const FR: Texts = {
     androidManual: 'Pour installer : touchez les trois points (⋮) en haut à droite de Chrome, puis « Installer l’application » ou « Ajouter à l’écran d’accueil » (selon votre version).',
     desktop: 'Pour installer : cliquez sur l’icône d’installation ⊕ dans la barre d’adresse de Chrome, ou sur les trois points (⋮) puis « Installer Albasse Shopping ».',
   },
+  interest: {
+    shoes: '😊 Cette paire semble vous intéresser ! Voulez-vous revoir les tailles disponibles ou découvrir des modèles similaires ?',
+    clothing: 'Ce modèle vous plaît ? 👕 Je peux vous présenter les couleurs et les tailles disponibles.',
+    perfumeOne: 'Ce parfum semble vous intéresser ! 🥰 Voulez-vous découvrir des parfums du même genre ?',
+    perfumeBrowse: '🥰 Vous découvrez plusieurs parfums. Préférez-vous une fragrance fraîche, boisée, sucrée ou intense ? Je peux vous aider à choisir.',
+    other: 'Cet article semble vous intéresser ! 😊 Voulez-vous voir ses détails (tailles, couleurs) ou des modèles similaires ?',
+    category: 'J’ai quelques suggestions qui pourraient vous plaire ! 🛍️ Voulez-vous voir d’autres articles dans cette catégorie ?',
+    chip: {
+      sizes: '📏 Voir les tailles',
+      colors: '🎨 Couleurs et tailles',
+      similar: '✨ Modèles similaires',
+      similarPerfume: '✨ Parfums du même genre',
+      more: '🛍️ Voir d’autres articles',
+      noThanks: 'Non merci',
+      family: { fresh: '🌿 Fraîche', woody: '🌳 Boisée', sweet: '🍯 Sucrée', intense: '🔥 Intense' },
+    },
+    familyLabel: { fresh: 'fraîche', woody: 'boisée', sweet: 'sucrée', intense: 'intense' },
+    sizesReply: (name, sizes) => `Voici les tailles proposées pour « ${name} » : ${sizes.join(', ')} 😊 Touchez le bouton + de la fiche pour l’ajouter à votre panier.`,
+    noSizes: (name) => `« ${name} » n’a pas de taille à choisir 😊`,
+    colorsReply: (name, colors, sizes) =>
+      [`Voici ce que propose « ${name} » 😊`, colors.length ? `🎨 Couleurs : ${colors.join(', ')}` : '', sizes.length ? `📏 Tailles proposées : ${sizes.join(', ')}` : ''].filter(Boolean).join('\n'),
+    similarIntro: 'Voici des modèles similaires, disponibles en ce moment 😊',
+    similarNone: 'Je n’ai pas d’autre modèle disponible dans cette catégorie pour le moment 😊',
+    familyIntro: (label) => `Voici les parfums dont la fiche annonce une fragrance ${label} 😊`,
+    familyNone: (label) => `Je ne trouve pas de parfum « ${label} » indiqué sur nos fiches, et je préfère ne rien inventer 😊 Voici les parfums disponibles en ce moment :`,
+    moreIntro: (category) => `Voici d’autres articles de la catégorie ${category} 😊`,
+    moreNone: 'Vous avez déjà vu tous les articles disponibles de cette catégorie 😊',
+    no: 'D’accord, pas de souci 😊 Je reste là si vous avez besoin d’aide, sans insister.',
+    gone: 'Cet article n’est plus disponible pour le moment 😕',
+  },
+  history: {
+    denied: 'Le suivi est désactivé sur cet appareil : je ne retiens pas les articles regardés, donc je ne peux pas vous dire ce que vous avez vu 😊',
+    signal: 'Votre navigateur demande de ne pas être suivi, et je respecte ce choix : je ne retiens pas les articles regardés 😊',
+    none: 'Je n’ai encore noté aucun article regardé sur cet appareil 😊 Dès que vous en regarderez, je pourrai vous les rappeler.',
+    unavailable: 'Je ne peux pas voir les articles que vous avez regardés depuis cet écran pour le moment 😊',
+    intro: 'Voici les derniers articles que vous avez regardés sur cet appareil 😊',
+    times: (n) => `${n} fois`,
+    repeated: (list) => `Regardés plusieurs fois : ${list}.`,
+    categories: (list) => `Catégories qui semblent vous intéresser : ${list}.`,
+    outro: 'Voulez-vous que je vous aide à choisir ? 😊',
+  },
+  tracking: {
+    about:
+      'Voici ce que fait la boutique 😊 Sur cet appareil, elle retient seulement les articles que vous regardez (sans votre nom ni votre téléphone) pour que je puisse mieux vous conseiller. Ces informations sont gardées 90 jours, puis effacées. Vous pouvez refuser quand vous voulez : écrivez-moi « ne me suis plus ».',
+    aboutDenied: 'Le suivi est désactivé sur cet appareil : la boutique ne retient pas les articles que vous regardez, et je ne sais donc rien à ce sujet 😊',
+    aboutSignal: 'Votre navigateur demande de ne pas être suivi, et je respecte ce choix : rien n’est retenu sur les articles que vous regardez 😊',
+    stopped: 'C’est noté 😊 Je ne retiens plus les articles que vous regardez, et ce qui était retenu sur cet appareil est effacé.',
+    stoppedAlready: 'C’est déjà le cas 😊 Le suivi est refusé : rien n’est retenu.',
+    resumed: 'Avec plaisir 😊 À partir de maintenant, je retiens les articles que vous regardez pour mieux vous conseiller (rien de personnel). Écrivez-moi « ne me suis plus » quand vous voulez arrêter.',
+    resumedAlready: 'Le suivi est déjà actif sur cet appareil 😊',
+    unavailable: 'Le suivi n’existe que sur le site web : ici, je ne retiens rien 😊',
+  },
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -792,6 +891,7 @@ const AR: Texts = {
     installApp: '📲 تثبيت Albasse Shopping',
     installHelp: '📲 شاهد كيفية التثبيت',
     alreadyInstalled: '✅ نعم، مثبّت بالفعل',
+    privacy: '🔒 الخصوصية',
     tutorial: '🎬 عرض الشرح',
     notNow: 'لاحقا',
     idk: '🤷 لا أعرف',
@@ -1109,6 +1209,58 @@ const AR: Texts = {
       `${safari ? '' : '⚠️ افتح أولا albasseshopping.com في متصفح Safari (التثبيت لا يعمل من هذا المتصفح).\n'}على الآيفون:\n1. اضغط «مشاركة» (المربع مع السهم) أسفل الشاشة\n2. مرر لأسفل واضغط «إضافة إلى الشاشة الرئيسية»\n3. اضغط «إضافة»`,
     androidManual: 'للتثبيت: اضغط على النقاط الثلاث (⋮) أعلى يمين Chrome ثم «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية» حسب إصدارك.',
     desktop: 'للتثبيت: اضغط على أيقونة التثبيت ⊕ في شريط عنوان Chrome، أو على النقاط الثلاث (⋮) ثم «تثبيت Albasse Shopping».',
+  },
+  interest: {
+    shoes: '😊 يبدو أن هذا الحذاء أعجبك! هل تريد مراجعة المقاسات المعروضة أو اكتشاف موديلات مشابهة؟',
+    clothing: 'هل أعجبك هذا الموديل؟ 👕 يمكنني أن أعرض لك الألوان والمقاسات المتوفرة.',
+    perfumeOne: 'يبدو أن هذا العطر أعجبك! 🥰 هل تريد اكتشاف عطور من النوع نفسه؟',
+    perfumeBrowse: '🥰 أنت تكتشف عدة عطور. هل تفضل رائحة منعشة أم خشبية أم حلوة أم قوية؟ يمكنني مساعدتك في الاختيار.',
+    other: 'يبدو أن هذا المنتج أعجبك! 😊 هل تريد رؤية تفاصيله (المقاسات والألوان) أو موديلات مشابهة؟',
+    category: 'عندي بعض الاقتراحات التي قد تعجبك! 🛍️ هل تريد رؤية منتجات أخرى في هذا القسم؟',
+    chip: {
+      sizes: '📏 عرض المقاسات',
+      colors: '🎨 الألوان والمقاسات',
+      similar: '✨ موديلات مشابهة',
+      similarPerfume: '✨ عطور من النوع نفسه',
+      more: '🛍️ منتجات أخرى',
+      noThanks: 'لا شكراً',
+      family: { fresh: '🌿 منعشة', woody: '🌳 خشبية', sweet: '🍯 حلوة', intense: '🔥 قوية' },
+    },
+    familyLabel: { fresh: 'منعشة', woody: 'خشبية', sweet: 'حلوة', intense: 'قوية' },
+    sizesReply: (name, sizes) => `هذه المقاسات المعروضة لـ «${name}»: ${sizes.join('، ')} 😊 المس زر + في البطاقة لإضافته إلى السلة.`,
+    noSizes: (name) => `«${name}» ليس له مقاسات للاختيار 😊`,
+    colorsReply: (name, colors, sizes) =>
+      [`هذا ما يعرضه «${name}» 😊`, colors.length ? `🎨 الألوان: ${colors.join('، ')}` : '', sizes.length ? `📏 المقاسات المعروضة: ${sizes.join('، ')}` : ''].filter(Boolean).join('\n'),
+    similarIntro: 'هذه موديلات مشابهة متوفرة الآن 😊',
+    similarNone: 'لا يوجد موديل آخر متوفر في هذا القسم الآن 😊',
+    familyIntro: (label) => `هذه العطور التي تذكر بطاقتها رائحة ${label} 😊`,
+    familyNone: (label) => `لا أجد عطرا بوصف «${label}» في بطاقات منتجاتنا، وأفضّل ألا أخترع شيئا 😊 هذه العطور المتوفرة الآن:`,
+    moreIntro: (category) => `هذه منتجات أخرى من قسم ${category} 😊`,
+    moreNone: 'لقد شاهدت كل المنتجات المتوفرة في هذا القسم 😊',
+    no: 'حسنا، لا مشكلة 😊 أنا هنا إذا احتجت إلى مساعدة، دون إلحاح.',
+    gone: 'هذا المنتج غير متوفر حاليا 😕',
+  },
+  history: {
+    denied: 'المتابعة متوقفة على هذا الجهاز: لا أحتفظ بالمنتجات التي شوهدت، لذلك لا أستطيع أن أخبرك بما شاهدته 😊',
+    signal: 'متصفحك يطلب عدم التتبع، وأنا أحترم ذلك: لا أحتفظ بالمنتجات التي شوهدت 😊',
+    none: 'لم أسجل بعد أي منتج شاهدته على هذا الجهاز 😊 عندما تشاهد منتجات سأتمكن من تذكيرك بها.',
+    unavailable: 'لا أستطيع رؤية المنتجات التي شاهدتها من هذه الشاشة حاليا 😊',
+    intro: 'هذه آخر المنتجات التي شاهدتها على هذا الجهاز 😊',
+    times: (n) => (n === 2 ? 'مرتان' : n >= 3 && n <= 10 ? `${n} مرات` : `${n} مرة`),
+    repeated: (list) => `منتجات شاهدتها أكثر من مرة: ${list}.`,
+    categories: (list) => `الأقسام التي يبدو أنها تهمك: ${list}.`,
+    outro: 'هل تريد أن أساعدك في الاختيار؟ 😊',
+  },
+  tracking: {
+    about:
+      'إليك ما يحدث 😊 على هذا الجهاز يحتفظ المتجر فقط بالمنتجات التي تشاهدها (بدون اسمك أو هاتفك) لأتمكن من نصحك بشكل أفضل. تُحفظ هذه المعلومات 90 يوما ثم تُمسح. يمكنك الرفض متى شئت: اكتب لي «لا تتبعني».',
+    aboutDenied: 'المتابعة متوقفة على هذا الجهاز: المتجر لا يحتفظ بالمنتجات التي تشاهدها، فلا أعرف شيئا عنها 😊',
+    aboutSignal: 'متصفحك يطلب عدم التتبع، وأنا أحترم ذلك: لا شيء محفوظ عن المنتجات التي تشاهدها 😊',
+    stopped: 'تم 😊 لن أحتفظ بعد الآن بالمنتجات التي تشاهدها، وما كان محفوظا على هذا الجهاز تم مسحه.',
+    stoppedAlready: 'هذا هو الحال بالفعل 😊 المتابعة مرفوضة ولا شيء محفوظ.',
+    resumed: 'بكل سرور 😊 من الآن سأحتفظ بالمنتجات التي تشاهدها لأنصحك بشكل أفضل (لا شيء شخصي). اكتب لي «لا تتبعني» متى أردت التوقف.',
+    resumedAlready: 'المتابعة مفعلة بالفعل على هذا الجهاز 😊',
+    unavailable: 'المتابعة موجودة فقط على موقع الويب: هنا لا أحتفظ بشيء 😊',
   },
 };
 

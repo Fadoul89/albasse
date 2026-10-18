@@ -11,6 +11,7 @@ import { Assistant } from '../components/Assistant';
 import { AppDownloadBanner } from '../components/AppDownloadBanner';
 import { trackPageView } from '../lib/analytics';
 import { startShortcutInstallTracking, trackAppInstallIfNeeded } from '../lib/appInstallTracking';
+import { initBrowsingTracker } from '../lib/browsingTracker';
 import { isIosDevice, isRunningAsInstalledPwa } from '../lib/pwaInstallPrompt';
 import { hasWebPushPermission, isWebPushSupported, subscribeToWebPush, syncWebPushSubscription } from '../lib/webPushSubscription';
 import { useAuthStore } from '../store/authStore';
@@ -35,6 +36,7 @@ import { AdminCustomerDetailScreen } from '../screens/admin/AdminCustomerDetailS
 import { AdminDashboardScreen } from '../screens/admin/AdminDashboardScreen';
 import { AdminSourcePerformanceScreen } from '../screens/admin/AdminSourcePerformanceScreen';
 import { AdminZaraStatsScreen } from '../screens/admin/AdminZaraStatsScreen';
+import { AdminBrowsingScreen } from '../screens/admin/AdminBrowsingScreen';
 import { AdminAbandonedCartsScreen } from '../screens/admin/AdminAbandonedCartsScreen';
 import { AdminNotificationsScreen } from '../screens/admin/AdminNotificationsScreen';
 import { AdminPromotionsScreen } from '../screens/admin/AdminPromotionsScreen';
@@ -92,6 +94,7 @@ const linking: LinkingOptions<RootStackParamList> = {
       AdminDashboard: 'admin/tableau-de-bord',
       AdminSourcePerformance: 'admin/performance-par-source',
       AdminZaraStats: 'admin/statistiques-zara',
+      AdminBrowsing: 'admin/suivi-navigation',
       AdminAbandonedCarts: 'admin/paniers-abandonnes',
       AdminNotifications: 'admin/notifications',
       AdminPromotions: 'admin/promotions',
@@ -154,6 +157,7 @@ export function RootNavigator() {
   useEffect(() => {
     trackAppInstallIfNeeded();
     startShortcutInstallTracking();
+    initBrowsingTracker();
     // Pour les visiteurs qui ont deja installe le raccourci (PWA) : on
     // propose l'activation des notifications a l'ouverture plutot que
     // d'attendre qu'ils reinstallent.
@@ -216,6 +220,7 @@ export function RootNavigator() {
             <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
             <Stack.Screen name="AdminSourcePerformance" component={AdminSourcePerformanceScreen} />
             <Stack.Screen name="AdminZaraStats" component={AdminZaraStatsScreen} />
+            <Stack.Screen name="AdminBrowsing" component={AdminBrowsingScreen} />
             <Stack.Screen name="AdminAbandonedCarts" component={AdminAbandonedCartsScreen} />
             <Stack.Screen name="AdminNotifications" component={AdminNotificationsScreen} />
             <Stack.Screen name="AdminPromotions" component={AdminPromotionsScreen} />

@@ -28,6 +28,7 @@ type AdminRoute = Extract<
   | 'AdminPromotions'
   | 'AdminSourcePerformance'
   | 'AdminZaraStats'
+  | 'AdminBrowsing'
   | 'AdminAbandonedCarts'
   | 'AdminStoreSettings'
   | 'AdminMessages'
@@ -49,6 +50,7 @@ const ADMIN_MENU_ITEMS: { icon: string; label: string; route: AdminRoute }[] = [
   { icon: '🎁', label: 'Promotions intelligentes', route: 'AdminPromotions' },
   { icon: '📡', label: 'Performance par source', route: 'AdminSourcePerformance' },
   { icon: '💬', label: 'Statistiques de Zara', route: 'AdminZaraStats' },
+  { icon: '🔎', label: 'Suivi de navigation', route: 'AdminBrowsing' },
   { icon: '🛒', label: 'Paniers abandonnés', route: 'AdminAbandonedCarts' },
   { icon: '📍', label: 'Informations de contact', route: 'AdminStoreSettings' },
   { icon: '✉️', label: 'Message à tous les clients', route: 'AdminMessages' },
