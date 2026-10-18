@@ -714,7 +714,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     check('la conversation reste ouverte et Zara confirme : article, nombre, total', (await panelOf(page).count()) === 1 && (await panelOf(page).getByText(new RegExp(`✅ « ${A.name.trim()} » ajouté au panier\\.\\nVotre panier : 1 article · ${String(A.price).replace(/\B(?=(\d{3})+(?!\d))/g, '\\s?')}`)).count()) >= 1 || (await panelOf(page).getByText(/Votre panier : 1 article/).count()) >= 1);
     const barTxt = await page.getByTestId('chat-cart-bar').innerText();
     check('compteur et total du panier mis a jour tout de suite (barre sous la conversation)', /1 article/.test(barTxt) && barAmount(barTxt) === Number(dbA.price), barTxt);
-    check('boutons apres l\'ajout : voir mon panier, commander, autres articles', (await chipLabels(page)).join('|') === '🛒 Voir mon panier|✅ Commander|🛍️ Autres articles', await chipLabels(page));
+    check('boutons apres l\'ajout : voir mon panier, commander, autres articles, emballage cadeau', (await chipLabels(page)).join('|') === '🛒 Voir mon panier|✅ Commander|🛍️ Autres articles|🎁 Emballage cadeau', await chipLabels(page));
+    check('apres l\'article choisi : Zara propose TOUJOURS l\'emballage cadeau (2 000 FCFA par commande, propose a la commande)', (await panelOf(page).getByText('🎁 Pour offrir : l’emballage cadeau est à 2 000 FCFA par commande (je vous le proposerai au moment de commander).').count()) >= 1);
     check('astuce du bouton + donnee une seule fois', (await panelOf(page).getByText(/Astuce : touchez \+ sur un article/).count()) === 1);
     await page.screenshot({ path: path.join(OUT, 'K2-ajoute.png') });
 
@@ -749,6 +750,11 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const itC = items.find((i) => i.product.id === C.id);
     check('apres la taille et la couleur : ajoute avec la bonne taille et la bonne couleur', !!itC && itC.size === '41' && itC.color === 'Blanc' && itC.quantity === 1, itC && [itC.size, itC.color]);
     check('la confirmation rappelle la variante : (Taille 41 · Blanc)', (await panelOf(page).getByText(/\(Taille 41 · Blanc\)/).count()) >= 1);
+    const nAdded = await panelOf(page).getByText(/ajouté au panier\./).count();
+    const nNudge = await panelOf(page).getByText(/Pour offrir : l’emballage cadeau est à 2\s000\sFCFA par commande/).count();
+    check('« toujours » : CHAQUE article ajoute dans le chat est suivi du rappel de l\'emballage cadeau (jamais un seul rappel pour toute la conversation)', nAdded >= 4 && nNudge === nAdded, [nAdded, nNudge]);
+    await tap(page, 'Emballage cadeau', /Emballage cadeau : pour 2\s000\sFCFA par commande/);
+    check('bouton « Emballage cadeau » : Zara explique, et ramene vers la commande (Commander, Voir mon panier, Menu)', (await chipLabels(page)).join('|') === '✅ Commander|🛒 Voir mon panier|🏠 Menu', await chipLabels(page));
     // annuler
     await cardFor(C).getByTestId('assistant-card-add').click();
     await waitText(page, /Quelle taille pour/);
@@ -1000,7 +1006,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await waitText(v.page, /ajouté au panier/);
       await waitText(v.page, /Avez-vous déjà installé l’application Albasse Shopping/);
       check('Android : apres le premier ajout au panier, Zara propose d\'installer (au bon moment)', true);
-      check('boutons : ceux du panier restent, puis installer + plus tard', (await chipLabels(v.page)).join('|') === '🛒 Voir mon panier|✅ Commander|🛍️ Autres articles|📲 Installer Albasse Shopping|✅ Oui, déjà installée|Plus tard', await chipLabels(v.page));
+      check('boutons : ceux du panier restent, puis installer + plus tard', (await chipLabels(v.page)).join('|') === '🛒 Voir mon panier|✅ Commander|🛍️ Autres articles|🎁 Emballage cadeau|📲 Installer Albasse Shopping|✅ Oui, déjà installée|Plus tard', await chipLabels(v.page));
       await chip(v.page, 'Plus tard').click();
       await waitText(v.page, /je ne vous le propose plus pour le moment/);
       await card.getByTestId('assistant-card-add').click();
@@ -2167,44 +2173,25 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.ctx.close();
     }
 
-    // --- U8. choix du visiteur : discret (page de confidentialite), signal « Ne pas me suivre » du navigateur
+    // --- U8. suivi 100 % automatique : aucun choix, aucune fenetre ; seul le signal « Ne pas me suivre » du navigateur est respecte
     {
       const r = await fresh();
       await openProduct(r);
       await sleepSec(1.5);
-      const rid = await ls(r.page, 'albasse_visitor_id');
-      check('le suivi est actif des la 1re fiche, sans rien demander (et sans aucune fenetre)', (await readProfile(r.page)) !== null && (await r.page.getByTestId('tracking-notice').count()) === 0);
+      check('le suivi est actif des la 1re fiche, tout seul : aucune fenetre, aucun bouton, aucune question', (await readProfile(r.page)) !== null && (await r.page.getByTestId('tracking-notice').count()) === 0 && !/Refuser|Autoriser|suivi/i.test(await r.page.locator('body').innerText()));
       await r.page.goto(`${base}/confidentialite`, { waitUntil: 'load' });
-      await r.page.getByTestId('privacy-tracking-toggle').waitFor({ timeout: 25000 });
-      check('page de confidentialite : « Le suivi ... est actif » avec le bouton « Refuser le suivi »', /est actif sur cet appareil/.test(await r.page.getByTestId('privacy-tracking-state').innerText()) && /Refuser le suivi/.test(await r.page.getByTestId('privacy-tracking-toggle').innerText()));
-      await r.page.screenshot({ path: path.join(OUT, 'U8-confidentialite-reglage.png') });
-      const callsBefore = r.browsingCalls.length;
-      await r.page.getByTestId('privacy-tracking-toggle').click();
-      await sleepSec(1);
-      check('« Refuser le suivi » : le profil du telephone est efface, le courrier en attente aussi, le choix est retenu', (await readProfile(r.page)) === null && (await readOutbox(r.page)) === null && JSON.parse(await ls(r.page, 'albasse_tracking_choice')).choice === 'denied');
-      check('« Refuser le suivi » : la base est priee d\'effacer ce qui existait deja (avec l\'identifiant anonyme du visiteur)', r.forgets.length === 1 && r.forgets[0].p_visitor_id === rid && /^[0-9a-f-]{36}$/.test(rid), r.forgets);
-      check('la page confirme : « desactive » et « efface »', /désactivé sur cet appareil/.test(await r.page.getByTestId('privacy-tracking-state').innerText()) && (await r.page.getByText(/ce qui était retenu sur cet appareil est effacé/).count()) === 1 && /Autoriser le suivi/.test(await r.page.getByTestId('privacy-tracking-toggle').innerText()));
-      await r.page.goto(`${base}/produit/${clarks.slug}`, { waitUntil: 'load' });
-      await sleepSec(5);
-      check('apres le refus : plus rien n\'est note, plus rien n\'est envoye', (await readProfile(r.page)) === null && r.browsingCalls.length === callsBefore, [await readProfile(r.page), r.browsingCalls.length, callsBefore]);
-      await r.page.goto(`${base}/confidentialite`, { waitUntil: 'load' });
-      await r.page.getByTestId('privacy-tracking-toggle').waitFor({ timeout: 25000 });
-      check('le choix est retenu apres rechargement : « desactive »', /désactivé sur cet appareil/.test(await r.page.getByTestId('privacy-tracking-state').innerText()));
-      await r.page.getByTestId('privacy-tracking-toggle').click();
-      await sleepSec(0.5);
-      await r.page.goto(`${base}/produit/${clarks.slug}`, { waitUntil: 'load' });
-      await r.page.waitForFunction((k) => { const p = JSON.parse(localStorage.getItem(k) || 'null'); return !!p && Object.keys(p.products).length > 0; }, PK, { timeout: 25000 });
-      check('« Autoriser le suivi » : le suivi reprend (de zero, l\'ancien historique n\'est pas revenu)', JSON.parse(await ls(r.page, 'albasse_tracking_choice')).choice === 'granted' && Object.keys((await readProfile(r.page)).products).join() === clarks.id);
-      check('aucune erreur (refus du suivi)', r.errs.length === 0, r.errs);
+      await r.page.getByText(/nous retenons aussi les articles que vous regardez/).waitFor({ timeout: 25000 });
+      const policy = await r.page.locator('body').innerText();
+      check('page de confidentialite : aucun bouton pour refuser ou autoriser le suivi', (await r.page.getByTestId('privacy-tracking-toggle').count()) === 0 && !/Refuser le suivi|Autoriser le suivi/.test(policy));
+      check('...mais le texte reste honnete (ce qui est retenu, 90 jours, effacement sur demande, signal du navigateur)', /conservées 90 jours/.test(policy) && /demander l'effacement/.test(policy) && /Ne pas me suivre/.test(policy));
+      await r.page.screenshot({ path: path.join(OUT, 'U8-confidentialite.png') });
+      check('aucune erreur (suivi automatique)', r.errs.length === 0, r.errs);
       await r.ctx.close();
 
       const d = await newVisitor(phone, { lang: 'fr', storage: { albasse_zara_name: 'Ali' }, initScripts: ["Object.defineProperty(navigator, 'doNotTrack', { get: () => '1' });"] });
       await d.page.goto(`${base}/produit/${sandales.slug}`, { waitUntil: 'load' });
       await sleepSec(5);
       check('signal « Ne pas me suivre » du navigateur : rien n\'est note, rien n\'est envoye, aucune fenetre', (await readProfile(d.page)) === null && d.browsingCalls.length === 0 && (await d.page.getByTestId('tracking-notice').count()) === 0);
-      await d.page.goto(`${base}/confidentialite`, { waitUntil: 'load' });
-      await d.page.getByTestId('privacy-tracking-toggle').waitFor({ timeout: 25000 });
-      check('...et la page de confidentialite montre « desactive » (le signal est respecte)', /désactivé sur cet appareil/.test(await d.page.getByTestId('privacy-tracking-state').innerText()));
       await d.ctx.close();
     }
 
@@ -2347,7 +2334,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.page.goto(`${base}/confidentialite`, { waitUntil: 'load' });
       await v.page.getByText(/nous retenons aussi les articles que vous regardez/).waitFor({ timeout: 25000 });
       const txt = await v.page.locator('body').innerText();
-      check('information : la politique de confidentialite parle des articles regardes, des 90 jours, du refus (« ne me suis plus ») et du signal du navigateur', /nous retenons aussi les articles que vous regardez/.test(txt) && /conservées 90 jours/.test(txt) && /ne me suis plus/.test(txt) && /Ne pas me suivre/.test(txt) && /bouton ci-dessous/.test(txt));
+      check('information : la politique de confidentialite parle des articles regardes, des 90 jours, de l\'effacement sur demande et du signal du navigateur (sans bouton)', /nous retenons aussi les articles que vous regardez/.test(txt) && /conservées 90 jours/.test(txt) && /demander l'effacement/.test(txt) && /Ne pas me suivre/.test(txt) && !/bouton ci-dessous|Refuser le suivi/.test(txt));
       check('aucune erreur (page de confidentialite)', v.errs.length === 0, v.errs);
       await v.ctx.close();
     }
@@ -2533,7 +2520,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await openZara(v);
       await sayAsk(v.page, 'Tu me suis ?', /elle retient seulement les articles que vous regardez \(sans votre nom ni votre téléphone\)/);
       const txt = await panelOf(v.page).innerText();
-      check('« Tu me suis ? » : explication simple (articles regardes, sans nom ni telephone, 90 jours, refus possible)', /90 jours/.test(txt) && /ne me suis plus/.test(txt) && !/espion|surveill/i.test(txt.replace(/Tu me suis \?/g, '')));
+      check('« Tu me suis ? » : explication simple et vraie (articles regardes, sans nom ni telephone, 90 jours), sans mettre en avant un moyen de refuser', /90 jours/.test(txt) && !/ne me suis plus|refuser/i.test(txt) && !/espion|surveill/i.test(txt.replace(/Tu me suis \?/g, '')));
       const chips = await chipLabels(v.page);
       check('boutons : « Confidentialite » et « Menu » seulement (aucun bouton pour suivre ou ne plus suivre)', chips.some((x) => x.includes('Confidentialité')) && (await noTrackingChips(v.page)), chips);
       await chip(v.page, 'Confidentialité').click();

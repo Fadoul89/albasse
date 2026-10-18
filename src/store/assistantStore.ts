@@ -1527,8 +1527,10 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     }
     cart.addItem(product, 1, color, size);
     const { count, total } = cartTotals();
-    await say(T().cart.added(name, variantText(size, color), count, total), { fast: true, actions: cartActions() });
-    await maybeOfferInstall(cartActions());
+    // après chaque article choisi : Zara rappelle toujours l'emballage cadeau (avec son bouton)
+    const actions = [...cartActions(), sayBtn(T().chip.wrap, 'emballage')];
+    await say(`${T().cart.added(name, variantText(size, color), count, total)}\n${T().cart.wrapNudge}`, { fast: true, actions });
+    await maybeOfferInstall(actions);
   }
 
   // Taille et couleur : demandées seulement s'il y a un vrai choix (une seule option = choisie d'office).
@@ -2081,6 +2083,11 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         return;
       }
       case 'wrap':
+        // le client a déjà des articles : on le ramène vers sa commande, l'emballage se choisit à ce moment-là
+        if (useCartStore.getState().items.length > 0) {
+          await say(giftWrapReply(get().lang), { actions: [checkoutChip(), { label: t.chip.viewCart, kind: 'cart' }, menuBtn()] });
+          return;
+        }
         await say(giftWrapReply(get().lang), {
           actions: [
             sayBtn(t.chip.giftIdea, 'idée cadeau'),

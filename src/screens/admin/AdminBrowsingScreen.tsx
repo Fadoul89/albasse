@@ -61,8 +61,8 @@ export function AdminBrowsingScreen() {
       >
         <Text style={styles.note}>
           🔎 Les articles que les visiteurs regardent sur le site, pour que Zara les conseille mieux. Les visiteurs sont anonymes (V-xxxxxx) ; un
-          client connecté apparaît seulement par un code (C-xxxxxxxx), jamais avec son nom ni son téléphone. Rien n'est noté pour ceux qui ont
-          refusé le suivi.
+          client connecté apparaît seulement par un code (C-xxxxxxxx), jamais avec son nom ni son téléphone. Le suivi se fait tout seul, sans rien
+          demander au visiteur ; rien n'est noté si son navigateur demande de ne pas être suivi.
         </Text>
 
         <View style={styles.periodRow}>

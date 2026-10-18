@@ -265,6 +265,7 @@ export interface Texts {
     addWhat: string;
     foundToAdd: string;
     tapPlus: string;
+    wrapNudge: string;
     ui: {
       view: string;
       subtotal: string;
@@ -715,6 +716,7 @@ const FR: Texts = {
     addWhat: 'Bien sûr ! Dites-moi ce que vous cherchez : je vous montre les articles avec un bouton + pour les ajouter 👇',
     foundToAdd: 'Voici ce que j’ai trouvé : touchez + sur l’article voulu pour l’ajouter au panier 👇',
     tapPlus: 'Astuce : touchez + sur un article pour l’ajouter au panier 🛒',
+    wrapNudge: `🎁 Pour offrir : l’emballage cadeau est à ${fcfa(GIFT_WRAP_FEE)} par commande (je vous le proposerai au moment de commander).`,
     ui: {
       view: 'Voir',
       subtotal: 'Sous-total',
@@ -793,12 +795,12 @@ const FR: Texts = {
   },
   tracking: {
     about:
-      'Voici ce que fait la boutique 😊 Sur cet appareil, elle retient seulement les articles que vous regardez (sans votre nom ni votre téléphone) pour que je puisse mieux vous conseiller. Ces informations sont gardées 90 jours, puis effacées. Vous pouvez refuser quand vous voulez : écrivez-moi « ne me suis plus ».',
+      'Voici ce que fait la boutique 😊 Sur cet appareil, elle retient seulement les articles que vous regardez (sans votre nom ni votre téléphone) pour que je puisse mieux vous conseiller. Ces informations sont gardées 90 jours, puis effacées.',
     aboutDenied: 'Le suivi est désactivé sur cet appareil : la boutique ne retient pas les articles que vous regardez, et je ne sais donc rien à ce sujet 😊',
     aboutSignal: 'Votre navigateur demande de ne pas être suivi, et je respecte ce choix : rien n’est retenu sur les articles que vous regardez 😊',
     stopped: 'C’est noté 😊 Je ne retiens plus les articles que vous regardez, et ce qui était retenu sur cet appareil est effacé.',
     stoppedAlready: 'C’est déjà le cas 😊 Le suivi est refusé : rien n’est retenu.',
-    resumed: 'Avec plaisir 😊 À partir de maintenant, je retiens les articles que vous regardez pour mieux vous conseiller (rien de personnel). Écrivez-moi « ne me suis plus » quand vous voulez arrêter.',
+    resumed: 'Avec plaisir 😊 À partir de maintenant, je retiens les articles que vous regardez pour mieux vous conseiller (rien de personnel).',
     resumedAlready: 'Le suivi est déjà actif sur cet appareil 😊',
     unavailable: 'Le suivi n’existe que sur le site web : ici, je ne retiens rien 😊',
   },
@@ -1175,6 +1177,7 @@ const AR: Texts = {
     addWhat: 'بالتأكيد! أخبرني بما تبحث عنه: أعرض عليك المنتجات مع زر + لإضافتها 👇',
     foundToAdd: 'إليك ما وجدته: اضغط + على المنتج المطلوب لإضافته إلى السلة 👇',
     tapPlus: 'نصيحة: اضغط + على أي منتج لإضافته إلى السلة 🛒',
+    wrapNudge: `🎁 للإهداء: تغليف الهدايا بـ ${fcfa(GIFT_WRAP_FEE)} لكل طلب (سأعرضه عليك عند إتمام الطلب).`,
     ui: {
       view: 'عرض',
       subtotal: 'المجموع الفرعي',
@@ -1253,12 +1256,12 @@ const AR: Texts = {
   },
   tracking: {
     about:
-      'إليك ما يحدث 😊 على هذا الجهاز يحتفظ المتجر فقط بالمنتجات التي تشاهدها (بدون اسمك أو هاتفك) لأتمكن من نصحك بشكل أفضل. تُحفظ هذه المعلومات 90 يوما ثم تُمسح. يمكنك الرفض متى شئت: اكتب لي «لا تتبعني».',
+      'إليك ما يحدث 😊 على هذا الجهاز يحتفظ المتجر فقط بالمنتجات التي تشاهدها (بدون اسمك أو هاتفك) لأتمكن من نصحك بشكل أفضل. تُحفظ هذه المعلومات 90 يوما ثم تُمسح.',
     aboutDenied: 'المتابعة متوقفة على هذا الجهاز: المتجر لا يحتفظ بالمنتجات التي تشاهدها، فلا أعرف شيئا عنها 😊',
     aboutSignal: 'متصفحك يطلب عدم التتبع، وأنا أحترم ذلك: لا شيء محفوظ عن المنتجات التي تشاهدها 😊',
     stopped: 'تم 😊 لن أحتفظ بعد الآن بالمنتجات التي تشاهدها، وما كان محفوظا على هذا الجهاز تم مسحه.',
     stoppedAlready: 'هذا هو الحال بالفعل 😊 المتابعة مرفوضة ولا شيء محفوظ.',
-    resumed: 'بكل سرور 😊 من الآن سأحتفظ بالمنتجات التي تشاهدها لأنصحك بشكل أفضل (لا شيء شخصي). اكتب لي «لا تتبعني» متى أردت التوقف.',
+    resumed: 'بكل سرور 😊 من الآن سأحتفظ بالمنتجات التي تشاهدها لأنصحك بشكل أفضل (لا شيء شخصي).',
     resumedAlready: 'المتابعة مفعلة بالفعل على هذا الجهاز 😊',
     unavailable: 'المتابعة موجودة فقط على موقع الويب: هنا لا أحتفظ بشيء 😊',
   },
