@@ -2181,7 +2181,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       case 'installLater':
         userSays(action.label);
         recordInstall('dismissed');
-        await say(T().install.later, { fast: true });
+        await say(T().install.later, { fast: true, actions: afterAnswerActions() });
         return;
       case 'say':
         await respondTo(action.payload ?? action.label, action.label);
@@ -2191,10 +2191,18 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     }
   }
 
-  // Après deux messages du client, si ce n'est pas déjà fait : la proposition d'installer le raccourci (une seule fois).
+  // Les messages du client depuis la fin de la présentation : la langue et le prénom choisis au tout début ne comptent pas.
+  function userMessagesAfterIntro(): number {
+    const infos = [texts('fr').info, texts('ar').info];
+    const all = get().messages;
+    const at = all.findIndex((m) => m.role === 'assistant' && infos.includes(m.text));
+    return at < 0 ? 0 : all.slice(at + 1).filter((m) => m.role === 'user').length;
+  }
+
+  // Après deux messages du client (une fois la présentation finie), si ce n'est pas déjà fait : la proposition d'installer le raccourci (une seule fois).
   async function afterTurn() {
     if (get().step.startsWith('co_')) return; // jamais au milieu d'une commande
-    if (get().messages.filter((m) => m.role === 'user').length >= INSTALL_OFFER_AFTER_MESSAGES) await maybeOfferInstall();
+    if (userMessagesAfterIntro() >= INSTALL_OFFER_AFTER_MESSAGES) await maybeOfferInstall();
   }
 
   return {
