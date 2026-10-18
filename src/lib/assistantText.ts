@@ -432,8 +432,8 @@ const FR: Texts = {
       'Avec plaisir ! 😊 Je suis là quand vous voulez. Que puis-je faire pour vous aujourd’hui ? 🛍️',
     ],
     compliment: [
-      'Oh, merci beaucoup ! 🥰 Vous êtes adorable ! Je suis votre assistante virtuelle Zara, toujours là pour vous aider avec le sourire ❤️🛍️',
-      'Oh, c’est très gentil, merci ! 🥰 Je suis Zara, votre assistante virtuelle : je suis là pour vous aider avec le sourire ❤️',
+      'Oh, merci beaucoup ! 🥰 Vous êtes adorable ! Je suis votre assistante virtuelle Zara, toujours là pour vous aider 😊❤️🛍️',
+      'Oh, c’est très gentil, merci ! 🥰 Je suis Zara, votre assistante virtuelle : je suis là pour vous aider 😊❤️',
       'Merci beaucoup, c’est adorable ! 😊❤️ Zara, votre assistante virtuelle, est toujours là pour vous aider 🛍️',
     ],
     goodbye: (kind) => {
@@ -838,7 +838,7 @@ const AR: Texts = {
     ],
     compliment: [
       'شكراً جزيلاً! 🥰 كلامك جميل جداً! أنا زارا، مساعدتك الافتراضية، وأنا دائماً هنا لمساعدتك بكل سرور ❤️🛍️',
-      'ما أجمل كلامك، شكراً لك! 🥰 أنا زارا، مساعدتك الافتراضية، وهنا لمساعدتك دائماً بابتسامة ❤️',
+      'ما أجمل كلامك، شكراً لك! 🥰 أنا زارا، مساعدتك الافتراضية، وهنا لمساعدتك دائماً 😊❤️',
       'شكراً لك، هذا لطف منك! 😊❤️ زارا، مساعدتك الافتراضية، دائماً هنا لمساعدتك 🛍️',
     ],
     goodbye: (kind) => {
