@@ -1,6 +1,7 @@
 import { isHomeCity } from './deliveryRules';
 import { arabicCityToLatin, arabicDigits, foldArabic, hasArabic, type GoodbyeKind, type GreetingKind, type Lang, type PayMethodKey, type PersonalKind } from './assistantLang';
 import { fcfa, texts } from './assistantText';
+import { BULK_MIN_QTY } from '../constants/shopRules';
 
 export { isHomeCity, fcfa };
 
@@ -315,6 +316,7 @@ export type Intent =
   | 'add'
   | 'install'
   | 'tracking'
+  | 'wholesale'
   | 'search';
 
 const has = (tokens: string[], words: string[]) => words.some((w) => tokens.includes(w));
@@ -421,6 +423,22 @@ export function trackingKind(text: string): TrackingKind | null {
   return n && TRACK_STOP_RE.test(n) ? 'stop' : null;
 }
 
+// Achat en gros : prix de gros, cartons, grandes quantités, revente. Zara ne donne aucun prix de gros : elle passe la main à l'équipe (WhatsApp).
+// « en gros » tout seul (« en gros je cherche un parfum ») ne compte pas.
+const WHOLESALE_RE = ar(
+  '(acheter|achat|achats|vente|vendre|vendez|commande|commander|prix|tarif|tarifs) (en|au) gros|(^| )en gros (prix|tarif|tarifs|quantite|commande|commandes)|(^| )(prix|tarif|tarifs) (de |du )?gros|(^| )grossistes?( |$)|(^| )(demi|semi) gros|(^| )cartons?( |$)|(^| )revend(re|eur|eurs|s|ons|ez)?( |$)|(^| )revente( |$)|grosses? commandes?|grandes? quantites?|quantites? importantes?|commande en quantite' +
+    '|بالجمله|سعر الجمله|(^| )جمله( |$)|كرتون|كراتين|كميه كبيره|كميات كبيره|اعاده البيع|(^| )تاجر( |$)'
+);
+const BULK_UNITS_RE = /(^| )(\d{2,4}) (pieces?|cartons?|unites?|paires?|exemplaires?|packs?|boites?|flacons?|bouteilles?|parfums?|montres?|chaussures?|chemises?|robes?|pantalons?|articles?)( |$)/;
+
+export function wantsWholesale(text: string): boolean {
+  const n = normalize(text);
+  if (!n) return false;
+  if (WHOLESALE_RE.test(n)) return true;
+  const m = BULK_UNITS_RE.exec(n);
+  return !!m && Number(m[2]) >= BULK_MIN_QTY;
+}
+
 // Programme de fidélité : le grade, les points, les paliers. Les noms de métaux (« or », « argent », « ذهبي ») ne comptent pas seuls :
 // ce sont aussi des produits ou de l'argent.
 const LOYALTY_RE = ar(
@@ -451,6 +469,7 @@ export function detectIntent(text: string): Intent {
   if (greetingKind(text) && base.length <= 3) return 'greeting';
   // le suivi de navigation passe avant « suivre ma commande » et les autres sujets
   if (trackingKind(text)) return 'tracking';
+  if (wantsWholesale(text)) return 'wholesale';
   if (personalKind(text)) return 'personal';
   if (LOYALTY_RE.test(n)) return 'loyalty';
   // installer l'application / ajouter à l'écran d'accueil

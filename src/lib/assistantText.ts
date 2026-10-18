@@ -322,6 +322,23 @@ export interface Texts {
     no: string;
     gone: string;
   };
+  // les moments forts (aucune remise annoncée : seulement des idées, et les vraies promotions pour le Black Friday)
+  occasion: {
+    tabaski: string;
+    ramadan: string;
+    korite: string;
+    wedding: string;
+    mothersDay: string;
+    valentine: string;
+    blackFriday: string;
+  };
+  // achat en gros : Zara ne donne aucun prix de gros, elle passe la main à l'équipe sur WhatsApp
+  wholesale: {
+    ask: string;
+    nudge: string;
+    chip: string;
+    prefill(product: string | null): string;
+  };
   // un client qui écrit lui-même « ne me suis plus » : Zara obéit (le suivi n'est jamais mis en avant)
   tracking: {
     stopped: string;
@@ -762,6 +779,21 @@ const FR: Texts = {
     moreNone: 'Vous avez déjà vu tous les articles disponibles de cette catégorie 😊',
     no: 'D’accord, pas de souci 😊 Je reste là si vous avez besoin d’aide, sans insister.',
     gone: 'Cet article n’est plus disponible pour le moment 😕',
+  },
+  occasion: {
+    tabaski: '🐑 Tabaski : un beau moment en famille ! Tenues, chaussures, parfums, cadeaux… je vous aide à choisir, avec les vrais prix et les vrais stocks.',
+    ramadan: '🌙 Ramadan Karim ! Tenues, parfums, cadeaux… je vous aide à choisir, avec les vrais prix et les vrais stocks.',
+    korite: '🌙 Aïd Moubarak ! Pour la fête : tenues, chaussures, parfums, cadeaux… je vous aide à choisir, avec les vrais prix et les vrais stocks.',
+    wedding: '💍 Un mariage ! Tenues, montres, parfums, bijoux, cadeaux pour les mariés ou les invités… je vous conseille. L’emballage cadeau est possible (2 000 FCFA par commande).',
+    mothersDay: '💐 Fête des mères : une belle attention pour elle ! Parfums, bijoux, tenues… je vous propose des idées. L’emballage cadeau est possible (2 000 FCFA par commande).',
+    valentine: '❤️ Saint-Valentin : une belle idée pour la personne qui compte ! Parfums, montres, bijoux… je vous conseille. L’emballage cadeau est possible (2 000 FCFA par commande).',
+    blackFriday: '🖤 Black Friday : je vous montre les vraies promotions en cours dans la boutique, avec les prix et les stocks réels.',
+  },
+  wholesale: {
+    ask: '📦 Pour les achats en gros (cartons, grandes quantités), les prix sont donnés directement par notre équipe 😊 Écrivez-nous sur WhatsApp avec : l’article, la quantité (ou le nombre de cartons) et votre ville.',
+    nudge: '📦 Grosse commande ? Notre équipe peut vous faire un prix et organiser la livraison : écrivez-nous sur WhatsApp. Vous pouvez aussi continuer ici.',
+    chip: '💬 Parler à l’équipe (gros)',
+    prefill: (product) => `Bonjour, je souhaite un prix de gros${product ? ` pour « ${product} »` : ''}. Quantité (ou nombre de cartons) : … Ville : …`,
   },
   tracking: {
     stopped: 'C’est noté 😊 Je ne retiens plus les articles que vous regardez, et ce qui était retenu sur cet appareil est effacé.',
@@ -1205,6 +1237,21 @@ const AR: Texts = {
     moreNone: 'لقد شاهدت كل المنتجات المتوفرة في هذا القسم 😊',
     no: 'حسنا، لا مشكلة 😊 أنا هنا إذا احتجت إلى مساعدة، دون إلحاح.',
     gone: 'هذا المنتج غير متوفر حاليا 😕',
+  },
+  occasion: {
+    tabaski: '🐑 عيد الأضحى لحظة جميلة مع العائلة! ملابس وأحذية وعطور وهدايا… أساعدك في الاختيار بالأسعار والمخزون الحقيقيين.',
+    ramadan: '🌙 رمضان كريم! ملابس وعطور وهدايا… أساعدك في الاختيار بالأسعار والمخزون الحقيقيين.',
+    korite: '🌙 عيد مبارك! للعيد: ملابس وأحذية وعطور وهدايا… أساعدك في الاختيار بالأسعار والمخزون الحقيقيين.',
+    wedding: '💍 حفل زواج! ملابس وساعات وعطور ومجوهرات وهدايا للعروسين أو للضيوف… أنصحك. تغليف الهدايا متاح (2 000 FCFA لكل طلب).',
+    mothersDay: '💐 عيد الأم: لفتة جميلة لها! عطور ومجوهرات وملابس… أقترح عليك أفكارا. تغليف الهدايا متاح (2 000 FCFA لكل طلب).',
+    valentine: '❤️ عيد الحب: فكرة جميلة لمن يهمك أمره! عطور وساعات ومجوهرات… أنصحك. تغليف الهدايا متاح (2 000 FCFA لكل طلب).',
+    blackFriday: '🖤 الجمعة السوداء: أعرض لك العروض الحقيقية الجارية في المتجر، بالأسعار والمخزون الحقيقيين.',
+  },
+  wholesale: {
+    ask: '📦 لمشتريات الجملة (كراتين وكميات كبيرة) يقدم فريقنا الأسعار مباشرة 😊 راسلنا على واتساب مع: المنتج والكمية (أو عدد الكراتين) ومدينتك.',
+    nudge: '📦 طلب كبير؟ يستطيع فريقنا تقديم سعر وتنظيم التوصيل: راسلنا على واتساب. ويمكنك أيضا المتابعة هنا.',
+    chip: '💬 التحدث مع الفريق (جملة)',
+    prefill: (product) => `مرحبا، أريد سعر الجملة${product ? ` لـ «${product}»` : ''}. الكمية (أو عدد الكراتين): … المدينة: …`,
   },
   tracking: {
     stopped: 'تم 😊 لن أحتفظ بعد الآن بالمنتجات التي تشاهدها، وما كان محفوظا على هذا الجهاز تم مسحه.',

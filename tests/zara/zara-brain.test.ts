@@ -12,6 +12,7 @@ import * as ac from '../../src/lib/activeTimer.ts';
 import * as tc from '../../src/lib/trackingConsent.ts';
 import * as ai from '../../src/lib/assistantInterest.ts';
 import * as bo from '../../src/lib/browsingOverview.ts';
+import * as oc from '../../src/lib/assistantOccasions.ts';
 import { isMissingColumn } from '../../src/lib/dbErrors.ts';
 
 const KEY = process.env.SUPABASE_ANON_KEY!;
@@ -520,7 +521,7 @@ async function main() {
     'checkout.askPay': [true], 'checkout.methodLabel': ['airtel_money'], 'checkout.recap': [{ lines: [{ name: 'ساعة', variant: '', qty: 2, subtotal: 25000 }], city: 'موندو', fee: 2500, gift: true, total: 37500, name: 'علي', phone: '66123456', address: 'حي فرشا', method: 'airtel_money' }],
     'checkout.placed': ['علي', '12345678'], 'checkout.totalToPay': [37500], 'checkout.payInitiated': ['Airtel Money', 'تم'], 'checkout.payUrl': ['https://pay.example.com'], 'checkout.payNumber': [37500, '60 60 51 51', 'Airtel Money'], 'checkout.payTeam': ['66123456', 'Airtel Money'], 'chip.useAddress': ['حي فرشا'],
     'cart.added': ['ساعة', ' (المقاس 41)', 2, 25000], 'cart.priceChanged': ['ساعة', '10 000 FCFA', '12 000 FCFA'], 'install.iosSteps': [false],
-    'interest.sizesReply': ['حذاء', ['40', '41']], 'interest.colorsReply': ['حذاء', ['أسود'], ['40']],
+    'interest.sizesReply': ['حذاء', ['40', '41']], 'interest.colorsReply': ['حذاء', ['أسود'], ['40']], 'wholesale.prefill': ['عطر'],
   };
   const leaks: string[] = [];
   let count = 0;
@@ -560,7 +561,7 @@ async function main() {
     'loyalty.mine': [{ points: 30, tier: 'argent', next: { key: 'or', missing: 20 } }], 'loyalty.orderPoints': [5],
     'checkout.askPay': [true], 'checkout.methodLabel': ['airtel_money'], 'checkout.recap': [{ lines: [{ name: 'Montre', variant: '', qty: 2, subtotal: 25000 }], city: 'Moundou', fee: 2500, gift: true, total: 37500, name: 'Ali', phone: '66123456', address: 'Farcha', method: 'airtel_money' }],
     'checkout.placed': ['Ali', 'ABCD1234'], 'checkout.totalToPay': [37500], 'checkout.payInitiated': ['Airtel Money', 'ok'], 'checkout.payUrl': ['https://pay.example.com'], 'checkout.payNumber': [37500, '60 60 51 51', 'Airtel Money'], 'checkout.payTeam': ['66123456', 'Airtel Money'], 'chip.useAddress': ['Farcha'],
-    'interest.sizesReply': ['Sandale', ['40', '41']], 'interest.colorsReply': ['Sandale', ['Noir'], ['40']],
+    'interest.sizesReply': ['Sandale', ['40', '41']], 'interest.colorsReply': ['Sandale', ['Noir'], ['40']], 'wholesale.prefill': ['Parfum'],
   };
   for (const k of Object.keys(sampleArgs)) delete sampleArgs[k];
   Object.assign(sampleArgs, frSample);
@@ -1038,6 +1039,40 @@ async function main() {
     const ago = (ms: number) => bo.formatAgo(new Date(NOW - ms).toISOString(), NOW);
     ok('« il y a ... » : a l\'instant, minutes, heures, jours, date au-dela de 30 jours, vide si inconnu', ago(20000) === 'à l’instant' && ago(5 * 60000) === 'il y a 5 min' && ago(3 * 3600000) === 'il y a 3 h' && ago(2 * 86400000) === 'il y a 2 j' && /2026|2025/.test(ago(60 * 86400000)) && bo.formatAgo(null, NOW) === '—' && bo.formatAgo('pas une date', NOW) === '—', [ago(20000), ago(5 * 60000), ago(3 * 3600000), ago(2 * 86400000), ago(60 * 86400000)]);
     ok('libelles lisibles : panier, commande, suggestions, niveaux (sans jargon)', bo.CART_LABELS.in_cart === 'Au panier' && bo.CART_LABELS.purchased === 'Acheté' && bo.ORDER_STATUS_LABELS.delivered === 'Livrée' && bo.SUGGESTION_LABELS.perfume_browse === 'Familles de parfums' && bi.INTEREST_LABELS.eleve === 'Élevé' && bo.INTEREST_FILTERS.join() === 'all,eleve,moyen,leger');
+  }
+
+  // ---- Moments forts et achats en gros ----
+  console.log('\n== moments forts (Tabaski, Ramadan...) et achats en gros (WhatsApp)');
+  {
+    const wholesaleYes = ['prix en gros', 'je veux le prix de gros', 'vous vendez en gros ?', 'prix par carton', 'un carton de parfum', 'je veux acheter en gros', 'grosse commande', 'grandes quantités', "c'est pour revendre", 'je suis grossiste', 'commande en quantité', 'je veux 50 pièces', '100 parfums svp', '20 chemises', 'combien le carton', 'سعر الجملة', 'اريد كرتون', 'بالجملة', 'كميات كبيرة', 'اريد 30 قطعة'.replace('قطعة', 'parfums')];
+    const wholesaleNo = ['en gros je cherche un parfum', 'un parfum pour homme', 'une montre', 'je veux 2 parfums', '3 chemises', '5 pièces', 'budget 30000', 'rolex', 'chaussures 42', 'livraison à Moundou', 'merci beaucoup', 'tabaski', 'prix de la rolex', 'moins de 50000 fcfa'];
+    ok('gros, cartons, grandes quantites, revente (francais et arabe) : reconnus comme « achat en gros »', wholesaleYes.every((t) => b.wantsWholesale(t) && b.detectIntent(t) === 'wholesale'), wholesaleYes.filter((t) => !(b.wantsWholesale(t) && b.detectIntent(t) === 'wholesale')));
+    ok('« en gros je cherche... », petites quantites (2, 3, 5), budgets et prix : jamais pris pour un achat en gros', wholesaleNo.every((t) => !b.wantsWholesale(t) && b.detectIntent(t) !== 'wholesale'), wholesaleNo.filter((t) => b.wantsWholesale(t) || b.detectIntent(t) === 'wholesale'));
+    const occYes: [string, oc.OccasionKey][] = [
+      ['tabaski', 'tabaski'], ['Tabaski approche', 'tabaski'], ['un cadeau pour la Tabaski', 'tabaski'], ['aid el kebir', 'tabaski'], ['عيد الأضحى', 'tabaski'],
+      ['ramadan', 'ramadan'], ['Ramadan Karim', 'ramadan'], ['رمضان', 'ramadan'],
+      ['Korité', 'korite'], ['aid el fitr', 'korite'], ['عيد الفطر', 'korite'],
+      ['mariage', 'wedding'], ['un cadeau de mariage', 'wedding'], ['je me marie', 'wedding'], ['زواج', 'wedding'], ['عرس', 'wedding'],
+      ['fête des mères', 'mothersDay'], ['cadeau fete des meres', 'mothersDay'], ['عيد الأم', 'mothersDay'],
+      ['Black Friday', 'blackFriday'], ['blackfriday', 'blackFriday'], ['الجمعة السوداء', 'blackFriday'],
+      ['Saint-Valentin', 'valentine'], ['St Valentin', 'valentine'], ['valentine', 'valentine'], ['عيد الحب', 'valentine'],
+    ];
+    ok('moments forts reconnus (francais et arabe) : Tabaski, Ramadan, Korite, mariage, fete des meres, Black Friday, Saint-Valentin', occYes.every(([t, k]) => oc.occasionOf(t) === k), occYes.filter(([t, k]) => oc.occasionOf(t) !== k));
+    const occNo = ['parfum pour homme', 'montre', 'chaussures noires', 'je veux un cadeau', 'anniversaire', 'livraison', 'promotions', 'black', 'ma mere', 'friday', 'rolex'];
+    ok('sans moment fort : rien n\'est reconnu (« black » seul est une couleur, « ma mere » n\'est pas la fete des meres)', occNo.every((t) => oc.occasionOf(t) === null), occNo.filter((t) => oc.occasionOf(t) !== null));
+    ok('le nom du moment fort est retire, le reste dit ce que cherche le client', oc.stripOccasion('un parfum pour la fête des mères') === 'un parfum pour la' && oc.stripOccasion('cadeau Tabaski budget 20000') === 'cadeau budget 20000' && oc.stripOccasion('Black Friday') === '');
+    const d = (iso: string) => Date.parse(`${iso}T09:00:00Z`);
+    ok('Zara parle d\'elle-meme seulement quand la date approche (Black Friday : 21 jours avant ; rien ailleurs)', oc.upcomingOccasion(d('2026-10-18')) === null && oc.upcomingOccasion(d('2026-11-05')) === null && oc.upcomingOccasion(d('2026-11-06')) === 'blackFriday' && oc.upcomingOccasion(d('2026-11-27')) === 'blackFriday' && oc.upcomingOccasion(d('2026-11-29')) === null);
+    ok('Saint-Valentin (10 jours avant), Ramadan (14 jours avant, jusqu\'a 14 jours apres), Korite, Tabaski', oc.upcomingOccasion(d('2027-01-24')) === null && oc.upcomingOccasion(d('2027-01-26')) === 'ramadan' && oc.upcomingOccasion(d('2027-02-13')) === 'valentine' && oc.upcomingOccasion(d('2027-02-20')) === 'ramadan' && oc.upcomingOccasion(d('2027-03-05')) === 'korite' && oc.upcomingOccasion(d('2027-05-05')) === 'tabaski' && oc.upcomingOccasion(d('2027-06-01')) === null);
+    ok('deux fetes proches : la plus proche passe en premier (le 10 fevrier 2027, le Ramadan a deja commence avant la Saint-Valentin)', oc.upcomingOccasion(d('2027-02-10')) === 'ramadan' && oc.upcomingOccasion(d('2027-02-13')) === 'valentine' && oc.upcomingOccasion(d('2027-02-04')) === 'ramadan');
+    const tf2 = tx.texts('fr'), ta2 = tx.texts('ar');
+    const keys: oc.OccasionKey[] = ['tabaski', 'ramadan', 'korite', 'wedding', 'mothersDay', 'valentine', 'blackFriday'];
+    ok('textes des moments forts : tous presents en francais et en arabe (arabe avec de l\'arabe)', keys.every((k) => tf2.occasion[k].length > 20 && ta2.occasion[k].length > 20 && l.hasArabic(ta2.occasion[k]) && !l.hasArabic(tf2.occasion[k])));
+    ok('aucune remise ni pourcentage annonces dans les messages des moments forts (seulement des idees, et « vraies promotions »)', keys.every((k) => !/%|\d+ ?FCFA de remise|-\s?\d+/.test(tf2.occasion[k].replace(/2\s000 FCFA/g, '')) && !/remise|solde|gratuit|offert/i.test(tf2.occasion[k])));
+    ok('Black Friday : seulement les VRAIES promotions de la boutique', /vraies promotions/.test(tf2.occasion.blackFriday) && /العروض الحقيقية/.test(ta2.occasion.blackFriday));
+    ok('l\'emballage cadeau cite dans les messages a le meme montant que la boutique (2 000 FCFA)', ['wedding', 'mothersDay', 'valentine'].every((k) => tf2.occasion[k as oc.OccasionKey].replace(/\s/g, '').includes('2000FCFA') && ta2.occasion[k as oc.OccasionKey].replace(/\s/g, '').includes('2000FCFA')));
+    ok('gros : Zara ne donne AUCUN prix de gros (pas de chiffre, pas de FCFA) et envoie vers l\'equipe sur WhatsApp', !/\d/.test(tf2.wholesale.ask + tf2.wholesale.nudge) && /WhatsApp/.test(tf2.wholesale.ask) && /واتساب/.test(ta2.wholesale.ask) && /équipe/.test(tf2.wholesale.ask));
+    ok('message WhatsApp deja ecrit pour l\'equipe : article, quantite (ou cartons), ville', tf2.wholesale.prefill('Parfum Oud').includes('« Parfum Oud »') && /Quantité/.test(tf2.wholesale.prefill(null)) && /Ville/.test(tf2.wholesale.prefill(null)) && !tf2.wholesale.prefill(null).includes('«') && l.hasArabic(ta2.wholesale.prefill('عطر')));
   }
 
   console.log('\n' + (failures === 0 ? 'TOUT EST BON' : `${failures} ECHEC(S)`));
