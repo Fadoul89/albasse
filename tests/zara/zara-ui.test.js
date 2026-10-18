@@ -4,7 +4,7 @@
 // Parties : A (nouveau visiteur), B (contexte produit/panier), C (client connecte : chat, commande, mes commandes, admin),
 //           D (panne), E (clavier, fiche produit, admin cache, ordinateur), M (client avec compte reconnu et salue par son prenom).
 //           T (personnalite : politesse, compliments, adresse et numero personnels), O (Zara finalise l'achat dans le chat).
-//           F (programme de fidelite : grade, points, comment gagner). Y (conclure la vente, preuves vraies, packs), Z (rappel WhatsApp et page admin).
+//           F (programme de fidelite : grade, points, comment gagner). Y (conclure la vente, preuves vraies, packs), Z (rappel WhatsApp avec jour choisi et page admin), H (bouton de Zara : milieu de l'ecran, vibration, lumiere).
 //           Choisir avec PARTS=ABCDEMTOF.
 const { chromium, devices } = require('playwright');
 const { spawn } = require('child_process');
@@ -13,7 +13,7 @@ const fs = require('fs');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const dist = process.argv[2] || '../../dist';
 const port = process.argv[3] || '4333';
-const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZTOFBCDE').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHTOFBCDE').toUpperCase();
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
 fs.mkdirSync(OUT, { recursive: true });
 const KEY = process.env.SUPABASE_ANON_KEY;
@@ -276,7 +276,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     await typeIn(p, text);
     const t0 = Date.now();
     while ((await panelOf(p).getByText(re).count()) <= n) {
-      if (Date.now() - t0 > timeout) throw new Error(`pas de nouvelle reponse pour « ${text} » (${re})`);
+      if (Date.now() - t0 > timeout) throw new Error(`pas de nouvelle reponse pour « ${text} » (${re}) | fin de la conversation : ${(await panelOf(p).innerText({ timeout: 2000 }).catch(() => '(pas de panneau ouvert)')).replace(/\s+/g, ' ').slice(-500)}`);
       await sleep(200);
     }
   };
@@ -286,7 +286,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     await chip(p, label).click();
     const t0 = Date.now();
     while ((await panelOf(p).getByText(re).count()) <= n) {
-      if (Date.now() - t0 > timeout) throw new Error(`pas de nouvelle reponse apres « ${label} » (${re})`);
+      if (Date.now() - t0 > timeout) throw new Error(`pas de nouvelle reponse apres « ${label} » (${re}) | fin de la conversation : ${(await panelOf(p).innerText({ timeout: 2000 }).catch(() => '(pas de panneau ouvert)')).replace(/\s+/g, ' ').slice(-500)}`);
       await sleep(200);
     }
   };
@@ -2839,7 +2839,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.ctx.close();
     }
 
-    // --- X7. un moment fort qui approche : Zara en parle d'elle-meme, une fois (date simulee)
+    // --- X7. un moment fort qui approche : Zara en parle d'elle-meme, une fois 
     {
       const v = await visitor();
       await v.ctx.clock.setFixedTime(new Date('2026-11-10T09:00:00Z'));
@@ -2891,18 +2891,34 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     };
     check('info : produit de test et sa categorie', !!rolex && !!rolexCat, { name: rolex && rolex.name, cat: rolexCat, stock: rolex && rolex.stock });
 
-    // --- Y1. « je reflechis » sans panier : des mots simples, jamais de chiffre invente, un rappel WhatsApp propose
+    // --- Y1. « je reflechis » sans panier et sans article montre : des mots simples, jamais de chiffre invente ; le rappel WhatsApp n'est PAS propose
     {
       const v = await visitor();
       await openZara(v);
       await ask(v.page, 'je réfléchis', /Prenez votre temps/, 20000);
       const msg = await panelOf(v.page).getByText(/Prenez votre temps/).last().innerText();
-      check('« je reflechis » (sans panier) : « Pas de souci », puis l\'offre d\'un rappel WhatsApp par l\'equipe', /Pas de souci/.test(msg) && /l’équipe peut vous écrire sur WhatsApp/.test(msg), msg);
+      check('« je reflechis » (sans panier, sans article montre) : « Pas de souci » et la porte reste ouverte', /Pas de souci/.test(msg), msg);
       check('sans panier : rien sur le panier, aucun chiffre de commandes, aucune validite 48 h', !/panier reste enregistré/.test(msg) && !/\d/.test(msg), msg);
       const chips = await chipLabels(v.page);
-      check('boutons : « Me rappeler sur WhatsApp », « Promotions », « Menu » (et « Creer mon compte » : visiteur sans compte)', chips.some((c) => /Me rappeler sur WhatsApp/.test(c)) && chips.some((c) => /Promotions/.test(c)) && chips.some((c) => /Menu/.test(c)) && chips.some((c) => /Créer mon compte/.test(c)), chips);
+      check('le rappel WhatsApp n\'est PAS propose a quelqu\'un qui n\'hesite pas encore a commander (ni phrase, ni bouton)', !/WhatsApp/.test(msg) && !chips.some((c) => /Me rappeler/.test(c)), [msg, chips]);
+      check('boutons : « Promotions », « Menu » (et « Creer mon compte » : visiteur sans compte)', chips.some((c) => /Promotions/.test(c)) && chips.some((c) => /Menu/.test(c)) && chips.some((c) => /Créer mon compte/.test(c)), chips);
       await v.page.screenshot({ path: path.join(OUT, 'Y1-je-reflechis.png') });
       check('aucune erreur (je reflechis)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+
+    // --- Y1b. le client a regarde un article puis hesite : LA, le rappel WhatsApp est propose
+    if (rolex) {
+      const v = await visitor();
+      await openZara(v);
+      await typeIn(v.page, 'rolex');
+      await cardsOf(v.page).filter({ hasText: /rolex/i }).first().waitFor({ timeout: 20000 });
+      await ask(v.page, 'je réfléchis', /Prenez votre temps/, 20000);
+      const msg = await panelOf(v.page).getByText(/Prenez votre temps/).last().innerText();
+      check('apres avoir regarde un article : « je reflechis » -> l\'offre d\'un rappel WhatsApp par l\'equipe', /Pas de souci/.test(msg) && /l’équipe peut vous écrire sur WhatsApp/.test(msg), msg);
+      const chips = await chipLabels(v.page);
+      check('boutons : « Me rappeler sur WhatsApp », « Promotions », « Menu »', chips.some((c) => /Me rappeler sur WhatsApp/.test(c)) && chips.some((c) => /Promotions/.test(c)) && chips.some((c) => /Menu/.test(c)), chips);
+      check('aucune erreur (je reflechis apres un article)', v.errs.length === 0, v.errs);
       await v.ctx.close();
     }
 
@@ -2968,7 +2984,14 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await waitText(v.page, /أنشئ حسابك|حسابك/, 25000);
       await ask(v.page, 'لاحقا', /خذ وقتك/, 20000);
       const chips = await chipLabels(v.page);
-      check('en arabe : « لاحقا » -> Zara conclut en arabe avec le bouton de rappel WhatsApp', chips.some((c) => /تواصلوا معي على واتساب/.test(c)), chips);
+      check('en arabe : sans article regarde, « لاحقا » -> Zara conclut, sans bouton de rappel WhatsApp', !chips.some((c) => /تواصلوا معي على واتساب/.test(c)), chips);
+      if (rolex) {
+        await typeIn(v.page, 'rolex');
+        await cardsOf(v.page).filter({ hasText: /rolex/i }).first().waitFor({ timeout: 20000 });
+        await ask(v.page, 'لاحقا', /خذ وقتك/, 20000);
+        const chips2 = await chipLabels(v.page);
+        check('en arabe : apres avoir regarde un article, « لاحقا » -> Zara conclut en arabe avec le bouton de rappel WhatsApp', chips2.some((c) => /تواصلوا معي على واتساب/.test(c)), chips2);
+      }
       await v.ctx.close();
     }
   }
@@ -2977,6 +3000,28 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   if (PARTS.includes('Z')) {
     console.log('\n== Z. « Me rappeler sur WhatsApp » : prenom, numero, accord, demande envoyee a l\'equipe ; page admin « Rappels WhatsApp »');
     const base = `http://localhost:${port}`;
+    // Les jours proposes par Zara, recalcules ici a part du code de l'application (heure du Tchad = UTC+1) : 5 jours ouvrables,
+    // « aujourd'hui » seulement avant 15 h, jamais un dimanche. (Une horloge figee bloque les animations de la page : on prend l'heure reelle.)
+    const DAY_FR = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+    const MON_FR = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+    const esc = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const chadDays = (now = new Date()) => {
+      const chad = new Date(now.getTime() + 3600000);
+      const out = [];
+      for (let off = chad.getUTCHours() < 15 ? 0 : 1; out.length < 5 && off < 14; off++) {
+        const d = new Date(Date.UTC(chad.getUTCFullYear(), chad.getUTCMonth(), chad.getUTCDate() + off, 12));
+        if (d.getUTCDay() === 0) continue;
+        const plain = `${DAY_FR[d.getUTCDay()]} ${d.getUTCDate()} ${MON_FR[d.getUTCMonth()]}`;
+        const label = off === 0 ? `Aujourd’hui (${plain})` : off === 1 ? `Demain (${plain})` : plain[0].toUpperCase() + plain.slice(1);
+        out.push({ iso: d.toISOString().slice(0, 10), label, word: DAY_FR[d.getUTCDay()], dom: d.getUTCDate() });
+      }
+      return out;
+    };
+    const days = chadDays();
+    const dayLabel = (iso) => {
+      const d = new Date(iso + 'T12:00:00Z');
+      return `${DAY_FR[d.getUTCDay()]} ${d.getUTCDate()} ${MON_FR[d.getUTCMonth()]}`;
+    };
     const visitor = (extra = {}) => newVisitor(phone, { lang: extra.lang || 'fr', storage: extra.noName ? {} : { albasse_zara_name: 'Ali' }, fakeCallbacks: extra.fakeCallbacks || { calls: [], replies: [{ body: true }] } });
     const openZara = async (v, welcome = /Créez votre compte gratuit(?:, Ali)?|أنشئ حسابك|حسابك/) => {
       await v.page.goto(`${base}/`, { waitUntil: 'load' });
@@ -2993,14 +3038,23 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await ask(v.page, 'rappelez-moi', /Quel est votre numéro WhatsApp/, 20000);
       await ask(v.page, '12345', /Il faut 8 chiffres/, 20000);
       check('numero faux (12345) : Zara redemande, rien n\'est envoye', fc.calls.length === 0);
-      await ask(v.page, '66 12 34 56', /Je transmets à l’équipe : Ali, WhatsApp 66 12 34 56/, 20000);
+      await ask(v.page, '66 12 34 56', /Quel jour voulez-vous que l’équipe vous écrive/, 20000);
+      const dayChips = await chipLabels(v.page);
+      check('apres le numero : Zara demande le JOUR, avec les 5 prochains jours ouvrables (jamais un dimanche) et « Annuler »', days.length === 5 && days.every((d) => dayChips.includes(d.label)) && dayChips.some((c) => /Annuler/.test(c)), [dayChips, days.map((d) => d.label)]);
+      check('rien n\'est envoye avant le jour et l\'accord du client', fc.calls.length === 0);
+      await v.page.screenshot({ path: path.join(OUT, 'Z1-jour.png') });
+      await ask(v.page, '45', /Je n’ai pas compris le jour/, 20000);
+      check('un jour illisible (« 45 ») : Zara redonne les jours, rien n\'est devine ni envoye', fc.calls.length === 0 && (await chipLabels(v.page)).includes(days[2].label));
+      await ask(v.page, days[2].word, /Je transmets à l’équipe : Ali, WhatsApp 66 12 34 56/, 20000);
+      const confirmTxt = await panelOf(v.page).getByText(/Je transmets à l’équipe : Ali, WhatsApp 66 12 34 56/).last().innerText();
+      check(`confirmation : prenom, numero ET jour choisi (« ${days[2].word} » ecrit par le client -> ${days[2].label})`, new RegExp(esc(days[2].label)).test(confirmTxt) && /C’est d’accord \?/.test(confirmTxt), confirmTxt);
       const chips = await chipLabels(v.page);
-      check('confirmation : prenom et numero visibles, boutons « Oui, d\'accord », « Changer le numero », « Annuler »', chips.some((c) => /Oui, d’accord/.test(c)) && chips.some((c) => /Changer le numéro/.test(c)) && chips.some((c) => /Annuler/.test(c)), chips);
+      check('boutons : « Oui, d\'accord », « Changer le numero », « Changer le jour », « Annuler »', chips.some((c) => /Oui, d’accord/.test(c)) && chips.some((c) => /Changer le numéro/.test(c)) && chips.some((c) => /Changer le jour/.test(c)) && chips.some((c) => /Annuler/.test(c)), chips);
       check('rien n\'est envoye avant l\'accord du client', fc.calls.length === 0);
       await v.page.screenshot({ path: path.join(OUT, 'Z1-confirmation.png') });
-      await tap(v.page, 'Oui, d’accord', /C’est noté ✅ L’équipe vous écrira sur WhatsApp/, 20000);
-      check('apres l\'accord : UNE demande envoyee avec le prenom, le numero a 8 chiffres, l\'origine « chat »', fc.calls.length === 1 && fc.calls[0].p_name === 'Ali' && fc.calls[0].p_phone === '66123456' && fc.calls[0].p_source === 'chat', fc.calls);
-      check('la demande ne porte aucun mot de passe, aucun paiement : seulement prenom, numero, note, origine, appareil', Object.keys(fc.calls[0]).sort().join(',') === 'p_device,p_name,p_note,p_phone,p_source', Object.keys(fc.calls[0]));
+      await tap(v.page, 'Oui, d’accord', new RegExp('C’est noté ✅ L’équipe vous écrira sur WhatsApp : ' + esc(days[2].label)), 20000);
+      check(`apres l'accord : UNE demande envoyee avec le prenom, le numero a 8 chiffres, l'origine « chat » et le JOUR (${days[2].iso})`, fc.calls.length === 1 && fc.calls[0].p_name === 'Ali' && fc.calls[0].p_phone === '66123456' && fc.calls[0].p_source === 'chat' && fc.calls[0].p_day === days[2].iso, fc.calls);
+      check('la demande ne porte aucun mot de passe, aucun paiement : seulement prenom, numero, note, origine, appareil, jour', Object.keys(fc.calls[0]).sort().join(',') === 'p_day,p_device,p_name,p_note,p_phone,p_source', Object.keys(fc.calls[0]));
       await ask(v.page, 'promotions', /promotion|promo/i, 20000);
       check('apres la demande, Zara repond normalement (le parcours est termine)', (await panelOf(v.page).getByText(/Quel est votre numéro WhatsApp/).count()) === 1 && fc.calls.length === 1);
       check('aucune erreur (rappel)', v.errs.length === 0, v.errs);
@@ -3013,10 +3067,16 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const v = await visitor({ fakeCallbacks: fc });
       await openZara(v);
       await ask(v.page, 'appelez-moi demain', /Quel est votre numéro WhatsApp/, 20000);
-      await ask(v.page, '91 23 45 67', /Je transmets à l’équipe : Ali, WhatsApp 91 23 45 67/, 20000);
+      await ask(v.page, '91 23 45 67', /Quel jour voulez-vous/, 20000);
+      await tap(v.page, days[1].label, /Je transmets à l’équipe : Ali, WhatsApp 91 23 45 67/, 20000);
       await tap(v.page, 'Changer le numéro', /Quel est votre numéro WhatsApp/, 20000);
       check('« Changer le numero » : Zara redemande le numero (rien d\'envoye)', fc.calls.length === 0);
       await ask(v.page, '+235 66 12 34 56', /WhatsApp 66 12 34 56/, 20000);
+      const kept = await panelOf(v.page).getByText(/Je transmets à l’équipe : Ali, WhatsApp 66 12 34 56/).last().innerText();
+      check('le jour deja choisi est garde apres « Changer le numero » : Zara ne le redemande pas', new RegExp(esc(days[1].label)).test(kept), kept);
+      await tap(v.page, 'Changer le jour', /Quel jour voulez-vous/, 20000);
+      check('« Changer le jour » : Zara redonne les jours (rien d\'envoye)', fc.calls.length === 0 && (await chipLabels(v.page)).includes(days[3].label));
+      await tap(v.page, days[3].label, new RegExp(esc('Elle vous écrira sur WhatsApp : ' + days[3].label)), 20000);
       await tap(v.page, 'Annuler', /je n’enregistre rien/, 20000);
       check('« Annuler » : rien n\'est enregistre', fc.calls.length === 0);
       await ask(v.page, 'livraison', /livraison|Livraison/i, 20000);
@@ -3028,7 +3088,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         const w = await visitor({ fakeCallbacks: f2 });
         await openZara(w);
         await ask(w.page, 'rappelez-moi', /Quel est votre numéro WhatsApp/, 20000);
-        await ask(w.page, '66 12 34 56', /Je transmets à l’équipe/, 20000);
+        await ask(w.page, '66 12 34 56', /Quel jour voulez-vous/, 20000);
+        await tap(w.page, days[1].label, /Je transmets à l’équipe/, 20000);
         const before = await panelOf(w.page).getByText(re).count();
         await chip(w.page, 'Oui, d’accord').click();
         const t0 = Date.now();
@@ -3053,12 +3114,15 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await waitText(v.page, /Comment puis-je vous appeler \?/, 25000);
       await chip(v.page, 'Passer').click();
       await sleep(3500);
+      await typeIn(v.page, 'rolex');
+      await cardsOf(v.page).filter({ hasText: /rolex/i }).first().waitFor({ timeout: 20000 });
       await ask(v.page, 'je réfléchis', /Prenez votre temps/, 25000);
       await tap(v.page, 'Me rappeler sur WhatsApp', /Quel est votre prénom \?/, 20000);
       await ask(v.page, 'Awa', /Merci Awa/, 20000);
-      await ask(v.page, '66 12 34 56', /Je transmets à l’équipe : Awa, WhatsApp 66 12 34 56/, 20000);
+      await ask(v.page, '66 12 34 56', /Quel jour voulez-vous/, 20000);
+      await ask(v.page, days[1].word, /Je transmets à l’équipe : Awa, WhatsApp 66 12 34 56/, 20000);
       await tap(v.page, 'Oui, d’accord', /C’est noté ✅/, 20000);
-      check('sans prenom connu : Zara le demande, puis le numero ; l\'origine est « later »', fc.calls.length === 1 && fc.calls[0].p_name === 'Awa' && fc.calls[0].p_source === 'later', fc.calls);
+      check(`sans prenom connu : Zara le demande, puis le numero, puis le jour (${days[1].word}) ; l'origine est « later », l'article regarde est transmis`, fc.calls.length === 1 && fc.calls[0].p_name === 'Awa' && fc.calls[0].p_source === 'later' && fc.calls[0].p_day === days[1].iso && /rolex/i.test(fc.calls[0].p_note), fc.calls);
       await v.ctx.close();
     }
 
@@ -3071,9 +3135,23 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.page.getByTestId('assistant-fab').click();
       await waitText(v.page, /أنشئ حسابك|حسابك/, 25000);
       await ask(v.page, 'اتصلوا بي', /ما رقم واتساب الخاص بك/, 20000);
-      await ask(v.page, '66 12 34 56', /أحول إلى الفريق: Ali، واتساب 66 12 34 56/, 20000);
+      await ask(v.page, '66 12 34 56', /في أي يوم تريد/, 20000);
+      const arChips = await chipLabels(v.page);
+      check('en arabe : les 5 jours sont proposes avec des noms de jours arabes', arChips.filter((c) => /[؀-ۿ]/.test(c) && !/[a-z]/i.test(c)).length >= 5, arChips);
+      await ask(v.page, String(days[2].dom), /أحول إلى الفريق: Ali، واتساب 66 12 34 56/, 20000);
       await tap(v.page, 'نعم، موافق', /تم التسجيل ✅/, 20000);
-      check('en arabe : tout le parcours, la demande part avec le meme numero', fc.calls.length === 1 && fc.calls[0].p_phone === '66123456', fc.calls);
+      check('en arabe : tout le parcours (numero, jour ecrit avec son numero, accord), la demande part avec le meme numero et le bon jour', fc.calls.length === 1 && fc.calls[0].p_phone === '66123456' && fc.calls[0].p_day === days[2].iso, fc.calls);
+      await v.ctx.close();
+    }
+
+    // --- Z4b. « c'est cher » : le rappel n'est propose qu'a celui qui a deja regarde un article ou a un panier
+    {
+      const v = await visitor();
+      await openZara(v);
+      await ask(v.page, 'c’est trop cher', /Je comprends/, 20000);
+      await sleep(2500);
+      const chips = await chipLabels(v.page);
+      check('« c\'est cher » sans article ni panier : pas de bouton de rappel WhatsApp (Promotions et Budget restent)', !chips.some((c) => /Me rappeler/.test(c)) && chips.some((c) => /Promotions/.test(c)), chips);
       await v.ctx.close();
     }
 
@@ -3088,10 +3166,15 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       };
       const SK = 'sb-xtitsmmccpkelxfjyqyh-auth-token';
       const iso = (msAgo) => new Date(Date.now() - msAgo).toISOString();
+      // jours demandes, par rapport a aujourd'hui (heure du Tchad)
+      const chadIso = (plusDays) => new Date(Date.now() + 3600000 + plusDays * 86400000).toISOString().slice(0, 10);
+      const [dLate, dToday, dSoon, dDone] = [chadIso(-1), chadIso(0), chadIso(3), chadIso(1)];
       const rowsOf = () => [
-        { id: 'c1', created_at: iso(10 * 60000), name: 'Awa', phone: '66123456', note: 'Rolex (+1)', source: 'cart', device: 'Android', status: 'new' },
-        { id: 'c2', created_at: iso(5 * 3600000), name: 'Moussa', phone: '91234567', note: '', source: 'later', device: 'Autre', status: 'new' },
-        { id: 'c3', created_at: iso(2 * 86400000), name: 'Hawa', phone: '66998877', note: 'Parfum Oud', source: 'price', device: 'iPhone', status: 'done' },
+        { id: 'c1', created_at: iso(10 * 60000), name: 'Awa', phone: '66123456', note: 'Rolex (+1)', source: 'cart', device: 'Android', status: 'new', wanted_day: dSoon },
+        { id: 'c2', created_at: iso(5 * 3600000), name: 'Moussa', phone: '91234567', note: '', source: 'later', device: 'Autre', status: 'new', wanted_day: dLate },
+        { id: 'c3', created_at: iso(2 * 86400000), name: 'Hawa', phone: '66998877', note: 'Parfum Oud', source: 'price', device: 'iPhone', status: 'done', wanted_day: dDone },
+        { id: 'c4', created_at: iso(3 * 3600000), name: 'Karim', phone: '60112233', note: 'Montre', source: 'chat', device: 'PC', status: 'new', wanted_day: dToday },
+        { id: 'c5', created_at: iso(40 * 3600000), name: 'Zeinab', phone: '66554433', note: '', source: 'chat', device: 'Autre', status: 'new', wanted_day: null },
       ];
       const openAdmin = async (fc, admin = true) => {
         const fu = accountOf({ is_admin: admin });
@@ -3105,7 +3188,14 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         const c = await openAdmin(fc);
         await c.page.getByTestId('callbacks-screen').waitFor({ timeout: 25000 });
         await c.page.getByTestId('callback-row-c1').waitFor({ timeout: 15000 });
-        check('onglets : « A rappeler (2) » et « Faits (1) »', /À rappeler \(2\)/.test(await c.page.getByTestId('callbacks-tab-new').innerText()) && /Faits \(1\)/.test(await c.page.getByTestId('callbacks-tab-done').innerText()));
+        check('onglets : « A rappeler (4) » et « Faits (1) »', /À rappeler \(4\)/.test(await c.page.getByTestId('callbacks-tab-new').innerText()) && /Faits \(1\)/.test(await c.page.getByTestId('callbacks-tab-done').innerText()));
+        const order = await c.page.locator('[data-testid^="callback-row-"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')));
+        check('ordre : le jour deja passe (c2), puis aujourd\'hui (c4), puis le jour a venir (c1), puis la demande sans jour (c5)', order.join(',') === 'callback-row-c2,callback-row-c4,callback-row-c1,callback-row-c5', order);
+        const d2 = norm(await c.page.getByTestId('callback-day-c2').innerText());
+        const d4 = norm(await c.page.getByTestId('callback-day-c4').innerText());
+        const d1 = norm(await c.page.getByTestId('callback-day-c1').innerText());
+        check('jour demande : « en retard » (jour passe), « aujourd\'hui ! » (jour du rappel), jour a venir sans alerte', new RegExp('À rappeler : ' + esc(dayLabel(dLate)) + ' — en retard').test(d2) && new RegExp('À rappeler : ' + esc(dayLabel(dToday)) + ' — aujourd’hui !').test(d4) && new RegExp('À rappeler : ' + esc(dayLabel(dSoon)) + '$').test(d1) && !/retard|aujourd’hui/.test(d1), [d2, d4, d1]);
+        check('ancienne demande sans jour : aucune ligne « A rappeler : »', (await c.page.getByTestId('callback-day-c5').count()) === 0);
         const r1 = norm(await c.page.getByTestId('callback-row-c1').innerText());
         check('demande 1 : prenom, numero (+235), origine « Panier en attente », appareil, article, il y a 10 min', /Awa/.test(r1) && /\+235 66 12 34 56/.test(r1) && /Panier en attente · Android/.test(r1) && /À propos de : Rolex \(\+1\)/.test(r1) && /il y a 10 min/.test(r1), r1);
         const r2 = norm(await c.page.getByTestId('callback-row-c2').innerText());
@@ -3123,6 +3213,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         await c.page.getByTestId('callbacks-tab-done').click();
         await c.page.getByTestId('callback-row-c1').waitFor({ timeout: 10000 });
         check('onglet « Faits » : les 2 demandes traitees', (await c.page.getByTestId('callback-row-c3').count()) === 1 && (await c.page.getByTestId('callback-row-c1').count()) === 1);
+        check('une demande deja traitee garde son jour mais sans alerte « en retard »', new RegExp('À rappeler : ' + esc(dayLabel(dDone)) + '$').test(norm(await c.page.getByTestId('callback-day-c3').innerText())) && !/retard|aujourd’hui/.test(norm(await c.page.getByTestId('callback-day-c3').innerText())));
         await c.page.screenshot({ path: path.join(OUT, 'Z5-rappels-admin.png') });
         check('aucune erreur (page admin des rappels)', c.errs.length === 0, c.errs);
         await c.ctx.close();
@@ -3132,7 +3223,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         const fc = { calls: [], table: { rows: [], error: { status: 404, body: { code: 'PGRST205', message: "Could not find the table 'public.assistant_callbacks' in the schema cache" } } } };
         const c = await openAdmin(fc);
         await c.page.getByTestId('callbacks-not-installed').waitFor({ timeout: 25000 });
-        check('table absente : message clair avec le nom du fichier a coller dans Supabase', /add-zara-sales-boost\.sql/.test(await c.page.getByTestId('callbacks-not-installed').innerText()));
+        check('table absente : message clair avec le nom des fichiers a coller dans Supabase', /add-zara-sales-boost\.sql/.test(await c.page.getByTestId('callbacks-not-installed').innerText()) && /add-zara-callback-day\.sql/.test(await c.page.getByTestId('callbacks-not-installed').innerText()));
         await c.ctx.close();
       }
       {
@@ -3146,6 +3237,112 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         check('client normal : « Acces reserve aux administrateurs », aucune demande visible', (await d.page.getByTestId('callback-row-c1').count()) === 0);
         await d.ctx.close();
       }
+    }
+  }
+
+  // =============================================== H. LE BOUTON DE ZARA : AU MILIEU, VIBRATION ET LUMIERE ===============================================
+  if (PARTS.includes('H')) {
+    console.log('\n== H. bouton de Zara : au milieu de l\'ecran (un peu plus haut qu\'avant), vibration et lumiere, bulle au-dessus, moins d\'animations respecte');
+    const base = `http://localhost:${port}`;
+    const open = async (v) => {
+      await v.page.goto(`${base}/`, { waitUntil: 'load' });
+      await v.page.getByTestId('assistant-fab').waitFor({ timeout: 25000 });
+      await sleep(800);
+    };
+    const geo = async (loc) => loc.evaluate((el) => { const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height, cx: r.x + r.width / 2, bottom: r.y + r.height }; });
+    // --- H1. place, vibration, lumiere
+    {
+      const v = await newVisitor(phone, { lang: 'fr', storage: { albasse_zara_name: 'Ali' } });
+      await open(v);
+      const fab = v.page.getByTestId('assistant-fab');
+      const g = await geo(fab);
+      const vp = v.page.viewportSize();
+      check('le bouton est au MILIEU de l\'ecran (centre a 2 px pres), de la taille d\'avant (62 px)', Math.abs(g.cx - vp.width / 2) <= 2 && Math.round(g.w) === 62, { g, vp });
+      check('le bouton est plus haut qu\'avant (bas de la photo a 136 px du bas de l\'ecran, avant 82 px) : visible, pas colle au bord', Math.abs(vp.height - g.bottom - 136) <= 2, { bottom: vp.height - g.bottom });
+      const anim = await fab.evaluate((el) => {
+        const list = el.getAnimations({ subtree: true });
+        const kf = (a) => a.effect.getKeyframes().map((k) => Object.keys(k).join(','));
+        return { n: list.length, shake: list.filter((a) => kf(a).some((k) => k.includes('transform')) && a.effect.getTiming().duration === 4200).length, glow: list.filter((a) => kf(a).some((k) => k.includes('boxShadow'))).length, rings: list.filter((a) => a.effect.getTiming().duration === 2400).length };
+      });
+      check('animations du navigateur actives : 1 vibration, 1 lueur qui respire, 2 halos', anim.shake === 1 && anim.glow === 1 && anim.rings === 2, anim);
+      // la photo vibre vraiment (une rotation non nulle dans les 5 secondes qui suivent), et le bouton qui recoit le toucher, lui, ne bouge jamais
+      const watched = await fab.evaluate(async (el) => {
+        const shaker = el.getAnimations({ subtree: true }).find((a) => a.effect.getTiming().duration === 4200).effect.target;
+        const seen = new Set();
+        let maxAbs = 0;
+        const slot0 = el.getBoundingClientRect();
+        let slotMoved = false;
+        const t0 = performance.now();
+        while (performance.now() - t0 < 5200) {
+          const m = getComputedStyle(shaker).transform;
+          if (m && m !== 'none') {
+            const [a, b] = m.replace(/matrix\(|\)/g, '').split(',').map(Number);
+            const deg = (Math.atan2(b, a) * 180) / Math.PI;
+            maxAbs = Math.max(maxAbs, Math.abs(deg));
+            seen.add(Math.round(deg));
+          }
+          const r = el.getBoundingClientRect();
+          if (Math.abs(r.x - slot0.x) > 0.5 || Math.abs(r.y - slot0.y) > 0.5 || Math.abs(r.width - slot0.width) > 0.5) slotMoved = true;
+          await new Promise((r2) => setTimeout(r2, 16));
+        }
+        return { maxAbs, angles: seen.size, slotMoved };
+      });
+      check('vibration : la photo tremble (rotation jusqu\'a ~14 degres) dans le cycle de 4,2 s', watched.maxAbs >= 8 && watched.maxAbs <= 16 && watched.angles >= 4, watched);
+      check('la zone du bouton qui recoit le toucher ne bouge jamais (le client peut toujours la toucher)', watched.slotMoved === false, watched);
+      await v.page.screenshot({ path: path.join(OUT, 'H1-bouton-milieu.png') });
+      await fab.click();
+      await panelOf(v.page).waitFor({ timeout: 15000 });
+      const left = await v.page.evaluate(() => document.getAnimations().filter((a) => a.effect && [4200, 2400].includes(a.effect.getTiming().duration)).length);
+      check('le chat s\'ouvre au toucher ; le bouton disparait et ses animations sont arretees (aucune animation qui tourne pour rien)', (await v.page.getByTestId('assistant-fab').count()) === 0 && left === 0, left);
+      check('aucune erreur (bouton)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+
+    // --- H2. la bulle de bienvenue : au-dessus du bouton, au milieu ; toucher la bulle ouvre le chat
+    {
+      const v = await newVisitor(phone, { lang: 'fr', storage: { albasse_zara_name: 'Ali' } });
+      await open(v);
+      const bubble = v.page.getByRole('button', { name: 'Ouvrir la discussion avec Zara Kings' });
+      await bubble.waitFor({ timeout: 15000 });
+      const b = await geo(bubble);
+      const g = await geo(v.page.getByTestId('assistant-fab'));
+      const vp = v.page.viewportSize();
+      check('la bulle est au-dessus du bouton, bien centree, et tient dans l\'ecran', Math.abs(b.cx - g.cx) <= 2 && b.bottom <= g.y - 6 && b.x >= 0 && b.x + b.w <= vp.width, { b, g });
+      await v.page.screenshot({ path: path.join(OUT, 'H2-bulle-au-dessus.png') });
+      await bubble.click();
+      await panelOf(v.page).waitFor({ timeout: 15000 });
+      check('toucher la bulle ouvre le chat', true);
+      await v.ctx.close();
+    }
+
+    // --- H3. sur la fiche produit, le bouton monte encore au-dessus de la barre « Commander »
+    if (realProduct) {
+      const v = await newVisitor(phone, { lang: 'fr', storage: { albasse_zara_name: 'Ali' } });
+      await v.page.goto(`${base}/`, { waitUntil: 'load' });
+      await v.page.getByTestId('assistant-fab').waitFor({ timeout: 25000 });
+      const slug = realProduct.slug;
+      await v.page.goto(`${base}/produit/${slug}`, { waitUntil: 'load' }).catch(() => {});
+      await sleep(2500);
+      const fab = v.page.getByTestId('assistant-fab');
+      if (await fab.count()) {
+        const g = await geo(fab);
+        const vp = v.page.viewportSize();
+        check('fiche produit : le bouton est 62 px plus haut (au-dessus de la barre Commander / Ajouter au panier)', Math.abs(vp.height - g.bottom - (136 + 62)) <= 2, { bottom: vp.height - g.bottom });
+      } else {
+        check('fiche produit : la page du produit n\'a pas pu etre ouverte par son adresse (test ignore)', true);
+      }
+      await v.ctx.close();
+    }
+
+    // --- H4. « moins d'animations » : le bouton reste immobile, avec une lueur fixe
+    {
+      const v = await newVisitor(phone, { lang: 'fr', storage: { albasse_zara_name: 'Ali' } });
+      await v.page.emulateMedia({ reducedMotion: 'reduce' });
+      await open(v);
+      const fab = v.page.getByTestId('assistant-fab');
+      const n = await fab.evaluate((el) => el.getAnimations({ subtree: true }).length);
+      check('moins d\'animations demande : aucune vibration ni halo (le bouton reste la, immobile, avec sa lueur fixe)', n === 0 && (await fab.count()) === 1, n);
+      await v.ctx.close();
     }
   }
 

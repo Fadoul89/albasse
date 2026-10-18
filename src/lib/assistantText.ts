@@ -61,7 +61,7 @@ export interface Texts {
   askNameMember: string;
   nice(name: string): string;
   footer: string;
-  placeholder: { message: string; name: string; city: string; amount: string; fullName: string; phone: string; address: string };
+  placeholder: { message: string; name: string; city: string; amount: string; fullName: string; phone: string; address: string; day: string };
   ui: { writing: string; close: string; reset: string; send: string; input: string; whatsappPill: string; whatsappAria: string; closeTeaser: string; otherLang: string };
   chooseLang: string;
   fabLabel: string;
@@ -121,6 +121,7 @@ export interface Texts {
     callback: string;
     callbackYes: string;
     callbackFix: string;
+    callbackDayFix: string;
     idk: string;
     anyBudget: string;
     giftWho: Record<Who, string>;
@@ -351,8 +352,10 @@ export interface Texts {
     askName: string;
     askPhone(name: string): string;
     badPhone: string;
-    confirm(name: string, phone: string, note: string): string;
-    done: string;
+    askDay: string;
+    badDay: string;
+    confirm(name: string, phone: string, note: string, day: string): string;
+    done(day: string): string;
     failed: string;
     cancelled: string;
   };
@@ -389,7 +392,7 @@ const FR: Texts = {
   askNameMember: 'Je vois que vous êtes connecté(e) 😊 Votre compte n’a pas encore de prénom : comment puis-je vous appeler ?',
   nice: (name) => `Enchantée ${name} ! 😊`,
   footer: `${ASSISTANT_NAME} est une assistante automatique. Pour une commande ou un souci, écrivez-nous sur WhatsApp.`,
-  placeholder: { message: 'Écrivez votre message…', name: 'Écrivez votre prénom…', city: 'Écrivez votre ville…', amount: 'Écrivez un montant…', fullName: 'Écrivez votre nom complet…', phone: 'Ex. 66123456', address: 'Quartier, rue, repère…' },
+  placeholder: { message: 'Écrivez votre message…', name: 'Écrivez votre prénom…', city: 'Écrivez votre ville…', amount: 'Écrivez un montant…', fullName: 'Écrivez votre nom complet…', phone: 'Ex. 66123456', address: 'Quartier, rue, repère…', day: 'Ou écrivez le jour (ex. jeudi)…' },
   ui: {
     writing: 'Zara est en train d’écrire…',
     close: 'Fermer',
@@ -459,6 +462,7 @@ const FR: Texts = {
     callback: '📲 Me rappeler sur WhatsApp',
     callbackYes: 'Oui, d’accord',
     callbackFix: 'Changer le numéro',
+    callbackDayFix: 'Changer le jour',
     idk: '🤷 Je ne sais pas',
     anyBudget: 'Peu importe',
     giftWho: { elle: '👩 Pour elle', lui: '👨 Pour lui', enfant: '👶 Pour un enfant' },
@@ -830,8 +834,10 @@ const FR: Texts = {
     askName: 'Avec plaisir 😊 Quel est votre prénom ?',
     askPhone: (name) => `Merci ${name} 🙏 Quel est votre numéro WhatsApp ? (exemple : 66 12 34 56)`,
     badPhone: 'Je n’ai pas bien compris ce numéro 🙏 Il faut 8 chiffres (exemple : 66 12 34 56).',
-    confirm: (name, phone, note) => `Je transmets à l’équipe : ${name}, WhatsApp ${phone}${note ? ` (à propos de : ${note})` : ''}.\nElle vous écrira sur WhatsApp à ce sujet. C’est d’accord ?`,
-    done: 'C’est noté ✅ L’équipe vous écrira sur WhatsApp dès que possible. Merci de votre confiance 🙏',
+    askDay: 'Quel jour voulez-vous que l’équipe vous écrive ? 📅',
+    badDay: 'Je n’ai pas compris le jour 🙏 Touchez un des jours ci-dessous.',
+    confirm: (name, phone, note, day) => `Je transmets à l’équipe : ${name}, WhatsApp ${phone}${note ? ` (à propos de : ${note})` : ''}.\n📅 Elle vous écrira sur WhatsApp : ${day}\nC’est d’accord ?`,
+    done: (day) => `C’est noté ✅ L’équipe vous écrira sur WhatsApp : ${day}\nMerci de votre confiance 🙏`,
     failed: 'Je n’ai pas pu enregistrer votre demande 😕 Écrivez-nous directement sur WhatsApp : l’équipe vous répondra.',
     cancelled: 'D’accord, je n’enregistre rien 😊',
   },
@@ -870,7 +876,7 @@ const AR: Texts = {
   askNameMember: 'أرى أنك مسجّل الدخول 😊 حسابك لا يحتوي على اسم بعد، فكيف يمكنني أن أناديك؟',
   nice: (name) => `سعدت بمعرفتك يا ${name}! 😊`,
   footer: 'زارا كينغز مساعدة آلية. لأي طلب أو مشكلة، راسلنا على واتساب.',
-  placeholder: { message: 'اكتب رسالتك…', name: 'اكتب اسمك الأول…', city: 'اكتب مدينتك…', amount: 'اكتب مبلغا…', fullName: 'اكتب اسمك الكامل…', phone: 'مثال: 66123456', address: 'الحي، الشارع، معلم قريب…' },
+  placeholder: { message: 'اكتب رسالتك…', name: 'اكتب اسمك الأول…', city: 'اكتب مدينتك…', amount: 'اكتب مبلغا…', fullName: 'اكتب اسمك الكامل…', phone: 'مثال: 66123456', address: 'الحي، الشارع، معلم قريب…', day: 'أو اكتب اليوم (مثال: الخميس)…' },
   ui: {
     writing: 'زارا تكتب الآن…',
     close: 'إغلاق',
@@ -940,6 +946,7 @@ const AR: Texts = {
     callback: '📲 تواصلوا معي على واتساب',
     callbackYes: 'نعم، موافق',
     callbackFix: 'تغيير الرقم',
+    callbackDayFix: 'تغيير اليوم',
     idk: '🤷 لا أعرف',
     anyBudget: 'لا يهم',
     giftWho: { elle: '👩 لها', lui: '👨 له', enfant: '👶 لطفل' },
@@ -1310,8 +1317,10 @@ const AR: Texts = {
     askName: 'بكل سرور 😊 ما اسمك الأول؟',
     askPhone: (name) => `شكرا ${name} 🙏 ما رقم واتساب الخاص بك؟ (مثال: 66 12 34 56)`,
     badPhone: 'لم أفهم هذا الرقم جيدا 🙏 يجب أن يكون 8 أرقام (مثال: 66 12 34 56).',
-    confirm: (name, phone, note) => `أحول إلى الفريق: ${name}، واتساب ${phone}${note ? ` (بخصوص: ${note})` : ''}.\nسيراسلك الفريق على واتساب بخصوص ذلك. هل أنت موافق؟`,
-    done: 'تم التسجيل ✅ سيراسلك الفريق على واتساب في أقرب وقت. شكرا لثقتك 🙏',
+    askDay: 'في أي يوم تريد أن يراسلك الفريق؟ 📅',
+    badDay: 'لم أفهم اليوم 🙏 اضغط على أحد الأيام أدناه.',
+    confirm: (name, phone, note, day) => `أحول إلى الفريق: ${name}، واتساب ${phone}${note ? ` (بخصوص: ${note})` : ''}.\n📅 سيراسلك الفريق على واتساب: ${day}\nهل أنت موافق؟`,
+    done: (day) => `تم التسجيل ✅ سيراسلك الفريق على واتساب: ${day}\nشكرا لثقتك 🙏`,
     failed: 'لم أتمكن من تسجيل طلبك 😕 راسلنا مباشرة على واتساب وسيرد عليك الفريق.',
     cancelled: 'حسنا، لن أسجل شيئا 😊',
   },

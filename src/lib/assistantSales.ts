@@ -75,3 +75,86 @@ export function callbackNote(names: string[], max = 280): string {
   const rest = clean.length - Math.max(used, 1);
   return rest > 0 ? `${note} (+${rest})` : note;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Le jour du rappel WhatsApp : le client choisit un jour précis parmi les prochains jours ouvrables (du lundi au samedi), à l'heure
+// du Tchad (UTC+1 toute l'année, sans heure d'été). Aujourd'hui n'est proposé que s'il reste du temps à l'équipe.
+// ---------------------------------------------------------------------------------------------
+
+export interface CallbackDay {
+  iso: string; // 2026-10-20
+  label: string; // « Demain (mardi 20 oct.) »
+  offset: number; // 0 = aujourd'hui, 1 = demain...
+  weekday: number; // 0 = dimanche
+  dom: number; // jour du mois
+}
+
+const CHAD_OFFSET_MS = 3600000;
+// Après cette heure (heure du Tchad), « aujourd'hui » n'est plus proposé (la boutique ferme à 16 h).
+export const CALLBACK_TODAY_UNTIL_HOUR = 15;
+export const CALLBACK_DAY_CHOICES = 5;
+
+const DAYS: Record<'fr' | 'ar', string[]> = {
+  fr: ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'],
+  ar: ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'],
+};
+const MONTHS: Record<'fr' | 'ar', string[]> = {
+  fr: ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'],
+  ar: ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'],
+};
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+const isoOf = (d: Date) => `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
+
+// La date du jour au Tchad (AAAA-MM-JJ).
+export function chadDayIso(now: Date = new Date()): string {
+  return isoOf(new Date(now.getTime() + CHAD_OFFSET_MS));
+}
+
+// « mardi 20 oct. » d'une date AAAA-MM-JJ (sans dépendre du fuseau de l'appareil).
+export function dayLabelOf(iso: string, lang: 'fr' | 'ar' = 'fr'): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return iso;
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12));
+  return `${DAYS[lang][d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[lang][d.getUTCMonth()]}`;
+}
+
+export function callbackDays(now: Date = new Date(), lang: 'fr' | 'ar' = 'fr', count = CALLBACK_DAY_CHOICES): CallbackDay[] {
+  const chad = new Date(now.getTime() + CHAD_OFFSET_MS);
+  const hour = chad.getUTCHours();
+  const startOffset = hour < CALLBACK_TODAY_UNTIL_HOUR ? 0 : 1;
+  const out: CallbackDay[] = [];
+  for (let offset = startOffset; out.length < count && offset < 14; offset++) {
+    const d = new Date(Date.UTC(chad.getUTCFullYear(), chad.getUTCMonth(), chad.getUTCDate() + offset, 12));
+    const weekday = d.getUTCDay();
+    if (weekday === 0) continue; // dimanche : l'équipe n'écrit pas
+    const plain = `${DAYS[lang][weekday]} ${d.getUTCDate()} ${MONTHS[lang][d.getUTCMonth()]}`;
+    const word = offset === 0 ? (lang === 'ar' ? 'اليوم' : 'Aujourd’hui') : offset === 1 ? (lang === 'ar' ? 'غدا' : 'Demain') : null;
+    const label = word ? `${word} (${plain})` : lang === 'ar' ? plain : plain.charAt(0).toUpperCase() + plain.slice(1);
+    out.push({ iso: isoOf(d), label, offset, weekday, dom: d.getUTCDate() });
+  }
+  return out;
+}
+
+const DAY_WORDS: Record<string, number> = {
+  dimanche: 0, lundi: 1, mardi: 2, mercredi: 3, jeudi: 4, vendredi: 5, samedi: 6,
+  الاحد: 0, الاثنين: 1, الثلاثاء: 2, الاربعاء: 3, الخميس: 4, الجمعه: 5, السبت: 6,
+};
+
+// Le jour écrit par le client (« demain », « lundi », « le 23 », « اليوم ») parmi ceux proposés ; null si rien n'est clair.
+// `normalized` est le texte déjà passé par normalize().
+export function dayFromText(normalized: string, days: CallbackDay[]): CallbackDay | null {
+  const text = ` ${normalized} `;
+  if (/ (aujourd hui|aujourdhui|ajourdhui|today|اليوم) /.test(text)) return days.find((d) => d.offset === 0) ?? null;
+  if (/ (demain|tomorrow|غدا|بكره) /.test(text)) return days.find((d) => d.offset === 1) ?? null;
+  for (const word of normalized.split(' ')) {
+    const wd = DAY_WORDS[word];
+    if (wd !== undefined) return days.find((d) => d.weekday === wd) ?? null;
+  }
+  const n = /(?:^|\D)(\d{1,2})(?:\D|$)/.exec(normalized);
+  if (n) {
+    const dom = Number(n[1]);
+    return days.find((d) => d.dom === dom) ?? null;
+  }
+  return null;
+}
