@@ -8,6 +8,7 @@ import { SearchScreen } from '../screens/SearchScreen';
 import { CartScreen } from '../screens/CartScreen';
 import { AccountScreen } from '../screens/AccountScreen';
 import { useCartStore } from '../store/cartStore';
+import { TAB_BAR_HEIGHT, TAB_CENTER_GAP } from './tabLayout';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 
@@ -38,7 +39,7 @@ export function TabNavigator() {
           borderColor: colors.border,
           borderTopLeftRadius: radius.xl,
           borderTopRightRadius: radius.xl,
-          height: 78,
+          height: TAB_BAR_HEIGHT,
           paddingBottom: 12,
           paddingTop: 10,
           shadowColor: '#000',
@@ -47,6 +48,9 @@ export function TabNavigator() {
           shadowOffset: { width: 0, height: -3 },
           elevation: 10,
         },
+        // l'espace du milieu (entre Recherche et Panier) est la place du bouton de Zara
+        tabBarItemStyle:
+          route.name === 'Search' ? { marginRight: TAB_CENTER_GAP / 2 } : route.name === 'Cart' ? { marginLeft: TAB_CENTER_GAP / 2 } : undefined,
         tabBarActiveTintColor: colors.gold,
         tabBarInactiveTintColor: colors.creamFaint,
         tabBarLabel: ({ color, focused }) => {

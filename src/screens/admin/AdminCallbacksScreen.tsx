@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable, RefreshControl, Linking 
 import { useAuthStore } from '../../store/authStore';
 import { colors, fonts, radius, spacing } from '../../theme';
 import { ScreenHeader } from '../../components/ScreenHeader';
-import { fetchCallbacks, setCallbackDone, type CallbackListResult, type CallbackRow, type CallbackSource } from '../../lib/assistantData';
+import { deleteCallback, fetchCallbacks, setCallbackDone, type CallbackListResult, type CallbackRow, type CallbackSource } from '../../lib/assistantData';
 import { chadDayIso, dayLabelOf } from '../../lib/assistantSales';
 
 // « Rappels WhatsApp » : les clients qui ont laissé leur numéro à Zara (avec leur accord). On les écrit au réveil.
@@ -52,6 +52,9 @@ export function AdminCallbacksScreen() {
   const [loading, setLoading] = useState(true);
   const [result, setResult] = useState<CallbackListResult | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // suppression en deux temps : « 🗑 » puis « Oui, supprimer » (pas de fenetre du navigateur)
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState(false);
   const latest = useRef(0);
 
   const load = useCallback(async () => {
@@ -72,6 +75,16 @@ export function AdminCallbacksScreen() {
     const ok = await setCallbackDone(row.id, row.status === 'new');
     setBusy(null);
     if (ok) await load();
+  };
+
+  const remove = async (row: CallbackRow) => {
+    setBusy(row.id);
+    setDeleteError(false);
+    const ok = await deleteCallback(row.id);
+    setBusy(null);
+    setConfirming(null);
+    if (ok) await load();
+    else setDeleteError(true);
   };
 
   if (!profile?.is_admin) {
@@ -99,6 +112,12 @@ export function AdminCallbacksScreen() {
         </Text>
 
         {loading && !result ? <Text style={styles.loading}>Chargement…</Text> : null}
+
+        {deleteError ? (
+          <Text style={styles.deleteError} testID="callbacks-delete-error">
+            La suppression n’a pas marché. Réessayez dans un instant.
+          </Text>
+        ) : null}
 
         {result && !result.ok ? <Problem reason={result.reason} message={result.message} onRetry={load} /> : null}
 
@@ -148,7 +167,32 @@ export function AdminCallbacksScreen() {
                     <Pressable style={styles.doneBtn} disabled={busy === row.id} onPress={() => toggle(row)} testID={`callback-done-${row.id}`}>
                       <Text style={styles.doneText}>{row.status === 'new' ? '✅ Fait' : 'Remettre'}</Text>
                     </Pressable>
+                    <Pressable
+                      style={styles.trashBtn}
+                      onPress={() => {
+                        setDeleteError(false);
+                        setConfirming(confirming === row.id ? null : row.id);
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Supprimer cette demande"
+                      testID={`callback-delete-${row.id}`}
+                    >
+                      <Text style={styles.callText}>🗑</Text>
+                    </Pressable>
                   </View>
+                  {confirming === row.id ? (
+                    <View style={styles.confirmBox} testID={`callback-confirm-${row.id}`}>
+                      <Text style={styles.confirmText}>Supprimer cette demande pour toujours ?</Text>
+                      <View style={styles.actions}>
+                        <Pressable style={styles.confirmYes} disabled={busy === row.id} onPress={() => remove(row)} testID={`callback-delete-yes-${row.id}`}>
+                          <Text style={styles.confirmYesText}>Oui, supprimer</Text>
+                        </Pressable>
+                        <Pressable style={styles.callBtn} onPress={() => setConfirming(null)} testID={`callback-delete-no-${row.id}`}>
+                          <Text style={styles.doneText}>Non</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  ) : null}
                 </View>
               ))
             )}
@@ -215,6 +259,12 @@ const styles = StyleSheet.create({
   callText: { fontSize: 14 },
   doneBtn: { borderRadius: radius.pill, borderWidth: 1, borderColor: colors.gold, paddingHorizontal: 14, paddingVertical: 9 },
   doneText: { color: colors.gold, fontFamily: fonts.bodySemiBold, fontSize: 13 },
+  trashBtn: { borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 9 },
+  confirmBox: { marginTop: 6, borderRadius: radius.md, borderWidth: 1, borderColor: colors.error, padding: spacing.sm, gap: 6 },
+  confirmText: { color: colors.cream, fontFamily: fonts.bodySemiBold, fontSize: 13 },
+  confirmYes: { backgroundColor: colors.error, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 9 },
+  confirmYesText: { color: colors.cream, fontFamily: fonts.bodyBold, fontSize: 13 },
+  deleteError: { color: colors.error, fontFamily: fonts.bodySemiBold, fontSize: 13, textAlign: 'center', marginBottom: spacing.sm },
   problem: { backgroundColor: colors.panel, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.gold, padding: spacing.md, gap: 8 },
   problemTitle: { color: colors.goldLight, fontFamily: fonts.bodyBold, fontSize: 15 },
   problemText: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 13, lineHeight: 20 },

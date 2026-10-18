@@ -355,6 +355,16 @@ export async function fetchCallbacks(): Promise<CallbackListResult> {
   }
 }
 
+// Supprime une demande pour de bon (administrateur seulement). Vrai seulement si la ligne a vraiment disparu de la base.
+export async function deleteCallback(id: string): Promise<boolean> {
+  try {
+    const { data, error } = await withTimeout(Promise.resolve(supabase.from('assistant_callbacks').delete().eq('id', id).select('id')), TIMEOUT_MS);
+    return !error && (data ?? []).length > 0;
+  } catch {
+    return false;
+  }
+}
+
 export async function setCallbackDone(id: string, done: boolean): Promise<boolean> {
   try {
     const { error } = await withTimeout(
