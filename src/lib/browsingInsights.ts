@@ -447,6 +447,9 @@ export interface Suggestion {
 export interface SuggestionContext {
   now: number;
   allowed: boolean; // suivi autorisé par le visiteur
+  // Ce que la boutique peut vraiment proposer en ce moment (catalogue réel). Sans ces vérifications, tout est permis.
+  available?: (productId: string) => boolean; // l'article existe encore et est en stock
+  categoryHasMore?: (categoryKey: string, seenIds: string[]) => boolean; // la catégorie a d'autres articles à montrer
 }
 
 const sameDay = (a: number, b: number) => Math.abs(a - b) < 24 * 3600 * 1000;
@@ -475,6 +478,7 @@ export function pickSuggestion(p: BrowsingProfile, ctx: SuggestionContext): Sugg
   for (const { r, est } of products) {
     const key = `product:${r.id}`;
     if (recent(key)) continue;
+    if (ctx.available && !ctx.available(r.id)) continue;
     const type = productTypeOf(r.name, r.categorySlug, r.categoryName);
     const manyColors = r.colors.length >= 2;
     return { kind: manyColors && type !== 'perfume' ? 'variants' : 'product_revisit', key, productId: r.id, categoryKey: r.categorySlug || r.categoryId, type, level: est.level };
@@ -488,6 +492,7 @@ export function pickSuggestion(p: BrowsingProfile, ctx: SuggestionContext): Sugg
   for (const c of cats) {
     const key = `cat:${c.key}`;
     if (recent(key)) continue;
+    if (ctx.categoryHasMore && !ctx.categoryHasMore(c.key, p.categories[c.key]?.productIds ?? [])) continue;
     const sample = c.key ? Object.values(p.products).find((r) => (r.categorySlug || r.categoryId) === c.key) : undefined;
     const type = productTypeOf(sample?.name, c.key, c.name);
     return { kind: type === 'perfume' ? 'perfume_browse' : 'category_browse', key, productId: null, categoryKey: c.key, type, level: c.level };

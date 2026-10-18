@@ -314,6 +314,8 @@ export type Intent =
   | 'cart'
   | 'add'
   | 'install'
+  | 'tracking'
+  | 'history'
   | 'search';
 
 const has = (tokens: string[], words: string[]) => words.some((w) => tokens.includes(w));
@@ -407,6 +409,42 @@ export function personalKind(text: string): PersonalKind | null {
   return null;
 }
 
+// Suivi de navigation (les articles regardés, pour que Zara conseille mieux) : le visiteur peut le refuser, le reprendre,
+// demander ce qui est retenu, ou demander ce qu'il a regardé. Ces phrases passent AVANT « suivre ma commande ».
+const TRACK_STOP_RE = ar(
+  'ne me (suis|suit|suivez|suivras|traque|traquez|surveille|surveillez|espionne|espionnez) (plus|pas)|(arrete|arretez|stop|stoppe|cesse|cessez) (de |d )?(me )?(suivre|tracer|traquer|surveiller|espionner)|(plus|pas) me (suivre|tracer|traquer)|(refuse|refuser|desactive|desactiver|coupe|couper|annule|annuler|arrete|arreter|stop|stoppe|supprime|supprimer) (le |mon |ce )?(suivi(?! de (ma|mon|mes|la|le|ce|cette|commande|colis))|tracking|tracage)|ne retiens (plus|pas)|ne garde (plus|pas) (ce que|mes)|ne memorise (plus|pas)|(efface|effacer|supprime|supprimer|vide|vider) (tout |toute )?(mon |ma |mes |l )?(historique|memoire|donnees)|je ne veux pas (etre )?(suivi|suivie|trace|tracee|espionne|espionnee|surveille|surveillee)|pas d espionnage' +
+    '|لا (تتبعني|تتابعني|تراقبني|تحفظ|تتجسس)|توقف عن (تتبعي|متابعتي|مراقبتي)|(ايقاف|الغاء|رفض) (التتبع|المتابعه|المراقبه)|لا اريد (ان )?(اتتبع|اتابع|تتبعي|متابعتي|مراقبتي)|(امسح|احذف|اشطب) (سجل|ما شاهدت|بياناتي)'
+);
+const TRACK_START_RE = ar(
+  '(tu peux|vous pouvez|tu as le droit de|vous avez le droit de) me (suivre|retenir)|(active|activer|autorise|autoriser|accepte|accepter|reactive|reactiver|remets|remettre) (le |mon |ce )?(suivi(?! de (ma|mon|mes|la|le|ce|cette|commande|colis))|tracking)|retiens (ce que|les articles)|souviens toi de ce que je regarde|ok pour le suivi|je t autorise a me suivre' +
+    '|(يمكنك|تستطيع) (ان )?(تتبعني|تتابعني|تحفظ|متابعتي|تتبعي)|(فعل|شغل|اسمح ب|اقبل) (التتبع|المتابعه)|تابعني|اتبعني'
+);
+const TRACK_ABOUT_RE = ar(
+  '(tu|vous) (me )?(suis|suit|suivez|surveille|surveillez|espionne|espionnez|traque|traquez)( |$)|(tu|vous) (retiens|retenez|memorises?|memorisez|collectes?|collectez|enregistres?|enregistrez|gardes?|gardez) (quoi|quelque chose|des (donnees|infos|informations)|mes)|(que|qu est ce que|ce que) (tu |vous )?(sais|savez|retiens|retenez|collectes?|collectez) (de|sur) moi|(que|qu est ce que) (sais|savez|retiens|retenez|collectes?|collectez) (tu |vous )?(de|sur) moi|donnees personnelles|vie privee|suivi de navigation|cookies|mes donnees' +
+    '|هل (تتبعني|تتابعني|تراقبني|تحفظ)|ماذا (تعرف|تحفظ|تجمع) عني|بياناتي|خصوصيتي|الخصوصيه|الكوكيز'
+);
+const HISTORY_RE = ar(
+  '(qu est ce que|quels?|quelles?|ce que|rappelle|rappeler|montre|montrez|liste|dis moi|dites moi|redis moi|c etait quoi|quoi).{0,30}(j ai|ai je|jai) (deja |dernierement |recemment )?(regarde|vu|vue|consulte|visite)|(derniers?|recents?|precedents?) (articles?|produits?|parfums?|modeles?|chaussures?|vetements?) (regardes?|vus?|consultes?)|mes (derniers )?(articles?|produits?|parfums?) (vus|regardes|consultes)|historique de (navigation|visite|consultation)|(tu|vous) (te |vous )?(souviens|souvenez) de ce que|ce que je regardais' +
+    '|(ماذا|ما الذي|ما هي المنتجات التي) (شاهدت|تصفحت)|المنتجات التي (شاهدت|تصفحت)|(اخر|آخر) (المنتجات|الاصناف) التي (شاهدت|تصفحت)|سجل التصفح|ما شاهدته'
+);
+
+export type TrackingKind = 'stop' | 'start' | 'about';
+
+// Le visiteur parle du suivi de sa navigation : l'arrêter (stop), le reprendre (start) ou demander ce qui est retenu (about).
+export function trackingKind(text: string): TrackingKind | null {
+  const n = normalize(text);
+  if (!n) return null;
+  if (TRACK_STOP_RE.test(n)) return 'stop';
+  if (TRACK_START_RE.test(n)) return 'start';
+  if (TRACK_ABOUT_RE.test(n)) return 'about';
+  return null;
+}
+
+// Il demande ce qu'il a regardé (« qu'est-ce que j'ai regardé ? », « mes derniers articles vus »).
+export function wantsHistory(text: string): boolean {
+  return HISTORY_RE.test(normalize(text));
+}
+
 // Programme de fidélité : le grade, les points, les paliers. Les noms de métaux (« or », « argent », « ذهبي ») ne comptent pas seuls :
 // ce sont aussi des produits ou de l'argent.
 const LOYALTY_RE = ar(
@@ -435,6 +473,9 @@ export function detectIntent(text: string): Intent {
   if (isThanksOnly(base, tokens)) return 'thanks';
   if (SMALLTALK.test(n)) return 'smalltalk';
   if (greetingKind(text) && base.length <= 3) return 'greeting';
+  // le suivi de navigation passe avant « suivre ma commande » et les autres sujets
+  if (trackingKind(text)) return 'tracking';
+  if (wantsHistory(text)) return 'history';
   if (personalKind(text)) return 'personal';
   if (LOYALTY_RE.test(n)) return 'loyalty';
   // installer l'application / ajouter à l'écran d'accueil

@@ -17,7 +17,7 @@ SUPABASE_ANON_KEY=... node --import ./tests/zara/register.mjs tests/zara/zara-br
 npx expo export --platform web
 SUPABASE_ANON_KEY=... node tests/zara/zara-ui.test.js dist 4333
 ```
-`PARTS=MTOF` lance seulement certaines parties : A conseil, L langues, K bouton « + » / panier / commande, P installation du raccourci (question « Avez-vous déjà installé l'application ? », bouton Installer, photo iPhone), R profil client modifiable, S statistiques de Zara (appareil iPhone/Android, commandes, comptes et installations « grâce à Zara », page administrateur « Statistiques de Zara »), M client avec compte reconnu et salué par son prénom (dont la connexion depuis Zara), T personnalité (politesse, compliments, adresse et numéro personnels), O Zara finalise l'achat dans le chat (fausse base : aucune vraie commande), F programme de fidélité (grade, points, comment gagner), B C D E reste du site (panier, client connecté, panne, clavier, ordinateur).
+`PARTS=MTOF` lance seulement certaines parties : A conseil, L langues, K bouton « + » / panier / commande, P installation du raccourci (question « Avez-vous déjà installé l'application ? », bouton Installer, photo iPhone), R profil client modifiable, S statistiques de Zara (appareil iPhone/Android, commandes, comptes et installations « grâce à Zara », page administrateur « Statistiques de Zara »), M client avec compte reconnu et salué par son prénom (dont la connexion depuis Zara), T personnalité (politesse, compliments, adresse et numéro personnels), O Zara finalise l'achat dans le chat (fausse base : aucune vraie commande), F programme de fidélité (grade, points, comment gagner), U suivi de navigation (articles regardés, temps ACTIF, variantes, panier, recherches, consentement « Refuser » / « Ne pas me suivre », envoi vers la base sans double comptage, reprise après coupure, 90 jours), V Zara intelligente (suggestions discrètes avec les vrais articles, « Non merci », historique « qu'est-ce que j'ai regardé », « ne me suis plus », signal du navigateur, arabe), W page administrateur « Suivi de navigation » (fausse base), B C D E reste du site (panier, client connecté, panne, clavier, ordinateur).
 
 ## Le script SQL des statistiques de Zara (add-assistant-stats.sql)
 Il n'est pas appliqué à la vraie base par les tests. Pour le vérifier sans toucher à la vraie base, on le joue sur un Postgres local jetable
@@ -25,3 +25,17 @@ Il n'est pas appliqué à la vraie base par les tests. Pour le vérifier sans to
 `add-assistant-client-counter.sql`. Contrôles faits : le script se relance sans erreur ; un visiteur ne peut ni lire les tables ni appeler
 les statistiques ; un client non administrateur est refusé ; l'administrateur reçoit les bons chiffres (commandes fausses et annulées
 écartées, périodes début inclus / fin exclue, appareil inconnu = « Autre »).
+
+## Le script SQL du suivi de navigation (add-browsing-intelligence.sql)
+Même méthode : il n'est pas appliqué à la vraie base par les tests, on le joue sur un Postgres local jetable (même décor, plus les stubs `anon` /
+`authenticated`). Contrôles faits : le script se relance sans erreur ; un visiteur ne peut ni lire les tables ni appeler le tableau de suivi ;
+un client non administrateur est refusé ; un envoi n'est compté qu'une fois même s'il arrive deux fois (numéro d'envoi) ; seules des différences
+sont ajoutées ; un achat n'est jamais « défait » par un retrait du panier ; les valeurs illisibles ou énormes sont ramenées à des valeurs sûres ;
+« refuser » efface les lignes du visiteur ; l'effacement après 90 jours marche ; l'administrateur voit des références anonymes (V-xxxxxx / C-xxxxxxxx),
+jamais l'identifiant brut ni le nom.
+
+## Ce que les tests ne prouvent pas
+- Les tests utilisent une fausse base pour tout ce qui s'écrit (suivi, commandes, statistiques) : rien n'est écrit dans la vraie base.
+- La mesure du temps actif est testée dans un navigateur de test (onglet caché, actualisation, retour sur la fiche, coupure de connexion) ; sur de
+  vrais téléphones, les veilles et changements d'application peuvent varier : le temps compte au plus 2 secondes par seconde et jamais pendant
+  une veille, mais le chiffre reste une estimation.

@@ -131,6 +131,17 @@ export function AdminDashboardScreen() {
               <Text style={styles.sourceLinkArrow}>→</Text>
             </Pressable>
 
+            <Pressable style={styles.sourceLinkCard} onPress={() => navigation.navigate('AdminBrowsing')} testID="dashboard-browsing-link">
+              <Text style={styles.sourceLinkIcon}>🔎</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sourceLinkTitle}>Suivi de navigation</Text>
+                <Text style={styles.sourceLinkSubtitle}>
+                  Les articles regardés par les visiteurs, le niveau d'intérêt, les recherches, les suggestions de Zara
+                </Text>
+              </View>
+              <Text style={styles.sourceLinkArrow}>→</Text>
+            </Pressable>
+
             <Section title="📡 Performance par source (résumé)">
               {stats.sourcePerformance.length === 0 ? (
                 <Text style={styles.emptyText}>Pas encore de données.</Text>

@@ -23,6 +23,7 @@ import {
   searchCatalog,
   thanksKind,
   tokenize,
+  trackingKind,
   wantsCancelOrder,
   wantsConfirmOrder,
   wantsEditOrder,
@@ -73,6 +74,9 @@ import {
 import { fetchCartStatus, fetchLoyaltyPoints, fetchPaymentNumbers, fetchProductForCart, getCatalog, getCategories, getCities, getStoreInfo, logAssistantEvent, startChatToday, toCard, type AssistantProduct } from '../lib/assistantData';
 import { clearIntent, currentDevice, markIntent } from '../lib/assistantAttribution';
 import { trackShortcutInstallIfNeeded } from '../lib/appInstallTracking';
+import { availability, familyPicks, inCatalog, isFamily, moreInCategory, perfumesInStock, planSuggestion, similarProducts, type PlannedChip } from '../lib/assistantInterest';
+import * as bi from '../lib/browsingInsights';
+import { getBrowsingProfile, recordSuggestion, setTrackingChoice, trackingState } from '../lib/browsingTracker';
 import { createOrder, generateOrderId } from '../lib/orders';
 import { trackTikTokEvent } from '../lib/tiktokPixel';
 import { initiatePayment } from '../lib/payments';
@@ -135,6 +139,8 @@ export interface ChatAction {
     | 'orderCancel'
     | 'orderAddress'
     | 'orderPage'
+    | 'interest'
+    | 'privacy'
     | 'account';
   payload?: string;
   highlight?: boolean;
@@ -535,7 +541,8 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
   }
 
   // Si le visiteur regarde un produit, ou a un panier : Zara commence par là.
-  async function contextMessages() {
+  // Retourne true si Zara a parlé du produit regardé ou du panier (elle n'ajoute alors pas de suggestion par-dessus).
+  async function contextMessages(): Promise<boolean> {
     try {
       const route = navigationRef.isReady() ? navigationRef.getCurrentRoute() : undefined;
       if (route?.name === 'Product') {
@@ -544,7 +551,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
           const product = (await getCatalog()).find((p) => p.slug === slug);
           if (product && product.stock > 0) {
             await say(productPitch(product, get().lang));
-            return;
+            return true;
           }
         }
       }
@@ -553,19 +560,23 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         const count = items.reduce((n, i) => n + i.quantity, 0);
         const total = items.reduce((sum, i) => sum + i.product.price * i.quantity, 0);
         await say(cartReminder(count, total, get().lang));
+        return true;
       }
     } catch {
       // pas de message de contexte : on continue avec la suite
     }
+    return false;
   }
 
   // Après la présentation : le contexte (produit regardé, panier), les informations importantes,
   // puis l'invitation à créer un compte (visiteur) ou le menu (client connecté).
   async function onboarding() {
-    await contextMessages();
+    const spoke = await contextMessages();
     await say(T().info);
     if (isGuest()) await accountInvitation();
     else await showMenu(T().menuIntro);
+    // une suggestion discrète d'après les articles regardés, seulement si Zara n'a pas déjà parlé du produit ou du panier
+    if (!spoke) await maybeSuggest();
   }
 
   // Le prénom est demandé une seule fois. Un visiteur qui a déjà un compte peut se connecter : Zara le reconnaîtra.
@@ -1738,6 +1749,194 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
   }
 
   // -------------------------------------------------------------------------------------------
+  // Intelligence commerciale : suggestions discrètes d'après les articles regardés, historique, choix du suivi
+  // Zara ne prétend jamais connaître ce que le client regarde : sans suivi (refusé, signal du navigateur, pas de données), elle se tait
+  // ou le dit franchement. Tout ce qu'elle propose vient du catalogue réel (prix, stock, tailles, couleurs).
+  // -------------------------------------------------------------------------------------------
+
+  const productKeyId = (key: string) => (key.startsWith('product:') ? key.slice('product:'.length) : null);
+  const lastPhrase = (fr: string, ar: string) => (get().lang === 'ar' ? ar : fr);
+  const stopTrackingChip = (): ChatAction => sayBtn(T().chip.stopTracking, lastPhrase('ne me suis plus', 'لا تتبعني'));
+  const allowTrackingChip = (): ChatAction => sayBtn(T().chip.allowTracking, lastPhrase('tu peux me suivre', 'يمكنك متابعتي'));
+  const myViewedChip = (): ChatAction => sayBtn(T().chip.myViewed, lastPhrase('qu’est-ce que j’ai regardé', 'ماذا شاهدت'));
+  const privacyChip = (): ChatAction => ({ label: T().chip.privacy, kind: 'privacy' });
+
+  const interestChip = (c: PlannedChip, key: string, kind: string, follow: boolean): ChatAction => ({
+    label: c.label,
+    kind: 'interest',
+    payload: [c.op, key, kind, c.arg, follow ? '1' : ''].join('|'),
+    highlight: c.op !== 'no' && !follow,
+  });
+
+  // Y a-t-il une suggestion possible, sans attendre le catalogue ? (évite d'afficher « Zara écrit... » pour rien)
+  function suggestionPossible(): boolean {
+    if (Platform.OS !== 'web' || get().step !== 'menu') return false;
+    const profile = getBrowsingProfile();
+    return !!profile && !!bi.pickSuggestion(profile, { now: Date.now(), allowed: true });
+  }
+
+  // Une suggestion, au plus : seulement quand Zara n'est au milieu de rien (ni question, ni commande), avec un vrai article en stock.
+  async function maybeSuggest(): Promise<boolean> {
+    if (Platform.OS !== 'web' || get().step !== 'menu') return false;
+    const profile = getBrowsingProfile();
+    // rien à suggérer : on ne fait pas attendre le client (le catalogue n'est lu que s'il y a vraiment une suggestion possible)
+    if (!profile || !bi.pickSuggestion(profile, { now: Date.now(), allowed: true })) return false;
+    let catalog: CatalogProduct[];
+    try {
+      catalog = await getCatalog();
+    } catch {
+      return false;
+    }
+    const picked = bi.pickSuggestion(profile, { now: Date.now(), allowed: true, ...availability(catalog) });
+    if (!picked) return false;
+    const plan = planSuggestion(picked, catalog, get().lang);
+    if (!plan) return false;
+    recordSuggestion(picked.key, picked.kind, 'shown', picked.productId);
+    await say(plan.text, { actions: [...plan.chips.map((c) => interestChip(c, picked.key, picked.kind, false)), menuBtn()] });
+    return true;
+  }
+
+  // Le client a touché un bouton de la suggestion : « Non merci » (Zara se tait 7 jours) ou la suite, avec les vrais articles.
+  async function interestChoice(action: ChatAction) {
+    const [op, key = '', kind = '', arg = '', follow = ''] = (action.payload ?? '').split('|');
+    userSays(action.label);
+    const suggestionKind = kind as bi.SuggestionKind;
+    const productId = productKeyId(key);
+    if (op === 'no') {
+      recordSuggestion(key, suggestionKind, 'dismissed', productId);
+      await say(T().interest.no, { fast: true, actions: [menuBtn()] });
+      return;
+    }
+    if (!follow) recordSuggestion(key, suggestionKind, 'accepted', productId); // une seule fois par suggestion
+    const t = T().interest;
+    let catalog: CatalogProduct[];
+    try {
+      catalog = await getCatalog();
+    } catch {
+      await dataError();
+      return;
+    }
+    const base = catalog.find((p) => p.id === arg);
+    const again = (more: PlannedChip[]): ChatAction[] => [...more.map((c) => interestChip(c, key, kind, true)), menuBtn(), wa()];
+    if (op === 'sizes' || op === 'colors') {
+      if (!base || base.stock <= 0) {
+        await say(t.gone, { actions: again([]) });
+        return;
+      }
+      const text = op === 'sizes' ? (base.sizes.length ? t.sizesReply(base.name, base.sizes) : t.noSizes(base.name)) : t.colorsReply(base.name, base.colors, base.sizes);
+      const similar: PlannedChip = { label: t.chip.similar, op: 'similar', arg: base.id };
+      await say(text, { products: [toCard(base)], actions: again([similar]) });
+      return;
+    }
+    if (op === 'similar') {
+      const list = base ? similarProducts(catalog, base, 4) : [];
+      if (!base || list.length === 0) {
+        await say(t.similarNone, { actions: again([]) });
+        return;
+      }
+      await showProducts(withName(t.similarIntro), list, { kind: 'category', slug: base.categorySlug }, catalog);
+      return;
+    }
+    if (op === 'family' && isFamily(arg)) {
+      const label = t.familyLabel[arg];
+      const picks = familyPicks(catalog, arg, 4);
+      if (picks.length > 0) {
+        await showProducts(withName(t.familyIntro(label)), picks, { kind: 'category', slug: picks[0].categorySlug }, catalog);
+        return;
+      }
+      // aucune fiche ne l'annonce : Zara le dit, sans inventer, et montre les parfums disponibles
+      const all = perfumesInStock(catalog).slice(0, 4);
+      if (all.length === 0) {
+        await say(t.similarNone, { actions: again([]) });
+        return;
+      }
+      await showProducts(withName(t.familyNone(label)), all, { kind: 'category', slug: all[0].categorySlug }, catalog);
+      return;
+    }
+    if (op === 'more') {
+      const seen = getBrowsingProfile()?.categories[arg];
+      const list = moreInCategory(catalog, arg, seen?.productIds ?? [], 4);
+      if (list.length === 0) {
+        await say(t.moreNone, { actions: again([]) });
+        return;
+      }
+      const name = categoryLabel(get().lang, arg, seen?.name ?? list[0].category);
+      await showProducts(withName(t.moreIntro(name)), list, { kind: 'category', slug: arg }, catalog);
+      return;
+    }
+    await say(t.gone, { actions: again([]) });
+  }
+
+  // « Qu'est-ce que j'ai regardé ? » : la vérité, ou l'aveu que Zara ne sait pas (suivi refusé, aucune donnée).
+  async function historyReply() {
+    const h = T().history;
+    if (Platform.OS !== 'web') {
+      await say(h.unavailable, { actions: [menuBtn()] });
+      return;
+    }
+    const state = trackingState();
+    if (!state.allowed) {
+      await say(state.choice === 'denied' ? h.denied : h.signal, { actions: [allowTrackingChip(), privacyChip(), menuBtn()] });
+      return;
+    }
+    const profile = getBrowsingProfile();
+    let catalog: CatalogProduct[] = [];
+    try {
+      catalog = await getCatalog();
+    } catch {
+      await dataError();
+      return;
+    }
+    const shown = profile ? inCatalog(bi.recentProducts(profile, 4, Date.now()), catalog) : [];
+    if (!profile || shown.length === 0) {
+      await say(h.none, { actions: [sayBtn(T().chip.promotions, 'promotions'), menuBtn()] });
+      return;
+    }
+    await say(h.intro, { products: shown.map((x) => toCard(x.product)) });
+    const lines: string[] = [];
+    const repeated = inCatalog(bi.repeatedProducts(profile).slice(0, 3), catalog);
+    if (repeated.length > 0) lines.push(h.repeated(repeated.map((x) => `${x.product.name} (${h.times(x.record.views)})`).join(', ')));
+    const cats = bi
+      .topCategories(profile, 2)
+      .filter((c) => !!c.name)
+      .map((c) => categoryLabel(get().lang, c.key, c.name as string));
+    if (cats.length > 0) lines.push(h.categories(cats.join(', ')));
+    lines.push(h.outro);
+    await say(lines.join('\n'), { actions: [sayBtn(T().chip.advice, 'conseil'), stopTrackingChip(), menuBtn()] });
+  }
+
+  // Le suivi de navigation : ce qui est retenu, l'arrêter (tout est effacé), le reprendre.
+  async function trackingReply(text: string) {
+    const k = T().tracking;
+    if (Platform.OS !== 'web') {
+      await say(k.unavailable, { actions: [menuBtn()] });
+      return;
+    }
+    const kind = trackingKind(text) ?? 'about';
+    const state = trackingState();
+    if (kind === 'stop') {
+      if (state.choice === 'denied') {
+        await say(k.stoppedAlready, { actions: [allowTrackingChip(), menuBtn()] });
+        return;
+      }
+      setTrackingChoice('denied'); // efface ce qui était retenu sur l'appareil et demande l'effacement dans la base
+      await say(k.stopped, { actions: [privacyChip(), menuBtn()] });
+      return;
+    }
+    if (kind === 'start') {
+      if (state.allowed) {
+        await say(k.resumedAlready, { actions: [stopTrackingChip(), menuBtn()] });
+        return;
+      }
+      setTrackingChoice('granted');
+      await say(k.resumed, { actions: [stopTrackingChip(), privacyChip(), menuBtn()] });
+      return;
+    }
+    if (state.allowed) await say(k.about, { actions: [stopTrackingChip(), myViewedChip(), privacyChip(), menuBtn()] });
+    else await say(state.choice === 'denied' ? k.aboutDenied : k.aboutSignal, { actions: [allowTrackingChip(), privacyChip(), menuBtn()] });
+  }
+
+  // -------------------------------------------------------------------------------------------
   // Aiguillage
   // -------------------------------------------------------------------------------------------
 
@@ -1844,6 +2043,12 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       }
       case 'install':
         await installReply();
+        return;
+      case 'tracking':
+        await trackingReply(text);
+        return;
+      case 'history':
+        await historyReply();
         return;
       case 'cart':
         await showCart();
@@ -2194,6 +2399,9 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         logAssistantEvent('install_later');
         await say(T().install.later, { fast: true, actions: afterAnswerActions() });
         return;
+      case 'interest':
+        await interestChoice(action);
+        return;
       case 'say':
         await respondTo(action.payload ?? action.label, action.label);
         return;
@@ -2232,7 +2440,8 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       set({ open: true, teaserDismissed: true });
       if (get().loading) return;
       if (get().messages.length === 0) void run(begin);
-      else get().greetMember();
+      else if (shouldGreetMember()) get().greetMember();
+      else if (suggestionPossible()) void run(async () => void (await maybeSuggest()));
     },
     greetMember: () => {
       if (get().loading || !shouldGreetMember()) return;
