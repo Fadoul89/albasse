@@ -229,6 +229,8 @@ interface AssistantState {
   openCart: () => void;
   // « Commander » : Zara vérifie le panier (prix, stock, compte) puis finalise la commande avec le client, dans la conversation
   startCheckout: () => Promise<void>;
+  // les boutons d'un ancien message qui restent affichés (aucun pendant une commande ou une demande de rappel)
+  oldChips: (actions: ChatAction[]) => ChatAction[];
   reset: () => void;
 }
 
@@ -445,6 +447,19 @@ const ORDINALS: [RegExp, number][] = [
   [/\b(quatrieme|4eme)\b/, 3],
   [/\b(dernier|derniere)\b/, -1],
 ];
+
+// Ce que disent les boutons « Comparer » et « 3 gammes de prix » : ils parlent des articles affichés à ce moment-là.
+const COMPARE_SAY: Record<Lang, string> = { fr: 'comparer ces articles', ar: 'قارن بين هذه المنتجات' };
+const RANGES_SAY: Record<Lang, string> = { fr: 'trois gammes de prix', ar: 'ثلاثة خيارات بأسعار مختلفة' };
+
+// Les boutons des anciens messages qui restent touchables : ceux qui mènent quelque part (promotions, catégories, un article précis,
+// panier, compte, WhatsApp, menu, installer). Les réponses à une question passée (taille, jour, budget, pour qui, confirmer...) partent.
+const OLD_CHIP_KINDS = new Set<ChatAction['kind']>([
+  'say', 'whatsapp', 'register', 'login', 'orders', 'account', 'category', 'menu', 'cart', 'checkout', 'link', 'policy', 'pair', 'add',
+  'install', 'installHelp', 'iosGuide', 'interest', 'style', 'orderPage',
+]);
+// Ces phrases parlent de ce qui est affiché en ce moment (le budget de ces articles, les comparer) : pas sur un ancien message.
+const CONTEXT_SAYS = new Set(['budget', ...Object.values(COMPARE_SAY), ...Object.values(RANGES_SAY)]);
 
 const saved = load();
 
@@ -754,13 +769,13 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     // psychologie commerciale : sans budget ni style dit par le client, des idées à trois niveaux de prix (seulement si les prix sont vraiment différents)
     const noBudget = range.min <= 0 && !Number.isFinite(range.max);
     if (noBudget && !clientStyle && ctx && (ctx.kind === 'category' || ctx.kind === 'query' || ctx.kind === 'who') && threeRanges(candidatesFor(catalog, ctx))) {
-      actions.push(sayBtn(T().chip.ranges, lang === 'ar' ? 'ثلاثة خيارات بأسعار مختلفة' : 'trois gammes de prix'));
+      actions.push(sayBtn(T().chip.ranges, RANGES_SAY[lang]));
     }
     if (pair) actions.push({ label: T().chip.withCategory(pair.name), kind: 'pair', payload: `${pair.slug}|${whoOf(ctx) ?? ''}` });
     if (gift) actions.push(sayBtn(T().chip.wrap, 'emballage'));
     if (ctx?.kind !== 'promo') actions.push(sayBtn(T().chip.promotions, 'promotions'));
     // un client qui hésite : Zara l'aide à comparer ; un client qui a dit son métier mais pas son style : elle le lui demande avec douceur
-    if (products.length >= 2 && currentTone() === 'hesitant') actions.push(sayBtn(T().chip.compare, lang === 'ar' ? 'قارن بين هذه المنتجات' : 'comparer ces articles'));
+    if (products.length >= 2 && currentTone() === 'hesitant') actions.push(sayBtn(T().chip.compare, COMPARE_SAY[lang]));
     if (!clientStyle && jobOfClient()) actions.push({ label: T().chip.myStyle, kind: 'style', payload: '' });
     const install = installOnProducts();
     if (install) actions.push(install);
@@ -1121,7 +1136,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       await say(closing.join('\n'), {
         actions: [
           sayBtn(T().chip.budget, 'budget'),
-          sayBtn(T().chip.compare, get().lang === 'ar' ? 'قارن بين هذه المنتجات' : 'comparer ces articles'),
+          sayBtn(T().chip.compare, COMPARE_SAY[get().lang]),
           sayBtn(T().chip.promotions, 'promotions'),
           ...(install ? [install] : []),
           menuBtn(),
@@ -1945,6 +1960,20 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     return null;
   }
 
+  function oldChips(actions: ChatAction[]): ChatAction[] {
+    const step = get().step;
+    if (step === 'ask_lang' || step === 'ask_name' || step.startsWith('co_') || step.startsWith('cb_')) return [];
+    const guest = isGuest();
+    let installOk: boolean | null = null;
+    return actions.filter((a) => {
+      if (!OLD_CHIP_KINDS.has(a.kind)) return false;
+      if (a.kind === 'say') return !CONTEXT_SAYS.has(a.payload ?? '');
+      if (a.kind === 'register' || a.kind === 'login') return guest;
+      if (a.kind === 'install' || a.kind === 'installHelp') return (installOk ??= installMenuChip() !== null);
+      return true;
+    });
+  }
+
   // Sous chaque proposition d'articles : le bouton pour installer le raccourci, mis en avant, tant que le client ne l'a pas installé
   // ni répondu « Plus tard » (mêmes règles que le bouton du menu). La petite phrase qui l'explique n'est dite qu'une fois.
   function installOnProducts(): ChatAction | null {
@@ -2222,7 +2251,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     const canCompare = cart.length === 0 && topics.length >= 2;
     if (canCompare) lines.push(T().persona.compareOffer);
     if (undecided) lines.push(c.callbackOffer);
-    const compareChip = sayBtn(T().chip.compare, get().lang === 'ar' ? 'قارن بين هذه المنتجات' : 'comparer ces articles');
+    const compareChip = sayBtn(T().chip.compare, COMPARE_SAY[get().lang]);
     const actions: ChatAction[] =
       cart.length > 0
         ? [checkoutChip(), callbackChip('cart'), { label: T().chip.viewCart, kind: 'cart' }]
@@ -3005,6 +3034,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       if (get().loading) return;
       void run(() => switchLang(otherLang()));
     },
+    oldChips,
     reset: () => {
       if (get().loading) return;
       save([], 'menu', null, null, null);

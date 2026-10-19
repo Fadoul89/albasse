@@ -33,6 +33,7 @@ const COMPACT_WIDTH = 430;
 const formatXAF = (n: number) => `${Math.round(n).toLocaleString('fr-FR')} FCFA`;
 
 // Texte arabe : écrit de droite à gauche.
+const NO_ACTIONS: ChatAction[] = [];
 const rtlStyle = (rtl: boolean): TextStyle | null => (rtl ? { writingDirection: 'rtl', textAlign: 'right' } : null);
 
 // Zone visible du navigateur : sur telephone, le clavier la reduit. La fenetre de chat la suit
@@ -138,7 +139,8 @@ function ProductCards({ products, lang, onOpen, onAdd }: { products: AssistantPr
   );
 }
 
-function ActionChips({ actions, onChoose }: { actions: ChatAction[]; onChoose: (action: ChatAction) => void }) {
+// `old` : les boutons d'un message précédent, gardés pour que le client puisse y revenir.
+function ActionChips({ actions, onChoose, old = false }: { actions: ChatAction[]; onChoose: (action: ChatAction) => void; old?: boolean }) {
   return (
     <View style={styles.chips}>
       {actions.map((a) => {
@@ -147,7 +149,7 @@ function ActionChips({ actions, onChoose }: { actions: ChatAction[]; onChoose: (
         return (
           <Pressable
             key={`${a.kind}-${a.label}`}
-            testID="assistant-chip"
+            testID={old ? 'assistant-chip-old' : 'assistant-chip'}
             style={[styles.chip, ghost && styles.chipGhost, a.highlight && styles.chipHighlight, whatsapp && styles.chipWhatsapp]}
             onPress={() => onChoose(a)}
             accessibilityRole="button"
@@ -172,7 +174,8 @@ function ChatPhoto({ image }: { image: ChatImage }) {
 
 function Bubble({
   message,
-  showActions,
+  actions,
+  old,
   city,
   onOpenProduct,
   onAdd,
@@ -181,7 +184,8 @@ function Bubble({
   onOpenFull,
 }: {
   message: ChatMessage;
-  showActions: boolean;
+  actions: ChatAction[];
+  old: boolean;
   city: { name: string; fee: number | null } | null;
   onOpenProduct: (slug: string) => void;
   onAdd: (slug: string) => void;
@@ -217,7 +221,7 @@ function Bubble({
           {!mine && message.cart ? <ChatCart lang={lang} city={city} onCheckout={onCheckout} onOpenFull={onOpenFull} /> : null}
         </View>
       </View>
-      {!mine && showActions && message.actions && message.actions.length > 0 ? <ActionChips actions={message.actions} onChoose={onChoose} /> : null}
+      {!mine && actions.length > 0 ? <ActionChips actions={actions} onChoose={onChoose} old={old} /> : null}
     </View>
   );
 }
@@ -233,6 +237,7 @@ export function AssistantPanel() {
   const choose = useAssistantStore((s) => s.choose);
   const closeChat = useAssistantStore((s) => s.closeChat);
   const reset = useAssistantStore((s) => s.reset);
+  const oldChips = useAssistantStore((s) => s.oldChips);
   const toggleLang = useAssistantStore((s) => s.toggleLang);
   const deliveryCity = useAssistantStore((s) => s.deliveryCity);
   const addToCart = useAssistantStore((s) => s.addToCart);
@@ -414,7 +419,8 @@ export function AssistantPanel() {
           <Bubble
             key={m.id}
             message={m}
-            showActions={i === lastIndex && !loading}
+            actions={loading || !m.actions ? NO_ACTIONS : i === lastIndex ? m.actions : oldChips(m.actions)}
+            old={i !== lastIndex}
             city={deliveryCity}
             onOpenProduct={openProduct}
             onAdd={addToCart}

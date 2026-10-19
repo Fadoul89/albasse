@@ -13,7 +13,7 @@ const fs = require('fs');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const dist = process.argv[2] || '../../dist';
 const port = process.argv[3] || '4333';
-const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGTOFBCDE').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJTOFBCDE').toUpperCase();
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
 fs.mkdirSync(OUT, { recursive: true });
 const KEY = process.env.SUPABASE_ANON_KEY;
@@ -1246,6 +1246,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await sleep(3500);
       const later = await chipLabels(v.page);
       check('apres « Plus tard » : plus de bouton d\'installation sous les articles proposes', later.includes('🏠 Menu') && later.every((l) => !/Voir comment installer|Installer Albasse Shopping/.test(l)), later);
+      const oldAfter = (await panelOf(v.page).getByTestId('assistant-chip-old').allInnerTexts()).map((t) => t.trim());
+      check('apres « Plus tard » : les anciens boutons d\'installation partent aussi (les autres restent)', oldAfter.includes('🔥 Promotions') && oldAfter.every((l) => !/Voir comment installer|Installer Albasse Shopping|Plus tard|Oui, déjà installée/.test(l)), oldAfter);
       check('aucune erreur (visiteur tout neuf)', v.errs.length === 0, v.errs);
       await v.ctx.close();
     }
@@ -3277,6 +3279,45 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   }
 
   // =============================================== H. LE BOUTON DE ZARA : AU MILIEU, VIBRATION ET LUMIERE ===============================================
+  if (PARTS.includes('J')) {
+    console.log('\n== J. anciens boutons de Zara : ceux qui menent quelque part restent touchables, les reponses passees partent');
+    const oldLabels = async (p) => (await panelOf(p).getByTestId('assistant-chip-old').allInnerTexts()).map((t) => t.trim());
+    {
+      const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
+      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await v.page.keyboard.press('Escape');
+      await v.page.getByRole('button', { name: FAB_NAME }).click();
+      await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?/);
+      check('au debut : aucun ancien bouton (seulement ceux du dernier message)', (await oldLabels(v.page)).length === 0, await oldLabels(v.page));
+      const menu = await chipLabels(v.page);
+      await tap(v.page, '🔥 Promotions', /promotion|promo|offre/i);
+      await sleep(1500);
+      const old1 = await oldLabels(v.page);
+      const kept = menu.filter((l) => !/العربية/.test(l));
+      check('apres un clic : les boutons du menu restent (promotions, nouveautes, conseil, categories, compte, WhatsApp)', kept.every((l) => old1.includes(l)) && ['🔥 Promotions', '🆕 Nouveautés', '🎯 Conseil', '🛍️ Catégories', '👤 Créer mon compte', '💬 WhatsApp'].every((l) => old1.includes(l)), { menu, old1 });
+      check('le bouton de langue d\'un ancien message part (le bouton en haut reste)', old1.every((l) => !/العربية/.test(l)), old1);
+      check('« Mon budget » d\'une ancienne liste part (il parlerait d\'autres articles)', old1.every((l) => l !== '💰 Mon budget'), old1);
+      const n = await panelOf(v.page).getByText(/Voici nos dernières nouveautés/).count();
+      await panelOf(v.page).getByTestId('assistant-chip-old').filter({ hasText: '🆕 Nouveautés' }).first().click();
+      await waitText(v.page, /Voici nos dernières nouveautés/);
+      check('un ancien bouton se touche et Zara repond (Nouveautes)', (await panelOf(v.page).getByText(/Voici nos dernières nouveautés/).count()) === n + 1 && (await cardsOf(v.page).count()) > 0);
+      check('les anciens « Mon budget » ne reviennent pas', (await oldLabels(v.page)).every((l) => l !== '💰 Mon budget'), await oldLabels(v.page));
+      // une question (quel article ?) : une fois repondue, ses boutons partent
+      await ask(v.page, 'conseil', /Je suis là pour vous conseiller\. Que cherchez-vous \?/);
+      await sleep(800);
+      const typeChips = (await chipLabels(v.page)).filter((l) => !['🏠 Menu', '💬 WhatsApp', '🎁 Idée cadeau'].includes(l));
+      check('la question « Que cherchez-vous ? » a ses boutons (articles)', typeChips.length >= 2, typeChips);
+      await chip(v.page, typeChips[0]).first().click();
+      await waitText(v.page, /C’est pour qui|pour qui|budget/i);
+      await sleep(1500);
+      const old2 = await oldLabels(v.page);
+      check('apres la reponse : les boutons de la question passee ne restent pas', typeChips.every((l) => !old2.includes(l)), { typeChips, old2 });
+      check('aucune erreur (anciens boutons)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+  }
+
   if (PARTS.includes('H')) {
     console.log('\n== H. bouton de Zara : au milieu de l\'ecran (un peu plus haut qu\'avant), vibration et lumiere, bulle au-dessus, moins d\'animations respecte');
     const base = `http://localhost:${port}`;
@@ -3965,6 +4006,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('compte connu : Zara ne redemande ni le nom ni le telephone, elle commence par l\'adresse', (await panelOf(c.page).getByText(/nom complet de la personne|Quel est votre numéro/).count()) === 0);
       await typeIn(c.page, 'Quartier Farcha, rue 12, près du marché');
       await waitText(c.page, /Dans quelle ville doit-on vous livrer/);
+      check('pendant la commande : aucun ancien bouton (le client ne peut pas se tromper)', (await panelOf(c.page).getByTestId('assistant-chip-old').count()) === 0);
       const cityChips = await chipLabels(c.page);
       check('la ville : boutons des villes de la boutique + annuler', cityChips.includes(farCity.name) && cityChips[cityChips.length - 1] === 'Annuler la commande', cityChips);
       await tapExact(c.page, farCity.name, /Dans votre ville, le paiement se fait à l’avance/);
