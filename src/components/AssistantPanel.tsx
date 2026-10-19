@@ -24,6 +24,7 @@ import { hasArabic, type Lang } from '../lib/assistantLang';
 import { currentDevice, markIntent } from '../lib/assistantAttribution';
 import { CartBar, ChatCart } from './AssistantCart';
 import { texts } from '../lib/assistantText';
+import { openInChrome } from '../lib/pwaInstallPrompt';
 import { ASSISTANT_NAME, WHATSAPP_URL } from '../constants/assistant';
 
 const AVATAR = require('../../assets/assistante-avatar.jpg');
@@ -331,6 +332,9 @@ export function AssistantPanel() {
         return;
       case 'policy':
         go(() => navigationRef.navigate('ReturnPolicy'));
+        return;
+      case 'openChrome':
+        openInChrome(); // navigateur de Facebook, WhatsApp... : la page s'ouvre dans Chrome pour pouvoir installer
         return;
       default:
         choose(action);

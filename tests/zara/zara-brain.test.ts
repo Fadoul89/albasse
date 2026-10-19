@@ -16,6 +16,7 @@ import * as oc from '../../src/lib/assistantOccasions.ts';
 import * as sa from '../../src/lib/assistantSales.ts';
 import * as ps from '../../src/lib/assistantPersona.ts';
 import * as fb from '../../src/lib/facebookShare.ts';
+import { chromeIntentUrl } from '../../src/lib/pwaInstallPrompt.ts';
 import { isMissingColumn } from '../../src/lib/dbErrors.ts';
 
 const KEY = process.env.SUPABASE_ANON_KEY!;
@@ -513,7 +514,7 @@ async function main() {
   ok('les phrases d\'exemple du patron sont la (compliment, adresse, numero)', tx.texts('fr').talk.compliment[0] === 'Oh, merci beaucoup ! 🥰 Vous êtes adorable ! Je suis votre assistante virtuelle Zara, toujours là pour vous aider 😊❤️🛍️' && !/sourire/.test(tx.texts('fr').talk.compliment.join(' ')) && !/ابتسامة/.test(tx.texts('ar').talk.compliment.join(' ')) && tx.texts('fr').talk.afterCompliment[0].startsWith('Avec grand plaisir ! 😊❤️ Je suis toujours là pour vous aider.') && tx.texts('fr').talk.personal('address')[0].startsWith('😊 Je suis votre assistante virtuelle, disponible en ligne pour vous aider ! Vous pouvez me retrouver ici sur Albasse Shopping.') && tx.texts('fr').talk.personal('phone')[0].startsWith('😊 Je n’ai pas de numéro personnel. Je travaille en ligne comme assistante virtuelle de marketing digital chez Albasse Shopping. Je suis là pour vous aider directement ici !') && tx.texts('fr').talk.personal('whatsapp')[0].startsWith('Haha 😊 Je n’ai pas de WhatsApp personnel.') && tx.texts('fr').talk.personal('live')[0].startsWith('Haha 😊 Je n’ai pas de domicile comme une personne.'));
 
   console.log('\n== textes arabes : tout en arabe (sauf les noms propres et les boutons du site)');
-  const ALLOWED = /Albasse|Shopping|Airtel|Moov|Money|FCFA|Acheter|Ajouter|panier|Voir|produit|le\b|au|N'Djamena|Mongo|Rolex|dorée|Test|STTL|Sud|Voyage|Abou|Aziza|Liberté|Abéché|Français|Chrome|Safari|albasseshopping\.com/g;
+  const ALLOWED = /Albasse|Shopping|Airtel|Moov|Money|FCFA|Acheter|Ajouter|panier|Voir|produit|le\b|au|N'Djamena|Mongo|Rolex|dorée|Test|STTL|Sud|Voyage|Abou|Aziza|Liberté|Abéché|Français|Chrome|Safari|Samsung|Internet|albasseshopping\.com/g;
   const sampleArgs: Record<string, unknown[]> = {
     welcome: ['علي', 3, false], teaser: ['علي'], hello: ['علي'], nice: ['علي'], 'card.only': [3], 'chip.withCategory': ['عطور'], promoIntro: [50], foundFor: ['عطر', 'بأقل من 10 000 FCFA'], fallbackFor: ['عطر', 'بأقل من 10 000 FCFA'],
     nothingFor: ['عطر'], askWho: [true], askType: ['lui', true], giftIntro: ['lui'], pairIntro: ['عطور'], rangeText: [{ min: 0, max: 10000 }], lowStock: ['ساعة', 3], pitch: ['ساعة', '10 000 FCFA', 3],
@@ -1264,6 +1265,14 @@ async function main() {
     const desk = fb.facebookShareTarget(page, 'desktop');
     ok('ordinateur : la page de partage dans un nouvel onglet (comme avant)', desk.kind === 'tab' && desk.url === web, desk);
     ok('sans navigateur (tests) : appareil « ordinateur »', fb.currentFacebookDevice() === 'desktop');
+  }
+
+  {
+    console.log('\n== Navigateur de Facebook / WhatsApp : ouvrir la page dans Chrome pour pouvoir installer');
+    const href = 'https://www.albasseshopping.com/produit/rolex-or?ref=a&b=1';
+    const url = chromeIntentUrl(href);
+    const m = /^intent:\/\/www\.albasseshopping\.com\/produit\/rolex-or\?ref=a&b=1#Intent;scheme=https;package=com\.android\.chrome;S\.browser_fallback_url=([^;]+);end$/.exec(url);
+    ok('« Ouvrir dans Chrome » : la meme page (chemin et parametres) dans Chrome, et la page reste ouverte si Chrome manque', !!m && decodeURIComponent(m[1]) === href, url);
   }
 
   console.log('\n' + (failures === 0 ? 'TOUT EST BON' : `${failures} ECHEC(S)`));

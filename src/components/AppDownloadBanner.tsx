@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, fonts, radius, spacing } from '../theme';
 import { trackAppDownloadClick } from '../lib/appDownloadTracking';
 import { isRunningInsideApp } from '../lib/runningInApp';
-import { installNotReadyMessage, isAppInstalledOnDevice, isIosDevice, isRunningAsInstalledPwa, triggerPwaInstallPrompt } from '../lib/pwaInstallPrompt';
+import { installNotReadyMessage, isAndroidDevice, isAppInstalledOnDevice, isInAppBrowser, isIosDevice, isRunningAsInstalledPwa, openInChromeOrExplain, triggerPwaInstallPrompt } from '../lib/pwaInstallPrompt';
 import { subscribeToWebPush } from '../lib/webPushSubscription';
 import { trackShortcutInstallIfNeeded } from '../lib/appInstallTracking';
 import { useInstallGuideStore } from '../store/installGuideStore';
@@ -40,6 +40,11 @@ export function AppDownloadBanner() {
     if (isIosDevice()) {
       // Safari n'a pas de boite d'installation : tutoriel video + etapes.
       useInstallGuideStore.getState().show();
+      return;
+    }
+    // navigateur de Facebook, WhatsApp... : on ouvre la page dans Chrome, ou l'installation marche
+    if (isAndroidDevice() && isInAppBrowser()) {
+      openInChromeOrExplain();
       return;
     }
     const outcome = await triggerPwaInstallPrompt();

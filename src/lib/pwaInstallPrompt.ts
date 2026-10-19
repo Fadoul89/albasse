@@ -147,11 +147,59 @@ export function isAndroidDevice(): boolean {
   return /Android/i.test(navigator.userAgent);
 }
 
+// Navigateur integre a une application (Facebook, Instagram, WhatsApp, Messenger, TikTok...) : on ne peut pas y installer,
+// il faut d'abord ouvrir le site dans Chrome. (L'application Albasse elle-meme n'en fait pas partie.)
+export function isInAppBrowser(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent;
+  if (/AlbasseShoppingApp/i.test(ua)) return false;
+  return /FBAN|FBAV|FB_IAB|Instagram|WhatsApp|Messenger|musical_ly|TikTok|BytedanceWebview|Line\/|; wv\)/i.test(ua);
+}
+
+// Le lien qui ouvre cette page dans Chrome (Android) ; sans Chrome, la page reste ouverte ici.
+export function chromeIntentUrl(href: string): string {
+  const u = new URL(href);
+  return `intent://${u.host}${u.pathname}${u.search}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(href)};end`;
+}
+
+// Ouvre la page actuelle dans Chrome (un vrai lien touche, dans le geste du visiteur).
+export function openInChrome(): void {
+  if (typeof document === 'undefined') return;
+  const a = document.createElement('a');
+  a.href = chromeIntentUrl(window.location.href);
+  a.rel = 'noopener';
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+// Bouton « Installer » du site dans un navigateur integre : Chrome s'ouvre ; s'il ne s'est pas ouvert 1,5 s plus tard (page
+// toujours affichee), on explique comment faire a la main.
+export function openInChromeOrExplain(): void {
+  if (typeof window === 'undefined') return;
+  let left = false;
+  const onHide = () => {
+    left = true;
+  };
+  window.addEventListener('blur', onHide);
+  window.addEventListener('pagehide', onHide);
+  openInChrome();
+  window.setTimeout(() => {
+    window.removeEventListener('blur', onHide);
+    window.removeEventListener('pagehide', onHide);
+    if (!left && document.visibilityState === 'visible') window.alert(manualInstallInstructions());
+  }, 1500);
+}
+
 // Instructions manuelles quand la boite d'installation automatique n'est pas
 // disponible. Le libelle du menu Chrome Android varie selon la version.
 export function manualInstallInstructions(): string {
   if (isIosDevice()) {
     return "Pour installer : appuyez sur le bouton Partager (le carré avec une flèche) en bas de Safari, puis « Sur l'écran d'accueil ». Ouvrez ensuite l'icône Albasse et touchez « Activer » dans le bandeau vert pour recevoir les alertes.";
+  }
+  if (isAndroidDevice() && isInAppBrowser()) {
+    return "Vous êtes dans le navigateur de Facebook ou WhatsApp : l'installation n'y marche pas. Touchez les trois points (⋮) en haut puis « Ouvrir dans Chrome » (ou « Ouvrir dans le navigateur »), puis touchez « Installer » dans Chrome.";
   }
   if (isAndroidDevice()) {
     return "Pour installer : appuyez sur les trois points (⋮) en haut à droite de Chrome, puis sur « Installer et créer un raccourci » (ou « Installer l'application » / « Ajouter à l'écran d'accueil » selon votre version).";
