@@ -1044,6 +1044,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await ask(v.page, p.name.trim(), new RegExp(`Voici ce que j’ai trouvé pour « ${p.name.trim()} »`));
       const card = cardsOf(v.page).filter({ hasText: p.name.trim() }).first();
       await card.waitFor({ timeout: 10000 });
+      await waitText(v.page, /Astuce : installez Albasse Shopping/);
+      check('Android : sous les articles trouves, le bouton « Installer Albasse Shopping »', (await chipLabels(v.page)).includes('📲 Installer Albasse Shopping'), await chipLabels(v.page));
       await card.getByTestId('assistant-card-add').click();
       await waitText(v.page, /ajouté au panier/);
       await waitText(v.page, /Avez-vous déjà installé l’application Albasse Shopping/);
@@ -1128,7 +1130,9 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const menu = await chipLabels(v.page);
       check('iPhone : le menu a le bouton « Voir comment installer » (juste avant WhatsApp)', menu.includes('📲 Voir comment installer') && menu.indexOf('📲 Voir comment installer') === menu.indexOf('💬 WhatsApp') - 1, menu);
       await tap(v.page, 'Promotions', /promotion|promo|offre/i);
-      await sleep(1200);
+      await waitText(v.page, /Astuce : installez Albasse Shopping sur votre écran d’accueil/);
+      const promoChips = await chipLabels(v.page);
+      check('iPhone : sous les articles proposes, le bouton « Voir comment installer » (juste avant Menu) + l\'astuce une seule fois', promoChips.includes('📲 Voir comment installer') && promoChips.indexOf('📲 Voir comment installer') === promoChips.indexOf('🏠 Menu') - 1 && (await panelOf(v.page).getByText(/Astuce : installez Albasse Shopping/).count()) === 1, promoChips);
       check('iPhone : apres un seul message, pas de proposition', (await panelOf(v.page).getByText(/Avez-vous déjà installé l’application Albasse Shopping/).count()) === 0);
       await ask(v.page, 'conseil', /Je suis là pour vous conseiller\. Que cherchez-vous \?/);
       await waitText(v.page, /Avez-vous déjà installé l’application Albasse Shopping/);
@@ -1238,6 +1242,10 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await waitText(v.page, /je ne vous le propose plus pour le moment/);
       const back = await chipLabels(v.page);
       check('« Plus tard » : Zara rend les boutons habituels (promotions, categories, menu), le client n\'est jamais bloque', back.includes('🏠 Menu') && back.includes('🔥 Promotions'), back);
+      await chip(v.page, 'Promotions').last().click();
+      await sleep(3500);
+      const later = await chipLabels(v.page);
+      check('apres « Plus tard » : plus de bouton d\'installation sous les articles proposes', later.includes('🏠 Menu') && later.every((l) => !/Voir comment installer|Installer Albasse Shopping/.test(l)), later);
       check('aucune erreur (visiteur tout neuf)', v.errs.length === 0, v.errs);
       await v.ctx.close();
     }

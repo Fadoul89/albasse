@@ -762,6 +762,8 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     // un client qui hésite : Zara l'aide à comparer ; un client qui a dit son métier mais pas son style : elle le lui demande avec douceur
     if (products.length >= 2 && currentTone() === 'hesitant') actions.push(sayBtn(T().chip.compare, lang === 'ar' ? 'قارن بين هذه المنتجات' : 'comparer ces articles'));
     if (!clientStyle && jobOfClient()) actions.push({ label: T().chip.myStyle, kind: 'style', payload: '' });
+    const install = installOnProducts();
+    if (install) actions.push(install);
     actions.push(menuBtn(), wa());
     // Une raison vraie pour le premier produit (remise, stock, budget, couleurs, tailles), puis une seule phrase de plus :
     // l'emballage cadeau (une fois), la rareté vraie d'un autre produit, ou un encouragement différent des précédents.
@@ -786,6 +788,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     }
     // une seule fois : le bouton + des fiches produits
     if (!get().messages.some((m) => m.role === 'assistant' && m.text.includes(T().cart.tapPlus))) lines.push(T().cart.tapPlus);
+    if (install && !saidBefore(T().install.productNudge)) lines.push(T().install.productNudge);
     await say(lines.join('\n'), { actions });
   }
 
@@ -1113,8 +1116,17 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       await say(withName(lines.join('\n')), { products: picks.map(toCard) });
       const closing: string[] = [t.closing];
       if (!get().messages.some((m) => m.role === 'assistant' && m.text.includes(T().cart.tapPlus))) closing.push(T().cart.tapPlus);
+      const install = installOnProducts();
+      if (install && !saidBefore(T().install.productNudge)) closing.push(T().install.productNudge);
       await say(closing.join('\n'), {
-        actions: [sayBtn(T().chip.budget, 'budget'), sayBtn(T().chip.compare, get().lang === 'ar' ? 'قارن بين هذه المنتجات' : 'comparer ces articles'), sayBtn(T().chip.promotions, 'promotions'), menuBtn(), wa()],
+        actions: [
+          sayBtn(T().chip.budget, 'budget'),
+          sayBtn(T().chip.compare, get().lang === 'ar' ? 'قارن بين هذه المنتجات' : 'comparer ces articles'),
+          sayBtn(T().chip.promotions, 'promotions'),
+          ...(install ? [install] : []),
+          menuBtn(),
+          wa(),
+        ],
       });
     } catch {
       await dataError();
@@ -1932,6 +1944,14 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     if (isAndroidDevice() && isPwaInstallPromptAvailable()) return { label: T().chip.installApp, kind: 'install' };
     return null;
   }
+
+  // Sous chaque proposition d'articles : le bouton pour installer le raccourci, mis en avant, tant que le client ne l'a pas installé
+  // ni répondu « Plus tard » (mêmes règles que le bouton du menu). La petite phrase qui l'explique n'est dite qu'une fois.
+  function installOnProducts(): ChatAction | null {
+    const chip = installMenuChip();
+    return chip ? { ...chip, highlight: true } : null;
+  }
+  const saidBefore = (text: string) => get().messages.some((m) => m.role === 'assistant' && m.text.includes(text));
 
   // `extra` : les boutons déjà affichés (ex. ceux du panier) restent disponibles sous la proposition.
   async function maybeOfferInstall(extra: ChatAction[] = []) {

@@ -316,6 +316,7 @@ export interface Texts {
     iosSteps(safari: boolean): string;
     androidManual: string;
     desktop: string;
+    productNudge: string;
   };
   // suggestions discrètes d'après les articles regardés (jamais à chaque clic, jamais sans raison vraie)
   interest: {
@@ -833,6 +834,7 @@ const FR: Texts = {
       `${safari ? '' : '⚠️ Ouvrez d’abord albasseshopping.com dans Safari (l’installation ne marche pas depuis ce navigateur).\n'}Sur iPhone :\n1. Touchez « Partager » (le carré avec une flèche) en bas de l’écran\n2. Faites défiler et touchez « Sur l’écran d’accueil »\n3. Touchez « Ajouter »`,
     androidManual: 'Pour installer : touchez les trois points (⋮) en haut à droite de Chrome, puis « Installer l’application » ou « Ajouter à l’écran d’accueil » (selon votre version).',
     desktop: 'Pour installer : cliquez sur l’icône d’installation ⊕ dans la barre d’adresse de Chrome, ou sur les trois points (⋮) puis « Installer Albasse Shopping ».',
+    productNudge: '📲 Astuce : installez Albasse Shopping sur votre écran d’accueil pour retrouver nos articles en un toucher.',
   },
   interest: {
     shoes: '😊 Cette paire semble vous intéresser ! Voulez-vous revoir les tailles disponibles ou découvrir des modèles similaires ?',
@@ -1387,6 +1389,7 @@ const AR: Texts = {
       `${safari ? '' : '⚠️ افتح أولا albasseshopping.com في متصفح Safari (التثبيت لا يعمل من هذا المتصفح).\n'}على الآيفون:\n1. اضغط «مشاركة» (المربع مع السهم) أسفل الشاشة\n2. مرر لأسفل واضغط «إضافة إلى الشاشة الرئيسية»\n3. اضغط «إضافة»`,
     androidManual: 'للتثبيت: اضغط على النقاط الثلاث (⋮) أعلى يمين Chrome ثم «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية» حسب إصدارك.',
     desktop: 'للتثبيت: اضغط على أيقونة التثبيت ⊕ في شريط عنوان Chrome، أو على النقاط الثلاث (⋮) ثم «تثبيت Albasse Shopping».',
+    productNudge: '📲 نصيحة: ثبّت Albasse Shopping على شاشتك الرئيسية لتجد منتجاتنا بلمسة واحدة.',
   },
   interest: {
     shoes: '😊 يبدو أن هذا الحذاء أعجبك! هل تريد مراجعة المقاسات المعروضة أو اكتشاف موديلات مشابهة؟',
