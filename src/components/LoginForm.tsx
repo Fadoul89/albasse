@@ -79,8 +79,8 @@ export function LoginForm({ onSuccess, onForgot }: { onSuccess: () => void; onFo
         <Text style={styles.checkboxLabel}>Se souvenir de mon mot de passe</Text>
       </Pressable>
       <GoldButton label="Se connecter" onPress={handleSubmit} loading={loading} style={{ marginTop: spacing.md }} />
-      <Pressable onPress={onForgot} style={{ marginTop: spacing.md }}>
-        <Text style={styles.link}>Mot de passe oublié ?</Text>
+      <Pressable testID="login-forgot" onPress={onForgot} style={{ marginTop: spacing.md }}>
+        <Text style={styles.link}>J’ai oublié mon mot de passe</Text>
       </Pressable>
     </View>
   );

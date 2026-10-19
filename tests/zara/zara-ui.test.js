@@ -3948,8 +3948,13 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await shown(v.page, 'Se connecter').click();
       await v.page.getByText('Numéro (ou e-mail) ou mot de passe incorrect.').waitFor({ timeout: 10000 });
       check('mauvais mot de passe : « Numero (ou e-mail) ou mot de passe incorrect »', true);
-      // mot de passe oublie avec le numero : aide sur WhatsApp
-      await v.page.goto(`http://localhost:${port}/mot-de-passe-oublie`, { waitUntil: 'load' });
+      // « J'ai oublié mon mot de passe » (sur l'ecran d'entree) puis aide sur WhatsApp avec le numero
+      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await waitWall(v.page);
+      await sleep(800);
+      check('ecran d\'entree : lien « J’ai oublié mon mot de passe » sous la connexion', (await wall(v.page).getByTestId('login-forgot').innerText()).trim() === 'J’ai oublié mon mot de passe');
+      await wall(v.page).getByTestId('login-forgot').click();
+      await v.page.waitForURL(/\/mot-de-passe-oublie/, { timeout: 15000 });
       await v.page.getByTestId('forgot-identifier').waitFor({ timeout: 15000 });
       await sleep(600);
       check('mot de passe oublie : ouvert sans compte', (await wall(v.page).count()) === 0);
