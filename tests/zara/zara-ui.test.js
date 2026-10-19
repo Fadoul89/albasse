@@ -13,7 +13,7 @@ const fs = require('fs');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const dist = process.argv[2] || '../../dist';
 const port = process.argv[3] || '4333';
-const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQTOFBCDE').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQITOFBCDE').toUpperCase();
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
 fs.mkdirSync(OUT, { recursive: true });
 const KEY = process.env.SUPABASE_ANON_KEY;
@@ -43,7 +43,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   // rank : rang du jour renvoye par la fonction de la base (null : fonction pas installee). fakeUser : compte simule (token : reponse a une connexion par mot de passe ; delay : lenteur du profil en ms). fakeOrders : { list: [...], patches: [] } = fausse table des commandes.
   // zaraInstall : par defaut, le visiteur a deja repondu « Plus tard » a l'installation (Zara ne la propose pas) ; null = vrai nouveau
   // visiteur, pour les parties qui testent l'installation
-  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, fakeSales = null, fakeCallbacks = null, initScripts = [], zaraInstall = 'dismissed' } = {}) {
+  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, fakeSales = null, fakeCallbacks = null, fakePushes = null, initScripts = [], zaraInstall = 'dismissed' } = {}) {
     const ctx = await b.newContext(opts);
     if (cookies) await ctx.addCookies(cookies);
     if (lang) storage = { albasse_zara_lang: lang, ...storage };
@@ -174,6 +174,33 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
             (fakeCallbacks.patches = fakeCallbacks.patches || []).push({ id, body });
             const row = fakeCallbacks.table.rows.find((x) => x.id === id);
             if (row) Object.assign(row, body);
+            return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } });
+          }
+        }
+        // les promotions publiees en vrai sur le site (fenetre « offre du jour ») ne doivent pas couvrir les pages pendant les tests
+        if (u.pathname === '/rest/v1/smart_promotions' && m === 'GET') return json(route, []);
+        // notifications push programmees (page « Promotions intelligentes ») : fakePushes.rows = la liste ; missing = table absente (script SQL pas lance) ;
+        // posts = programmations recues ; patches = annulations / « envoyer maintenant » (avec le filtre de statut)
+        if (fakePushes && u.pathname === '/rest/v1/scheduled_pushes') {
+          if (fakePushes.missing) return json(route, { code: 'PGRST205', message: "Could not find the table 'public.scheduled_pushes' in the schema cache" }, 404);
+          if (m === 'GET') return json(route, [...fakePushes.rows].sort((a, b) => b.send_at.localeCompare(a.send_at)));
+          if (m === 'POST') {
+            const body = JSON.parse(req.postData() || '{}');
+            (fakePushes.posts = fakePushes.posts || []).push(body);
+            const product = (fakePushes.products || []).find((x) => x.id === body.product_id) || null;
+            fakePushes.rows.push({ id: 'new' + fakePushes.posts.length, status: 'pending', sent_at: null, ...body, product: product && { name: product.name, slug: product.slug, images: product.images } });
+            return route.fulfill({ status: 201, headers: { 'access-control-allow-origin': '*' } });
+          }
+          if (m === 'PATCH') {
+            const id = (u.searchParams.get('id') || '').replace('eq.', '');
+            const body = JSON.parse(req.postData() || '{}');
+            (fakePushes.patches = fakePushes.patches || []).push({ id, body, status: u.searchParams.get('status') });
+            const row = fakePushes.rows.find((x) => x.id === id && (u.searchParams.get('status') !== 'eq.pending' || x.status === 'pending'));
+            if (row) {
+              Object.assign(row, body);
+              // « envoyer maintenant » : la base l'envoie au passage suivant du minuteur
+              if (body.send_at && fakePushes.sendOnNow) Object.assign(row, { status: 'sent', sent_at: body.send_at });
+            }
             return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } });
           }
         }
@@ -787,6 +814,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     await showProduct(C);
     await cardFor(C).getByTestId('assistant-card-add').click();
     await waitText(page, new RegExp(`Quelle taille pour « ${C.name.trim()} » \\?`));
+    await chip(page, 'Annuler').first().waitFor({ timeout: 8000 }); // les boutons arrivent quand Zara a fini d'ecrire
     check('produit avec tailles : Zara demande la taille avant d\'ajouter (rien dans le panier)', (await chipLabels(page)).join('|') === 'Taille 40|Taille 41|Taille 42|Annuler' && qtyOf(await cartItems(), C) === 0, await chipLabels(page));
     await tap(page, 'Taille 41', new RegExp(`Quelle couleur pour « ${C.name.trim()} » \\?`));
     check('puis la couleur', (await chipLabels(page)).join('|') === 'Noir|Blanc|Annuler', await chipLabels(page));
@@ -3393,6 +3421,124 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   }
 
   // =============================================== H. LE BOUTON DE ZARA : AU MILIEU, VIBRATION ET LUMIERE ===============================================
+  if (PARTS.includes('I')) {
+    console.log('\n== I. notifications push programmees (page « Promotions intelligentes », fausse base : rien n\'est envoye)');
+    const uid = '22222222-2222-4222-8222-222222222222';
+    const JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyMjIyMjIyMi0yMjIyLTQyMjItODIyMi0yMjIyMjIyMjIyMjIiLCJleHAiOjQxMDI0NDQ4MDAsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.c2ln';
+    const accountOf = ({ is_admin = true } = {}) => {
+      const auth = { id: uid, aud: 'authenticated', role: 'authenticated', email: 'admin@example.com', app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' };
+      const token = { access_token: JWT, refresh_token: 'fake-refresh', token_type: 'bearer', expires_in: 3600, expires_at: 4102444800, user: auth };
+      return { auth, token, session: JSON.stringify(token), profile: { id: uid, email: 'admin@example.com', full_name: 'Admin Albasse', phone: '66123456', banned: false, role: 'admin', is_admin } };
+    };
+    const SK = 'sb-xtitsmmccpkelxfjyqyh-auth-token';
+    const products = await get('products?select=id,name,slug,images,price&is_active=eq.true&stock=gt.0&order=created_at.desc&limit=40');
+    const prod = products.find((p) => (p.images || [])[0] && p.name.trim().length >= 4) || products[0];
+    const chadDay = (plusDays) => new Date(Date.now() + 3600000 + plusDays * 86400000).toISOString().slice(0, 10);
+    const chadToIso = (d, t) => new Date(`${d}T${t}:00+01:00`).toISOString();
+    const at = (hoursFromNow) => new Date(Date.now() + hoursFromNow * 3600000).toISOString();
+    const rowsOf = () => [
+      { id: 'p1', product_id: prod.id, title: '🛍️ ' + prod.name.trim(), message: 'Promo du soir sur cet article', send_at: at(5), status: 'pending', sent_at: null, product: { name: prod.name, slug: prod.slug, images: prod.images } },
+      { id: 'p2', product_id: prod.id, title: '🛍️ ' + prod.name.trim(), message: 'Deja partie hier', send_at: at(-20), status: 'sent', sent_at: at(-20), product: { name: prod.name, slug: prod.slug, images: prod.images } },
+      { id: 'p3', product_id: prod.id, title: '🛍️ ' + prod.name.trim(), message: 'Trop en retard', send_at: at(-30), status: 'expired', sent_at: null, product: { name: prod.name, slug: prod.slug, images: prod.images } },
+    ];
+    const openAdmin = async (fp, admin = true) => {
+      const fu = accountOf({ is_admin: admin });
+      const c = await newVisitor(phone, { lang: 'fr', storage: { [SK]: fu.session }, fakeUser: fu, fakePushes: fp });
+      await c.page.goto(`http://localhost:${port}/admin/promotions`, { waitUntil: 'load' });
+      return c;
+    };
+    const section = (c) => c.page.getByTestId('scheduled-pushes');
+    // la table n'existe pas encore : l'explication, et le bouton ne programme rien
+    {
+      const fp = { missing: true, rows: [], products };
+      const c = await openAdmin(fp);
+      await section(c).waitFor({ timeout: 25000 });
+      await c.page.getByTestId('push-missing').waitFor({ timeout: 15000 });
+      check('script SQL pas encore lance : l\'explication « add-scheduled-push.sql » s\'affiche', /add-scheduled-push\.sql/.test(await c.page.getByTestId('push-missing').innerText()));
+      check('aucune erreur (table absente)', c.errs.length === 0, c.errs);
+      await c.ctx.close();
+    }
+    // la vraie utilisation
+    {
+      const fp = { rows: rowsOf(), products, posts: [], patches: [] };
+      const c = await openAdmin(fp);
+      await section(c).waitFor({ timeout: 25000 });
+      await c.page.getByTestId('push-row-p1').waitFor({ timeout: 15000 });
+      const txt = await section(c).innerText();
+      check('la section est la premiere de « Promotions intelligentes », avec « A venir (1) » et l\'historique', /📣 Notifications push programmées/.test(txt) && /À venir \(1\)/.test(txt) && /Historique/.test(txt), txt.slice(0, 300));
+      check('historique : « Envoyee » et « Pas envoyee (trop en retard) »', /✅ Envoyée/.test(await c.page.getByTestId('push-row-p2').innerText()) && /Pas envoyée \(trop en retard\)/.test(await c.page.getByTestId('push-row-p3').innerText()));
+      // rien de choisi : on le dit
+      await c.page.getByTestId('push-schedule').getByText('Programmer la notification').click();
+      await c.page.getByTestId('push-problem').waitFor({ timeout: 5000 });
+      check('sans article : « Choisissez un article. »', (await c.page.getByTestId('push-problem').innerText()) === 'Choisissez un article.');
+      // choisir l'article
+      await c.page.getByTestId('push-product-search').fill(prod.name.trim().slice(0, 6));
+      await c.page.getByTestId('push-product-option-' + prod.id).click();
+      await c.page.getByTestId('push-product-selected').waitFor({ timeout: 5000 });
+      check('l\'article choisi s\'affiche (nom, prix)', (await c.page.getByTestId('push-product-selected').innerText()).includes(prod.name.trim()));
+      // message court : 120 caracteres au plus, compteur, apercu
+      await c.page.getByTestId('push-message').fill('x'.repeat(130));
+      check('message : coupe a 120 caracteres, compteur 120/120', (await c.page.getByTestId('push-message').inputValue()).length === 120 && /120\/120/.test(await section(c).innerText()));
+      const msg = 'Ce soir seulement : -20 % sur cet article 🔥';
+      await c.page.getByTestId('push-message').fill(msg);
+      const preview = await c.page.getByTestId('push-preview').innerText();
+      check('apercu de la notification : titre (nom de l\'article) + message', preview.includes(prod.name.trim().slice(0, 20)) && preview.includes(msg), preview);
+      // une heure deja passee
+      const when = c.page.getByTestId('push-when');
+      await when.locator('input[type=date]').fill(chadDay(0));
+      await when.locator('input[type=time]').fill('00:01');
+      await c.page.getByTestId('push-schedule').getByText('Programmer la notification').click();
+      await sleep(500);
+      check('heure deja passee : refusee avec explication', /déjà passée/.test(await c.page.getByTestId('push-problem').innerText()) && fp.posts.length === 0);
+      // demain 18:30 (heure du Tchad)
+      const d1 = chadDay(1);
+      await when.locator('input[type=date]').fill(d1);
+      await when.locator('input[type=time]').fill('18:30');
+      check('« Depart : ... a 18:30 » affiche avant de programmer', /Départ : .+ à 18:30/.test(await section(c).innerText()));
+      await c.page.getByTestId('push-schedule').getByText('Programmer la notification').click();
+      await c.page.getByText(/Notification programmée ✓/).first().waitFor({ timeout: 10000 });
+      const p0 = fp.posts[0] || {};
+      check('programmee : l\'article, le titre (nom), le message et l\'heure exacte (18:30 au Tchad = 17:30 UTC)', p0.product_id === prod.id && p0.title.startsWith('🛍️ ' + prod.name.trim().slice(0, 20)) && p0.message === msg && p0.send_at === chadToIso(d1, '18:30'), p0);
+      await c.page.getByTestId('push-row-new1').waitFor({ timeout: 8000 });
+      check('elle apparait dans « A venir (2) »', /À venir \(2\)/.test(await section(c).innerText()));
+      // une deuxieme, a une autre heure : plusieurs notifications programmees
+      await when.locator('input[type=time]').fill('20:00');
+      await c.page.getByTestId('push-schedule').getByText('Programmer la notification').click();
+      await c.page.getByTestId('push-row-new2').waitFor({ timeout: 8000 });
+      await c.page.getByText('📣 Notifications push programmées').evaluate((el) => el.scrollIntoView({ block: 'start' }));
+      await sleep(400);
+      await c.page.screenshot({ path: path.join(OUT, 'I1-notifications-programmees.png') });
+      await c.page.getByText(/^À venir \(/).evaluate((el) => el.scrollIntoView({ block: 'center' }));
+      await sleep(400);
+      await c.page.screenshot({ path: path.join(OUT, 'I2-notifications-a-venir.png') });
+      check('deuxieme programmation (meme article et message, 20:00) : « A venir (3) »', fp.posts.length === 2 && fp.posts[1].send_at === chadToIso(d1, '20:00') && /À venir \(3\)/.test(await section(c).innerText()), fp.posts);
+      // annuler (avec confirmation)
+      await c.page.getByTestId('push-cancel-p1').click();
+      await c.page.getByText('Annuler cette notification ?').waitFor({ timeout: 5000 });
+      await c.page.getByText('Oui, annuler').click();
+      await sleep(1500);
+      const pc = fp.patches.find((x) => x.id === 'p1');
+      check('annuler : la base recoit « cancelled » seulement si elle est encore a venir', pc && pc.body.status === 'cancelled' && pc.status === 'eq.pending', fp.patches);
+      check('annulee : elle passe dans l\'historique « Annulee »', /✖ Annulée/.test(await c.page.getByTestId('push-row-p1').innerText()) && /À venir \(2\)/.test(await section(c).innerText()));
+      // envoyer maintenant (avec confirmation)
+      await c.page.getByTestId('push-now-new1').click();
+      await c.page.getByText('Envoyer maintenant ?').waitFor({ timeout: 5000 });
+      await c.page.getByText('Oui, envoyer').click();
+      await sleep(1500);
+      const pn = fp.patches.find((x) => x.id === 'new1');
+      check('envoyer maintenant : l\'heure de depart devient « maintenant » (le minuteur l\'envoie dans la minute)', pn && Math.abs(new Date(pn.body.send_at).getTime() - Date.now()) < 60000 && pn.status === 'eq.pending', pn);
+      check('aucune erreur (notifications programmees)', c.errs.length === 0, c.errs);
+      await c.ctx.close();
+    }
+    // client non administrateur : rien
+    {
+      const c = await openAdmin({ rows: rowsOf(), products }, false);
+      await sleep(4000);
+      check('client non administrateur : « Acces reserve aux administrateurs », aucune notification visible', (await c.page.getByText('Accès réservé aux administrateurs.').count()) === 1 && (await c.page.getByTestId('scheduled-pushes').count()) === 0);
+      await c.ctx.close();
+    }
+  }
+
   if (PARTS.includes('N')) {
     console.log('\n== N. bouton « Facebook » d\'une fiche produit : l\'application Facebook sur telephone, pas le navigateur');
     const prod = (await get('products?select=slug,name&is_active=eq.true&stock=gt.0&order=created_at.desc&limit=1'))[0];

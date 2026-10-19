@@ -17,6 +17,7 @@ import * as sa from '../../src/lib/assistantSales.ts';
 import * as ps from '../../src/lib/assistantPersona.ts';
 import * as fb from '../../src/lib/facebookShare.ts';
 import { chromeIntentUrl } from '../../src/lib/pwaInstallPrompt.ts';
+import * as sp from '../../src/lib/scheduledPushTime.ts';
 import { isMissingColumn } from '../../src/lib/dbErrors.ts';
 
 const KEY = process.env.SUPABASE_ANON_KEY!;
@@ -1273,6 +1274,26 @@ async function main() {
     const url = chromeIntentUrl(href);
     const m = /^intent:\/\/www\.albasseshopping\.com\/produit\/rolex-or\?ref=a&b=1#Intent;scheme=https;package=com\.android\.chrome;S\.browser_fallback_url=([^;]+);end$/.exec(url);
     ok('« Ouvrir dans Chrome » : la meme page (chemin et parametres) dans Chrome, et la page reste ouverte si Chrome manque', !!m && decodeURIComponent(m[1]) === href, url);
+  }
+
+  {
+    console.log('\n== Notifications push programmees : heure du Tchad, titre, verifications');
+    ok('18:30 au Tchad = 17:30 UTC (UTC+1 toute l\'annee)', sp.chadToIso('2026-10-21', '18:30') === '2026-10-21T17:30:00.000Z');
+    ok('minuit au Tchad = 23:00 UTC la veille', sp.chadToIso('2026-10-21', '00:00') === '2026-10-20T23:00:00.000Z');
+    ok('date ou heure invalide : rien', sp.chadToIso('21/10/2026', '18:30') === null && sp.chadToIso('2026-10-21', '6h') === null && sp.chadToIso('', '') === null);
+    ok('heure du Tchad d\'un instant', sp.chadTimeOf('2026-10-21T17:30:00.000Z') === '18:30' && sp.chadTimeOf('2026-10-20T23:00:00.000Z') === '00:00');
+    ok('libelle : « mercredi 21 oct. a 18:30 »', sp.chadLabel('2026-10-21T17:30:00.000Z') === 'mercredi 21 oct. à 18:30', sp.chadLabel('2026-10-21T17:30:00.000Z'));
+    ok('titre : le nom de l\'article avec 🛍️, coupe proprement a 60 caracteres', sp.pushTitleFor('  Rolex   or  ') === '🛍️ Rolex or' && sp.pushTitleFor('x'.repeat(100)).length <= 60 && sp.pushTitleFor('x'.repeat(100)).endsWith('…'));
+    const now = new Date('2026-10-21T10:15:00.000Z'); // 11:15 au Tchad
+    ok('creneau par defaut : dans une heure, a l\'heure pile (12:00 au Tchad)', JSON.stringify(sp.defaultChadSlot(now)) === JSON.stringify({ date: '2026-10-21', time: '12:00' }), sp.defaultChadSlot(now));
+    const base = { productId: 'p', message: 'Promo', date: '2026-10-21', time: '18:30' };
+    ok('tout est bon : aucune remarque', sp.scheduleProblem(base, now) === null);
+    ok('sans article / sans message / message trop long / sans heure / heure passee : la bonne remarque',
+      sp.scheduleProblem({ ...base, productId: null }, now) === 'Choisissez un article.' &&
+      sp.scheduleProblem({ ...base, message: '   ' }, now) === 'Écrivez un message court.' &&
+      /trop long/.test(sp.scheduleProblem({ ...base, message: 'x'.repeat(121) }, now) || '') &&
+      sp.scheduleProblem({ ...base, time: '' }, now) === 'Choisissez le jour et l’heure.' &&
+      /déjà passée/.test(sp.scheduleProblem({ ...base, time: '11:00' }, now) || ''));
   }
 
   console.log('\n' + (failures === 0 ? 'TOUT EST BON' : `${failures} ECHEC(S)`));
