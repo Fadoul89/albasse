@@ -9,6 +9,7 @@ import { formatRelativeTime } from '../../lib/formatDuration';
 import { colors, fonts, radius, spacing } from '../../theme';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import type { AdminNotification, AdminNotificationType } from '../../types';
+import { withPrettyPhoneLogins } from '../../lib/phoneAuth';
 
 const TYPE_ICON: Record<AdminNotificationType, string> = {
   new_order: '🛒',
@@ -75,7 +76,7 @@ export function AdminNotificationsScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.title}>{n.title}</Text>
                 <Text style={styles.message} numberOfLines={2}>
-                  {n.message}
+                  {withPrettyPhoneLogins(n.message)}
                 </Text>
                 <Text style={styles.time}>{formatRelativeTime(n.created_at)}</Text>
               </View>

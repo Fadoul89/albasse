@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NavigationContainer, DarkTheme, getStateFromPath } from '@react-navigation/native';
@@ -16,6 +16,9 @@ import { initBrowsingTracker } from '../lib/browsingTracker';
 import { isIosDevice, isRunningAsInstalledPwa } from '../lib/pwaInstallPrompt';
 import { hasWebPushPermission, isWebPushSupported, subscribeToWebPush, syncWebPushSubscription } from '../lib/webPushSubscription';
 import { useAuthStore } from '../store/authStore';
+import { useStoreSettings } from '../hooks/useStoreSettings';
+import { mustSignUp, wallCovers } from '../lib/accountWall';
+import { AccountWall } from '../components/AccountWall';
 import { TabNavigator } from './TabNavigator';
 import { CategoryScreen } from '../screens/CategoryScreen';
 import { ProductScreen } from '../screens/ProductScreen';
@@ -155,7 +158,21 @@ const IGNORED_REDIRECT_PATHS = ['/', '/connexion', '/inscription'];
 
 export function RootNavigator() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const authLoading = useAuthStore((s) => s.isLoading);
   const wasAuthenticated = useRef(isAuthenticated);
+  const { settings, isLoading: settingsLoading } = useStoreSettings();
+  const [routeName, setRouteName] = useState<string | undefined>();
+  // compte obligatoire : le visiteur sans compte voit l'écran « Créez votre compte » (sauf connexion, inscription, confidentialité,
+  // contact…), et ni Zara ni les fenêtres de promotion / d'installation
+  const signUpFirst = mustSignUp({
+    required: settings.account_required,
+    settingsLoading,
+    authLoading,
+    isAuthenticated,
+    userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+  });
+  const showWall = signUpFirst && wallCovers(routeName);
+  const noteRoute = () => setRouteName(navigationRef.getCurrentRoute()?.name);
 
   useEffect(() => {
     trackAppInstallIfNeeded();
@@ -194,13 +211,19 @@ export function RootNavigator() {
       theme={navTheme}
       documentTitle={{ enabled: false }}
       linking={linking}
-      onStateChange={() => trackPageView()}
+      onReady={noteRoute}
+      onStateChange={() => {
+        trackPageView();
+        noteRoute();
+      }}
     >
       <View style={styles.root}>
-        <SafeAreaView edges={['top']} style={styles.tickerSafeArea}>
-          <AppDownloadBanner />
-          <SocialProofTicker />
-        </SafeAreaView>
+        {!signUpFirst && (
+          <SafeAreaView edges={['top']} style={styles.tickerSafeArea}>
+            <AppDownloadBanner />
+            <SocialProofTicker />
+          </SafeAreaView>
+        )}
         <View style={styles.stackWrap}>
           <Stack.Navigator screenOptions={{ headerShown: false }}>
             <Stack.Screen name="Tabs" component={TabNavigator} />
@@ -250,14 +273,19 @@ export function RootNavigator() {
             <Stack.Screen name="AdminAffiliateSettings" component={AdminAffiliateSettingsScreen} />
             <Stack.Screen name="AdminAffiliateCommissions" component={AdminAffiliateCommissionsScreen} />
           </Stack.Navigator>
+          {showWall && <AccountWall />}
         </View>
         <FavoritesSync />
-        <Assistant />
-        <SmartPromotionPopup />
-        <WheelPopup />
-        <AppDownloadPopup />
-        <IosInstallGuide />
-        <GlowBorder />
+        {!signUpFirst && (
+          <>
+            <Assistant />
+            <SmartPromotionPopup />
+            <WheelPopup />
+            <AppDownloadPopup />
+            <IosInstallGuide />
+            <GlowBorder />
+          </>
+        )}
       </View>
     </NavigationContainer>
   );

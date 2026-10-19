@@ -7,6 +7,7 @@ import { GoldButton } from './GoldButton';
 import { CityPicker } from './CityPicker';
 import { checkProfileForm, formFromProfile, profileFormChanged, type ProfileField, type ProfileForm } from '../lib/profileEdit';
 import type { Profile } from '../types';
+import { visibleEmail } from '../lib/phoneAuth';
 
 interface Props {
   profile: Profile;
@@ -69,7 +70,7 @@ export function ProfileEditor({ profile, onClose }: Props) {
   return (
     <View style={styles.card} testID="profile-editor">
       <Text style={styles.title}>✏️ Modifier mon profil</Text>
-      <Text style={styles.email}>E-mail : {profile.email}</Text>
+      <Text style={styles.email}>E-mail : {visibleEmail(profile.email) ?? '— (connexion avec votre numéro de téléphone)'}</Text>
       {field('fullName', 'Nom et prénom', { testID: 'profile-input-fullName' })}
       {field('phone', 'Numéro de téléphone', { keyboardType: 'phone-pad', testID: 'profile-input-phone' })}
       {field('whatsappNumber', 'Numéro WhatsApp', { keyboardType: 'phone-pad', testID: 'profile-input-whatsapp' })}

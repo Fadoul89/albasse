@@ -12,7 +12,7 @@ import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { useToastStore } from '../../store/toastStore';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
-import { WhatsAppOrderToggle } from '../../components/WhatsAppOrderToggle';
+import { StoreSettingToggle } from '../../components/StoreSettingToggle';
 import type { Product } from '../../types';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
@@ -158,7 +158,7 @@ export function AdminProductsScreen() {
         contentContainerStyle={{ padding: spacing.md, paddingBottom: 60 }}
         ListHeaderComponent={
           <View style={{ marginBottom: spacing.md }}>
-            <WhatsAppOrderToggle />
+            <StoreSettingToggle setting="whatsappOrder" />
             <Text style={styles.total}>
               📦 Total : {filtered.length} produit{filtered.length > 1 ? 's' : ''}
               {filtered.length !== products.length ? ` (sur ${products.length})` : ''}

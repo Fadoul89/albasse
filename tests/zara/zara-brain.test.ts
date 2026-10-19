@@ -1315,6 +1315,27 @@ async function main() {
     ok('statistiques : 0 ou 1 clic au singulier, sans destinataires connus pas de pourcentage', sp.clickStats(0, null).main === '👆 0 clic' && sp.clickStats(1, 1).sub === 'envoyée à 1 téléphone · 100 %' && sp.clickStats(null, undefined).sub === null);
   }
 
+  {
+    console.log('\n== compte obligatoire a l\'entree, comptes crees avec le numero de telephone');
+    const pa = await import('../../src/lib/phoneAuth.ts');
+    const aw = await import('../../src/lib/accountWall.ts');
+    const same = ['66 12 34 56', '66123456', '+235 66 12 34 56', '00235 66 12 34 56', '+235-66-12-34-56', '(+235) 66.12.34.56'].map(pa.phoneDigits);
+    ok('le meme numero ecrit de plusieurs facons donne le meme compte (23566123456)', same.every((d) => d === '23566123456'), same);
+    ok('numero etranger garde son indicatif ; trop court, trop long ou avec des lettres : refuse', pa.phoneDigits('+33 6 12 34 56 78') === '33612345678' && pa.phoneDigits('12') === null && pa.phoneDigits('1234567890123456') === null && pa.phoneDigits('66 12 ab 56') === null && pa.phoneDigits('') === null);
+    ok('adresse du compte : 23566123456@tel.albasseshopping.com (rien pour un numero invalide)', pa.phoneLoginEmail('66 12 34 56') === '23566123456@tel.albasseshopping.com' && pa.phoneLoginEmail('abc') === null);
+    ok('connexion : un numero donne l\'adresse du numero, un e-mail reste un e-mail (en minuscules)', pa.loginEmailFor(' 66 12 34 56 ') === '23566123456@tel.albasseshopping.com' && pa.loginEmailFor('Awa@Example.com') === 'awa@example.com' && pa.loginEmailFor('awa@') === null && pa.loginEmailFor('bonjour') === null);
+    ok('l\'adresse tiree du numero ne s\'affiche jamais ; un vrai e-mail oui', pa.visibleEmail('23566123456@tel.albasseshopping.com') === null && pa.visibleEmail('ali@example.com') === 'ali@example.com' && pa.visibleEmail(null) === null && pa.isPhoneLoginEmail('X@TEL.ALBASSESHOPPING.COM'));
+    ok('notification « Nouveau client » : l\'adresse devient le numero lisible', pa.withPrettyPhoneLogins('23566123456@tel.albasseshopping.com') === '📱 +235 66 12 34 56' && pa.withPrettyPhoneLogins('ali@example.com') === 'ali@example.com' && pa.withPrettyPhoneLogins('33612345678@tel.albasseshopping.com') === '📱 +33612345678');
+    const base = { required: true, settingsLoading: false, authLoading: false, isAuthenticated: false, userAgent: 'Mozilla/5.0 (Linux; Android 13; Pixel 7) Chrome/126.0 Mobile Safari/537.36' };
+    ok('visiteur sans compte + compte obligatoire : le mur', aw.mustSignUp(base));
+    ok('pas de mur : connecte, reglage coupe ou absent, pendant le chargement (reglage ou session)', !aw.mustSignUp({ ...base, isAuthenticated: true }) && !aw.mustSignUp({ ...base, required: false }) && !aw.mustSignUp({ ...base, required: undefined }) && !aw.mustSignUp({ ...base, settingsLoading: true }) && !aw.mustSignUp({ ...base, authLoading: true }));
+    const bots = ['Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)', 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)', 'meta-externalagent/1.1', 'WhatsApp/2.23.20.0 A', 'Mozilla/5.0 (compatible; bingbot/2.0)'];
+    ok('robots de Google, Facebook, WhatsApp, Bing : pas de mur (articles sur Google, apercus des liens)', bots.every((ua) => !aw.mustSignUp({ ...base, userAgent: ua })));
+    const people = ['Mozilla/5.0 (Linux; Android 10; CUBOT X30) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36', 'Mozilla/5.0 (Linux; Android 12; SM-A125F) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36 [FB_IAB/FB4A;FBAV/440.0]', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Instagram 300.0'];
+    ok('vrais telephones (Cubot, navigateur de Facebook, Instagram) : le mur', people.every((ua) => aw.mustSignUp({ ...base, userAgent: ua })));
+    ok('pages ouvertes sans compte : connexion, inscription, mot de passe, confidentialite, retours, contact ; le reste est couvert', ['Login', 'Register', 'ForgotPassword', 'ResetPassword', 'PrivacyPolicy', 'ReturnPolicy', 'Contact'].every((r) => !aw.wallCovers(r)) && ['Tabs', 'Product', 'Category', 'Checkout', undefined].every((r) => aw.wallCovers(r)));
+  }
+
   console.log('\n' + (failures === 0 ? 'TOUT EST BON' : `${failures} ECHEC(S)`));
   process.exit(failures === 0 ? 0 : 1);
 }

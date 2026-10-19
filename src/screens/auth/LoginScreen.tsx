@@ -44,8 +44,8 @@ export function LoginScreen() {
       );
       return;
     }
-    if (!email || !password) {
-      showToast('Entrez votre email et votre mot de passe.', { title: 'Champs manquants', type: 'error' });
+    if (!email.trim() || !password) {
+      showToast('Entrez votre numéro de téléphone (ou e-mail) et votre mot de passe.', { title: 'Champs manquants', type: 'error' });
       return;
     }
     setLoading(true);
@@ -53,8 +53,12 @@ export function LoginScreen() {
     setLoading(false);
     if (error) {
       showToast(error, { title: 'Connexion impossible', type: 'error' });
+    } else if (!navigation.isFocused()) {
+      // la page demandée à l'arrivée sur le site a déjà été rouverte (RootNavigator)
     } else if (navigation.canGoBack()) {
       navigation.goBack();
+    } else {
+      navigation.navigate('Tabs');
     }
   };
 
@@ -64,15 +68,17 @@ export function LoginScreen() {
       <View style={styles.content}>
         <Text style={styles.brand}>ALBASSE SHOPPING</Text>
         <TextInput
+          testID="login-identifier"
           value={email}
           onChangeText={setEmail}
-          placeholder="Email"
+          placeholder="Numéro de téléphone ou e-mail"
           placeholderTextColor={colors.creamFaint}
           autoCapitalize="none"
-          keyboardType="email-address"
+          autoCorrect={false}
           style={styles.input}
         />
         <TextInput
+          testID="login-password"
           value={password}
           onChangeText={setPassword}
           placeholder="Mot de passe"

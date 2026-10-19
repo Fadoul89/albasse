@@ -284,7 +284,9 @@ export function ProductScreen({ route }: Props) {
               <Pressable style={styles.waOrderBtn} onPress={orderOnWhatsApp} testID="product-wa-order">
                 <Text style={styles.waOrderText}>💬 Commander sur WhatsApp</Text>
               </Pressable>
-              <Text style={styles.waOrderHint}>Sans créer de compte · 💵 Paiement à la livraison possible</Text>
+              <Text style={styles.waOrderHint}>
+                {storeSettings.account_required ? '' : 'Sans créer de compte · '}💵 Paiement à la livraison possible
+              </Text>
             </>
           )}
 

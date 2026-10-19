@@ -16,6 +16,7 @@ import {
 } from '../../lib/formatDuration';
 import { getLoyaltyStatus } from '../../lib/loyalty';
 import { ScreenHeader } from '../../components/ScreenHeader';
+import { StoreSettingToggle } from '../../components/StoreSettingToggle';
 import type { CustomerSummary } from '../../types';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
@@ -145,6 +146,7 @@ export function AdminCustomersScreen() {
         )}
         ListHeaderComponent={
           <View>
+            <StoreSettingToggle setting="accountRequired" />
             <View style={styles.statsGrid}>
               <StatCard icon="👥" label="Total clients" value={String(stats.total)} />
               <StatCard icon="🆕" label="Nouveaux (7j)" value={String(stats.newCustomers)} />

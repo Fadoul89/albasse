@@ -13,7 +13,7 @@ const fs = require('fs');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const dist = process.argv[2] || '../../dist';
 const port = process.argv[3] || '4333';
-const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI1TOFBCDE').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI12TOFBCDE').toUpperCase();
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
 fs.mkdirSync(OUT, { recursive: true });
 const KEY = process.env.SUPABASE_ANON_KEY;
@@ -183,33 +183,46 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
           pushClicks.push(JSON.parse(req.postData() || '{}'));
           return json(route, true);
         }
-        // reglages de la boutique : la vraie ligne, avec une fausse colonne whatsapp_order_enabled. fakeStore.waOrder = sa valeur
-        // (undefined = colonne absente : script add-whatsapp-order-toggle.sql pas lance) ; patches = ce que la base aurait recu
-        if (fakeStore && u.pathname === '/rest/v1/store_settings') {
-          if (m === 'GET') {
-            (fakeStore.gets = fakeStore.gets || []).push({ select: u.searchParams.get('select'), waOrder: fakeStore.waOrder });
-            const fix = (row) => {
-              const r = { ...row };
+        // reglages de la boutique : la vraie ligne, avec deux fausses colonnes. fakeStore.waOrder = whatsapp_order_enabled (undefined = colonne
+        // absente : script add-whatsapp-order-toggle.sql pas lance) ; fakeStore.accountRequired = account_required ('missing' = colonne absente,
+        // sinon false par defaut : les autres parties voient le site ouvert meme quand le compte est obligatoire en vrai) ; patches = ce que la
+        // base aurait recu. Sans fakeStore : seulement account_required = false.
+        if (u.pathname === '/rest/v1/store_settings' && m === 'GET') {
+          const fs = fakeStore || {};
+          const select = u.searchParams.get('select') || '*';
+          const wants = (col) => select === '*' || select.split(',').includes(col);
+          if (fakeStore) (fakeStore.gets = fakeStore.gets || []).push({ select, waOrder: fakeStore.waOrder });
+          const fix = (row) => {
+            const r = { ...row };
+            if (fakeStore) {
               if (fakeStore.waOrder === undefined) delete r.whatsapp_order_enabled;
-              else if (/^\*$|whatsapp_order_enabled/.test(u.searchParams.get('select') || '*')) r.whatsapp_order_enabled = fakeStore.waOrder;
-              return r;
-            };
-            const wait = fakeStore.delay ? sleep(fakeStore.delay) : Promise.resolve();
-            // la vraie ligne, lue avec la cle publique (la base refuserait la fausse session de l'admin)
-            return wait.then(() => route.fetch({ headers: { ...req.headers(), apikey: KEY, authorization: `Bearer ${KEY}` } })).then(async (res) => {
-              const data = await res.json();
-              return json(route, Array.isArray(data) ? data.map(fix) : fix(data), res.status());
-            });
-          }
-          if (m === 'PATCH') {
-            const body = JSON.parse(req.postData() || '{}');
-            (fakeStore.patches = fakeStore.patches || []).push(body);
-            if ('whatsapp_order_enabled' in body) {
-              if (fakeStore.waOrder === undefined) return json(route, { code: 'PGRST204', message: "Could not find the 'whatsapp_order_enabled' column of 'store_settings' in the schema cache" }, 400);
-              fakeStore.waOrder = body.whatsapp_order_enabled;
+              else if (wants('whatsapp_order_enabled')) r.whatsapp_order_enabled = fakeStore.waOrder;
             }
-            return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } });
-          }
+            if (fs.accountRequired === 'missing') delete r.account_required;
+            else if (wants('account_required')) r.account_required = fs.accountRequired === true;
+            return r;
+          };
+          const wait = fs.delay ? sleep(fs.delay) : Promise.resolve();
+          // avec fakeStore, la vraie ligne est lue avec la cle publique (la base refuserait la fausse session de l'admin)
+          const fetchOpts = fakeStore ? { headers: { ...req.headers(), apikey: KEY, authorization: `Bearer ${KEY}` } } : undefined;
+          return wait.then(() => route.fetch(fetchOpts)).then(async (res) => {
+            const text = await res.text();
+            let data = null;
+            try {
+              data = JSON.parse(text);
+            } catch (e) {}
+            if (!res.ok() || data === null || typeof data !== 'object') return route.fulfill({ status: res.status(), contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: text });
+            return json(route, Array.isArray(data) ? data.map(fix) : fix(data), res.status());
+          }).catch(() => {}); // page deja fermee pendant la lecture
+        }
+        if (fakeStore && u.pathname === '/rest/v1/store_settings' && m === 'PATCH') {
+          const body = JSON.parse(req.postData() || '{}');
+          (fakeStore.patches = fakeStore.patches || []).push(body);
+          const missing = ('whatsapp_order_enabled' in body && fakeStore.waOrder === undefined && 'whatsapp_order_enabled') || ('account_required' in body && fakeStore.accountRequired === 'missing' && 'account_required');
+          if (missing) return json(route, { code: 'PGRST204', message: `Could not find the '${missing}' column of 'store_settings' in the schema cache` }, 400);
+          if ('whatsapp_order_enabled' in body) fakeStore.waOrder = body.whatsapp_order_enabled;
+          if ('account_required' in body) fakeStore.accountRequired = body.account_required;
+          return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } });
         }
         // les promotions publiees en vrai sur le site (fenetre « offre du jour ») ne doivent pas couvrir les pages pendant les tests
         if (u.pathname === '/rest/v1/smart_promotions' && m === 'GET') return json(route, []);
@@ -245,7 +258,17 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
           return json(route, reply.body, reply.status || 200);
         }
         if (fakeUser && u.pathname === '/auth/v1/user') return json(route, fakeUser.auth);
-        if (fakeUser && fakeUser.token && u.pathname === '/auth/v1/token' && m === 'POST') return json(route, fakeUser.token);
+        if (fakeUser && fakeUser.token && u.pathname === '/auth/v1/token' && m === 'POST') {
+          (fakeUser.tokenCalls = fakeUser.tokenCalls || []).push({ grant: u.searchParams.get('grant_type'), ...JSON.parse(req.postData() || '{}') });
+          if (fakeUser.loginError && u.searchParams.get('grant_type') === 'password') return json(route, { code: 400, error_code: 'invalid_credentials', msg: 'Invalid login credentials' }, 400);
+          return json(route, fakeUser.token);
+        }
+        // inscription (fausse base) : signups = ce que Supabase aurait recu ; signupError = 'exists' (numero deja inscrit)
+        if (fakeUser && fakeUser.token && u.pathname === '/auth/v1/signup' && m === 'POST') {
+          (fakeUser.signups = fakeUser.signups || []).push(JSON.parse(req.postData() || '{}'));
+          if (fakeUser.signupError === 'exists') return json(route, { code: 422, error_code: 'user_already_exists', msg: 'User already registered' }, 422);
+          return json(route, fakeUser.token);
+        }
         if (fakeUser && u.pathname === '/rest/v1/profiles' && m === 'GET' && u.searchParams.get('id') === 'eq.' + fakeUser.auth.id) {
           if (!fakeUser.delay) return json(route, fakeUser.profile);
           return sleep(fakeUser.delay).then(() => {
@@ -1595,7 +1618,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await c.page.screenshot({ path: path.join(OUT, 'M4-visiteur-connexion.png') });
       await chip(c.page, 'Me connecter').click();
       await c.page.waitForURL(/\/connexion/, { timeout: 15000 });
-      await c.page.getByPlaceholder('Email').fill('test@example.com');
+      await c.page.getByTestId('login-identifier').fill('test@example.com');
       await c.page.getByPlaceholder('Mot de passe').fill('motdepasse-test');
       await c.page.getByText('Se connecter', { exact: true }).first().click();
       await c.page.waitForURL((url) => !/\/connexion/.test(url.pathname), { timeout: 20000 });
@@ -1627,7 +1650,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await chip(d.page, 'Me connecter').click();
       await d.page.waitForURL(/\/connexion/, { timeout: 15000 });
       check('ordinateur : le chat reste ouvert pendant que le client se connecte', (await panelOf(d.page).count()) === 1);
-      await d.page.getByPlaceholder('Email').fill('test@example.com');
+      await d.page.getByTestId('login-identifier').fill('test@example.com');
       await d.page.getByPlaceholder('Mot de passe').fill('motdepasse-test');
       await d.page.getByText('Se connecter', { exact: true }).first().click();
       await waitText(d.page, /Salut Fatimé ! 😍👋 Vous êtes bien connecté\(e\), ça me fait plaisir de vous retrouver ! 🥰/, 25000);
@@ -2053,7 +2076,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     {
       const login = async (c) => {
         await c.page.goto(`http://localhost:${port}/connexion`, { waitUntil: 'load' });
-        await c.page.getByPlaceholder('Email').fill('test@example.com');
+        await c.page.getByTestId('login-identifier').fill('test@example.com');
         await c.page.getByPlaceholder('Mot de passe').fill('motdepasse-test');
         await c.page.getByText('Se connecter', { exact: true }).first().click();
         await sleep(3500); // la page /connexion ouverte directement n'a pas de page precedente : on attend l'enregistrement de la connexion, pas un changement de page
@@ -3702,6 +3725,232 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await c.page.getByText('Accès réservé aux administrateurs.').waitFor({ timeout: 25000 });
       check('client non administrateur : pas d\'interrupteur', (await c.page.getByTestId('wa-order-toggle').count()) === 0 && fs.patches.length === 0);
       await c.ctx.close();
+    }
+  }
+
+  if (PARTS.includes('2')) {
+    console.log('\n== 2. compte obligatoire a l\'entree du site, inscription par numero de telephone (e-mail facultatif), connexion par numero (fausse base)');
+    const uid = '44444444-4444-4444-8444-444444444444';
+    const JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0NDQ0NDQ0NC00NDQ0LTQ0NDQtODQ0NC00NDQ0NDQ0NDQ0NDQiLCJleHAiOjQxMDI0NDQ4MDAsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.c2ln';
+    const LOGIN_EMAIL = '23566123456@tel.albasseshopping.com';
+    // un compte de la fausse base : profil vide (cree par la base a l'inscription) ou deja rempli
+    const accountOf = ({ email = LOGIN_EMAIL, is_admin = false, filled = false } = {}) => {
+      const auth = { id: uid, aud: 'authenticated', role: 'authenticated', email, app_metadata: { provider: 'email' }, user_metadata: {}, identities: [{ id: uid, provider: 'email' }], created_at: '2026-01-01T00:00:00Z' };
+      const token = { access_token: JWT, refresh_token: 'fake-refresh', token_type: 'bearer', expires_in: 3600, expires_at: 4102444800, user: auth };
+      const profile = filled
+        ? { id: uid, email, full_name: 'Ali Mahamat', phone: '66 12 34 56', whatsapp_number: '66 12 34 56', banned: false, role: is_admin ? 'admin' : 'customer', is_admin, loyalty_points: 0, login_count: 1 }
+        : { id: uid, email, full_name: null, phone: null, whatsapp_number: null, banned: false, role: 'customer', is_admin, loyalty_points: 0, login_count: 0 };
+      return { auth, token, session: JSON.stringify(token), profile, editable: true, patches: [] };
+    };
+    const SK = 'sb-xtitsmmccpkelxfjyqyh-auth-token';
+    const prod = (await get('products?select=slug,name&is_active=eq.true&stock=gt.0&order=created_at.desc&limit=1'))[0];
+    const wall = (pg) => pg.getByTestId('account-wall');
+    const shown = (pg, text) => pg.getByText(text, { exact: true }).locator('visible=true').first();
+    const fabCount = (pg) => pg.getByRole('button', { name: FAB_NAME }).count();
+    // le mur s'affiche (attente du reglage et de la session)
+    const waitWall = (pg) => wall(pg).waitFor({ timeout: 25000 });
+    // 1) compte obligatoire : le visiteur voit le mur, sans Zara ni bandeaux
+    {
+      const v = await newVisitor(phone, { fakeStore: { waOrder: true, accountRequired: true } });
+      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await waitWall(v.page);
+      await sleep(1500);
+      const txt = await wall(v.page).innerText();
+      check('compte obligatoire : l\'ecran « Créez votre compte » couvre l\'accueil', /Créez votre compte gratuit/.test(txt) && /Créer mon compte/.test(txt) && /J’ai déjà un compte/.test(txt), txt.slice(0, 200));
+      check('l\'ecran dit que seuls le nom, le numero et un mot de passe sont demandes (e-mail facultatif)', /nom, votre numéro de téléphone et un mot de passe/.test(txt) && /facultatif/.test(txt));
+      check('pas de bouton de Zara derriere le mur', (await fabCount(v.page)) === 0);
+      await v.page.goto(`http://localhost:${port}/produit/${prod.slug}`, { waitUntil: 'load' });
+      await waitWall(v.page);
+      check('une fiche produit ouverte depuis un lien : couverte aussi', (await wall(v.page).count()) === 1);
+      for (const [path, what] of [['/confidentialite', 'confidentialite'], ['/contact', 'contact'], ['/connexion', 'connexion']]) {
+        await v.page.goto(`http://localhost:${port}${path}`, { waitUntil: 'load' });
+        await sleep(3500);
+        check(`page ${what} : ouverte sans compte`, (await wall(v.page).count()) === 0);
+      }
+      check('aucune erreur (mur)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+    // 2) reglage coupe, ou script SQL pas lance : site ouvert comme avant
+    for (const [accountRequired, what] of [[false, 'desactive'], ['missing', 'script pas lance']]) {
+      const v = await newVisitor(phone, { fakeStore: { waOrder: true, accountRequired } });
+      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(5000);
+      check(`reglage ${what} : pas de mur, Zara est la`, (await wall(v.page).count()) === 0 && (await fabCount(v.page)) > 0);
+      await v.ctx.close();
+    }
+    // 3) robot de Google : il voit le site (articles trouves sur Google)
+    {
+      const v = await newVisitor({ ...phone, userAgent: 'Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)' }, { fakeStore: { waOrder: true, accountRequired: true } });
+      await v.page.goto(`http://localhost:${port}/produit/${prod.slug}`, { waitUntil: 'load' });
+      await v.page.getByText('Ajouter au panier').first().waitFor({ timeout: 25000 });
+      await sleep(3000);
+      check('robot de Google : pas de mur sur la fiche produit', (await wall(v.page).count()) === 0);
+      await v.ctx.close();
+    }
+    // 4) client deja connecte : jamais de mur, meme un instant
+    {
+      const fu = accountOf({ filled: true });
+      const v = await newVisitor(phone, { storage: { [SK]: fu.session }, fakeUser: fu, fakeStore: { waOrder: true, accountRequired: true } });
+      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      let seen = 0;
+      for (let i = 0; i < 16; i++) {
+        seen += await wall(v.page).count();
+        await sleep(400);
+      }
+      check('client connecte : le mur ne s\'affiche jamais (meme pendant le chargement)', seen === 0, seen);
+      await v.ctx.close();
+    }
+    // 5) inscription depuis le mur : nom, numero, mot de passe ; on revient sur la fiche demandee
+    const register = async (v, { name = 'Ali Mahamat', phoneNo = '66 12 34 56', password = 'secret12', email = '', terms = true } = {}) => {
+      await shown(v.page, 'Créer mon compte').click();
+      await v.page.getByTestId('register-phone').waitFor({ timeout: 15000 });
+      await sleep(800);
+      if (name) await v.page.getByTestId('register-name').locator('visible=true').fill(name);
+      if (phoneNo) await v.page.getByTestId('register-phone').locator('visible=true').fill(phoneNo);
+      if (password) await v.page.getByTestId('register-password').locator('visible=true').fill(password);
+      if (email) await v.page.getByTestId('register-email').locator('visible=true').fill(email);
+      if (terms) await v.page.getByTestId('register-terms').locator('visible=true').click();
+      await shown(v.page, 'Créer mon compte').click();
+    };
+    {
+      const fu = accountOf();
+      const v = await newVisitor(phone, { fakeUser: fu, fakeStore: { waOrder: true, accountRequired: true } });
+      await v.page.goto(`http://localhost:${port}/produit/${prod.slug}`, { waitUntil: 'load' });
+      await waitWall(v.page);
+      await sleep(1000);
+      await shown(v.page, 'Créer mon compte').click();
+      await v.page.getByTestId('register-phone').waitFor({ timeout: 15000 });
+      await sleep(800);
+      check('« Créer mon compte » : le formulaire s\'ouvre, sans le mur par-dessus', (await wall(v.page).count()) === 0);
+      const form = await v.page.locator('body').innerText();
+      check('formulaire court : e-mail, WhatsApp et profession dans « facultatif »', /E-mail \(facultatif\)|Informations optionnelles/i.test(form) && !/Email \*/.test(form) && !/Profession \*/.test(form) && !/Numéro WhatsApp \*/.test(form));
+      // il manque le numero : rien n'est envoye
+      await v.page.getByTestId('register-name').locator('visible=true').fill('Ali Mahamat');
+      await v.page.getByTestId('register-password').locator('visible=true').fill('secret12');
+      await v.page.getByTestId('register-terms').locator('visible=true').click();
+      await shown(v.page, 'Créer mon compte').click();
+      await v.page.getByText('Nom, numéro de téléphone et mot de passe sont obligatoires.').waitFor({ timeout: 8000 });
+      check('sans numero : message, rien n\'est envoye', !(fu.signups || []).length);
+      await v.page.getByTestId('register-phone').locator('visible=true').fill('12');
+      await shown(v.page, 'Créer mon compte').click();
+      await v.page.getByText(/numéro de téléphone valide/).first().waitFor({ timeout: 8000 });
+      check('numero trop court : message, rien n\'est envoye', !(fu.signups || []).length);
+      await v.page.getByTestId('register-phone').locator('visible=true').fill('66 12 34 56');
+      await v.page.getByTestId('register-email').locator('visible=true').fill('pas-un-email');
+      await shown(v.page, 'Créer mon compte').click();
+      await v.page.getByText(/adresse e-mail valide, ou laissez la case vide/).waitFor({ timeout: 8000 });
+      check('e-mail mal ecrit : message, rien n\'est envoye', !(fu.signups || []).length);
+      await v.page.getByTestId('register-email').locator('visible=true').fill('');
+      await shown(v.page, 'Créer mon compte').click();
+      await v.page.getByText('Bienvenue ✓').waitFor({ timeout: 15000 });
+      await sleep(2500);
+      const su = (fu.signups || [])[0] || {};
+      check('inscription sans e-mail : le compte est cree avec le numero (23566123456@tel.albasseshopping.com) et le mot de passe', fu.signups.length === 1 && su.email === LOGIN_EMAIL && su.password === 'secret12', fu.signups);
+      const patch = fu.patches.find((x) => 'full_name' in x) || {};
+      check('profil : nom, numero, WhatsApp = le meme numero, pas de profession, pas d\'e-mail', patch.full_name === 'Ali Mahamat' && patch.phone === '66 12 34 56' && patch.whatsapp_number === '66 12 34 56' && patch.profession === null && !('email' in patch), patch);
+      check('apres l\'inscription : plus de mur, retour sur la fiche demandee', (await wall(v.page).count()) === 0 && new URL(v.page.url()).pathname === `/produit/${prod.slug}`, v.page.url());
+      check('apres l\'inscription : Zara est de retour', (await fabCount(v.page)) > 0);
+      check('aucune erreur (inscription)', v.errs.length === 0, v.errs);
+      // Mon compte : l'adresse tiree du numero ne s'affiche jamais
+      await v.page.goto(`http://localhost:${port}/compte`, { waitUntil: 'load' });
+      await sleep(4000);
+      check('Mon compte : l\'adresse « @tel.albasseshopping.com » n\'est jamais montree', !/tel\.albasseshopping\.com/.test(await v.page.locator('body').innerText()));
+      await v.ctx.close();
+    }
+    // 6) inscription avec un e-mail : il va dans le profil, le compte reste celui du numero
+    {
+      const fu = accountOf();
+      const v = await newVisitor(phone, { fakeUser: fu, fakeStore: { waOrder: true, accountRequired: true } });
+      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await waitWall(v.page);
+      await sleep(1000);
+      await register(v, { phoneNo: '+235 66 12 34 56', email: 'ali@example.com' });
+      await v.page.getByText('Bienvenue ✓').waitFor({ timeout: 15000 });
+      await sleep(1500);
+      const patch = fu.patches.find((x) => 'full_name' in x) || {};
+      check('« +235 66 12 34 56 » donne le meme compte que « 66 12 34 56 »', (fu.signups || [])[0]?.email === LOGIN_EMAIL, fu.signups);
+      check('e-mail donne : enregistre dans le profil', patch.email === 'ali@example.com', patch);
+      await v.ctx.close();
+    }
+    // 7) numero deja inscrit
+    {
+      const fu = { ...accountOf(), signupError: 'exists' };
+      const v = await newVisitor(phone, { fakeUser: fu, fakeStore: { waOrder: true, accountRequired: true } });
+      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await waitWall(v.page);
+      await sleep(1000);
+      await register(v);
+      await v.page.getByText(/Un compte existe déjà avec ce numéro/).waitFor({ timeout: 15000 });
+      check('numero deja inscrit : « Connectez-vous avec votre numero et votre mot de passe »', /Connectez-vous avec votre numéro/.test(await v.page.getByText(/Un compte existe déjà avec ce numéro/).first().innerText()));
+      await v.ctx.close();
+    }
+    // 8) connexion par numero, puis par e-mail (ancien compte), puis mauvais mot de passe
+    for (const [typed, expected, what] of [['66 12 34 56', LOGIN_EMAIL, 'numero'], ['00235 66123456', LOGIN_EMAIL, 'numero avec 00235'], ['Awa@Example.com', 'awa@example.com', 'e-mail (ancien compte)']]) {
+      const fu = accountOf({ email: expected, filled: true });
+      const v = await newVisitor(phone, { fakeUser: fu, fakeStore: { waOrder: true, accountRequired: true } });
+      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await waitWall(v.page);
+      await sleep(1000);
+      await shown(v.page, 'J’ai déjà un compte').click();
+      await v.page.getByTestId('login-identifier').waitFor({ timeout: 15000 });
+      await sleep(600);
+      check(`connexion (${what}) : la case dit « Numéro de téléphone ou e-mail »`, (await v.page.getByTestId('login-identifier').locator('visible=true').getAttribute('placeholder')) === 'Numéro de téléphone ou e-mail');
+      await v.page.getByTestId('login-identifier').locator('visible=true').fill(typed);
+      await v.page.getByTestId('login-password').locator('visible=true').fill('secret12');
+      await shown(v.page, 'Se connecter').click();
+      await sleep(4000);
+      const call = (fu.tokenCalls || []).find((c) => c.grant === 'password') || {};
+      check(`connexion (${what}) : envoyee avec ${expected}, puis plus de mur`, call.email === expected && call.password === 'secret12' && (await wall(v.page).count()) === 0, { call, wall: await wall(v.page).count() });
+      await v.ctx.close();
+    }
+    {
+      const fu = { ...accountOf({ filled: true }), loginError: true };
+      const v = await newVisitor(phone, { fakeUser: fu, fakeStore: { waOrder: true, accountRequired: true } });
+      await v.page.goto(`http://localhost:${port}/connexion`, { waitUntil: 'load' });
+      await v.page.getByTestId('login-identifier').waitFor({ timeout: 15000 });
+      await sleep(600);
+      await v.page.getByTestId('login-identifier').locator('visible=true').fill('66 12 34 56');
+      await v.page.getByTestId('login-password').locator('visible=true').fill('mauvais');
+      await shown(v.page, 'Se connecter').click();
+      await v.page.getByText('Numéro (ou e-mail) ou mot de passe incorrect.').waitFor({ timeout: 10000 });
+      check('mauvais mot de passe : « Numero (ou e-mail) ou mot de passe incorrect »', true);
+      // mot de passe oublie avec le numero : aide sur WhatsApp
+      await v.page.goto(`http://localhost:${port}/mot-de-passe-oublie`, { waitUntil: 'load' });
+      await v.page.getByTestId('forgot-identifier').waitFor({ timeout: 15000 });
+      await sleep(600);
+      check('mot de passe oublie : ouvert sans compte', (await wall(v.page).count()) === 0);
+      await v.page.getByTestId('forgot-identifier').locator('visible=true').fill('66 12 34 56');
+      await shown(v.page, 'Continuer').click();
+      await v.page.getByTestId('forgot-phone-help').waitFor({ timeout: 8000 });
+      await v.ctx.route('https://wa.me/**', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<html><body>whatsapp</body></html>' }));
+      const [popup] = await Promise.all([v.ctx.waitForEvent('page', { timeout: 10000 }), shown(v.page, '💬 Écrire sur WhatsApp').click()]);
+      await popup.waitForLoadState('domcontentloaded').catch(() => {});
+      const url = decodeURIComponent(popup.url());
+      check('mot de passe oublie (numero) : WhatsApp de la boutique avec le numero du client', url.startsWith('https://wa.me/235') && /oublié le mot de passe/.test(url) && /66 12 34 56/.test(url), url);
+      await v.ctx.close();
+    }
+    // 9) l'admin coupe et remet le compte obligatoire (page Clients)
+    {
+      const fu = accountOf({ email: 'admin@example.com', is_admin: true, filled: true });
+      const fs = { waOrder: true, accountRequired: true, patches: [] };
+      const v = await newVisitor(phone, { storage: { [SK]: fu.session }, fakeUser: fu, fakeStore: fs });
+      await v.page.goto(`http://localhost:${port}/admin/clients`, { waitUntil: 'load' });
+      await v.page.getByTestId('account-required-toggle').waitFor({ timeout: 25000 });
+      await sleep(1500);
+      const st = async () => (await v.page.getByTestId('account-required-status').innerText()).trim();
+      check('page Clients : interrupteur « Compte obligatoire », « Activé »', /Activé/.test(await st()), await st());
+      await v.page.getByTestId('account-required-switch').click();
+      await v.page.getByText('🔓 Site ouvert', { exact: true }).waitFor({ timeout: 10000 });
+      check('couper : la base recoit account_required = false', fs.patches.length === 1 && fs.patches[0].account_required === false && Object.keys(fs.patches[0]).length === 1, fs.patches);
+      await v.page.getByTestId('account-required-switch').click();
+      await v.page.getByText('🔐 Compte obligatoire', { exact: true }).waitFor({ timeout: 10000 });
+      check('remettre : la base recoit account_required = true', fs.patches.length === 2 && fs.patches[1].account_required === true, fs.patches);
+      await v.ctx.close();
+      const v2 = await newVisitor(phone, { fakeStore: fs });
+      await v2.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await waitWall(v2.page);
+      check('remis : un nouveau visiteur voit de nouveau le mur', (await wall(v2.page).count()) === 1);
+      await v2.ctx.close();
     }
   }
 
