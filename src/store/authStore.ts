@@ -8,12 +8,14 @@ import type { Profile } from '../types';
 import type { ProfileChanges } from '../lib/profileEdit';
 import { clearIntent, readIntent } from '../lib/assistantAttribution';
 import { isMissingColumn } from '../lib/dbErrors';
+import { loginEmailFor, phoneLoginEmail } from '../lib/phoneAuth';
 
 export interface SignUpDetails {
   fullName: string;
   phone: string;
-  whatsappNumber: string;
-  profession: string;
+  whatsappNumber?: string;
+  profession?: string;
+  email?: string;
   region?: string;
   country?: string;
   address?: string;
@@ -25,12 +27,9 @@ interface AuthState {
   isLoading: boolean;
   isAuthenticated: boolean;
   init: () => Promise<void>;
-  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUp: (
-    email: string,
-    password: string,
-    details: SignUpDetails
-  ) => Promise<{ error: string | null; needsEmailConfirmation?: boolean }>;
+  // identifier : le numéro de téléphone (comptes créés avec le numéro) ou l'e-mail (anciens comptes)
+  signIn: (identifier: string, password: string) => Promise<{ error: string | null }>;
+  signUp: (password: string, details: SignUpDetails) => Promise<{ error: string | null; needsEmailConfirmation?: boolean }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   updateProfile: (changes: ProfileChanges) => Promise<{ error: string | null }>;
@@ -50,7 +49,7 @@ function translateAuthError(message: string): string {
     return "Votre compte a été suspendu. Veuillez contacter notre service client pour plus d'informations.";
   }
   if (m.includes('invalid login credentials')) {
-    return 'E-mail ou mot de passe incorrect.';
+    return 'Numéro (ou e-mail) ou mot de passe incorrect.';
   }
   if (m.includes('email not confirmed')) {
     return 'Veuillez confirmer votre e-mail avant de vous connecter.';
@@ -223,8 +222,10 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     }
   },
 
-  signIn: async (email, password) => {
+  signIn: async (identifier, password) => {
     try {
+      const email = loginEmailFor(identifier);
+      if (!email) return { error: 'Numéro de téléphone ou e-mail invalide.' };
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) return { error: translateAuthError(error.message) };
       if (!data.user) return { error: null };
@@ -259,12 +260,19 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     }
   },
 
-  signUp: async (email, password, details) => {
+  // Le compte est créé avec le numéro (voir lib/phoneAuth) ; l'e-mail, facultatif, va seulement dans le profil.
+  signUp: async (password, details) => {
     try {
+      const email = phoneLoginEmail(details.phone);
+      if (!email) return { error: 'Merci de saisir un numéro de téléphone valide.' };
+      const alreadyThere = 'Un compte existe déjà avec ce numéro. Connectez-vous avec votre numéro et votre mot de passe.';
       const { data, error } = await supabase.auth.signUp({ email, password });
-      if (error) return { error: translateAuthError(error.message) };
+      if (error) {
+        const message = translateAuthError(error.message);
+        return { error: message.startsWith('Un compte existe déjà') ? alreadyThere : message };
+      }
       if (data.user && data.user.identities && data.user.identities.length === 0) {
-        return { error: 'Un compte existe déjà avec cet e-mail.' };
+        return { error: alreadyThere };
       }
 
       if (!data.session) {
@@ -280,8 +288,9 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
           .update({
             full_name: details.fullName,
             phone: details.phone,
-            whatsapp_number: details.whatsappNumber,
-            profession: details.profession,
+            whatsapp_number: details.whatsappNumber || details.phone,
+            profession: details.profession || null,
+            ...(details.email ? { email: details.email } : {}),
             region: details.region || null,
             country: details.country || null,
             address: details.address || null,

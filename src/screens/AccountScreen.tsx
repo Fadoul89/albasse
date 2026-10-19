@@ -7,6 +7,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing } from '../theme';
 import { useAuthStore } from '../store/authStore';
+import { visibleEmail } from '../lib/phoneAuth';
 import { GoldButton } from '../components/GoldButton';
 import { ProfileEditor } from '../components/ProfileEditor';
 import { useCustomerMessages } from '../hooks/useCustomerMessages';
@@ -143,7 +144,7 @@ export function AccountScreen() {
           </View>
         </Pressable>
         <Text style={styles.name}>{profile.full_name ?? 'Client Albasse'}</Text>
-        <Text style={styles.email}>{profile.email}</Text>
+        {visibleEmail(profile.email) ? <Text style={styles.email}>{profile.email}</Text> : null}
         {profile.phone ? <Text style={styles.detail}>📞 {profile.phone}</Text> : null}
         {profile.address ? <Text style={styles.detail}>📍 {profile.address}</Text> : null}
 

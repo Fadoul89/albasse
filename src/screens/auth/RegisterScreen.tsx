@@ -10,9 +10,7 @@ import { GoldButton } from '../../components/GoldButton';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { isSupabaseConfigured } from '../../lib/supabase';
 import { CityPicker } from '../../components/CityPicker';
-
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PHONE_REGEX = /^[+]?[\d\s-]{8,15}$/;
+import { isValidEmail, phoneDigits } from '../../lib/phoneAuth';
 
 export function RegisterScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -39,25 +37,22 @@ export function RegisterScreen() {
       );
       return;
     }
-    if (!fullName || !phone || !whatsappNumber || !profession || !email || !password) {
-      showToast(
-        'Nom, téléphone, numéro WhatsApp, profession, email et mot de passe sont obligatoires.',
-        { title: 'Champs manquants', type: 'error' }
-      );
+    if (!fullName.trim() || !phone.trim() || !password) {
+      showToast('Nom, numéro de téléphone et mot de passe sont obligatoires.', { title: 'Champs manquants', type: 'error' });
       return;
     }
-    if (!EMAIL_REGEX.test(email.trim())) {
-      showToast('Merci de saisir une adresse e-mail valide.', { title: 'E-mail invalide', type: 'error' });
-      return;
-    }
-    if (!PHONE_REGEX.test(phone.trim())) {
-      showToast('Merci de saisir un numéro de téléphone valide (8 à 15 chiffres).', {
+    if (!phoneDigits(phone)) {
+      showToast('Merci de saisir un numéro de téléphone valide (ex. 66 12 34 56).', {
         title: 'Téléphone invalide',
         type: 'error',
       });
       return;
     }
-    if (!PHONE_REGEX.test(whatsappNumber.trim())) {
+    if (email.trim() && !isValidEmail(email)) {
+      showToast('Merci de saisir une adresse e-mail valide, ou laissez la case vide.', { title: 'E-mail invalide', type: 'error' });
+      return;
+    }
+    if (whatsappNumber.trim() && !phoneDigits(whatsappNumber)) {
       showToast('Merci de saisir un numéro WhatsApp valide (8 à 15 chiffres).', {
         title: 'Numéro WhatsApp invalide',
         type: 'error',
@@ -76,11 +71,12 @@ export function RegisterScreen() {
       return;
     }
     setLoading(true);
-    const { error, needsEmailConfirmation } = await signUp(email, password, {
-      fullName,
-      phone,
-      whatsappNumber,
-      profession,
+    const { error, needsEmailConfirmation } = await signUp(password, {
+      fullName: fullName.trim(),
+      phone: phone.trim(),
+      whatsappNumber: whatsappNumber.trim(),
+      profession: profession.trim(),
+      email: email.trim(),
       region,
       country,
       address,
@@ -96,7 +92,10 @@ export function RegisterScreen() {
       );
     } else {
       showToast('Votre compte a bien été créé.', { title: 'Bienvenue ✓', type: 'success' });
+      // la page demandée à l'arrivée sur le site a déjà été rouverte (RootNavigator) : on n'y touche pas
+      if (!navigation.isFocused()) return;
       if (navigation.canGoBack()) navigation.goBack();
+      else navigation.navigate('Tabs');
     }
   };
 
@@ -106,6 +105,7 @@ export function RegisterScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.sectionLabel}>Informations obligatoires</Text>
         <TextInput
+          testID="register-name"
           value={fullName}
           onChangeText={setFullName}
           placeholder="Nom et prénom *"
@@ -113,43 +113,16 @@ export function RegisterScreen() {
           style={styles.input}
         />
         <TextInput
+          testID="register-phone"
           value={phone}
           onChangeText={setPhone}
-          placeholder="Numéro de téléphone *"
+          placeholder="Numéro de téléphone * (ex. 66 12 34 56)"
           placeholderTextColor={colors.creamFaint}
           keyboardType="phone-pad"
           style={styles.input}
         />
         <TextInput
-          value={whatsappNumber}
-          onChangeText={setWhatsappNumber}
-          placeholder="Numéro WhatsApp *"
-          placeholderTextColor={colors.creamFaint}
-          keyboardType="phone-pad"
-          style={styles.input}
-        />
-        {!whatsappNumber && phone && (
-          <Pressable onPress={() => setWhatsappNumber(phone)} style={{ marginBottom: spacing.sm, marginTop: -4 }}>
-            <Text style={styles.link}>Même numéro que mon téléphone</Text>
-          </Pressable>
-        )}
-        <TextInput
-          value={profession}
-          onChangeText={setProfession}
-          placeholder="Profession *"
-          placeholderTextColor={colors.creamFaint}
-          style={styles.input}
-        />
-        <TextInput
-          value={email}
-          onChangeText={setEmail}
-          placeholder="Email *"
-          placeholderTextColor={colors.creamFaint}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          style={styles.input}
-        />
-        <TextInput
+          testID="register-password"
           value={password}
           onChangeText={setPassword}
           placeholder="Mot de passe (min. 6 caractères) *"
@@ -157,8 +130,34 @@ export function RegisterScreen() {
           secureTextEntry
           style={styles.input}
         />
+        <Text style={styles.fieldHint}>Pour vous connecter : votre numéro de téléphone et ce mot de passe.</Text>
 
         <Text style={styles.sectionLabel}>Informations optionnelles</Text>
+        <TextInput
+          testID="register-email"
+          value={email}
+          onChangeText={setEmail}
+          placeholder="E-mail (facultatif)"
+          placeholderTextColor={colors.creamFaint}
+          autoCapitalize="none"
+          keyboardType="email-address"
+          style={styles.input}
+        />
+        <TextInput
+          value={whatsappNumber}
+          onChangeText={setWhatsappNumber}
+          placeholder="Numéro WhatsApp (si différent du téléphone)"
+          placeholderTextColor={colors.creamFaint}
+          keyboardType="phone-pad"
+          style={styles.input}
+        />
+        <TextInput
+          value={profession}
+          onChangeText={setProfession}
+          placeholder="Profession"
+          placeholderTextColor={colors.creamFaint}
+          style={styles.input}
+        />
         <Text style={styles.fieldLabel}>📍 Ville</Text>
         <CityPicker value={region} onChange={(v) => setRegion(v)} />
         <TextInput
@@ -188,7 +187,7 @@ export function RegisterScreen() {
         <View style={styles.termsBox}>
           <Text style={styles.termsTitle}>📜 Conditions d'inscription</Text>
           <Text style={styles.termsIntro}>En créant mon compte, j'accepte :</Text>
-          <Text style={styles.termsItem}>1. Fournir des informations exactes (nom, téléphone et profession).</Text>
+          <Text style={styles.termsItem}>1. Fournir des informations exactes (nom et téléphone).</Text>
           <Text style={styles.termsItem}>
             2. Passer uniquement des commandes sérieuses et avec une réelle intention d'achat.
           </Text>
@@ -205,7 +204,7 @@ export function RegisterScreen() {
           </Text>
         </View>
 
-        <Pressable style={styles.checkboxRow} onPress={() => setAcceptsTerms((v) => !v)}>
+        <Pressable testID="register-terms" style={styles.checkboxRow} onPress={() => setAcceptsTerms((v) => !v)}>
           <View style={[styles.checkbox, acceptsTerms && styles.checkboxChecked]}>
             {acceptsTerms && <Text style={styles.checkboxMark}>✓</Text>}
           </View>
@@ -255,6 +254,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   fieldLabel: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 12, marginBottom: 6 },
+  fieldHint: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11, marginTop: -2, marginBottom: spacing.sm },
   privacyNote: {
     color: colors.creamFaint,
     fontFamily: fonts.body,
@@ -263,7 +263,6 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   privacyLink: { color: colors.gold, fontFamily: fonts.bodyMedium, fontSize: 12, marginTop: spacing.sm },
-  link: { color: colors.gold, fontFamily: fonts.bodyMedium, fontSize: 12 },
   termsBox: {
     backgroundColor: colors.panel,
     borderRadius: radius.md,

@@ -30,6 +30,7 @@ import { StarRating } from '../components/StarRating';
 import { GoldButton } from '../components/GoldButton';
 import { ProductCard } from '../components/ProductCard';
 import { FavoriteButton } from '../components/FavoriteButton';
+import { useStoreSettings } from '../hooks/useStoreSettings';
 import { WebPushBanner } from '../components/WebPushBanner';
 
 const { width } = Dimensions.get('window');
@@ -51,6 +52,9 @@ export function ProductScreen({ route }: Props) {
   const addItem = useCartStore((s) => s.addItem);
   const showToast = useToastStore((s) => s.show);
   const profile = useAuthStore((s) => s.profile);
+  const { settings: storeSettings, isLoading: storeSettingsLoading } = useStoreSettings();
+  // l'admin peut cacher le bouton « Commander sur WhatsApp » (page Produits)
+  const showWhatsAppOrder = !storeSettingsLoading && storeSettings.whatsapp_order_enabled !== false;
 
   const [activeImage, setActiveImage] = useState(0);
   const [color, setColor] = useState<string | null>(product?.colors[0] ?? null);
@@ -275,10 +279,16 @@ export function ProductScreen({ route }: Props) {
             )}
           </View>
 
-          <Pressable style={styles.waOrderBtn} onPress={orderOnWhatsApp}>
-            <Text style={styles.waOrderText}>💬 Commander sur WhatsApp</Text>
-          </Pressable>
-          <Text style={styles.waOrderHint}>Sans créer de compte · 💵 Paiement à la livraison possible</Text>
+          {showWhatsAppOrder && (
+            <>
+              <Pressable style={styles.waOrderBtn} onPress={orderOnWhatsApp} testID="product-wa-order">
+                <Text style={styles.waOrderText}>💬 Commander sur WhatsApp</Text>
+              </Pressable>
+              <Text style={styles.waOrderHint}>
+                {storeSettings.account_required ? '' : 'Sans créer de compte · '}💵 Paiement à la livraison possible
+              </Text>
+            </>
+          )}
 
           <View style={styles.shareRow}>
             <Text style={styles.shareLabel}>Partager :</Text>

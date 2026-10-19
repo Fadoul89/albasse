@@ -318,6 +318,10 @@ export interface StoreSettings {
   hours: string | null;
   google_maps_url: string | null;
   voiceover_url: string | null;
+  // bouton « Commander sur WhatsApp » des fiches produit (absent tant que add-whatsapp-order-toggle.sql n'est pas lancé : affiché)
+  whatsapp_order_enabled?: boolean;
+  // compte obligatoire à l'entrée du site (absent tant que add-account-required.sql n'est pas lancé : site ouvert)
+  account_required?: boolean;
   left_ad_items: AdItem[];
   right_ad_items: AdItem[];
   updated_at: string;

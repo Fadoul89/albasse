@@ -22,6 +22,7 @@ import { ScreenHeader } from '../../components/ScreenHeader';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { BanDialog } from '../../components/BanDialog';
 import { GoldButton } from '../../components/GoldButton';
+import { visibleEmail } from '../../lib/phoneAuth';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
 
@@ -173,7 +174,7 @@ export function AdminCustomerDetailScreen({ route }: Props) {
           <Row label="Ville" value={profile.region ?? '—'} />
           <Row label="Pays" value={profile.country ?? '—'} />
           <Row label="Adresse" value={profile.address ?? '—'} />
-          <Row label="Email" value={profile.email} />
+          <Row label="Email" value={visibleEmail(profile.email) ?? '— (compte créé avec le numéro)'} />
           <Row label="🚩 Fausses commandes signalées" value={`${profile.fake_order_count} / 3`} />
         </Section>
 

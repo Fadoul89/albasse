@@ -15,14 +15,18 @@ const FALLBACK: StoreSettings = {
   hours: 'Lun - Sam : 8h - 19h',
   google_maps_url: null,
   voiceover_url: null,
+  whatsapp_order_enabled: true,
   left_ad_items: [],
   right_ad_items: [],
   updated_at: new Date().toISOString(),
 };
 
+// Derniers réglages lus : la page suivante les a tout de suite (sans attendre la base).
+let lastSettings: StoreSettings | null = null;
+
 export function useStoreSettings() {
-  const [settings, setSettings] = useState<StoreSettings>(FALLBACK);
-  const [isLoading, setIsLoading] = useState(isSupabaseConfigured);
+  const [settings, setSettings] = useState<StoreSettings>(lastSettings ?? FALLBACK);
+  const [isLoading, setIsLoading] = useState(isSupabaseConfigured && !lastSettings);
 
   const refresh = () => {
     if (!isSupabaseConfigured) {
@@ -37,11 +41,12 @@ export function useStoreSettings() {
       .single()
       .then(({ data }) => {
         if (data) {
-          setSettings({
+          lastSettings = {
             ...(data as StoreSettings),
             left_ad_items: (data as StoreSettings).left_ad_items ?? [],
             right_ad_items: (data as StoreSettings).right_ad_items ?? [],
-          });
+          };
+          setSettings(lastSettings);
         }
         setIsLoading(false);
       });
