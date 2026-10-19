@@ -87,6 +87,7 @@ import {
   isAndroidDevice,
   isIosDevice,
   isAppInstalledOnDevice,
+  isInAppBrowser,
   isPwaInstallPromptAvailable,
   isRunningAsInstalledPwa,
   triggerPwaInstallPrompt,
@@ -150,7 +151,8 @@ export interface ChatAction {
     | 'callbackDayFix'
     | 'style'
     | 'categoryMore'
-    | 'categoryPage';
+    | 'categoryPage'
+    | 'openChrome';
   payload?: string;
   highlight?: boolean;
 }
@@ -459,7 +461,7 @@ const RANGES_SAY: Record<Lang, string> = { fr: 'trois gammes de prix', ar: 'ثل
 // panier, compte, WhatsApp, menu, installer). Les réponses à une question passée (taille, jour, budget, pour qui, confirmer...) partent.
 const OLD_CHIP_KINDS = new Set<ChatAction['kind']>([
   'say', 'whatsapp', 'register', 'login', 'orders', 'account', 'category', 'menu', 'cart', 'checkout', 'link', 'policy', 'pair', 'add',
-  'install', 'installHelp', 'iosGuide', 'interest', 'style', 'orderPage', 'categoryPage',
+  'install', 'installHelp', 'iosGuide', 'interest', 'style', 'orderPage', 'categoryPage', 'openChrome',
 ]);
 // Ces phrases parlent de ce qui est affiché en ce moment (le budget de ces articles, les comparer) : pas sur un ancien message.
 const CONTEXT_SAYS = new Set(['budget', ...Object.values(COMPARE_SAY), ...Object.values(RANGES_SAY)]);
@@ -2001,7 +2003,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       if (!OLD_CHIP_KINDS.has(a.kind)) return false;
       if (a.kind === 'say') return !CONTEXT_SAYS.has(a.payload ?? '');
       if (a.kind === 'register' || a.kind === 'login') return guest;
-      if (a.kind === 'install' || a.kind === 'installHelp' || a.kind === 'iosGuide') return (installOk ??= installMenuChip() !== null);
+      if (a.kind === 'install' || a.kind === 'installHelp' || a.kind === 'iosGuide' || a.kind === 'openChrome') return (installOk ??= installMenuChip() !== null);
       return true;
     });
   }
@@ -2046,13 +2048,14 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
 
   // Android sans installation en un toucher : les étapes du navigateur utilisé (dans Facebook, WhatsApp... : ouvrir Chrome d'abord).
   async function androidSteps() {
-    const ua = navigator.userAgent;
-    const text = /FBAN|FBAV|Instagram|WhatsApp|Line\/|; wv\)/i.test(ua)
-      ? T().install.androidOpenChrome
-      : /SamsungBrowser/i.test(ua)
-        ? T().install.androidSamsung
-        : T().install.androidManual;
-    await say(text, { actions: [{ label: T().chip.alreadyInstalled, kind: 'installYes' }, menuBtn()] });
+    const done: ChatAction = { label: T().chip.alreadyInstalled, kind: 'installYes' };
+    if (isInAppBrowser()) {
+      // un bouton qui ouvre la page dans Chrome, où l'installation marche
+      await say(T().install.androidOpenChrome, { actions: [{ label: T().chip.openChrome, kind: 'openChrome', highlight: true }, done, menuBtn()] });
+      return;
+    }
+    const text = /SamsungBrowser/i.test(navigator.userAgent) ? T().install.androidSamsung : T().install.androidManual;
+    await say(text, { actions: [done, menuBtn()] });
   }
 
   // iPhone : les étapes écrites, avec la photo « comment installer » juste dessous (touchée, elle s'ouvre en grand).

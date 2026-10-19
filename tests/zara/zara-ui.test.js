@@ -1291,10 +1291,20 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     }
     // Android dans le navigateur de Facebook / WhatsApp : ouvrir Chrome d'abord ; Samsung Internet : ses propres etapes
     for (const [ua, re, label] of [
-      ['Mozilla/5.0 (Linux; Android 14; Pixel 7 Build/UQ1A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/124.0.0.0 Mobile Safari/537.36 [FBAN/EMA;FBLC/fr_FR;FBAV/400.0.0.0;]', /Ouvrez d’abord albasseshopping\.com dans Chrome/, 'navigateur de Facebook'],
+      ['Mozilla/5.0 (Linux; Android 14; Pixel 7 Build/UQ1A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/124.0.0.0 Mobile Safari/537.36 [FBAN/EMA;FBLC/fr_FR;FBAV/400.0.0.0;]', /Vous êtes dans le navigateur de Facebook, WhatsApp ou Instagram/, 'navigateur de Facebook'],
       ['Mozilla/5.0 (Linux; Android 14; SM-A546B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/25.0 Chrome/121.0.0.0 Mobile Safari/537.36', /menu \(☰\) en bas de Samsung Internet/, 'Samsung Internet'],
     ]) {
-      const v = await newVisitor({ ...phone, userAgent: ua }, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' } });
+      const catchIntents = () => {
+        window.__nav = [];
+        document.addEventListener('click', (e) => {
+          const a = e.target && e.target.closest ? e.target.closest('a') : null;
+          if (a && /^intent:/.test(a.getAttribute('href') || '')) {
+            window.__nav.push(a.getAttribute('href'));
+            e.preventDefault();
+          }
+        }, true);
+      };
+      const v = await newVisitor({ ...phone, userAgent: ua }, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' }, initScripts: [catchIntents] });
       await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
       await sleep(2500);
       await v.page.keyboard.press('Escape');
@@ -1303,6 +1313,13 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await chip(v.page, 'Voir comment installer').first().click();
       await waitText(v.page, re);
       check(`Android, ${label} : les bonnes etapes d'installation`, true);
+      if (label === 'navigateur de Facebook') {
+        check('navigateur de Facebook : bouton « Ouvrir dans Chrome » + « Oui, deja installee » + menu', (await chipLabels(v.page)).join('|') === '🌐 Ouvrir dans Chrome|✅ Oui, déjà installée|🏠 Menu', await chipLabels(v.page));
+        await chip(v.page, 'Ouvrir dans Chrome').click();
+        await sleep(500);
+        const nav = await v.page.evaluate(() => window.__nav);
+        check('« Ouvrir dans Chrome » : la page s\'ouvre dans Chrome (lien intent vers com.android.chrome), le chat reste la', nav.length === 1 && /^intent:\/\/localhost:\d+\/#Intent;scheme=https;package=com\.android\.chrome;/.test(nav[0]) && (await panelOf(v.page).count()) === 1, nav);
+      }
       check(`aucune erreur (${label})`, v.errs.length === 0, v.errs);
       await v.ctx.close();
     }
@@ -3397,6 +3414,13 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await sleep(2500);
       await v.page.keyboard.press('Escape');
       await v.page.getByText('📘 Facebook').first().waitFor({ timeout: 15000 });
+      // comme un client : on fait defiler la fiche pour amener le bouton au milieu de l'ecran (pas sous la barre « Ajouter au panier »)
+      await v.page.getByText('📘 Facebook').first().evaluate((el) => {
+        let sc = el.parentElement;
+        while (sc && !(sc.scrollHeight > sc.clientHeight + 20 && /auto|scroll/.test(getComputedStyle(sc).overflowY))) sc = sc.parentElement;
+        if (sc) sc.scrollTop += el.getBoundingClientRect().top - window.innerHeight * 0.4;
+      });
+      await sleep(600);
     };
     const shareOf = async (v) => (await v.page.evaluate(() => window.__fbNav || []));
     // Android (Chrome)

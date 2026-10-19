@@ -16,6 +16,7 @@ import * as oc from '../../src/lib/assistantOccasions.ts';
 import * as sa from '../../src/lib/assistantSales.ts';
 import * as ps from '../../src/lib/assistantPersona.ts';
 import * as fb from '../../src/lib/facebookShare.ts';
+import { chromeIntentUrl } from '../../src/lib/pwaInstallPrompt.ts';
 import { isMissingColumn } from '../../src/lib/dbErrors.ts';
 
 const KEY = process.env.SUPABASE_ANON_KEY!;
@@ -1264,6 +1265,14 @@ async function main() {
     const desk = fb.facebookShareTarget(page, 'desktop');
     ok('ordinateur : la page de partage dans un nouvel onglet (comme avant)', desk.kind === 'tab' && desk.url === web, desk);
     ok('sans navigateur (tests) : appareil « ordinateur »', fb.currentFacebookDevice() === 'desktop');
+  }
+
+  {
+    console.log('\n== Navigateur de Facebook / WhatsApp : ouvrir la page dans Chrome pour pouvoir installer');
+    const href = 'https://www.albasseshopping.com/produit/rolex-or?ref=a&b=1';
+    const url = chromeIntentUrl(href);
+    const m = /^intent:\/\/www\.albasseshopping\.com\/produit\/rolex-or\?ref=a&b=1#Intent;scheme=https;package=com\.android\.chrome;S\.browser_fallback_url=([^;]+);end$/.exec(url);
+    ok('« Ouvrir dans Chrome » : la meme page (chemin et parametres) dans Chrome, et la page reste ouverte si Chrome manque', !!m && decodeURIComponent(m[1]) === href, url);
   }
 
   console.log('\n' + (failures === 0 ? 'TOUT EST BON' : `${failures} ECHEC(S)`));
