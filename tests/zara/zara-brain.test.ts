@@ -1296,6 +1296,25 @@ async function main() {
       /déjà passée/.test(sp.scheduleProblem({ ...base, time: '11:00' }, now) || ''));
   }
 
+  {
+    console.log('\n== Clics des notifications programmees : la marque du telephone = celle de la base');
+    const title = '🛍️ MANTEAU HOMME ORIGINAL', message = 'Ce soir seulement : -20 % sur cet article 🔥';
+    const h = await sp.pushClickHash(title, message);
+    ok('marque : 16 caracteres, la meme que dans la base (SHA-256 de « titre + ligne + message », emoji compris)', h === '3d2f2e1122f825b4', h);
+    // le service worker du site (public/sw.js) calcule exactement la meme marque
+    const { readFileSync } = await import('node:fs');
+    const vm = await import('node:vm');
+    const swContext: Record<string, unknown> = { self: { addEventListener() {}, location: { origin: 'https://www.albasseshopping.com' } }, crypto: globalThis.crypto, TextEncoder, URL, caches: {}, Response };
+    vm.runInNewContext(readFileSync(new URL('../../public/sw.js', import.meta.url), 'utf8'), swContext);
+    const swTag = await (swContext.pushClickTag as (t: string, b: string) => Promise<string>)(title, message);
+    ok('le service worker calcule la meme marque', swTag === h, swTag);
+    const opened = await (swContext.withClickTag as (n: unknown, t: string) => Promise<string>)({ title, body: message }, 'https://www.albasseshopping.com/produit/manteau');
+    ok('la page ouverte au toucher porte la marque ?push=…', opened === 'https://www.albasseshopping.com/produit/manteau?push=' + h, opened);
+    ok('lecture de la marque dans l\'adresse (et rien si elle est absente ou mal formee)', sp.readPushTag('?push=' + h) === h && sp.readPushTag('?a=1&push=' + h + '&b=2') === h && sp.readPushTag('') === null && sp.readPushTag('?push=abc') === null && sp.readPushTag('?push=3D2F2E1122F825B4') === null);
+    ok('statistiques : « 👆 3 clics » et « envoyee a 11 telephones · 27 % »', JSON.stringify(sp.clickStats(3, 11)) === JSON.stringify({ main: '👆 3 clics', sub: 'envoyée à 11 téléphones · 27 %' }), sp.clickStats(3, 11));
+    ok('statistiques : 0 ou 1 clic au singulier, sans destinataires connus pas de pourcentage', sp.clickStats(0, null).main === '👆 0 clic' && sp.clickStats(1, 1).sub === 'envoyée à 1 téléphone · 100 %' && sp.clickStats(null, undefined).sub === null);
+  }
+
   console.log('\n' + (failures === 0 ? 'TOUT EST BON' : `${failures} ECHEC(S)`));
   process.exit(failures === 0 ? 0 : 1);
 }

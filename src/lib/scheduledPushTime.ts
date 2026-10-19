@@ -52,3 +52,26 @@ export function scheduleProblem(
   if (new Date(iso).getTime() <= now.getTime()) return 'Cette heure est déjà passée : choisissez une heure à venir.';
   return null;
 }
+
+// La marque d'une notification touchée (même calcul que public/sw.js et la base) : les 16 premiers caractères du SHA-256
+// de « titre + retour à la ligne + message ».
+export async function pushClickHash(title: string, message: string): Promise<string> {
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${title}\n${message}`));
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('').slice(0, 16);
+}
+
+// La marque « ?push=… » dans l'adresse ouverte par une notification ; null s'il n'y en a pas (ou si elle est mal formée).
+export function readPushTag(search: string): string | null {
+  const m = /[?&]push=([0-9a-f]{16})(?:&|#|$)/.exec(search);
+  return m ? m[1] : null;
+}
+
+// « 👆 3 clics » et « envoyée à 11 téléphones · 27 % » sous une notification envoyée.
+export function clickStats(clicks: number | null | undefined, recipients: number | null | undefined): { main: string; sub: string | null } {
+  const n = Math.max(0, Number(clicks) || 0);
+  const main = `👆 ${n} clic${n > 1 ? 's' : ''}`;
+  const r = Number(recipients) || 0;
+  if (r <= 0) return { main, sub: null };
+  const rate = Math.round((n / r) * 100);
+  return { main, sub: `envoyée à ${r} téléphone${r > 1 ? 's' : ''} · ${rate} %` };
+}

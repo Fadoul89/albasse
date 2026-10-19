@@ -63,6 +63,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     }, [storage, session, zaraInstall]);
     const writes = [];
     const rpcCalls = [];
+    const pushClicks = []; // clics de notifications comptes (record_push_click)
     // statistiques de Zara : ce que le site envoie a la base (appareil du compteur, gestes d'installation, installations, demandes de la page admin)
     const chatStarts = [];
     const events = [];
@@ -177,6 +178,11 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
             return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } });
           }
         }
+        // un client a touche une notification programmee : le site compte le clic (fausse base)
+        if (u.pathname === '/rest/v1/rpc/record_push_click' && m === 'POST') {
+          pushClicks.push(JSON.parse(req.postData() || '{}'));
+          return json(route, true);
+        }
         // les promotions publiees en vrai sur le site (fenetre « offre du jour ») ne doivent pas couvrir les pages pendant les tests
         if (u.pathname === '/rest/v1/smart_promotions' && m === 'GET') return json(route, []);
         // notifications push programmees (page « Promotions intelligentes ») : fakePushes.rows = la liste ; missing = table absente (script SQL pas lance) ;
@@ -282,7 +288,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     page.on('console', (msg) => {
       if (msg.type() === 'error' && !/Failed to load resource|net::ERR|Erreur creation session visiteur/.test(msg.text())) errs.push(msg.text());
     });
-    return { ctx, page, errs, writes, rpcCalls, chatStarts, events, installs, statsCalls, browsingCalls, browsingApplied, forgets, net, overviewCalls };
+    return { ctx, page, errs, writes, rpcCalls, pushClicks, chatStarts, events, installs, statsCalls, browsingCalls, browsingApplied, forgets, net, overviewCalls };
   }
 
   const panelOf = (p) => p.getByTestId('assistant-panel');
@@ -3438,7 +3444,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const at = (hoursFromNow) => new Date(Date.now() + hoursFromNow * 3600000).toISOString();
     const rowsOf = () => [
       { id: 'p1', product_id: prod.id, title: '🛍️ ' + prod.name.trim(), message: 'Promo du soir sur cet article', send_at: at(5), status: 'pending', sent_at: null, product: { name: prod.name, slug: prod.slug, images: prod.images } },
-      { id: 'p2', product_id: prod.id, title: '🛍️ ' + prod.name.trim(), message: 'Deja partie hier', send_at: at(-20), status: 'sent', sent_at: at(-20), product: { name: prod.name, slug: prod.slug, images: prod.images } },
+      { id: 'p2', product_id: prod.id, title: '🛍️ ' + prod.name.trim(), message: 'Deja partie hier', send_at: at(-20), status: 'sent', sent_at: at(-20), clicks: 3, recipients: 11, product: { name: prod.name, slug: prod.slug, images: prod.images } },
       { id: 'p3', product_id: prod.id, title: '🛍️ ' + prod.name.trim(), message: 'Trop en retard', send_at: at(-30), status: 'expired', sent_at: null, product: { name: prod.name, slug: prod.slug, images: prod.images } },
     ];
     const openAdmin = async (fp, admin = true) => {
@@ -3467,6 +3473,15 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const txt = await section(c).innerText();
       check('la section est la premiere de « Promotions intelligentes », avec « A venir (1) » et l\'historique', /📣 Notifications push programmées/.test(txt) && /À venir \(1\)/.test(txt) && /Historique/.test(txt), txt.slice(0, 300));
       check('historique : « Envoyee » et « Pas envoyee (trop en retard) »', /✅ Envoyée/.test(await c.page.getByTestId('push-row-p2').innerText()) && /Pas envoyée \(trop en retard\)/.test(await c.page.getByTestId('push-row-p3').innerText()));
+      const badge = c.page.getByTestId('push-clicks-p2');
+      const badgeInfo = await badge.evaluate((el) => ({ text: el.innerText, bg: getComputedStyle(el).backgroundColor }));
+      check('sous la notification envoyee : « 👆 3 clics » et « envoyee a 11 telephones · 27 % », sur fond vert bien visible', /👆 3 clics/.test(badgeInfo.text) && /envoyée à 11 téléphones · 27 %/.test(badgeInfo.text) && badgeInfo.bg === 'rgb(22, 163, 74)', badgeInfo);
+      check('pas de clics affiches sous une notification pas envoyee ou a venir', (await c.page.getByTestId('push-clicks-p3').count()) === 0 && (await c.page.getByTestId('push-clicks-p1').count()) === 0);
+      // de nouveaux clics arrivent : « Actualiser les clics »
+      fp.rows.find((r) => r.id === 'p2').clicks = 5;
+      await c.page.getByTestId('push-refresh').click();
+      await c.page.getByText(/👆 5 clics/).waitFor({ timeout: 8000 });
+      check('« Actualiser les clics » : le nouveau nombre s\'affiche', /envoyée à 11 téléphones · 45 %/.test(await badge.innerText()), await badge.innerText());
       // rien de choisi : on le dit
       await c.page.getByTestId('push-schedule').getByText('Programmer la notification').click();
       await c.page.getByTestId('push-problem').waitFor({ timeout: 5000 });
@@ -3529,6 +3544,27 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('envoyer maintenant : l\'heure de depart devient « maintenant » (le minuteur l\'envoie dans la minute)', pn && Math.abs(new Date(pn.body.send_at).getTime() - Date.now()) < 60000 && pn.status === 'eq.pending', pn);
       check('aucune erreur (notifications programmees)', c.errs.length === 0, c.errs);
       await c.ctx.close();
+    }
+    // un client touche la notification : la page s'ouvre avec la marque ?push=… et le site compte le clic, une seule fois
+    {
+      const tag = '3d2f2e1122f825b4';
+      const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
+      await v.page.goto(`http://localhost:${port}/produit/${prod.slug}?push=${tag}`, { waitUntil: 'load' });
+      await sleep(3500);
+      check('toucher d\'une notification : le clic est compte (la marque est envoyee a la base)', v.pushClicks.length === 1 && v.pushClicks[0].p_hash === tag, v.pushClicks);
+      check('la fiche de l\'article s\'affiche normalement', new URL(v.page.url()).pathname === `/produit/${prod.slug}`);
+      await v.page.reload({ waitUntil: 'load' });
+      await sleep(3000);
+      check('rechargement dans le meme onglet : pas de deuxieme clic', v.pushClicks.length === 1, v.pushClicks);
+      await sleep(6500);
+      check('la marque quitte l\'adresse apres quelques secondes (lien propre si le client le partage)', !/push=/.test(v.page.url()), v.page.url());
+      const w = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
+      await w.page.goto(`http://localhost:${port}/produit/${prod.slug}?push=pas-une-marque`, { waitUntil: 'load' });
+      await sleep(3000);
+      check('marque mal formee ou absente : rien n\'est envoye', w.pushClicks.length === 0, w.pushClicks);
+      check('aucune erreur (clic de notification)', v.errs.length === 0 && w.errs.length === 0, [...v.errs, ...w.errs]);
+      await v.ctx.close();
+      await w.ctx.close();
     }
     // client non administrateur : rien
     {
