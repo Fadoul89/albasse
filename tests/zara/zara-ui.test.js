@@ -177,6 +177,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
             return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } });
           }
         }
+        // les promotions publiees en vrai sur le site (fenetre « offre du jour ») ne doivent pas couvrir les pages pendant les tests
+        if (u.pathname === '/rest/v1/smart_promotions' && m === 'GET') return json(route, []);
         // notifications push programmees (page « Promotions intelligentes ») : fakePushes.rows = la liste ; missing = table absente (script SQL pas lance) ;
         // posts = programmations recues ; patches = annulations / « envoyer maintenant » (avec le filtre de statut)
         if (fakePushes && u.pathname === '/rest/v1/scheduled_pushes') {
