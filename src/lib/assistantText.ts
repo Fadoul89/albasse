@@ -116,6 +116,8 @@ export interface Texts {
     viewCart: string;
     checkout: string;
     moreItems: string;
+    seeMore: string;
+    categoryPage(category: string): string;
     cancel: string;
     installApp: string;
     installHelp: string;
@@ -208,6 +210,10 @@ export interface Texts {
   noPromo: string;
   newIntro: string;
   chooseCategory: string;
+  // une catégorie touchée dans le chat : ses articles s'affichent dans le chat (le chat reste ouvert)
+  categoryIntro(category: string, total: number): string;
+  categoryMore(category: string, from: number, to: number, total: number): string;
+  categoryEmpty: string;
   foundFor(q: string, range: string | null): string;
   fallbackFor(q: string, range: string): string;
   nothingFor(text: string): string;
@@ -498,6 +504,8 @@ const FR: Texts = {
     viewCart: '🛒 Voir mon panier',
     checkout: '✅ Commander',
     moreItems: '🛍️ Autres articles',
+    seeMore: '➕ Voir plus',
+    categoryPage: (category) => `📄 Page « ${category} »`,
     cancel: 'Annuler',
     installApp: '📲 Installer Albasse Shopping',
     installHelp: '📲 Voir comment installer',
@@ -692,6 +700,9 @@ const FR: Texts = {
   noPromo: 'Pas de promotion en ce moment, mais découvrez nos nouveautés !',
   newIntro: '🆕 Voici nos dernières nouveautés{nom} !',
   chooseCategory: 'Choisissez une catégorie 👇',
+  categoryIntro: (category, total) => `🛍️ ${category} : voici nos articles{nom} 👇${total > 1 ? ` (${total} disponibles)` : ''}`,
+  categoryMore: (category, from, to, total) => `🛍️ ${category} : la suite, ${from} à ${to} sur ${total} 👇`,
+  categoryEmpty: 'Pas d’article disponible dans cette catégorie pour le moment 😔 Voici d’autres idées :',
   foundFor: (q, range) => `Voici ce que j’ai trouvé pour « ${q} »${range ? ` ${range}` : ''}{nom} :`,
   fallbackFor: (q, range) => `Je n’ai rien ${range} pour « ${q} ». Voici ce qui s’en approche le plus :`,
   nothingFor: (text) => `Je n’ai rien trouvé pour « ${text} » 😕 Dites-moi ce que vous aimez, je vous conseille, ou parcourez nos catégories.`,
@@ -1054,6 +1065,8 @@ const AR: Texts = {
     viewCart: '🛒 عرض سلتي',
     checkout: '✅ إتمام الطلب',
     moreItems: '🛍️ منتجات أخرى',
+    seeMore: '➕ عرض المزيد',
+    categoryPage: (category) => `📄 صفحة «${category}»`,
     cancel: 'إلغاء',
     installApp: '📲 تثبيت Albasse Shopping',
     installHelp: '📲 شاهد كيفية التثبيت',
@@ -1250,6 +1263,9 @@ const AR: Texts = {
   noPromo: 'لا توجد عروض الآن، لكن اكتشف جديدنا!',
   newIntro: '🆕 إليك أحدث منتجاتنا{nom}!',
   chooseCategory: 'اختر فئة 👇',
+  categoryIntro: (category, total) => `🛍️ ${category}: إليك منتجاتنا{nom} 👇${total > 1 ? ` (${total} متوفرة)` : ''}`,
+  categoryMore: (category, from, to, total) => `🛍️ ${category}: البقية، من ${from} إلى ${to} من ${total} 👇`,
+  categoryEmpty: 'لا توجد منتجات متوفرة في هذه الفئة حاليا 😔 إليك أفكارا أخرى:',
   foundFor: (q, range) => `إليك ما وجدته من أجل «${q}»${range ? ` ${range}` : ''}{nom}:`,
   fallbackFor: (q, range) => `لم أجد شيئا ${range} من أجل «${q}». إليك الأقرب إلى طلبك:`,
   nothingFor: (text) => `لم أجد شيئا من أجل «${text}» 😕 أخبرني بما تحب فأنصحك، أو تصفح فئاتنا.`,

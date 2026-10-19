@@ -70,7 +70,7 @@ import {
   type Range,
 } from '../lib/assistantMarketing';
 import { fetchCartStatus, fetchLoyaltyPoints, fetchPaymentNumbers, fetchProductForCart, getCatalog, getCategories, getCities, getProductSales, getStoreInfo, logAssistantEvent, requestCallback, startChatToday, toCard, type AssistantProduct, type CallbackSource } from '../lib/assistantData';
-import { compareFacts, declaredStyle, jobFrom, jobKindOfProfession, styleOrder, threeRanges, toneOf, type JobKind, type StyleKey } from '../lib/assistantPersona';
+import { compareFacts, declaredStyle, jobFrom, jobKindOfProfession, rankForStyle, styleOrder, threeRanges, toneOf, type JobKind, type StyleKey } from '../lib/assistantPersona';
 import { callbackDays, callbackNote, dayFromText, LOW_STOCK_MAX, pickComplement, provenSales, type CallbackDay } from '../lib/assistantSales';
 import { clearIntent, currentDevice, markIntent } from '../lib/assistantAttribution';
 import { trackShortcutInstallIfNeeded } from '../lib/appInstallTracking';
@@ -148,7 +148,9 @@ export interface ChatAction {
     | 'callbackFix'
     | 'callbackDay'
     | 'callbackDayFix'
-    | 'style';
+    | 'style'
+    | 'categoryMore'
+    | 'categoryPage';
   payload?: string;
   highlight?: boolean;
 }
@@ -457,7 +459,7 @@ const RANGES_SAY: Record<Lang, string> = { fr: 'trois gammes de prix', ar: 'ثل
 // panier, compte, WhatsApp, menu, installer). Les réponses à une question passée (taille, jour, budget, pour qui, confirmer...) partent.
 const OLD_CHIP_KINDS = new Set<ChatAction['kind']>([
   'say', 'whatsapp', 'register', 'login', 'orders', 'account', 'category', 'menu', 'cart', 'checkout', 'link', 'policy', 'pair', 'add',
-  'install', 'installHelp', 'iosGuide', 'interest', 'style', 'orderPage',
+  'install', 'installHelp', 'iosGuide', 'interest', 'style', 'orderPage', 'categoryPage',
 ]);
 // Ces phrases parlent de ce qui est affiché en ce moment (le budget de ces articles, les comparer) : pas sur un ancien message.
 const CONTEXT_SAYS = new Set(['budget', ...Object.values(COMPARE_SAY), ...Object.values(RANGES_SAY)]);
@@ -758,7 +760,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     products: CatalogProduct[],
     ctx: Context | null,
     catalog: CatalogProduct[],
-    opts: { range?: Range; cheapest?: boolean } = {}
+    opts: { range?: Range; cheapest?: boolean; extra?: ChatAction[] } = {}
   ) {
     setCtx(ctx);
     const lang = get().lang;
@@ -766,7 +768,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     const gift = ctx?.kind === 'gift';
     const pair = pairFor(products, catalog);
     const range = opts.range ?? ANY_BUDGET;
-    const actions: ChatAction[] = [sayBtn(T().chip.budget, 'budget')];
+    const actions: ChatAction[] = [...(opts.extra ?? []), sayBtn(T().chip.budget, 'budget')];
     // psychologie commerciale : sans budget ni style dit par le client, des idées à trois niveaux de prix (seulement si les prix sont vraiment différents)
     const noBudget = range.min <= 0 && !Number.isFinite(range.max);
     if (noBudget && !clientStyle && ctx && (ctx.kind === 'category' || ctx.kind === 'query' || ctx.kind === 'who') && threeRanges(candidatesFor(catalog, ctx))) {
@@ -836,6 +838,31 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         }
       }
       await showProducts(intro, newest(catalog, 4), { kind: 'new' }, catalog);
+    } catch {
+      await dataError();
+    }
+  }
+
+  // Une catégorie touchée dans le chat : ses articles s'affichent ici, avec le bouton « + » sur chaque carte ; le chat reste ouvert.
+  // « Voir plus » montre la suite ; « Page » ouvre la page de la catégorie pour ceux qui la préfèrent.
+  const CATEGORY_PAGE_SIZE = 6;
+  async function categoryReply(slug: string, offset = 0) {
+    try {
+      const catalog = await getCatalog();
+      const ctx: Context = { kind: 'category', slug };
+      const all = rankForStyle(candidatesFor(catalog, ctx), clientStyle);
+      const items = all.slice(offset, offset + CATEGORY_PAGE_SIZE);
+      if (items.length === 0) {
+        await say(T().categoryEmpty, { actions: [sayBtn(T().chip.categories, 'catégories'), sayBtn(T().chip.promotions, 'promotions'), sayBtn(T().chip.news, 'nouveautés'), menuBtn()] });
+        return;
+      }
+      const name = categoryLabel(get().lang, slug, items[0].category);
+      const next = offset + items.length;
+      const extra: ChatAction[] = [];
+      if (next < all.length) extra.push({ label: T().chip.seeMore, kind: 'categoryMore', payload: `${slug}|${next}`, highlight: true });
+      extra.push({ label: T().chip.categoryPage(name), kind: 'categoryPage', payload: slug });
+      const intro = offset === 0 ? T().categoryIntro(name, all.length) : T().categoryMore(name, offset + 1, next, all.length);
+      await showProducts(withName(intro), items, ctx, catalog, { extra });
     } catch {
       await dataError();
     }
@@ -2832,6 +2859,16 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         userSays(action.label);
         await pairReply(action.payload ?? '');
         return;
+      case 'category':
+        userSays(action.label);
+        await categoryReply(action.payload ?? '');
+        return;
+      case 'categoryMore': {
+        userSays(action.label);
+        const [slug = '', from = '0'] = (action.payload ?? '').split('|');
+        await categoryReply(slug, Number(from) || 0);
+        return;
+      }
       // --- commande dans la conversation
       case 'orderCity':
         userSays(action.label);

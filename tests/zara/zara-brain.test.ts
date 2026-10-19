@@ -529,6 +529,7 @@ async function main() {
     'chip.take': ['ساعة'], 'persona.ranges.deal': ['ساعة', '12 500 FCFA'], 'persona.ranges.favorite': ['عطر', '18 000 FCFA'], 'persona.ranges.premium': ['حذاء', '45 000 FCFA'],
     'persona.compare.line': ['ساعة', '12 500 FCFA', ['لونان', 'المقاسات 40, 41']], 'persona.compare.cheaper': ['ساعة', '2 500 FCFA'], 'persona.compare.moreChoice': ['ساعة'],
     'persona.compare.colors': [3], 'persona.compare.sizes': ['40, 41'], 'persona.loyal.points': [30, 'argent', 20, 'or'], 'closing.proof': [5], 'closing.pack': ['ساعة', 'عطر', 25000],
+    categoryIntro: ['ساعات', 12], categoryMore: ['ساعات', 7, 12, 12], 'chip.categoryPage': ['ساعات'],
   };
   const leaks: string[] = [];
   let count = 0;
@@ -569,6 +570,7 @@ async function main() {
     'checkout.askPay': [true], 'checkout.methodLabel': ['airtel_money'], 'checkout.recap': [{ lines: [{ name: 'Montre', variant: '', qty: 2, subtotal: 25000 }], city: 'Moundou', fee: 2500, gift: true, total: 37500, name: 'Ali', phone: '66123456', address: 'Farcha', method: 'airtel_money' }],
     'checkout.placed': ['Ali', 'ABCD1234'], 'checkout.totalToPay': [37500], 'checkout.payInitiated': ['Airtel Money', 'ok'], 'checkout.payUrl': ['https://pay.example.com'], 'checkout.payNumber': [37500, '60 60 51 51', 'Airtel Money'], 'checkout.payTeam': ['66123456', 'Airtel Money'], 'chip.useAddress': ['Farcha'],
     'interest.sizesReply': ['Sandale', ['40', '41']], 'interest.colorsReply': ['Sandale', ['Noir'], ['40']], 'wholesale.prefill': ['Parfum'],
+    categoryIntro: ['Montre', 12], categoryMore: ['Montre', 7, 12, 12], 'chip.categoryPage': ['Montre'],
   };
   for (const k of Object.keys(sampleArgs)) delete sampleArgs[k];
   Object.assign(sampleArgs, frSample);
@@ -1236,6 +1238,14 @@ async function main() {
     ok('le metier valorise sans rien supposer : la phrase de reponse au metier ne parle ni de prix, ni de budget, ni d\'argent, et pose la question du style', [fr.persona.jobAck.pro, fr.persona.jobAck.student].every((t) => !/budget|prix|argent|riche|moyens|salaire/i.test(t.replace('petit prix', '')) && /élégant/.test(t)) && /\?/.test(fr.persona.jobAck.pro));
     ok('loyaute : les points affiches viennent du compte (parametre), le grade suivant seulement s\'il reste des points a gagner', /Vos points : 30/.test(fr.persona.loyal.points(30, 'argent', 20, 'or')) && /20 points pour le grade Or/.test(fr.persona.loyal.points(30, 'argent', 20, 'or')) && !/pour le grade/.test(fr.persona.loyal.points(100, 'diamond', 0, null)) && /Diamond/.test(fr.persona.loyal.points(100, 'diamond', 0, null)), [fr.persona.loyal.points(30, 'argent', 20, 'or'), fr.persona.loyal.points(100, 'diamond', 0, null)]);
     ok('comparer : le texte donne le prix, les couleurs, les tailles et l\'ecart exact ; une seule phrase « le plus accessible »', /Article : 12 500 FCFA · 2 couleurs/.test(fr.persona.compare.line('Article', '12 500 FCFA', ['2 couleurs'])) && /2 500 FCFA de moins/.test(fr.persona.compare.cheaper('Article', '2 500 FCFA')) && fr.persona.compare.colors(1) === '1 couleur' && fr.persona.compare.colors(3) === '3 couleurs');
+  }
+
+  {
+    console.log('\n== Categorie touchee dans le chat : les articles s\'affichent dans le chat');
+    const fr = tx.texts('fr'), ar = tx.texts('ar');
+    ok('categorie : titre avec le nom et le nombre d\'articles disponibles, le prenom du client a sa place', fr.categoryIntro('Montre', 12) === '🛍️ Montre : voici nos articles{nom} 👇 (12 disponibles)' && fr.categoryIntro('Montre', 1) === '🛍️ Montre : voici nos articles{nom} 👇', [fr.categoryIntro('Montre', 12), fr.categoryIntro('Montre', 1)]);
+    ok('categorie : « la suite » dit ou on en est (7 a 12 sur 12)', fr.categoryMore('Montre', 7, 12, 12) === '🛍️ Montre : la suite, 7 à 12 sur 12 👇' && /7.*12.*12/.test(ar.categoryMore('ساعات', 7, 12, 12)));
+    ok('categorie : boutons « Voir plus » et « Page » en francais et en arabe', fr.chip.seeMore === '➕ Voir plus' && fr.chip.categoryPage('Montre') === '📄 Page « Montre »' && /عرض المزيد/.test(ar.chip.seeMore) && /ساعات/.test(ar.chip.categoryPage('ساعات')));
   }
 
   {

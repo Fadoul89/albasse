@@ -313,7 +313,8 @@ export function AssistantPanel() {
       case 'account':
         go(() => navigationRef.navigate('Tabs', { screen: 'Account' } as never));
         return;
-      case 'category':
+      // la catégorie elle-même s'affiche dans le chat (Zara) ; seul « Page » ouvre la page de la catégorie
+      case 'categoryPage':
         if (action.payload) go(() => navigationRef.navigate('Category', { slug: action.payload as string }));
         return;
       case 'cart':

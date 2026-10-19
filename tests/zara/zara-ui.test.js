@@ -13,7 +13,7 @@ const fs = require('fs');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const dist = process.argv[2] || '../../dist';
 const port = process.argv[3] || '4333';
-const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNTOFBCDE').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQTOFBCDE').toUpperCase();
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
 fs.mkdirSync(OUT, { recursive: true });
 const KEY = process.env.SUPABASE_ANON_KEY;
@@ -3417,6 +3417,51 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await sleep(800);
       check('ordinateur : la page de partage Facebook s\'ouvre dans un nouvel onglet', popup !== v.page && asked.includes(sharer(pageUrl)) && v.page.url().includes(`/produit/${prod.slug}`), { asked, page: v.page.url() });
       check('aucune erreur (Facebook, ordinateur)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+  }
+
+  if (PARTS.includes('Q')) {
+    console.log('\n== Q. categorie touchee dans le chat : ses articles s\'affichent dans le chat (bouton « + »), Zara reste ouverte');
+    {
+      const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
+      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await v.page.keyboard.press('Escape');
+      await v.page.getByRole('button', { name: FAB_NAME }).click();
+      await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?/);
+      await tap(v.page, '🛍️ Catégories', /Choisissez une catégorie/);
+      await sleep(800);
+      const cats = await chipLabels(v.page);
+      const pick = cats.includes('Montre') ? 'Montre' : cats[0];
+      const before = await cardsOf(v.page).count();
+      await panelOf(v.page).getByTestId('assistant-chip').filter({ hasText: new RegExp(`^\\s*${pick.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`) }).click();
+      await waitText(v.page, /voici nos articles/);
+      await sleep(1500);
+      const intro = await panelOf(v.page).getByText(/voici nos articles/).last().innerText();
+      check('categorie touchee : Zara annonce la categorie par son nom et le nombre d\'articles disponibles', new RegExp(`^🛍️ ${pick} : voici nos articles(, Ali)? 👇( \\(\\d+ disponibles\\))?$`).test(intro), intro);
+      const shown = (await cardsOf(v.page).count()) - before;
+      check('categorie touchee : Zara reste ouverte, la page ne change pas', (await panelOf(v.page).count()) === 1 && new URL(v.page.url()).pathname === '/', v.page.url());
+      check('categorie touchee : ses articles s\'affichent dans le chat (1 a 6 cartes)', shown >= 1 && shown <= 6, shown);
+      check('chaque carte a son bouton « + » pour ajouter au panier', (await panelOf(v.page).getByTestId('assistant-card-add').count()) >= shown, await panelOf(v.page).getByTestId('assistant-card-add').count());
+      const chips1 = await chipLabels(v.page);
+      check('boutons : « Page « categorie » » pour ceux qui preferent la page, et le menu', chips1.includes(`📄 Page « ${pick} »`) && chips1.includes('🏠 Menu'), chips1);
+      if (chips1.includes('➕ Voir plus')) {
+        const n1 = await cardsOf(v.page).count();
+        await chip(v.page, '➕ Voir plus').click();
+        await waitText(v.page, /la suite, 7 à \d+ sur \d+/);
+        await sleep(1200);
+        check('« Voir plus » : la suite des articles dans le chat (pas les memes)', (await cardsOf(v.page).count()) > n1 && new URL(v.page.url()).pathname === '/', await cardsOf(v.page).count());
+      } else check('« Voir plus » absent : tous les articles de la categorie sont deja affiches', shown <= 6, shown);
+      // « + » sur une carte du chat : ajoute au panier (ou demande la taille / la couleur), sans quitter le chat
+      await cardsOf(v.page).last().getByTestId('assistant-card-add').click();
+      await waitText(v.page, /ajouté au panier|Quelle taille|Quelle couleur|Choisissez/);
+      check('« + » dans le chat : ajoute au panier (ou demande la taille/couleur) et Zara reste ouverte', (await panelOf(v.page).count()) === 1 && new URL(v.page.url()).pathname === '/');
+      // « Page » : ouvre la page de la categorie (le client l'a choisi)
+      await panelOf(v.page).getByTestId('assistant-chip-old').filter({ hasText: `📄 Page « ${pick} »` }).first().click();
+      await sleep(2000);
+      check('« Page » : la page de la categorie s\'ouvre', /\/categorie\//.test(v.page.url()), v.page.url());
+      check('aucune erreur (categorie dans le chat)', v.errs.length === 0, v.errs);
       await v.ctx.close();
     }
   }
