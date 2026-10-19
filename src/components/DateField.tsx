@@ -65,6 +65,7 @@ const webInputStyle = {
   fontFamily: fonts.body,
   fontSize: 14,
   width: '100%' as const,
+  boxSizing: 'border-box' as const,
   colorScheme: 'dark' as const,
 };
 

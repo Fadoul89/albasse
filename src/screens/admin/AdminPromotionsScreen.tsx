@@ -27,6 +27,7 @@ import { GoldButton } from '../../components/GoldButton';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { DateField } from '../../components/DateField';
 import { TimeField } from '../../components/TimeField';
+import { ScheduledPushes } from '../../components/ScheduledPushes';
 import type { SmartPromotion, AdItem } from '../../types';
 
 type TargetType = 'category' | 'product' | 'none';
@@ -313,6 +314,8 @@ export function AdminPromotionsScreen() {
         contentContainerStyle={{ padding: spacing.md, paddingBottom: 60 }}
         ListHeaderComponent={
           <View style={styles.form}>
+            <ScheduledPushes products={products} />
+
             <View style={styles.voiceoverBox}>
               <Text style={styles.formTitle}>Message vocal (voix off)</Text>
               <Text style={styles.helperText}>
