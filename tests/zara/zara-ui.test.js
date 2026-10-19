@@ -812,6 +812,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     await showProduct(C);
     await cardFor(C).getByTestId('assistant-card-add').click();
     await waitText(page, new RegExp(`Quelle taille pour « ${C.name.trim()} » \\?`));
+    await chip(page, 'Annuler').first().waitFor({ timeout: 8000 }); // les boutons arrivent quand Zara a fini d'ecrire
     check('produit avec tailles : Zara demande la taille avant d\'ajouter (rien dans le panier)', (await chipLabels(page)).join('|') === 'Taille 40|Taille 41|Taille 42|Annuler' && qtyOf(await cartItems(), C) === 0, await chipLabels(page));
     await tap(page, 'Taille 41', new RegExp(`Quelle couleur pour « ${C.name.trim()} » \\?`));
     check('puis la couleur', (await chipLabels(page)).join('|') === 'Noir|Blanc|Annuler', await chipLabels(page));
