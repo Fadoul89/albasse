@@ -326,6 +326,8 @@ export type Intent =
   | 'tracking'
   | 'wholesale'
   | 'callback'
+  | 'ranges'
+  | 'compare'
   | 'search';
 
 const has = (tokens: string[], words: string[]) => words.some((w) => tokens.includes(w));
@@ -465,6 +467,13 @@ export function loyaltyKind(text: string): 'mine' | 'earn' | 'tiers' {
   return 'mine';
 }
 
+// « trois options », « plusieurs gammes de prix » : le client veut des idées à plusieurs niveaux de prix.
+const RANGES_RE = /\b(trois|3) (options|choix|idees|gammes|propositions|niveaux)\b|\b(plusieurs|differentes|differents) (gammes|options|choix|prix|niveaux)\b|\bgammes? de prix\b|\bbon plan et premium\b|\bdifferents prix\b|ثلاث(ه)? (خيارات|افكار|اقتراحات)|3 (خيارات|افكار)|خيارات بأسعار مختلفه|فئات سعريه|عده فئات/;
+// « comparer », « quelle différence entre », « lequel choisir » : le client veut aider son choix entre des articles.
+const COMPARE_RE = /\bcompar(e|er|ez|ons|aison|aisons)\b|\bdifferences? entre\b|\bquelle difference\b|\blequel (choisir|prendre|est (mieux|meilleur|le mieux))\b|\blaquelle (choisir|prendre|est (mieux|meilleure|la mieux))\b|\blequel des deux\b|قارن|مقارنه|الفرق بين|ايهما|ايهم/;
+export const wantsRanges = (text: string) => RANGES_RE.test(normalize(text));
+export const wantsCompare = (text: string) => COMPARE_RE.test(normalize(text));
+
 export function detectIntent(text: string): Intent {
   const n = normalize(text);
   const base = n.split(' ').filter(Boolean);
@@ -480,6 +489,8 @@ export function detectIntent(text: string): Intent {
   if (trackingKind(text)) return 'tracking';
   if (wantsWholesale(text)) return 'wholesale';
   if (wantsCallback(text)) return 'callback';
+  if (wantsRanges(text)) return 'ranges';
+  if (wantsCompare(text)) return 'compare';
   if (personalKind(text)) return 'personal';
   if (LOYALTY_RE.test(n)) return 'loyalty';
   // installer l'application / ajouter à l'écran d'accueil

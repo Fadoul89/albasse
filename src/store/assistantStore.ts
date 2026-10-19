@@ -70,6 +70,7 @@ import {
   type Range,
 } from '../lib/assistantMarketing';
 import { fetchCartStatus, fetchLoyaltyPoints, fetchPaymentNumbers, fetchProductForCart, getCatalog, getCategories, getCities, getProductSales, getStoreInfo, logAssistantEvent, requestCallback, startChatToday, toCard, type AssistantProduct, type CallbackSource } from '../lib/assistantData';
+import { compareFacts, declaredStyle, jobFrom, jobKindOfProfession, styleOrder, threeRanges, toneOf, type JobKind, type StyleKey } from '../lib/assistantPersona';
 import { callbackDays, callbackNote, dayFromText, LOW_STOCK_MAX, pickComplement, provenSales, type CallbackDay } from '../lib/assistantSales';
 import { clearIntent, currentDevice, markIntent } from '../lib/assistantAttribution';
 import { trackShortcutInstallIfNeeded } from '../lib/appInstallTracking';
@@ -145,7 +146,8 @@ export interface ChatAction {
     | 'callbackYes'
     | 'callbackFix'
     | 'callbackDay'
-    | 'callbackDayFix';
+    | 'callbackDayFix'
+    | 'style';
   payload?: string;
   highlight?: boolean;
 }
@@ -392,6 +394,35 @@ interface PendingAdd {
 let pendingVariant: PendingAdd | null = null;
 
 // Demande de rappel WhatsApp en cours (prénom, numéro, d'où vient la demande). Elle n'est pas gardée si la page est rechargée : le client revient au menu.
+// Psychologie commerciale : ce que le client DIT aimer (jamais déduit de son métier), son métier s'il le dit (pour l'ordre des boutons seulement),
+// et s'il vient de dire qu'il réfléchit. Le style est gardé dans l'onglet.
+const STYLE_KEY = 'albasse_zara_style';
+const STYLE_LIST: StyleKey[] = ['elegant', 'trend', 'sport', 'budget'];
+function loadStyle(): StyleKey | null {
+  if (Platform.OS !== 'web') return null;
+  try {
+    const v = window.sessionStorage.getItem(STYLE_KEY);
+    return STYLE_LIST.includes(v as StyleKey) ? (v as StyleKey) : null;
+  } catch {
+    return null;
+  }
+}
+let clientStyle: StyleKey | null = loadStyle();
+let clientJob: JobKind | null = null;
+let hesitating = false;
+let hesitatingAt = 0; // nombre de messages quand il a dit qu'il réfléchit : l'hésitation ne colle pas à toute la conversation
+const HESITATION_MESSAGES = 6;
+function setClientStyle(style: StyleKey | null) {
+  clientStyle = style;
+  if (Platform.OS !== 'web') return;
+  try {
+    if (style) window.sessionStorage.setItem(STYLE_KEY, style);
+    else window.sessionStorage.removeItem(STYLE_KEY);
+  } catch {
+    // le style reste en mémoire pour cette visite
+  }
+}
+
 let callbackDraft: { name: string | null; phone: string | null; source: CallbackSource; day: CallbackDay | null; options: CallbackDay[] } | null = null;
 
 // Proposition d'installer le raccourci : une seule fois, puis pause de 14 jours. Elle vient après deux messages du client
@@ -718,14 +749,22 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     await say(intro, { products: products.map(toCard) });
     const gift = ctx?.kind === 'gift';
     const pair = pairFor(products, catalog);
+    const range = opts.range ?? ANY_BUDGET;
     const actions: ChatAction[] = [sayBtn(T().chip.budget, 'budget')];
+    // psychologie commerciale : sans budget ni style dit par le client, des idées à trois niveaux de prix (seulement si les prix sont vraiment différents)
+    const noBudget = range.min <= 0 && !Number.isFinite(range.max);
+    if (noBudget && !clientStyle && ctx && (ctx.kind === 'category' || ctx.kind === 'query' || ctx.kind === 'who') && threeRanges(candidatesFor(catalog, ctx))) {
+      actions.push(sayBtn(T().chip.ranges, lang === 'ar' ? 'ثلاثة خيارات بأسعار مختلفة' : 'trois gammes de prix'));
+    }
     if (pair) actions.push({ label: T().chip.withCategory(pair.name), kind: 'pair', payload: `${pair.slug}|${whoOf(ctx) ?? ''}` });
     if (gift) actions.push(sayBtn(T().chip.wrap, 'emballage'));
     if (ctx?.kind !== 'promo') actions.push(sayBtn(T().chip.promotions, 'promotions'));
+    // un client qui hésite : Zara l'aide à comparer ; un client qui a dit son métier mais pas son style : elle le lui demande avec douceur
+    if (products.length >= 2 && currentTone() === 'hesitant') actions.push(sayBtn(T().chip.compare, lang === 'ar' ? 'قارن بين هذه المنتجات' : 'comparer ces articles'));
+    if (!clientStyle && jobOfClient()) actions.push({ label: T().chip.myStyle, kind: 'style', payload: '' });
     actions.push(menuBtn(), wa());
     // Une raison vraie pour le premier produit (remise, stock, budget, couleurs, tailles), puis une seule phrase de plus :
     // l'emballage cadeau (une fois), la rareté vraie d'un autre produit, ou un encouragement différent des précédents.
-    const range = opts.range ?? ANY_BUDGET;
     const first = products[0];
     const lines: string[] = [];
     if (first) {
@@ -737,7 +776,13 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     else {
       // une preuve VRAIE avant l'encouragement : les commandes réelles des 7 derniers jours (seulement avec un chiffre solide)
       const proven = first ? provenSales(await getProductSales(), first.id) : 0;
-      lines.push(lowStockLine(products.slice(1), lang) ?? (proven > 0 ? T().closing.proof(proven) : freshLine(T().encouragements)));
+      const real = lowStockLine(products.slice(1), lang) ?? (proven > 0 ? T().closing.proof(proven) : null);
+      // les faits vrais d'abord ; puis, si le client a dit ce qu'il aime (ou qu'il hésite), une phrase dans son style ; sinon l'encouragement habituel
+      const toneLines = T().persona.tone[currentTone()];
+      const toneLine = toneLines.length > 0 ? freshLine(toneLines) : null;
+      if (real) lines.push(real);
+      if (toneLine) lines.push(toneLine);
+      else if (!real) lines.push(freshLine(T().encouragements));
     }
     // une seule fois : le bouton + des fiches produits
     if (!get().messages.some((m) => m.role === 'assistant' && m.text.includes(T().cart.tapPlus))) lines.push(T().cart.tapPlus);
@@ -761,7 +806,17 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
   async function newReply() {
     try {
       const catalog = await getCatalog();
-      await showProducts(withName(T().newIntro), newest(catalog, 4), { kind: 'new' }, catalog);
+      let intro = withName(T().newIntro);
+      // un client qui a vraiment des points : Zara le remercie de sa fidélité, avec ses points relus dans son compte (jamais inventés)
+      const auth = useAuthStore.getState();
+      if (auth.isAuthenticated && auth.profile) {
+        const points = await fetchLoyaltyPoints(auth.profile.id);
+        if (points !== null && points > 0) {
+          const st = getLoyaltyStatus(points);
+          intro = `${T().persona.loyal.intro}\n${T().persona.loyal.points(points, st.current.key, st.pointsToNext, st.next?.key ?? null)}`;
+        }
+      }
+      await showProducts(intro, newest(catalog, 4), { kind: 'new' }, catalog);
     } catch {
       await dataError();
     }
@@ -794,7 +849,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       const shown = hasWords ? stripBudget(text) : text;
       const ctx: Context = { kind: 'query', query: hasWords ? parsed.query : text };
       if (range) {
-        const { items, fallback } = pickInBudget(catalog, ctx, range, 4);
+        const { items, fallback } = pickInBudget(catalog, ctx, range, 4, clientStyle);
         if (items.length > 0) {
           const rt = T().rangeText(range);
           await showProducts(withName(fallback ? T().fallbackFor(shown, rt) : T().foundFor(shown, rt)), items, ctx, catalog, { range });
@@ -896,7 +951,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       const catalog = await getCatalog();
       const range = rangeOfNeed(need);
       const ctx = contextOfNeed(need);
-      const { items, fallback } = pickInBudget(catalog, ctx, range, 4);
+      const { items, fallback } = pickInBudget(catalog, ctx, range, 4, clientStyle);
       setNeed(null);
       if (items.length === 0) {
         await say(T().budgetNothing, { actions: [sayBtn(T().chip.advice, 'conseil'), sayBtn(T().chip.promotions, 'promotions'), wa()] });
@@ -918,7 +973,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     try {
       const catalog = await getCatalog();
       const ctx = get().ctx;
-      const { items, fallback } = pickInBudget(catalog, ctx, range, 4);
+      const { items, fallback } = pickInBudget(catalog, ctx, range, 4, clientStyle);
       if (items.length === 0) {
         await say(T().budgetNothing, { actions: [sayBtn(T().chip.advice, 'conseil'), sayBtn(T().chip.promotions, 'promotions'), wa()] });
         return;
@@ -987,6 +1042,139 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
   // -------------------------------------------------------------------------------------------
   // Livraison et paiement
   // -------------------------------------------------------------------------------------------
+
+  // -------------------------------------------------------------------------------------------
+  // Psychologie commerciale : le style que le client dit aimer, le ton, trois gammes de prix, comparer, fidélité.
+  // Le métier ne change que l'ordre des boutons : le budget et les goûts viennent toujours du client. Jamais de fausse rareté ni d'urgence.
+  // -------------------------------------------------------------------------------------------
+
+  const isLoyalMember = () => {
+    const auth = useAuthStore.getState();
+    return auth.isAuthenticated && (auth.profile?.loyalty_points ?? 0) > 0;
+  };
+  const jobOfClient = (): JobKind | null => clientJob ?? jobKindOfProfession(useAuthStore.getState().profile?.profession);
+  const isHesitating = () => hesitating && get().messages.length - hesitatingAt <= HESITATION_MESSAGES;
+  const currentTone = () => toneOf({ style: clientStyle, hesitant: isHesitating(), loyal: isLoyalMember() });
+  const styleLabel = (k: StyleKey) => ({ elegant: T().chip.styleElegant, trend: T().chip.styleTrend, sport: T().chip.styleSport, budget: T().chip.styleBudget })[k];
+  const styleChips = (): ChatAction[] => styleOrder(jobOfClient()).map((k) => ({ label: styleLabel(k), kind: 'style' as const, payload: k }));
+
+  async function askStyle(intro: string) {
+    await say(withName(intro), { actions: [...styleChips(), menuBtn()] });
+  }
+
+  // Le client a dit ce qu'il aime : Zara s'en souvient, puis montre des choix dans ce style (ou demande l'article, une question à la fois).
+  async function applyStyle(style: StyleKey) {
+    setClientStyle(style);
+    await say(T().persona.styleSet[style], { fast: true });
+    if (get().ctx) {
+      await budgetReply(ANY_BUDGET);
+      return;
+    }
+    await startNeed({ lang: get().lang, gift: false, rest: [], query: '' });
+  }
+
+  // Les articles que le client a le plus regardés (seulement si le suivi est autorisé) : ils guident le « coup de cœur », sans jamais être cités.
+  function likedProductIds(): string[] {
+    const profile = getBrowsingProfile();
+    if (!profile) return [];
+    return Object.values(profile.products)
+      .filter((r) => r.views >= 1)
+      .sort((a, b) => b.activeSeconds + b.views * 10 - (a.activeSeconds + a.views * 10))
+      .map((r) => r.id);
+  }
+
+  // Trois idées : un bon plan, un coup de cœur, un style premium. Les prix, les stocks et les photos viennent du catalogue.
+  async function rangesReply() {
+    try {
+      const catalog = await getCatalog();
+      const ctx = get().ctx;
+      if (!ctx) {
+        await startNeed({ lang: get().lang, gift: false, rest: [], query: '' });
+        return;
+      }
+      const r = threeRanges(candidatesFor(catalog, ctx), { style: clientStyle, liked: likedProductIds() });
+      const t = T().persona.ranges;
+      if (!r) {
+        const { items } = pickInBudget(catalog, ctx, ANY_BUDGET, 4, clientStyle);
+        if (items.length === 0) {
+          await say(T().budgetNothing, { actions: [sayBtn(T().chip.advice, 'conseil'), sayBtn(T().chip.promotions, 'promotions'), wa()] });
+          return;
+        }
+        await showProducts(withName(t.tooClose), items, ctx, catalog);
+        return;
+      }
+      const picks = [r.deal, ...(r.favorite ? [r.favorite] : []), r.premium];
+      const lines = [
+        t.intro,
+        t.deal(shortName(r.deal.name), fcfa(r.deal.price)),
+        ...(r.favorite ? [t.favorite(shortName(r.favorite.name), fcfa(r.favorite.price))] : []),
+        t.premium(shortName(r.premium.name), fcfa(r.premium.price)),
+      ];
+      await say(withName(lines.join('\n')), { products: picks.map(toCard) });
+      const closing: string[] = [t.closing];
+      if (!get().messages.some((m) => m.role === 'assistant' && m.text.includes(T().cart.tapPlus))) closing.push(T().cart.tapPlus);
+      await say(closing.join('\n'), {
+        actions: [sayBtn(T().chip.budget, 'budget'), sayBtn(T().chip.compare, get().lang === 'ar' ? 'قارن بين هذه المنتجات' : 'comparer ces articles'), sayBtn(T().chip.promotions, 'promotions'), menuBtn(), wa()],
+      });
+    } catch {
+      await dataError();
+    }
+  }
+
+  // Comparer deux articles que Zara vient de montrer : seulement ce qui est vrai (prix, couleurs, tailles), rien sur la qualité.
+  async function compareReply(text: string) {
+    const c = T().persona.compare;
+    const shown = [...get().messages].reverse().find((m) => m.role === 'assistant' && m.products && m.products.length > 0)?.products ?? [];
+    if (shown.length < 2) {
+      await say(c.needTwo, { actions: [sayBtn(T().chip.advice, 'conseil'), sayBtn(T().chip.promotions, 'promotions'), menuBtn()] });
+      return;
+    }
+    try {
+      const catalog = await getCatalog();
+      // « compare le premier et le troisième » / « compare la rolex et le parfum » : sinon les deux premiers
+      const norm = normalize(text);
+      const byOrdinal = ORDINALS.filter(([re, i]) => i >= 0 && re.test(norm)).map(([, i]) => shown[i]).filter(Boolean);
+      const words = tokenize(parseNeed(text).query).filter((w) => !ADD_NOISE.has(w) && !/^compar/.test(w));
+      const byName = shown
+        .map((p) => {
+          const full = catalog.find((x) => x.slug === p.slug);
+          const fields = full ? [...full.nameTokens, ...full.catTokens] : tokenize(p.name);
+          return { p, score: words.filter((w) => fields.some((f) => f === w || (w.length >= 4 && (f.startsWith(w) || w.startsWith(f))))).length };
+        })
+        .filter((x) => x.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .map((x) => x.p);
+      const pair = [...new Map([...byOrdinal, ...byName].map((p) => [p.slug, p])).values()].slice(0, 2);
+      const two = pair.length === 2 ? pair : shown.slice(0, 2);
+      const full = two.map((p) => catalog.find((x) => x.slug === p.slug));
+      if (!full[0] || !full[1]) {
+        await say(c.needTwo, { actions: [sayBtn(T().chip.advice, 'conseil'), menuBtn()] });
+        return;
+      }
+      const [a, b] = [full[0], full[1]];
+      const facts = compareFacts(a, b);
+      const extras = (p: CatalogProduct) => [...(p.colors.length > 0 ? [c.colors(p.colors.length)] : []), ...(p.sizes.length > 0 ? [c.sizes(p.sizes.slice(0, 5).join(', '))] : [])];
+      const lines = [
+        c.intro,
+        c.line(shortName(a.name), fcfa(a.price), extras(a)),
+        c.line(shortName(b.name), fcfa(b.price), extras(b)),
+        facts.cheaper ? c.cheaper(shortName(facts.cheaper.name), fcfa(facts.diff)) : c.samePrice,
+        ...(facts.moreChoice ? [c.moreChoice(shortName(facts.moreChoice.name))] : []),
+        c.ask,
+      ];
+      await say(withName(lines.join('\n')), {
+        products: [a, b].map(toCard),
+        actions: [
+          { label: T().chip.take(shortName(a.name).slice(0, 26)), kind: 'add', payload: a.slug },
+          { label: T().chip.take(shortName(b.name).slice(0, 26)), kind: 'add', payload: b.slug },
+          sayBtn(T().chip.budget, 'budget'),
+          menuBtn(),
+        ],
+      });
+    } catch {
+      await dataError();
+    }
+  }
 
   async function askCity(known?: City[] | null) {
     setStep('ask_city');
@@ -1546,6 +1734,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       return;
     }
     cart.addItem(product, 1, color, size);
+    hesitating = false;
     const { count, total } = cartTotals();
     // après chaque article choisi : Zara rappelle toujours l'emballage cadeau (avec son bouton)
     let actions = [...cartActions(), sayBtn(T().chip.wrap, 'emballage')];
@@ -1974,6 +2163,8 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
   }
 
   async function laterClosing() {
+    hesitating = true; // le client réfléchit : Zara l'aide à comparer, sans pression (quelques messages seulement)
+    hesitatingAt = get().messages.length;
     const cart = useCartStore.getState().items;
     const c = T().closing;
     const lines: string[] = [withName(c.later)];
@@ -2006,13 +2197,17 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     // visiteur sans compte et sans panier : la porte reste ouverte (favoris avec un compte gratuit)
     else if (isGuest()) lines.push(c.favorites);
     // le rappel WhatsApp n'est proposé qu'au client qui hésite à commander : un panier, ou un article dont on vient de parler
-    const hesitating = cart.length > 0 || topics.length > 0;
-    if (hesitating) lines.push(c.callbackOffer);
+    const undecided = cart.length > 0 || topics.length > 0;
+    // plusieurs articles montrés et rien dans le panier : Zara propose de les comparer
+    const canCompare = cart.length === 0 && topics.length >= 2;
+    if (canCompare) lines.push(T().persona.compareOffer);
+    if (undecided) lines.push(c.callbackOffer);
+    const compareChip = sayBtn(T().chip.compare, get().lang === 'ar' ? 'قارن بين هذه المنتجات' : 'comparer ces articles');
     const actions: ChatAction[] =
       cart.length > 0
         ? [checkoutChip(), callbackChip('cart'), { label: T().chip.viewCart, kind: 'cart' }]
-        : hesitating
-        ? [callbackChip('later'), sayBtn(T().chip.promotions, 'promotions'), menuBtn()]
+        : undecided
+        ? [...(canCompare ? [compareChip] : []), callbackChip('later'), sayBtn(T().chip.promotions, 'promotions'), menuBtn()]
         : [sayBtn(T().chip.promotions, 'promotions'), menuBtn()];
     if (isGuest()) actions.push({ label: T().chip.createAccount, kind: 'register' });
     await say(lines.join('\n'), { actions });
@@ -2186,7 +2381,34 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       await occasionReply(occasion, text);
       return;
     }
+    // psychologie commerciale : le client parle de son métier (valorisé, jamais déduit en budget) ou de ce qu'il aime
+    const job = jobFrom(text);
+    if (job) {
+      clientJob = job.kind;
+      const p = parseNeed(text);
+      if (!clientStyle && !p.slug && !p.who && !p.gift) {
+        await askStyle(t.persona.jobAck[job.kind]);
+        return;
+      }
+    }
+    if (intent === 'search' || intent === 'advice') {
+      const style = declaredStyle(text);
+      if (style) {
+        setClientStyle(style);
+        const p = parseNeed(text);
+        if (!p.slug && !p.who && !p.gift) {
+          await applyStyle(style);
+          return;
+        }
+      }
+    }
     switch (intent) {
+      case 'ranges':
+        await rangesReply();
+        return;
+      case 'compare':
+        await compareReply(text);
+        return;
       case 'wholesale':
         await say(t.wholesale.ask, { actions: [waChipPrefill(null), menuBtn()] });
         return;
@@ -2648,6 +2870,13 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         userSays(action.label);
         await askCallbackDay();
         return;
+      case 'style': {
+        userSays(action.label);
+        const style = STYLE_LIST.includes(action.payload as StyleKey) ? (action.payload as StyleKey) : null;
+        if (style) await applyStyle(style);
+        else await askStyle(T().persona.askStyle);
+        return;
+      }
       case 'cancel':
         userSays(action.label);
         if (get().step.startsWith('cb_')) {
@@ -2759,6 +2988,9 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     reset: () => {
       if (get().loading) return;
       save([], 'menu', null, null, null);
+      setClientStyle(null);
+      clientJob = null;
+      hesitating = false;
       set({ messages: [], step: 'menu', ctx: null, need: null, order: null });
       void run(begin);
     },
