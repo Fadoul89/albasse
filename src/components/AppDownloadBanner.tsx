@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, fonts, radius, spacing } from '../theme';
 import { trackAppDownloadClick } from '../lib/appDownloadTracking';
 import { isRunningInsideApp } from '../lib/runningInApp';
-import { installNotReadyMessage, isAndroidDevice, isAppInstalledOnDevice, isInAppBrowser, isIosDevice, isRunningAsInstalledPwa, openInChromeOrExplain, triggerPwaInstallPrompt } from '../lib/pwaInstallPrompt';
+import { installNotReadyMessage, isAndroidDevice, isAppInstalledOnDevice, isInAppBrowser, isIosDevice, isRunningAsInstalledPwa, openInChrome, triggerPwaInstallPrompt } from '../lib/pwaInstallPrompt';
 import { subscribeToWebPush } from '../lib/webPushSubscription';
 import { trackShortcutInstallIfNeeded } from '../lib/appInstallTracking';
 import { useInstallGuideStore } from '../store/installGuideStore';
@@ -42,9 +42,10 @@ export function AppDownloadBanner() {
       useInstallGuideStore.getState().show();
       return;
     }
-    // navigateur de Facebook, WhatsApp... : on ouvre la page dans Chrome, ou l'installation marche
+    // navigateur de Facebook, WhatsApp... : on ouvre la page dans Chrome, où l'installation marche (Facebook demande lui-même
+    // « Vous quittez notre application ? » : aucun autre message de notre part)
     if (isAndroidDevice() && isInAppBrowser()) {
-      openInChromeOrExplain();
+      openInChrome();
       return;
     }
     const outcome = await triggerPwaInstallPrompt();
