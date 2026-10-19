@@ -13,6 +13,7 @@ import {
   cancelScheduledPush,
   chadLabel,
   chadToIso,
+  clickStats,
   createScheduledPush,
   defaultChadSlot,
   fetchScheduledPushes,
@@ -264,7 +265,14 @@ export function ScheduledPushes({ products }: { products: Product[] }) {
         </PushRow>
       ))}
 
-      {history.length > 0 ? <Text style={styles.listTitle}>Historique</Text> : null}
+      {history.length > 0 ? (
+        <View style={styles.historyHead}>
+          <Text style={[styles.listTitle, { marginBottom: 0 }]}>Historique</Text>
+          <Pressable onPress={() => void load()} hitSlop={8} testID="push-refresh">
+            <Text style={styles.link}>↻ Actualiser les clics</Text>
+          </Pressable>
+        </View>
+      ) : null}
       {history.map((r) => (
         <PushRow key={r.id} row={r} />
       ))}
@@ -312,13 +320,40 @@ function PushRow({ row, children }: { row: ScheduledPush; children?: React.React
         <Text style={styles.rowMeta}>
           {STATUS[row.status] ?? row.status} · {chadLabel(row.status === 'sent' && row.sent_at ? row.sent_at : row.send_at)}
         </Text>
+        {row.status === 'sent' ? <ClickBadge row={row} /> : null}
         {children ? <View style={styles.rowActions}>{children}</View> : null}
       </View>
     </View>
   );
 }
 
+// Les clics d'une notification envoyée, bien visibles (vert) : « 👆 3 clics » et « envoyée à 11 téléphones · 27 % ».
+function ClickBadge({ row }: { row: ScheduledPush }) {
+  const stats = clickStats(row.clicks, row.recipients);
+  return (
+    <View style={styles.clickBadge} testID={`push-clicks-${row.id}`}>
+      <Text style={styles.clickMain}>{stats.main}</Text>
+      {stats.sub ? <Text style={styles.clickSub}>{stats.sub}</Text> : null}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  historyHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.md, marginBottom: spacing.sm },
+  clickBadge: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 8,
+    marginTop: 8,
+    backgroundColor: '#16a34a',
+    borderRadius: radius.pill,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  clickMain: { color: '#ffffff', fontFamily: fonts.bodyBold, fontSize: 13.5 },
+  clickSub: { color: '#eafff1', fontFamily: fonts.bodyMedium, fontSize: 11.5 },
   box: { backgroundColor: colors.panel, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.xl },
   title: { color: colors.cream, fontFamily: fonts.display, fontSize: 17, marginBottom: spacing.sm },
   helper: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11, marginBottom: spacing.sm },

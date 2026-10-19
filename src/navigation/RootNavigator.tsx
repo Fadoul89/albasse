@@ -11,6 +11,7 @@ import { Assistant } from '../components/Assistant';
 import { AppDownloadBanner } from '../components/AppDownloadBanner';
 import { trackPageView } from '../lib/analytics';
 import { startShortcutInstallTracking, trackAppInstallIfNeeded } from '../lib/appInstallTracking';
+import { recordPushClickFromUrl } from '../lib/pushClicks';
 import { initBrowsingTracker } from '../lib/browsingTracker';
 import { isIosDevice, isRunningAsInstalledPwa } from '../lib/pwaInstallPrompt';
 import { hasWebPushPermission, isWebPushSupported, subscribeToWebPush, syncWebPushSubscription } from '../lib/webPushSubscription';
@@ -159,6 +160,7 @@ export function RootNavigator() {
   useEffect(() => {
     trackAppInstallIfNeeded();
     startShortcutInstallTracking();
+    recordPushClickFromUrl();
     initBrowsingTracker();
     // Pour les visiteurs qui ont deja installe le raccourci (PWA) : on
     // propose l'activation des notifications a l'ouverture plutot que

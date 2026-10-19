@@ -110,8 +110,29 @@ async function openTarget(target) {
   }
 }
 
+// La marque d'une notification touchee : les 16 premiers caracteres du SHA-256 de « titre + retour a la ligne + message ».
+// Le site la lit dans l'adresse (?push=...) et compte le clic de la notification programmee qui correspond
+// (add-push-clicks.sql : record_push_click).
+async function pushClickTag(title, body) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${title}\n${body}`));
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('').slice(0, 16);
+}
+
+async function withClickTag(notification, target) {
+  try {
+    const url = new URL(target);
+    url.searchParams.set('push', await pushClickTag(notification.title || '', notification.body || ''));
+    return url.href;
+  } catch {
+    return target;
+  }
+}
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const target = pageToOpen(event.notification);
-  event.waitUntil(Promise.allSettled([rememberTarget(target), openTarget(target)]));
+  event.waitUntil(
+    withClickTag(event.notification, pageToOpen(event.notification)).then((target) =>
+      Promise.allSettled([rememberTarget(target), openTarget(target)])
+    )
+  );
 });
