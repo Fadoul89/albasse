@@ -174,24 +174,6 @@ export function openInChrome(): void {
   a.remove();
 }
 
-// Bouton « Installer » du site dans un navigateur integre : Chrome s'ouvre ; s'il ne s'est pas ouvert 1,5 s plus tard (page
-// toujours affichee), on explique comment faire a la main.
-export function openInChromeOrExplain(): void {
-  if (typeof window === 'undefined') return;
-  let left = false;
-  const onHide = () => {
-    left = true;
-  };
-  window.addEventListener('blur', onHide);
-  window.addEventListener('pagehide', onHide);
-  openInChrome();
-  window.setTimeout(() => {
-    window.removeEventListener('blur', onHide);
-    window.removeEventListener('pagehide', onHide);
-    if (!left && document.visibilityState === 'visible') window.alert(manualInstallInstructions());
-  }, 1500);
-}
-
 // Instructions manuelles quand la boite d'installation automatique n'est pas
 // disponible. Le libelle du menu Chrome Android varie selon la version.
 export function manualInstallInstructions(): string {
