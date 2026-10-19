@@ -116,6 +116,8 @@ export interface Texts {
     viewCart: string;
     checkout: string;
     moreItems: string;
+    seeMore: string;
+    categoryPage(category: string): string;
     cancel: string;
     installApp: string;
     installHelp: string;
@@ -208,6 +210,10 @@ export interface Texts {
   noPromo: string;
   newIntro: string;
   chooseCategory: string;
+  // une catégorie touchée dans le chat : ses articles s'affichent dans le chat (le chat reste ouvert)
+  categoryIntro(category: string, total: number): string;
+  categoryMore(category: string, from: number, to: number, total: number): string;
+  categoryEmpty: string;
   foundFor(q: string, range: string | null): string;
   fallbackFor(q: string, range: string): string;
   nothingFor(text: string): string;
@@ -316,6 +322,7 @@ export interface Texts {
     iosSteps(safari: boolean): string;
     androidManual: string;
     desktop: string;
+    productNudge: string;
   };
   // suggestions discrètes d'après les articles regardés (jamais à chaque clic, jamais sans raison vraie)
   interest: {
@@ -497,6 +504,8 @@ const FR: Texts = {
     viewCart: '🛒 Voir mon panier',
     checkout: '✅ Commander',
     moreItems: '🛍️ Autres articles',
+    seeMore: '➕ Voir plus',
+    categoryPage: (category) => `📄 Page « ${category} »`,
     cancel: 'Annuler',
     installApp: '📲 Installer Albasse Shopping',
     installHelp: '📲 Voir comment installer',
@@ -691,6 +700,9 @@ const FR: Texts = {
   noPromo: 'Pas de promotion en ce moment, mais découvrez nos nouveautés !',
   newIntro: '🆕 Voici nos dernières nouveautés{nom} !',
   chooseCategory: 'Choisissez une catégorie 👇',
+  categoryIntro: (category, total) => `🛍️ ${category} : voici nos articles{nom} 👇${total > 1 ? ` (${total} disponibles)` : ''}`,
+  categoryMore: (category, from, to, total) => `🛍️ ${category} : la suite, ${from} à ${to} sur ${total} 👇`,
+  categoryEmpty: 'Pas d’article disponible dans cette catégorie pour le moment 😔 Voici d’autres idées :',
   foundFor: (q, range) => `Voici ce que j’ai trouvé pour « ${q} »${range ? ` ${range}` : ''}{nom} :`,
   fallbackFor: (q, range) => `Je n’ai rien ${range} pour « ${q} ». Voici ce qui s’en approche le plus :`,
   nothingFor: (text) => `Je n’ai rien trouvé pour « ${text} » 😕 Dites-moi ce que vous aimez, je vous conseille, ou parcourez nos catégories.`,
@@ -833,6 +845,7 @@ const FR: Texts = {
       `${safari ? '' : '⚠️ Ouvrez d’abord albasseshopping.com dans Safari (l’installation ne marche pas depuis ce navigateur).\n'}Sur iPhone :\n1. Touchez « Partager » (le carré avec une flèche) en bas de l’écran\n2. Faites défiler et touchez « Sur l’écran d’accueil »\n3. Touchez « Ajouter »`,
     androidManual: 'Pour installer : touchez les trois points (⋮) en haut à droite de Chrome, puis « Installer l’application » ou « Ajouter à l’écran d’accueil » (selon votre version).',
     desktop: 'Pour installer : cliquez sur l’icône d’installation ⊕ dans la barre d’adresse de Chrome, ou sur les trois points (⋮) puis « Installer Albasse Shopping ».',
+    productNudge: '📲 Astuce : installez Albasse Shopping sur votre écran d’accueil pour retrouver nos articles en un toucher.',
   },
   interest: {
     shoes: '😊 Cette paire semble vous intéresser ! Voulez-vous revoir les tailles disponibles ou découvrir des modèles similaires ?',
@@ -1052,6 +1065,8 @@ const AR: Texts = {
     viewCart: '🛒 عرض سلتي',
     checkout: '✅ إتمام الطلب',
     moreItems: '🛍️ منتجات أخرى',
+    seeMore: '➕ عرض المزيد',
+    categoryPage: (category) => `📄 صفحة «${category}»`,
     cancel: 'إلغاء',
     installApp: '📲 تثبيت Albasse Shopping',
     installHelp: '📲 شاهد كيفية التثبيت',
@@ -1248,6 +1263,9 @@ const AR: Texts = {
   noPromo: 'لا توجد عروض الآن، لكن اكتشف جديدنا!',
   newIntro: '🆕 إليك أحدث منتجاتنا{nom}!',
   chooseCategory: 'اختر فئة 👇',
+  categoryIntro: (category, total) => `🛍️ ${category}: إليك منتجاتنا{nom} 👇${total > 1 ? ` (${total} متوفرة)` : ''}`,
+  categoryMore: (category, from, to, total) => `🛍️ ${category}: البقية، من ${from} إلى ${to} من ${total} 👇`,
+  categoryEmpty: 'لا توجد منتجات متوفرة في هذه الفئة حاليا 😔 إليك أفكارا أخرى:',
   foundFor: (q, range) => `إليك ما وجدته من أجل «${q}»${range ? ` ${range}` : ''}{nom}:`,
   fallbackFor: (q, range) => `لم أجد شيئا ${range} من أجل «${q}». إليك الأقرب إلى طلبك:`,
   nothingFor: (text) => `لم أجد شيئا من أجل «${text}» 😕 أخبرني بما تحب فأنصحك، أو تصفح فئاتنا.`,
@@ -1387,6 +1405,7 @@ const AR: Texts = {
       `${safari ? '' : '⚠️ افتح أولا albasseshopping.com في متصفح Safari (التثبيت لا يعمل من هذا المتصفح).\n'}على الآيفون:\n1. اضغط «مشاركة» (المربع مع السهم) أسفل الشاشة\n2. مرر لأسفل واضغط «إضافة إلى الشاشة الرئيسية»\n3. اضغط «إضافة»`,
     androidManual: 'للتثبيت: اضغط على النقاط الثلاث (⋮) أعلى يمين Chrome ثم «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية» حسب إصدارك.',
     desktop: 'للتثبيت: اضغط على أيقونة التثبيت ⊕ في شريط عنوان Chrome، أو على النقاط الثلاث (⋮) ثم «تثبيت Albasse Shopping».',
+    productNudge: '📲 نصيحة: ثبّت Albasse Shopping على شاشتك الرئيسية لتجد منتجاتنا بلمسة واحدة.',
   },
   interest: {
     shoes: '😊 يبدو أن هذا الحذاء أعجبك! هل تريد مراجعة المقاسات المعروضة أو اكتشاف موديلات مشابهة؟',

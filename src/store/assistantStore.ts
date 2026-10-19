@@ -70,7 +70,7 @@ import {
   type Range,
 } from '../lib/assistantMarketing';
 import { fetchCartStatus, fetchLoyaltyPoints, fetchPaymentNumbers, fetchProductForCart, getCatalog, getCategories, getCities, getProductSales, getStoreInfo, logAssistantEvent, requestCallback, startChatToday, toCard, type AssistantProduct, type CallbackSource } from '../lib/assistantData';
-import { compareFacts, declaredStyle, jobFrom, jobKindOfProfession, styleOrder, threeRanges, toneOf, type JobKind, type StyleKey } from '../lib/assistantPersona';
+import { compareFacts, declaredStyle, jobFrom, jobKindOfProfession, rankForStyle, styleOrder, threeRanges, toneOf, type JobKind, type StyleKey } from '../lib/assistantPersona';
 import { callbackDays, callbackNote, dayFromText, LOW_STOCK_MAX, pickComplement, provenSales, type CallbackDay } from '../lib/assistantSales';
 import { clearIntent, currentDevice, markIntent } from '../lib/assistantAttribution';
 import { trackShortcutInstallIfNeeded } from '../lib/appInstallTracking';
@@ -86,6 +86,7 @@ import {
   installNotReadyMessage,
   isAndroidDevice,
   isIosDevice,
+  isAppInstalledOnDevice,
   isPwaInstallPromptAvailable,
   isRunningAsInstalledPwa,
   triggerPwaInstallPrompt,
@@ -147,7 +148,9 @@ export interface ChatAction {
     | 'callbackFix'
     | 'callbackDay'
     | 'callbackDayFix'
-    | 'style';
+    | 'style'
+    | 'categoryMore'
+    | 'categoryPage';
   payload?: string;
   highlight?: boolean;
 }
@@ -229,6 +232,8 @@ interface AssistantState {
   openCart: () => void;
   // « Commander » : Zara vérifie le panier (prix, stock, compte) puis finalise la commande avec le client, dans la conversation
   startCheckout: () => Promise<void>;
+  // les boutons d'un ancien message qui restent affichés (aucun pendant une commande ou une demande de rappel)
+  oldChips: (actions: ChatAction[]) => ChatAction[];
   reset: () => void;
 }
 
@@ -445,6 +450,19 @@ const ORDINALS: [RegExp, number][] = [
   [/\b(quatrieme|4eme)\b/, 3],
   [/\b(dernier|derniere)\b/, -1],
 ];
+
+// Ce que disent les boutons « Comparer » et « 3 gammes de prix » : ils parlent des articles affichés à ce moment-là.
+const COMPARE_SAY: Record<Lang, string> = { fr: 'comparer ces articles', ar: 'قارن بين هذه المنتجات' };
+const RANGES_SAY: Record<Lang, string> = { fr: 'trois gammes de prix', ar: 'ثلاثة خيارات بأسعار مختلفة' };
+
+// Les boutons des anciens messages qui restent touchables : ceux qui mènent quelque part (promotions, catégories, un article précis,
+// panier, compte, WhatsApp, menu, installer). Les réponses à une question passée (taille, jour, budget, pour qui, confirmer...) partent.
+const OLD_CHIP_KINDS = new Set<ChatAction['kind']>([
+  'say', 'whatsapp', 'register', 'login', 'orders', 'account', 'category', 'menu', 'cart', 'checkout', 'link', 'policy', 'pair', 'add',
+  'install', 'installHelp', 'iosGuide', 'interest', 'style', 'orderPage', 'categoryPage',
+]);
+// Ces phrases parlent de ce qui est affiché en ce moment (le budget de ces articles, les comparer) : pas sur un ancien message.
+const CONTEXT_SAYS = new Set(['budget', ...Object.values(COMPARE_SAY), ...Object.values(RANGES_SAY)]);
 
 const saved = load();
 
@@ -742,7 +760,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     products: CatalogProduct[],
     ctx: Context | null,
     catalog: CatalogProduct[],
-    opts: { range?: Range; cheapest?: boolean } = {}
+    opts: { range?: Range; cheapest?: boolean; extra?: ChatAction[] } = {}
   ) {
     setCtx(ctx);
     const lang = get().lang;
@@ -750,18 +768,20 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     const gift = ctx?.kind === 'gift';
     const pair = pairFor(products, catalog);
     const range = opts.range ?? ANY_BUDGET;
-    const actions: ChatAction[] = [sayBtn(T().chip.budget, 'budget')];
+    const actions: ChatAction[] = [...(opts.extra ?? []), sayBtn(T().chip.budget, 'budget')];
     // psychologie commerciale : sans budget ni style dit par le client, des idées à trois niveaux de prix (seulement si les prix sont vraiment différents)
     const noBudget = range.min <= 0 && !Number.isFinite(range.max);
     if (noBudget && !clientStyle && ctx && (ctx.kind === 'category' || ctx.kind === 'query' || ctx.kind === 'who') && threeRanges(candidatesFor(catalog, ctx))) {
-      actions.push(sayBtn(T().chip.ranges, lang === 'ar' ? 'ثلاثة خيارات بأسعار مختلفة' : 'trois gammes de prix'));
+      actions.push(sayBtn(T().chip.ranges, RANGES_SAY[lang]));
     }
     if (pair) actions.push({ label: T().chip.withCategory(pair.name), kind: 'pair', payload: `${pair.slug}|${whoOf(ctx) ?? ''}` });
     if (gift) actions.push(sayBtn(T().chip.wrap, 'emballage'));
     if (ctx?.kind !== 'promo') actions.push(sayBtn(T().chip.promotions, 'promotions'));
     // un client qui hésite : Zara l'aide à comparer ; un client qui a dit son métier mais pas son style : elle le lui demande avec douceur
-    if (products.length >= 2 && currentTone() === 'hesitant') actions.push(sayBtn(T().chip.compare, lang === 'ar' ? 'قارن بين هذه المنتجات' : 'comparer ces articles'));
+    if (products.length >= 2 && currentTone() === 'hesitant') actions.push(sayBtn(T().chip.compare, COMPARE_SAY[lang]));
     if (!clientStyle && jobOfClient()) actions.push({ label: T().chip.myStyle, kind: 'style', payload: '' });
+    const install = installOnProducts();
+    if (install) actions.push(install);
     actions.push(menuBtn(), wa());
     // Une raison vraie pour le premier produit (remise, stock, budget, couleurs, tailles), puis une seule phrase de plus :
     // l'emballage cadeau (une fois), la rareté vraie d'un autre produit, ou un encouragement différent des précédents.
@@ -786,6 +806,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     }
     // une seule fois : le bouton + des fiches produits
     if (!get().messages.some((m) => m.role === 'assistant' && m.text.includes(T().cart.tapPlus))) lines.push(T().cart.tapPlus);
+    if (install && !saidBefore(T().install.productNudge)) lines.push(T().install.productNudge);
     await say(lines.join('\n'), { actions });
   }
 
@@ -817,6 +838,31 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         }
       }
       await showProducts(intro, newest(catalog, 4), { kind: 'new' }, catalog);
+    } catch {
+      await dataError();
+    }
+  }
+
+  // Une catégorie touchée dans le chat : ses articles s'affichent ici, avec le bouton « + » sur chaque carte ; le chat reste ouvert.
+  // « Voir plus » montre la suite ; « Page » ouvre la page de la catégorie pour ceux qui la préfèrent.
+  const CATEGORY_PAGE_SIZE = 6;
+  async function categoryReply(slug: string, offset = 0) {
+    try {
+      const catalog = await getCatalog();
+      const ctx: Context = { kind: 'category', slug };
+      const all = rankForStyle(candidatesFor(catalog, ctx), clientStyle);
+      const items = all.slice(offset, offset + CATEGORY_PAGE_SIZE);
+      if (items.length === 0) {
+        await say(T().categoryEmpty, { actions: [sayBtn(T().chip.categories, 'catégories'), sayBtn(T().chip.promotions, 'promotions'), sayBtn(T().chip.news, 'nouveautés'), menuBtn()] });
+        return;
+      }
+      const name = categoryLabel(get().lang, slug, items[0].category);
+      const next = offset + items.length;
+      const extra: ChatAction[] = [];
+      if (next < all.length) extra.push({ label: T().chip.seeMore, kind: 'categoryMore', payload: `${slug}|${next}`, highlight: true });
+      extra.push({ label: T().chip.categoryPage(name), kind: 'categoryPage', payload: slug });
+      const intro = offset === 0 ? T().categoryIntro(name, all.length) : T().categoryMore(name, offset + 1, next, all.length);
+      await showProducts(withName(intro), items, ctx, catalog, { extra });
     } catch {
       await dataError();
     }
@@ -1113,8 +1159,17 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       await say(withName(lines.join('\n')), { products: picks.map(toCard) });
       const closing: string[] = [t.closing];
       if (!get().messages.some((m) => m.role === 'assistant' && m.text.includes(T().cart.tapPlus))) closing.push(T().cart.tapPlus);
+      const install = installOnProducts();
+      if (install && !saidBefore(T().install.productNudge)) closing.push(T().install.productNudge);
       await say(closing.join('\n'), {
-        actions: [sayBtn(T().chip.budget, 'budget'), sayBtn(T().chip.compare, get().lang === 'ar' ? 'قارن بين هذه المنتجات' : 'comparer ces articles'), sayBtn(T().chip.promotions, 'promotions'), menuBtn(), wa()],
+        actions: [
+          sayBtn(T().chip.budget, 'budget'),
+          sayBtn(T().chip.compare, COMPARE_SAY[get().lang]),
+          sayBtn(T().chip.promotions, 'promotions'),
+          ...(install ? [install] : []),
+          menuBtn(),
+          wa(),
+        ],
       });
     } catch {
       await dataError();
@@ -1915,7 +1970,9 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     if (!record) return false;
     return record.outcome === 'accepted' || (record.outcome === 'dismissed' && Date.now() - Number(record.at) < INSTALL_PAUSE_MS);
   }
-  const alreadyInstalled = () => isRunningAsInstalledPwa() || isRunningInsideApp();
+  // déjà installée sur ce téléphone (application Albasse, raccourci ouvert depuis l'écran d'accueil, ou installation retenue) :
+  // plus aucun bouton ni question d'installation
+  const alreadyInstalled = () => isRunningAsInstalledPwa() || isRunningInsideApp() || isAppInstalledOnDevice();
   // L'installation d'iPhone ne marche que depuis Safari (pas depuis Chrome, Facebook, Instagram...).
   const isSafariIos = () => !/CriOS|FxiOS|EdgiOS|OPiOS|FBAN|FBAV|Instagram|Line\//i.test(navigator.userAgent);
   const installChips = (ios: boolean): ChatAction[] => [
@@ -1932,6 +1989,28 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     if (isAndroidDevice() && isPwaInstallPromptAvailable()) return { label: T().chip.installApp, kind: 'install' };
     return null;
   }
+
+  function oldChips(actions: ChatAction[]): ChatAction[] {
+    const step = get().step;
+    if (step === 'ask_lang' || step === 'ask_name' || step.startsWith('co_') || step.startsWith('cb_')) return [];
+    const guest = isGuest();
+    let installOk: boolean | null = null;
+    return actions.filter((a) => {
+      if (!OLD_CHIP_KINDS.has(a.kind)) return false;
+      if (a.kind === 'say') return !CONTEXT_SAYS.has(a.payload ?? '');
+      if (a.kind === 'register' || a.kind === 'login') return guest;
+      if (a.kind === 'install' || a.kind === 'installHelp' || a.kind === 'iosGuide') return (installOk ??= installMenuChip() !== null);
+      return true;
+    });
+  }
+
+  // Sous chaque proposition d'articles : le bouton pour installer le raccourci, mis en avant, tant que le client ne l'a pas installé
+  // ni répondu « Plus tard » (mêmes règles que le bouton du menu). La petite phrase qui l'explique n'est dite qu'une fois.
+  function installOnProducts(): ChatAction | null {
+    const chip = installMenuChip();
+    return chip ? { ...chip, highlight: true } : null;
+  }
+  const saidBefore = (text: string) => get().messages.some((m) => m.role === 'assistant' && m.text.includes(text));
 
   // `extra` : les boutons déjà affichés (ex. ceux du panier) restent disponibles sous la proposition.
   async function maybeOfferInstall(extra: ChatAction[] = []) {
@@ -1970,7 +2049,8 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     const image: ChatImage | undefined = Platform.OS === 'web' ? { ...IOS_INSTALL_PHOTO, alt: T().install.photoAlt } : undefined;
     const text = `${T().install.iosSteps(isSafariIos())}${image ? `\n\n${T().install.photoHint}` : ''}`;
     logAssistantEvent('install_ios_guide');
-    await say(text, { image, actions: [{ label: T().chip.tutorial, kind: 'iosGuide' }, menuBtn()] });
+    // l'iPhone ne dit pas si l'application est déjà là : le client peut le dire, et le bouton d'installation ne revient plus
+    await say(text, { image, actions: [{ label: T().chip.tutorial, kind: 'iosGuide' }, { label: T().chip.alreadyInstalled, kind: 'installYes' }, menuBtn()] });
   }
 
   // Appelée directement par le toucher du client : la boîte d'installation de Chrome n'apparaît qu'après un geste volontaire.
@@ -2202,7 +2282,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     const canCompare = cart.length === 0 && topics.length >= 2;
     if (canCompare) lines.push(T().persona.compareOffer);
     if (undecided) lines.push(c.callbackOffer);
-    const compareChip = sayBtn(T().chip.compare, get().lang === 'ar' ? 'قارن بين هذه المنتجات' : 'comparer ces articles');
+    const compareChip = sayBtn(T().chip.compare, COMPARE_SAY[get().lang]);
     const actions: ChatAction[] =
       cart.length > 0
         ? [checkoutChip(), callbackChip('cart'), { label: T().chip.viewCart, kind: 'cart' }]
@@ -2779,6 +2859,16 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         userSays(action.label);
         await pairReply(action.payload ?? '');
         return;
+      case 'category':
+        userSays(action.label);
+        await categoryReply(action.payload ?? '');
+        return;
+      case 'categoryMore': {
+        userSays(action.label);
+        const [slug = '', from = '0'] = (action.payload ?? '').split('|');
+        await categoryReply(slug, Number(from) || 0);
+        return;
+      }
       // --- commande dans la conversation
       case 'orderCity':
         userSays(action.label);
@@ -2985,6 +3075,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       if (get().loading) return;
       void run(() => switchLang(otherLang()));
     },
+    oldChips,
     reset: () => {
       if (get().loading) return;
       save([], 'menu', null, null, null);

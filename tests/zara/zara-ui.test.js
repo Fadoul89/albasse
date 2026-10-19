@@ -13,7 +13,7 @@ const fs = require('fs');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const dist = process.argv[2] || '../../dist';
 const port = process.argv[3] || '4333';
-const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGTOFBCDE').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQTOFBCDE').toUpperCase();
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
 fs.mkdirSync(OUT, { recursive: true });
 const KEY = process.env.SUPABASE_ANON_KEY;
@@ -980,7 +980,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await ask(v.page, 'comment installer l’application sur mon téléphone', /Sur iPhone :/);
       const steps = await panelOf(v.page).getByText(/Sur iPhone :/).last().innerText();
       check('iPhone : Partager, puis « Sur l\'ecran d\'accueil », puis Ajouter (pas d\'installation native promise)', /Partager/.test(steps) && /Sur l’écran d’accueil/.test(steps) && /Ajouter/.test(steps) && !/Safari \(l’installation ne marche pas/.test(steps), steps);
-      check('iPhone : bouton tutoriel + menu', (await chipLabels(v.page)).join('|') === '🎬 Voir le tutoriel|🏠 Menu', await chipLabels(v.page));
+      check('iPhone : bouton tutoriel + « Oui, deja installee » + menu', (await chipLabels(v.page)).join('|') === '🎬 Voir le tutoriel|✅ Oui, déjà installée|🏠 Menu', await chipLabels(v.page));
       await chip(v.page, 'Voir le tutoriel').click();
       await v.page.locator('video').first().waitFor({ state: 'attached', timeout: 8000 });
       check('le tutoriel video existant de l\'iPhone s\'ouvre', (await v.page.locator('video').count()) >= 1);
@@ -1044,6 +1044,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await ask(v.page, p.name.trim(), new RegExp(`Voici ce que j’ai trouvé pour « ${p.name.trim()} »`));
       const card = cardsOf(v.page).filter({ hasText: p.name.trim() }).first();
       await card.waitFor({ timeout: 10000 });
+      await waitText(v.page, /Astuce : installez Albasse Shopping/);
+      check('Android : sous les articles trouves, le bouton « Installer Albasse Shopping »', (await chipLabels(v.page)).includes('📲 Installer Albasse Shopping'), await chipLabels(v.page));
       await card.getByTestId('assistant-card-add').click();
       await waitText(v.page, /ajouté au panier/);
       await waitText(v.page, /Avez-vous déjà installé l’application Albasse Shopping/);
@@ -1128,7 +1130,9 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const menu = await chipLabels(v.page);
       check('iPhone : le menu a le bouton « Voir comment installer » (juste avant WhatsApp)', menu.includes('📲 Voir comment installer') && menu.indexOf('📲 Voir comment installer') === menu.indexOf('💬 WhatsApp') - 1, menu);
       await tap(v.page, 'Promotions', /promotion|promo|offre/i);
-      await sleep(1200);
+      await waitText(v.page, /Astuce : installez Albasse Shopping sur votre écran d’accueil/);
+      const promoChips = await chipLabels(v.page);
+      check('iPhone : sous les articles proposes, le bouton « Voir comment installer » (juste avant Menu) + l\'astuce une seule fois', promoChips.includes('📲 Voir comment installer') && promoChips.indexOf('📲 Voir comment installer') === promoChips.indexOf('🏠 Menu') - 1 && (await panelOf(v.page).getByText(/Astuce : installez Albasse Shopping/).count()) === 1, promoChips);
       check('iPhone : apres un seul message, pas de proposition', (await panelOf(v.page).getByText(/Avez-vous déjà installé l’application Albasse Shopping/).count()) === 0);
       await ask(v.page, 'conseil', /Je suis là pour vous conseiller\. Que cherchez-vous \?/);
       await waitText(v.page, /Avez-vous déjà installé l’application Albasse Shopping/);
@@ -1185,7 +1189,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const info = await img.evaluate((i) => ({ src: i.currentSrc || i.src, w: i.naturalWidth, h: i.naturalHeight, shownW: Math.round(i.getBoundingClientRect().width) }));
       check('iPhone : la photo « comment installer » est envoyee et se charge (1120 x 1960, a la bonne taille dans la bulle)', /\/ios-installer-photo\.jpg$/.test(info.src) && info.w === 1120 && info.h === 1960 && info.shownW >= 200 && info.shownW <= 300, info);
       const txt = await panelOf(v.page).getByText(/Sur iPhone :/).last().innerText();
-      check('iPhone : les etapes ecrites + « Touchez-la pour l\'agrandir » + boutons tutoriel video et menu', /Partager/.test(txt) && /Touchez-la pour l’agrandir/.test(txt) && (await chipLabels(v.page)).join('|') === '🎬 Voir le tutoriel|🏠 Menu', { txt, chips: await chipLabels(v.page) });
+      check('iPhone : les etapes ecrites + « Touchez-la pour l\'agrandir » + boutons tutoriel video et menu', /Partager/.test(txt) && /Touchez-la pour l’agrandir/.test(txt) && (await chipLabels(v.page)).join('|') === '🎬 Voir le tutoriel|✅ Oui, déjà installée|🏠 Menu', { txt, chips: await chipLabels(v.page) });
       check('la photo a un texte alternatif (lecteurs d\'ecran)', /Comment installer Albasse Shopping sur iPhone/.test((await photo.getAttribute('aria-label')) || ''));
       await v.page.screenshot({ path: path.join(OUT, 'P3-photo-iphone.png') });
       const [pop] = await Promise.all([v.ctx.waitForEvent('page', { timeout: 10000 }), photo.click()]);
@@ -1196,6 +1200,13 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.page.getByRole('button', { name: FAB_NAME }).click();
       await sleep(1500);
       check('apres un rechargement : la conversation garde la photo', (await v.page.getByTestId('assistant-photo').count()) === 1);
+      // l'iPhone ne dit pas si l'application est la : le client le dit, et le bouton d'installation ne revient plus
+      await chip(v.page, 'Oui, déjà installée').first().click();
+      await waitText(v.page, /Vous faites déjà partie de la famille Albasse Shopping/);
+      await tap(v.page, 'Promotions', /promotion|promo|offre/i);
+      await sleep(2500);
+      const left = [...(await chipLabels(v.page)), ...(await panelOf(v.page).getByTestId('assistant-chip-old').allInnerTexts())];
+      check('iPhone, « Oui, deja installee » apres les etapes : plus aucun bouton d\'installation (articles, anciens messages)', left.every((l) => !/Voir comment installer|Voir le tutoriel|Oui, déjà installée/.test(l)) && left.includes('🏠 Menu'), left);
       check('aucune erreur (iPhone, photo)', v.errs.length === 0, v.errs);
       await v.ctx.close();
     }
@@ -1238,6 +1249,12 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await waitText(v.page, /je ne vous le propose plus pour le moment/);
       const back = await chipLabels(v.page);
       check('« Plus tard » : Zara rend les boutons habituels (promotions, categories, menu), le client n\'est jamais bloque', back.includes('🏠 Menu') && back.includes('🔥 Promotions'), back);
+      await chip(v.page, 'Promotions').last().click();
+      await sleep(3500);
+      const later = await chipLabels(v.page);
+      check('apres « Plus tard » : plus de bouton d\'installation sous les articles proposes', later.includes('🏠 Menu') && later.every((l) => !/Voir comment installer|Installer Albasse Shopping/.test(l)), later);
+      const oldAfter = (await panelOf(v.page).getByTestId('assistant-chip-old').allInnerTexts()).map((t) => t.trim());
+      check('apres « Plus tard » : les anciens boutons d\'installation partent aussi (les autres restent)', oldAfter.includes('🔥 Promotions') && oldAfter.every((l) => !/Voir comment installer|Installer Albasse Shopping|Plus tard|Oui, déjà installée/.test(l)), oldAfter);
       check('aucune erreur (visiteur tout neuf)', v.errs.length === 0, v.errs);
       await v.ctx.close();
     }
@@ -1250,6 +1267,59 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?/);
       await ask(v.page, 'installer', /trois points/);
       check("Android sans invite disponible : aucun bouton « Installer », seulement l'explication a la demande", (await chipLabels(v.page)).every((l) => !/Installer/.test(l)), await chipLabels(v.page));
+      await v.ctx.close();
+    }
+    // deja installee sur ce telephone, visite dans Chrome (souvenir sur l'appareil) : aucun bouton « Installer », ni chez Zara ni sur le site
+    {
+      const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali', albasse_app_installed: '1' } });
+      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      check('deja installee : pas de bandeau « Installer » du site', (await v.page.getByText("Albasse Shopping, l'app").count()) === 0);
+      await v.page.keyboard.press('Escape');
+      await v.page.getByRole('button', { name: FAB_NAME }).click();
+      await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?/);
+      check('deja installee : pas de bouton « Installer » dans le menu de Zara', (await chipLabels(v.page)).every((l) => !/Installer|Voir comment installer/.test(l)), await chipLabels(v.page));
+      await tap(v.page, 'Promotions', /promotion|promo|offre/i);
+      await sleep(2500);
+      const all = [...(await chipLabels(v.page)), ...(await panelOf(v.page).getByTestId('assistant-chip-old').allInnerTexts())];
+      check('deja installee : pas de bouton « Installer » sous les articles proposes, ni l\'astuce', all.every((l) => !/Installer|Voir comment installer/.test(l)) && (await panelOf(v.page).getByText(/Astuce : installez/).count()) === 0, all);
+      await ask(v.page, 'conseil', /Je suis là pour vous conseiller\. Que cherchez-vous \?/);
+      await sleep(2500);
+      check('deja installee : pas de question « Avez-vous deja installe l\'application ? »', (await panelOf(v.page).getByText(/Avez-vous déjà installé l’application/).count()) === 0);
+      await ask(v.page, 'installer l’application', /est déjà installé sur votre téléphone/);
+      check('deja installee : « comment installer ? » -> Zara dit que c\'est deja installe', true);
+      check('aucune erreur (deja installee, souvenir)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+    // une installation acceptee autrefois (suivi des installations du site) compte aussi
+    {
+      const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali', albasse_shortcut_install_tracked: 'abc-123' } });
+      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await v.page.keyboard.press('Escape');
+      await v.page.getByRole('button', { name: FAB_NAME }).click();
+      await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?/);
+      await ask(v.page, 'installer', /est déjà installé sur votre téléphone/);
+      check('installation acceptee autrefois : Zara sait que c\'est installe, aucun bouton', (await chipLabels(v.page)).every((l) => !/Installer/.test(l)), await chipLabels(v.page));
+      await v.ctx.close();
+    }
+    // souvenir perime (desinstallee depuis) : Chrome propose de nouveau l'installation -> le bouton revient
+    {
+      const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali', albasse_app_installed: '1' } });
+      await v.ctx.addInitScript(() => { window.__pwaInstallPrompt__ = { prompt: async () => {}, userChoice: Promise.resolve({ outcome: 'accepted' }) }; });
+      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await v.page.keyboard.press('Escape');
+      await v.page.getByRole('button', { name: FAB_NAME }).click();
+      await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?/);
+      check('desinstallee depuis (Chrome propose l\'installation) : le bouton « Installer » revient et le vieux souvenir est oublie', (await chipLabels(v.page)).includes('📲 Installer Albasse Shopping') && (await v.page.evaluate(() => localStorage.getItem('albasse_app_installed'))) === null, await chipLabels(v.page));
+      // Chrome annonce l'installation (menu de Chrome) : le bouton part tout de suite
+      await v.page.evaluate(() => window.dispatchEvent(new Event('appinstalled')));
+      await tap(v.page, 'Promotions', /promotion|promo|offre/i);
+      await sleep(2500);
+      const after = [...(await chipLabels(v.page)), ...(await panelOf(v.page).getByTestId('assistant-chip-old').allInnerTexts())];
+      check('« appinstalled » de Chrome : plus de bouton « Installer » (ni sous les articles ni sur les anciens messages), souvenir enregistre', after.every((l) => !/Installer/.test(l)) && (await v.page.evaluate(() => localStorage.getItem('albasse_app_installed'))) === '1', after);
+      check('aucune erreur (souvenir perime, appinstalled)', v.errs.length === 0, v.errs);
       await v.ctx.close();
     }
     // deja installe (mode application) et ordinateur
@@ -3269,6 +3339,172 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   }
 
   // =============================================== H. LE BOUTON DE ZARA : AU MILIEU, VIBRATION ET LUMIERE ===============================================
+  if (PARTS.includes('N')) {
+    console.log('\n== N. bouton « Facebook » d\'une fiche produit : l\'application Facebook sur telephone, pas le navigateur');
+    const prod = (await get('products?select=slug,name&is_active=eq.true&stock=gt.0&order=created_at.desc&limit=1'))[0];
+    const sharer = (u) => 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(u);
+    const pageUrl = `https://www.albasseshopping.com/produit/${prod.slug}`;
+    // les liens que la page fait « toucher » sont notes (et pas suivis) : on voit ce que le telephone recevrait
+    const catchLinks = () => {
+      window.__fbNav = [];
+      document.addEventListener('click', (e) => {
+        const a = e.target && e.target.closest ? e.target.closest('a') : null;
+        if (a && /^(intent|fb):|facebook\.com/.test(a.getAttribute('href') || '')) {
+          window.__fbNav.push(a.getAttribute('href'));
+          e.preventDefault();
+        }
+      }, true);
+    };
+    const openProduct = async (v) => {
+      await v.page.goto(`http://localhost:${port}/produit/${prod.slug}`, { waitUntil: 'load' });
+      await sleep(2500);
+      await v.page.keyboard.press('Escape');
+      await v.page.getByText('📘 Facebook').first().waitFor({ timeout: 15000 });
+    };
+    const shareOf = async (v) => (await v.page.evaluate(() => window.__fbNav || []));
+    // Android (Chrome)
+    {
+      const v = await newVisitor(phone, { initScripts: [catchLinks] });
+      await openProduct(v);
+      await v.page.getByText('📘 Facebook').first().click();
+      await sleep(600);
+      const nav = await shareOf(v);
+      const m = /^intent:\/\/facewebmodal\/f\?href=([^#]+)#Intent;scheme=fb;package=com\.facebook\.katana;S\.browser_fallback_url=([^;]+);end$/.exec(nav[0] || '');
+      check('Android : le bouton ouvre l\'application Facebook (et la page de partage seulement si l\'application manque)', nav.length === 1 && !!m && decodeURIComponent(m[1]) === sharer(pageUrl) && decodeURIComponent(m[2]) === sharer(pageUrl), nav);
+      check('Android : la fiche produit reste affichee (pas d\'onglet du navigateur ouvert)', v.ctx.pages().length === 1 && v.page.url().includes(`/produit/${prod.slug}`), v.ctx.pages().map((p) => p.url()));
+      check('aucune erreur (Facebook, Android)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+    // Android, dans l'application Albasse : fb:// d'abord ; sans reponse de Facebook, la page de partage 1,5 s plus tard
+    {
+      const v = await newVisitor(phone, { storage: { albasse_app_shell: '1' }, initScripts: [catchLinks] });
+      await openProduct(v);
+      await v.page.getByText('📘 Facebook').first().click();
+      await sleep(400);
+      const first = await shareOf(v);
+      check('application Albasse : l\'application Facebook est appelee tout de suite (fb://facewebmodal)', first.length === 1 && first[0] === 'fb://facewebmodal/f?href=' + encodeURIComponent(sharer(pageUrl)), first);
+      await sleep(1700);
+      const after = await shareOf(v);
+      check('application Albasse : Facebook ne s\'est pas ouvert -> la page de partage ensuite (une seule fois)', after.length === 2 && after[1] === sharer(pageUrl), after);
+      // Facebook s'ouvre (la page perd la main) : pas de page de partage en plus
+      await v.page.getByText('📘 Facebook').first().click();
+      await sleep(300);
+      await v.page.evaluate(() => window.dispatchEvent(new Event('blur')));
+      await sleep(1800);
+      const opened = await shareOf(v);
+      check('application Albasse : si Facebook s\'ouvre, rien d\'autre ne s\'ouvre', opened.length === 3 && opened[2].startsWith('fb://'), opened);
+      check('aucune erreur (Facebook, application Albasse)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+    // iPhone : le lien facebook.com (l'iPhone l'ouvre dans l'application Facebook quand elle est installee)
+    {
+      const v = await newVisitor({ ...devices['iPhone 13'], viewport: { width: 390, height: 800 } }, { initScripts: [catchLinks] });
+      await openProduct(v);
+      await v.page.getByText('📘 Facebook').first().click();
+      await sleep(600);
+      const nav = await shareOf(v);
+      check('iPhone : le lien Facebook est touche dans la page (lien universel vers l\'application Facebook)', nav.length === 1 && nav[0] === sharer(pageUrl), nav);
+      check('aucune erreur (Facebook, iPhone)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+    // ordinateur : un nouvel onglet avec la page de partage (comme avant)
+    {
+      const v = await newVisitor({ viewport: { width: 1280, height: 800 } }, { initScripts: [catchLinks] });
+      await openProduct(v);
+      const asked = [];
+      v.ctx.on('request', (r) => { if (/facebook\.com/.test(r.url())) asked.push(r.url()); }); // le test ne laisse rien sortir : on note l'adresse demandee
+      const [popup] = await Promise.all([v.ctx.waitForEvent('page', { timeout: 10000 }), v.page.getByText('📘 Facebook').first().click()]);
+      await sleep(800);
+      check('ordinateur : la page de partage Facebook s\'ouvre dans un nouvel onglet', popup !== v.page && asked.includes(sharer(pageUrl)) && v.page.url().includes(`/produit/${prod.slug}`), { asked, page: v.page.url() });
+      check('aucune erreur (Facebook, ordinateur)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+  }
+
+  if (PARTS.includes('Q')) {
+    console.log('\n== Q. categorie touchee dans le chat : ses articles s\'affichent dans le chat (bouton « + »), Zara reste ouverte');
+    {
+      const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
+      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await v.page.keyboard.press('Escape');
+      await v.page.getByRole('button', { name: FAB_NAME }).click();
+      await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?/);
+      await tap(v.page, '🛍️ Catégories', /Choisissez une catégorie/);
+      await sleep(800);
+      const cats = await chipLabels(v.page);
+      const pick = cats.includes('Montre') ? 'Montre' : cats[0];
+      const before = await cardsOf(v.page).count();
+      await panelOf(v.page).getByTestId('assistant-chip').filter({ hasText: new RegExp(`^\\s*${pick.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`) }).click();
+      await waitText(v.page, /voici nos articles/);
+      await sleep(1500);
+      const intro = await panelOf(v.page).getByText(/voici nos articles/).last().innerText();
+      check('categorie touchee : Zara annonce la categorie par son nom et le nombre d\'articles disponibles', new RegExp(`^🛍️ ${pick} : voici nos articles(, Ali)? 👇( \\(\\d+ disponibles\\))?$`).test(intro), intro);
+      const shown = (await cardsOf(v.page).count()) - before;
+      check('categorie touchee : Zara reste ouverte, la page ne change pas', (await panelOf(v.page).count()) === 1 && new URL(v.page.url()).pathname === '/', v.page.url());
+      check('categorie touchee : ses articles s\'affichent dans le chat (1 a 6 cartes)', shown >= 1 && shown <= 6, shown);
+      check('chaque carte a son bouton « + » pour ajouter au panier', (await panelOf(v.page).getByTestId('assistant-card-add').count()) >= shown, await panelOf(v.page).getByTestId('assistant-card-add').count());
+      const chips1 = await chipLabels(v.page);
+      check('boutons : « Page « categorie » » pour ceux qui preferent la page, et le menu', chips1.includes(`📄 Page « ${pick} »`) && chips1.includes('🏠 Menu'), chips1);
+      if (chips1.includes('➕ Voir plus')) {
+        const n1 = await cardsOf(v.page).count();
+        await chip(v.page, '➕ Voir plus').click();
+        await waitText(v.page, /la suite, 7 à \d+ sur \d+/);
+        await sleep(1200);
+        check('« Voir plus » : la suite des articles dans le chat (pas les memes)', (await cardsOf(v.page).count()) > n1 && new URL(v.page.url()).pathname === '/', await cardsOf(v.page).count());
+      } else check('« Voir plus » absent : tous les articles de la categorie sont deja affiches', shown <= 6, shown);
+      // « + » sur une carte du chat : ajoute au panier (ou demande la taille / la couleur), sans quitter le chat
+      await cardsOf(v.page).last().getByTestId('assistant-card-add').click();
+      await waitText(v.page, /ajouté au panier|Quelle taille|Quelle couleur|Choisissez/);
+      check('« + » dans le chat : ajoute au panier (ou demande la taille/couleur) et Zara reste ouverte', (await panelOf(v.page).count()) === 1 && new URL(v.page.url()).pathname === '/');
+      // « Page » : ouvre la page de la categorie (le client l'a choisi)
+      await panelOf(v.page).getByTestId('assistant-chip-old').filter({ hasText: `📄 Page « ${pick} »` }).first().click();
+      await sleep(2000);
+      check('« Page » : la page de la categorie s\'ouvre', /\/categorie\//.test(v.page.url()), v.page.url());
+      check('aucune erreur (categorie dans le chat)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+  }
+
+  if (PARTS.includes('J')) {
+    console.log('\n== J. anciens boutons de Zara : ceux qui menent quelque part restent touchables, les reponses passees partent');
+    const oldLabels = async (p) => (await panelOf(p).getByTestId('assistant-chip-old').allInnerTexts()).map((t) => t.trim());
+    {
+      const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
+      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await v.page.keyboard.press('Escape');
+      await v.page.getByRole('button', { name: FAB_NAME }).click();
+      await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?/);
+      check('au debut : aucun ancien bouton (seulement ceux du dernier message)', (await oldLabels(v.page)).length === 0, await oldLabels(v.page));
+      const menu = await chipLabels(v.page);
+      await tap(v.page, '🔥 Promotions', /promotion|promo|offre/i);
+      await sleep(1500);
+      const old1 = await oldLabels(v.page);
+      const kept = menu.filter((l) => !/العربية/.test(l));
+      check('apres un clic : les boutons du menu restent (promotions, nouveautes, conseil, categories, compte, WhatsApp)', kept.every((l) => old1.includes(l)) && ['🔥 Promotions', '🆕 Nouveautés', '🎯 Conseil', '🛍️ Catégories', '👤 Créer mon compte', '💬 WhatsApp'].every((l) => old1.includes(l)), { menu, old1 });
+      check('le bouton de langue d\'un ancien message part (le bouton en haut reste)', old1.every((l) => !/العربية/.test(l)), old1);
+      check('« Mon budget » d\'une ancienne liste part (il parlerait d\'autres articles)', old1.every((l) => l !== '💰 Mon budget'), old1);
+      const n = await panelOf(v.page).getByText(/Voici nos dernières nouveautés/).count();
+      await panelOf(v.page).getByTestId('assistant-chip-old').filter({ hasText: '🆕 Nouveautés' }).first().click();
+      await waitText(v.page, /Voici nos dernières nouveautés/);
+      check('un ancien bouton se touche et Zara repond (Nouveautes)', (await panelOf(v.page).getByText(/Voici nos dernières nouveautés/).count()) === n + 1 && (await cardsOf(v.page).count()) > 0);
+      check('les anciens « Mon budget » ne reviennent pas', (await oldLabels(v.page)).every((l) => l !== '💰 Mon budget'), await oldLabels(v.page));
+      // une question (quel article ?) : une fois repondue, ses boutons partent
+      await ask(v.page, 'conseil', /Je suis là pour vous conseiller\. Que cherchez-vous \?/);
+      await sleep(800);
+      const typeChips = (await chipLabels(v.page)).filter((l) => !['🏠 Menu', '💬 WhatsApp', '🎁 Idée cadeau'].includes(l));
+      check('la question « Que cherchez-vous ? » a ses boutons (articles)', typeChips.length >= 2, typeChips);
+      await chip(v.page, typeChips[0]).first().click();
+      await waitText(v.page, /C’est pour qui|pour qui|budget/i);
+      await sleep(1500);
+      const old2 = await oldLabels(v.page);
+      check('apres la reponse : les boutons de la question passee ne restent pas', typeChips.every((l) => !old2.includes(l)), { typeChips, old2 });
+      check('aucune erreur (anciens boutons)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+  }
+
   if (PARTS.includes('H')) {
     console.log('\n== H. bouton de Zara : au milieu de l\'ecran (un peu plus haut qu\'avant), vibration et lumiere, bulle au-dessus, moins d\'animations respecte');
     const base = `http://localhost:${port}`;
@@ -3957,6 +4193,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('compte connu : Zara ne redemande ni le nom ni le telephone, elle commence par l\'adresse', (await panelOf(c.page).getByText(/nom complet de la personne|Quel est votre numéro/).count()) === 0);
       await typeIn(c.page, 'Quartier Farcha, rue 12, près du marché');
       await waitText(c.page, /Dans quelle ville doit-on vous livrer/);
+      check('pendant la commande : aucun ancien bouton (le client ne peut pas se tromper)', (await panelOf(c.page).getByTestId('assistant-chip-old').count()) === 0);
       const cityChips = await chipLabels(c.page);
       check('la ville : boutons des villes de la boutique + annuler', cityChips.includes(farCity.name) && cityChips[cityChips.length - 1] === 'Annuler la commande', cityChips);
       await tapExact(c.page, farCity.name, /Dans votre ville, le paiement se fait à l’avance/);
