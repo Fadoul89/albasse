@@ -41,23 +41,26 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
 
   // Un contexte = un visiteur. Lecture seule vers la base ; le reste d'internet est coupe.
   // rank : rang du jour renvoye par la fonction de la base (null : fonction pas installee). fakeUser : compte simule (token : reponse a une connexion par mot de passe ; delay : lenteur du profil en ms). fakeOrders : { list: [...], patches: [] } = fausse table des commandes.
-  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, fakeSales = null, fakeCallbacks = null, initScripts = [] } = {}) {
+  // zaraInstall : par defaut, le visiteur a deja repondu « Plus tard » a l'installation (Zara ne la propose pas) ; null = vrai nouveau
+  // visiteur, pour les parties qui testent l'installation
+  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, fakeSales = null, fakeCallbacks = null, initScripts = [], zaraInstall = 'dismissed' } = {}) {
     const ctx = await b.newContext(opts);
     if (cookies) await ctx.addCookies(cookies);
     if (lang) storage = { albasse_zara_lang: lang, ...storage };
     for (const code of initScripts) await ctx.addInitScript(code);
-    await ctx.addInitScript(([entries, sessionEntries]) => {
+    await ctx.addInitScript(([entries, sessionEntries, installDefault]) => {
       try {
         localStorage.setItem('albasse_app_banner_dismissed', '1');
         localStorage.setItem('albasse_app_popup_seen_' + new Date().toISOString().slice(0, 10), '1');
         for (const [k, v] of Object.entries(entries)) localStorage.setItem(k, v);
+        if (installDefault && !localStorage.getItem('albasse_zara_install')) localStorage.setItem('albasse_zara_install', JSON.stringify({ at: Date.now(), outcome: installDefault }));
         // la conversation et le « deja salue » de l'onglet ne sont mis qu'a la premiere page (pas apres un rechargement)
         if (!sessionStorage.getItem('__zara_test_seeded')) {
           for (const [k, v] of Object.entries(sessionEntries)) sessionStorage.setItem(k, v);
           sessionStorage.setItem('__zara_test_seeded', '1');
         }
       } catch (e) {}
-    }, [storage, session]);
+    }, [storage, session, zaraInstall]);
     const writes = [];
     const rpcCalls = [];
     // statistiques de Zara : ce que le site envoie a la base (appareil du compteur, gestes d'installation, installations, demandes de la page admin)
@@ -971,7 +974,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const iphone = { ...devices['iPhone 13'], viewport: { width: 390, height: 800 } };
     // iPhone (Safari) : aide pas a pas, tutoriel
     {
-      const v = await newVisitor(iphone, { storage: { albasse_zara_name: 'Ali' } });
+      const v = await newVisitor(iphone, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' } });
       await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
       await sleep(2500);
       await v.page.getByRole('button', { name: FAB_NAME }).click();
@@ -987,7 +990,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('aucune erreur (iPhone)', v.errs.length === 0, v.errs);
       await v.ctx.close();
       // iPhone mais pas Safari : il faut ouvrir Safari
-      const w = await newVisitor({ ...iphone, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/120.0.0.0 Mobile/15E148 Safari/604.1' }, { storage: { albasse_zara_name: 'Ali' } });
+      const w = await newVisitor({ ...iphone, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/120.0.0.0 Mobile/15E148 Safari/604.1' }, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' } });
       await w.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
       await sleep(2500);
       await w.page.getByRole('button', { name: FAB_NAME }).click();
@@ -998,7 +1001,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     }
     // Android : invite native apres un clic volontaire, une seule fois
     {
-      const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
+      const v = await newVisitor(phone, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' } });
       await v.ctx.addInitScript(() => {
         window.__fakePromptCalls = 0;
         window.__pwaInstallPrompt__ = { prompt: async () => { window.__fakePromptCalls++; }, userChoice: Promise.resolve({ outcome: 'accepted' }) };
@@ -1016,7 +1019,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('le site reste utilisable (le champ de saisie fonctionne)', await inputOf(v.page).isEnabled());
       await v.ctx.close();
       // refus
-      const d = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
+      const d = await newVisitor(phone, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' } });
       await d.ctx.addInitScript(() => {
         window.__pwaInstallPrompt__ = { prompt: async () => {}, userChoice: Promise.resolve({ outcome: 'dismissed' }) };
       });
@@ -1035,7 +1038,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const all = await get('products?select=id,name,slug,price,stock,sizes,colors,images&is_active=eq.true&stock=gt.3&limit=1000');
       const BAD = /montre|parfum|chaussure|sac|robe|homme|femme|enfant|bebe|lunette|cadeau|sandale|basket|veste|costume|chemise|pantalon|creme|jouet|velo|meuble|maison|electri|voiture|aliment|budget|panier|promo|livraison|conseil|ajout|total/i;
       const p = all.find((x) => (x.images || [])[0] && /^[A-Za-zÀ-ÿ]{4,14}$/.test(x.name.trim()) && !BAD.test(x.name) && all.filter((y) => y.name.trim() === x.name.trim()).length === 1 && (x.sizes || []).length === 0 && (x.colors || []).length <= 1);
-      const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
+      const v = await newVisitor(phone, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' } });
       await v.ctx.addInitScript(() => { window.__pwaInstallPrompt__ = { prompt: async () => {}, userChoice: Promise.resolve({ outcome: 'accepted' }) }; });
       await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
       await sleep(2500);
@@ -1066,7 +1069,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     }
     // Android avec invite : bouton « Installer » dans le menu, proposition apres deux messages (une seule fois), bouton retire apres « Plus tard »
     {
-      const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
+      const v = await newVisitor(phone, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' } });
       await v.ctx.addInitScript(() => {
         window.__fakePromptCalls = 0;
         window.__pwaInstallPrompt__ = { prompt: async () => { window.__fakePromptCalls++; }, userChoice: Promise.resolve({ outcome: 'dismissed' }) };
@@ -1103,7 +1106,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     }
     // Android avec invite, en arabe
     {
-      const v = await newVisitor(phone, { lang: 'ar', storage: { albasse_zara_name: 'علي' } });
+      const v = await newVisitor(phone, { zaraInstall: null, lang: 'ar', storage: { albasse_zara_name: 'علي' } });
       await v.ctx.addInitScript(() => {
         window.__fakePromptCalls = 0;
         window.__pwaInstallPrompt__ = { prompt: async () => { window.__fakePromptCalls++; }, userChoice: Promise.resolve({ outcome: 'accepted' }) };
@@ -1122,7 +1125,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     }
     // iPhone : bouton « Ajouter a l'ecran d'accueil » dans le menu -> les etapes ; proposition apres deux messages
     {
-      const v = await newVisitor(iphone, { storage: { albasse_zara_name: 'Ali' } });
+      const v = await newVisitor(iphone, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' } });
       await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
       await sleep(2500);
       await v.page.getByRole('button', { name: FAB_NAME }).click();
@@ -1145,7 +1148,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     }
     // « Oui, deja installee » : Zara remercie et ne propose plus rien (ni la question, ni le bouton du menu), meme apres un rechargement
     {
-      const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
+      const v = await newVisitor(phone, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' } });
       await v.ctx.addInitScript(() => { window.__pwaInstallPrompt__ = { prompt: async () => {}, userChoice: Promise.resolve({ outcome: 'accepted' }) }; });
       await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
       await sleep(2500);
@@ -1173,7 +1176,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     }
     // iPhone : « Voir comment installer » envoie les etapes ET la photo pas a pas (4 images du tutoriel) ; la photo s'ouvre en grand ; elle reste apres un rechargement
     {
-      const v = await newVisitor(iphone, { storage: { albasse_zara_name: 'Ali' } });
+      const v = await newVisitor(iphone, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' } });
       await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
       await sleep(2500);
       await v.page.getByRole('button', { name: FAB_NAME }).click();
@@ -1212,7 +1215,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     }
     // iPhone en arabe : les etapes en arabe + la meme photo
     {
-      const v = await newVisitor(iphone, { lang: 'ar', storage: { albasse_zara_name: 'علي' } });
+      const v = await newVisitor(iphone, { zaraInstall: null, lang: 'ar', storage: { albasse_zara_name: 'علي' } });
       await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
       await sleep(2500);
       await v.page.getByRole('button', { name: /التحدث مع زارا كينغز/ }).click();
@@ -1227,7 +1230,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     }
     // Visiteur tout neuf (iPhone, ni langue ni prenom retenus) : choisir la langue et « Passer » ne comptent pas ; la question vient apres 2 vrais messages
     {
-      const v = await newVisitor(iphone, { lang: null });
+      const v = await newVisitor(iphone, { zaraInstall: null, lang: null });
       await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
       await sleep(2500);
       await v.page.getByRole('button', { name: FAB_NAME }).click();
@@ -1258,20 +1261,54 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('aucune erreur (visiteur tout neuf)', v.errs.length === 0, v.errs);
       await v.ctx.close();
     }
-    // Android sans invite disponible : pas de bouton, seulement l'explication quand le client la demande
+    // Android sans installation en un toucher (Chrome pas encore pret, autre navigateur) : Zara propose quand meme, avec les etapes
     {
-      const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
+      const v = await newVisitor(phone, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' } });
       await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
       await sleep(2500);
+      await v.page.keyboard.press('Escape');
       await v.page.getByRole('button', { name: FAB_NAME }).click();
       await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?/);
-      await ask(v.page, 'installer', /trois points/);
-      check("Android sans invite disponible : aucun bouton « Installer », seulement l'explication a la demande", (await chipLabels(v.page)).every((l) => !/Installer/.test(l)), await chipLabels(v.page));
+      const menu = await chipLabels(v.page);
+      check('Android sans installation en un toucher : le menu a « Voir comment installer » (juste avant WhatsApp)', menu.includes('📲 Voir comment installer') && menu.indexOf('📲 Voir comment installer') === menu.indexOf('💬 WhatsApp') - 1, menu);
+      await tap(v.page, 'Promotions', /promotion|promo|offre/i);
+      await waitText(v.page, /Astuce : installez Albasse Shopping/);
+      check('Android sans installation en un toucher : « Voir comment installer » sous les articles proposes', (await chipLabels(v.page)).includes('📲 Voir comment installer'), await chipLabels(v.page));
+      await ask(v.page, 'conseil', /Je suis là pour vous conseiller\. Que cherchez-vous \?/);
+      await waitText(v.page, /Avez-vous déjà installé l’application Albasse Shopping/);
+      check('Android sans installation en un toucher : apres deux messages, la question avec « Voir comment installer », « Oui, deja installee », « Plus tard »', (await chipLabels(v.page)).join('|') === '📲 Voir comment installer|✅ Oui, déjà installée|Plus tard', await chipLabels(v.page));
+      await chip(v.page, 'Voir comment installer').click();
+      await waitText(v.page, /trois points \(⋮\) en haut à droite de Chrome/);
+      check('Android : les etapes de Chrome (⋮ puis « Installer l\'application » / « Ajouter a l\'ecran d\'accueil ») + « Oui, deja installee » + menu', (await chipLabels(v.page)).join('|') === '✅ Oui, déjà installée|🏠 Menu', await chipLabels(v.page));
+      await chip(v.page, 'Oui, déjà installée').click();
+      await waitText(v.page, /Vous faites déjà partie de la famille Albasse Shopping/);
+      await tap(v.page, 'Promotions', /promotion|promo|offre/i);
+      await sleep(2500);
+      const after = [...(await chipLabels(v.page)), ...(await panelOf(v.page).getByTestId('assistant-chip-old').allInnerTexts())];
+      check('Android : apres « Oui, deja installee », plus aucun bouton d\'installation', after.every((l) => !/Voir comment installer|Installer Albasse/.test(l)), after);
+      check('aucune erreur (Android sans installation en un toucher)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+    // Android dans le navigateur de Facebook / WhatsApp : ouvrir Chrome d'abord ; Samsung Internet : ses propres etapes
+    for (const [ua, re, label] of [
+      ['Mozilla/5.0 (Linux; Android 14; Pixel 7 Build/UQ1A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/124.0.0.0 Mobile Safari/537.36 [FBAN/EMA;FBLC/fr_FR;FBAV/400.0.0.0;]', /Ouvrez d’abord albasseshopping\.com dans Chrome/, 'navigateur de Facebook'],
+      ['Mozilla/5.0 (Linux; Android 14; SM-A546B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/25.0 Chrome/121.0.0.0 Mobile Safari/537.36', /menu \(☰\) en bas de Samsung Internet/, 'Samsung Internet'],
+    ]) {
+      const v = await newVisitor({ ...phone, userAgent: ua }, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' } });
+      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await v.page.keyboard.press('Escape');
+      await v.page.getByRole('button', { name: FAB_NAME }).click();
+      await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?/);
+      await chip(v.page, 'Voir comment installer').first().click();
+      await waitText(v.page, re);
+      check(`Android, ${label} : les bonnes etapes d'installation`, true);
+      check(`aucune erreur (${label})`, v.errs.length === 0, v.errs);
       await v.ctx.close();
     }
     // deja installee sur ce telephone, visite dans Chrome (souvenir sur l'appareil) : aucun bouton « Installer », ni chez Zara ni sur le site
     {
-      const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali', albasse_app_installed: '1' } });
+      const v = await newVisitor(phone, { zaraInstall: null, storage: { albasse_zara_name: 'Ali', albasse_app_installed: '1' } });
       await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
       await sleep(2500);
       check('deja installee : pas de bandeau « Installer » du site', (await v.page.getByText("Albasse Shopping, l'app").count()) === 0);
@@ -1293,7 +1330,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     }
     // une installation acceptee autrefois (suivi des installations du site) compte aussi
     {
-      const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali', albasse_shortcut_install_tracked: 'abc-123' } });
+      const v = await newVisitor(phone, { zaraInstall: null, storage: { albasse_zara_name: 'Ali', albasse_shortcut_install_tracked: 'abc-123' } });
       await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
       await sleep(2500);
       await v.page.keyboard.press('Escape');
@@ -1305,7 +1342,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     }
     // souvenir perime (desinstallee depuis) : Chrome propose de nouveau l'installation -> le bouton revient
     {
-      const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali', albasse_app_installed: '1' } });
+      const v = await newVisitor(phone, { zaraInstall: null, storage: { albasse_zara_name: 'Ali', albasse_app_installed: '1' } });
       await v.ctx.addInitScript(() => { window.__pwaInstallPrompt__ = { prompt: async () => {}, userChoice: Promise.resolve({ outcome: 'accepted' }) }; });
       await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
       await sleep(2500);
@@ -1324,7 +1361,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     }
     // deja installe (mode application) et ordinateur
     {
-      const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
+      const v = await newVisitor(phone, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' } });
       await v.ctx.addInitScript(() => {
         const mm = window.matchMedia.bind(window);
         window.matchMedia = (q) => (/display-mode:\s*standalone/.test(q) ? { matches: true, media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} } : mm(q));
@@ -1341,7 +1378,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await sleep(2500);
       check('deja installe : ni bouton « Installer » dans le menu, ni proposition apres plusieurs messages', (await panelOf(v.page).getByText(/Avez-vous déjà installé l’application Albasse Shopping/).count()) === 0 && (await chipLabels(v.page)).every((l) => !/Installer|Voir comment installer|Oui, déjà installée/.test(l)), await chipLabels(v.page));
       await v.ctx.close();
-      const d = await newVisitor({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 }, { storage: { albasse_zara_name: 'Ali' } });
+      const d = await newVisitor({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 }, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' } });
       await d.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
       await sleep(2500);
       await d.page.getByRole('button', { name: FAB_NAME }).click();
@@ -1854,7 +1891,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
 
     // --- S2. les gestes de Zara autour de l'installation sont notes avec l'appareil (question, deja installee, plus tard, aide iPhone)
     {
-      const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
+      const v = await newVisitor(phone, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' } });
       await fakePromptWith(v, 'accepted');
       await openChat(v);
       await reachQuestion(v);
@@ -1866,7 +1903,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('Android : « Oui, deja installee » est note (install_already)', eventNames(v).join('|') === 'install_question:Android|install_already:Android', v.events);
       check('aucune erreur (gestes, Android)', v.errs.length === 0, v.errs);
       await v.ctx.close();
-      const w = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
+      const w = await newVisitor(phone, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' } });
       await fakePromptWith(w, 'accepted');
       await openChat(w);
       await reachQuestion(w);
@@ -1875,7 +1912,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await sleep(600);
       check('« Plus tard » est note (install_later)', eventNames(w).join('|') === 'install_question:Android|install_later:Android', w.events);
       await w.ctx.close();
-      const x = await newVisitor(iphone, { storage: { albasse_zara_name: 'Ali' } });
+      const x = await newVisitor(iphone, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' } });
       await openChat(x);
       await reachQuestion(x);
       await chip(x.page, 'Voir comment installer').click();
@@ -1888,7 +1925,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
 
     // --- S3. installations : « grace a Zara » seulement si le client a touche « Installer » chez Zara et accepte
     {
-      const a = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
+      const a = await newVisitor(phone, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' } });
       await fakePromptWith(a, 'accepted');
       await openChat(a);
       await waitText(a.page, /Créez votre compte gratuit(?:, Ali)?/);
@@ -1901,7 +1938,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('aucune erreur (installation via Zara)', a.errs.length === 0, a.errs);
       await a.ctx.close();
 
-      const b = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
+      const b = await newVisitor(phone, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' } });
       await b.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
       await sleep(3000);
       await b.page.evaluate(() => window.dispatchEvent(new Event('appinstalled')));
@@ -1909,7 +1946,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('installation faite autrement (menu de Chrome, sans passer par Zara) : comptee, mais PAS « grace a Zara »', b.installs.length === 1 && b.installs[0].via_assistant === undefined && b.installs[0].device_type === 'Android', b.installs);
       await b.ctx.close();
 
-      const c = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
+      const c = await newVisitor(phone, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' } });
       await fakePromptWith(c, 'dismissed');
       await openChat(c);
       await waitText(c.page, /Créez votre compte gratuit(?:, Ali)?/);
@@ -1921,7 +1958,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('installe plus tard par un autre chemin apres un refus : PAS « grace a Zara »', c.installs.length === 1 && c.installs[0].via_assistant === undefined, c.installs);
       await c.ctx.close();
 
-      const d = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' }, noStatsColumns: true });
+      const d = await newVisitor(phone, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' }, noStatsColumns: true });
       await fakePromptWith(d, 'accepted');
       await openChat(d);
       await waitText(d.page, /Créez votre compte gratuit(?:, Ali)?/);

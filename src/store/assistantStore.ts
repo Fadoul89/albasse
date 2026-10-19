@@ -1975,19 +1975,21 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
   const alreadyInstalled = () => isRunningAsInstalledPwa() || isRunningInsideApp() || isAppInstalledOnDevice();
   // L'installation d'iPhone ne marche que depuis Safari (pas depuis Chrome, Facebook, Instagram...).
   const isSafariIos = () => !/CriOS|FxiOS|EdgiOS|OPiOS|FBAN|FBAV|Instagram|Line\//i.test(navigator.userAgent);
-  const installChips = (ios: boolean): ChatAction[] => [
-    ios ? { label: T().chip.installHelp, kind: 'installHelp', highlight: true } : { label: T().chip.installApp, kind: 'install', highlight: true },
+  // Android : Chrome installe en un toucher seulement quand il est prêt ; sinon (Chrome pas encore prêt, Samsung Internet, navigateur
+  // de Facebook ou WhatsApp...) Zara donne les étapes. iPhone : toujours les étapes (Safari n'a pas d'installation en un toucher).
+  const oneTapInstall = () => isAndroidDevice() && isPwaInstallPromptAvailable();
+  const installChips = (guide: boolean): ChatAction[] => [
+    guide ? { label: T().chip.installHelp, kind: 'installHelp', highlight: true } : { label: T().chip.installApp, kind: 'install', highlight: true },
     { label: T().chip.notNow, kind: 'installLater' },
   ];
 
-  // Le bouton du menu pour les clients qui n'ont pas encore installé : iPhone (aide pas à pas) ; Android seulement quand Chrome permet
-  // réellement l'installation (il ne la permet plus une fois l'application installée) ; jamais sur ordinateur ni dans l'application.
+  // Le bouton du menu pour les clients qui n'ont pas encore installé (téléphone seulement) : installer en un toucher quand Chrome le
+  // permet, sinon les étapes ; jamais sur ordinateur, ni dans l'application, ni une fois installée ou après « Plus tard ».
   function installMenuChip(): ChatAction | null {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return null;
     if (alreadyInstalled() || installDeclined()) return null;
-    if (isIosDevice()) return { label: T().chip.installHelp, kind: 'installHelp' };
-    if (isAndroidDevice() && isPwaInstallPromptAvailable()) return { label: T().chip.installApp, kind: 'install' };
-    return null;
+    if (!isIosDevice() && !isAndroidDevice()) return null;
+    return oneTapInstall() ? { label: T().chip.installApp, kind: 'install' } : { label: T().chip.installHelp, kind: 'installHelp' };
   }
 
   function oldChips(actions: ChatAction[]): ChatAction[] {
@@ -2016,13 +2018,11 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
   async function maybeOfferInstall(extra: ChatAction[] = []) {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
     if (alreadyInstalled() || installPaused()) return;
-    const ios = isIosDevice();
-    // iPhone : l'aide pas à pas ; Android : le bouton seulement quand Chrome permet réellement l'installation
-    if (!ios && !(isAndroidDevice() && isPwaInstallPromptAvailable())) return;
+    if (!isIosDevice() && !isAndroidDevice()) return; // ordinateur : jamais de question
     recordInstall('asked'); // on ne le redit pas, même si le client l'ignore
     logAssistantEvent('install_question');
-    // « Avez-vous déjà installé l'application ? » : le bouton pour installer, « Oui, déjà installée », « Plus tard »
-    const [install, later] = installChips(ios);
+    // « Avez-vous déjà installé l'application ? » : installer (en un toucher ou les étapes), « Oui, déjà installée », « Plus tard »
+    const [install, later] = installChips(!oneTapInstall());
     await say(T().install.ask, { actions: [...extra, install, { label: T().chip.alreadyInstalled, kind: 'installYes' }, later] });
   }
 
@@ -2037,11 +2037,22 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       return;
     }
     if (isAndroidDevice()) {
-      if (isPwaInstallPromptAvailable()) await say(T().install.offer, { actions: installChips(false) });
-      else await say(T().install.androidManual, { actions: afterAnswerActions() });
+      if (oneTapInstall()) await say(T().install.offer, { actions: installChips(false) });
+      else await androidSteps();
       return;
     }
     await say(T().install.desktop, { actions: afterAnswerActions() });
+  }
+
+  // Android sans installation en un toucher : les étapes du navigateur utilisé (dans Facebook, WhatsApp... : ouvrir Chrome d'abord).
+  async function androidSteps() {
+    const ua = navigator.userAgent;
+    const text = /FBAN|FBAV|Instagram|WhatsApp|Line\/|; wv\)/i.test(ua)
+      ? T().install.androidOpenChrome
+      : /SamsungBrowser/i.test(ua)
+        ? T().install.androidSamsung
+        : T().install.androidManual;
+    await say(text, { actions: [{ label: T().chip.alreadyInstalled, kind: 'installYes' }, menuBtn()] });
   }
 
   // iPhone : les étapes écrites, avec la photo « comment installer » juste dessous (touchée, elle s'ouvre en grand).
@@ -2987,7 +2998,8 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         return;
       case 'installHelp':
         userSays(action.label);
-        await installSteps();
+        if (isIosDevice()) await installSteps();
+        else await androidSteps();
         return;
       case 'iosGuide':
         useInstallGuideStore.getState().show();
