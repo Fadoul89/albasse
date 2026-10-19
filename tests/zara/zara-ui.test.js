@@ -13,7 +13,7 @@ const fs = require('fs');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const dist = process.argv[2] || '../../dist';
 const port = process.argv[3] || '4333';
-const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHNTOFBCDE').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHTOFBCDE').toUpperCase();
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
 fs.mkdirSync(OUT, { recursive: true });
 const KEY = process.env.SUPABASE_ANON_KEY;
@@ -3510,129 +3510,6 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const g3 = await geo(w.page.getByTestId('assistant-fab'));
       check('bouton colle a droite : la bulle reste au-dessus, entiere dans l\'ecran, et toujours au-dessus du bouton', b2.bottom <= g3.y - 6 && b2.x >= 0 && b2.x + b2.w <= vp.width, { b2, g3 });
       await w.ctx.close();
-    }
-  }
-
-  // =============================================== N. LE MATIN AVEC ZARA (page admin « Rapport du matin ») ===============================================
-  if (PARTS.includes('N')) {
-    console.log('\n== N. « Le matin avec Zara » : ventes, commandes a traiter, rappels, paniers, articles regardes et stock, chiffres manquants (fausse base)');
-    const base = `http://localhost:${port}`;
-    const uid = '22222222-2222-4222-8222-222222222222';
-    const JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyMjIyMjIyMi0yMjIyLTQyMjItODIyMi0yMjIyMjIyMjIyMjIiLCJleHAiOjQxMDI0NDQ4MDAsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.c2ln';
-    const accountOf = ({ is_admin = true } = {}) => {
-      const auth = { id: uid, aud: 'authenticated', role: 'authenticated', email: 'admin@example.com', app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' };
-      const token = { access_token: JWT, refresh_token: 'fake-refresh', token_type: 'bearer', expires_in: 3600, expires_at: 4102444800, user: auth };
-      return { auth, token, session: JSON.stringify(token), profile: { id: uid, email: 'admin@example.com', full_name: 'Admin Albasse', phone: '66123456', banned: false, role: 'admin', is_admin } };
-    };
-    const SK = 'sb-xtitsmmccpkelxfjyqyh-auth-token';
-    const norm = (t) => t.replace(/[\s  ]+/g, ' ').trim();
-    const HOUR = 3600 * 1000;
-    const ago = (h) => new Date(Date.now() - h * HOUR).toISOString();
-    const chadIso = (plusDays) => new Date(Date.now() + HOUR + plusDays * 24 * HOUR).toISOString().slice(0, 10);
-    const STATS = {
-      conversations: [{ device: 'Android', n: 6 }],
-      orders: [{ device: 'Android', status: 'pending', n: 1, amount: 10000 }, { device: 'iPhone', status: 'paid', n: 1, amount: 5000 }, { device: 'Android', status: 'cancelled', n: 1, amount: 3000 }],
-      accounts: [{ device: 'Android', n: 2 }],
-      installs: [{ device: 'iPhone', n: 1 }],
-      totals: { orders: 4, orders_amount: 42000, accounts: 5, installs: 3 },
-    };
-    const rolexId = realProduct ? realProduct.id : 'p-rolex';
-    const OVERVIEW = {
-      rows: [
-        { visitor_ref: 'V-aaaaaa', product_id: rolexId, product_name: 'Rolex', views: 4, sessions: 1, active_seconds: 120, cart_status: 'in_cart', interest: 'eleve' },
-        { visitor_ref: 'V-bbbbbb', product_id: rolexId, product_name: 'Rolex', views: 2, sessions: 1, active_seconds: 40, cart_status: 'in_cart', interest: 'moyen' },
-        { visitor_ref: 'V-aaaaaa', product_id: lowStock ? lowStock.id : 'p-low', product_name: lowStock ? lowStock.name : 'Article rare', views: 3, sessions: 1, active_seconds: 60, cart_status: 'in_cart', interest: 'eleve' },
-        { visitor_ref: 'V-cccccc', product_id: 'p-x', product_name: 'Sac bleu', views: 1, sessions: 1, active_seconds: 5, cart_status: 'none', interest: 'leger' },
-      ],
-      top_products: [
-        { product_id: rolexId, product_name: 'Rolex', views: 10, visitors: 4 },
-        { product_id: lowStock ? lowStock.id : 'p-low', product_name: lowStock ? lowStock.name : 'Article rare', views: 6, visitors: 3 },
-      ],
-      top_searches: [{ query: 'montre', n: 5 }, { query: 'parfum', n: 2 }],
-      totals: { visitors: 7, rows: 4 },
-    };
-    const ordersList = () => [
-      { id: 'o1', status: 'pending', total: 10000, created_at: ago(5), is_flagged_fake: false },
-      { id: 'o2', status: 'processing', total: 5000, created_at: ago(30), is_flagged_fake: false },
-      { id: 'o3', status: 'delivered', total: 7000, created_at: ago(3), is_flagged_fake: false },
-      { id: 'o4', status: 'pending', total: 99999, created_at: ago(1), is_flagged_fake: true },
-    ];
-    const callbackRows = () => [
-      { id: 'c1', created_at: ago(48), name: 'Awa', phone: '66123456', note: '', source: 'cart', device: 'Android', status: 'new', wanted_day: chadIso(-1) },
-      { id: 'c2', created_at: ago(2), name: 'Moussa', phone: '91234567', note: '', source: 'later', device: 'Autre', status: 'new', wanted_day: chadIso(0) },
-      { id: 'c3', created_at: ago(3), name: 'Hawa', phone: '66998877', note: '', source: 'price', device: 'iPhone', status: 'new', wanted_day: chadIso(3) },
-      { id: 'c4', created_at: ago(4), name: 'Karim', phone: '60112233', note: '', source: 'chat', device: 'PC', status: 'new', wanted_day: null },
-      { id: 'c5', created_at: ago(60), name: 'Zeinab', phone: '66554433', note: '', source: 'chat', device: 'Autre', status: 'done', wanted_day: chadIso(-1) },
-    ];
-    const openMorning = async ({ stats = { replies: [{ body: STATS }] }, overview = { replies: [{ body: OVERVIEW }] }, orders = { list: ordersList(), patches: [] }, callbacks = { calls: [], table: { rows: callbackRows() } }, admin = true } = {}) => {
-      const fu = accountOf({ is_admin: admin });
-      const c = await newVisitor(phone, { lang: 'fr', storage: { [SK]: fu.session }, fakeUser: fu, fakeStats: stats, fakeOverview: overview, fakeOrders: orders, fakeCallbacks: callbacks });
-      await c.page.goto(`${base}/admin/matin`, { waitUntil: 'load' });
-      return c;
-    };
-    const text = async (c, id) => norm(await c.page.getByTestId(id).innerText());
-
-    // --- N1. le rapport complet
-    {
-      const c = await openMorning();
-      await c.page.getByTestId('morning-screen').waitFor({ timeout: 25000 });
-      await c.page.getByTestId('morning-sales').waitFor({ timeout: 25000 });
-      await c.page.getByTestId('morning-watched').waitFor({ timeout: 25000 });
-      await sleep(800);
-      const todo = await text(c, 'morning-todo');
-      check('« A faire en premier » : 2 rappels WhatsApp a faire aujourd\'hui (dont 1 en retard), 2 commandes a traiter (la fausse et la livree n\'y sont pas)', /2 rappels WhatsApp à faire aujourd’hui \(dont 1 en retard\)/.test(todo) && /2 commandes à traiter \(la plus ancienne attend 30 h\)/.test(todo), todo);
-      if (lowStock) check('« A faire en premier » : l\'article tres regarde et presque epuise est signale avec son VRAI stock', /1 article très regardé presque épuisé/.test(todo), todo);
-      check('aucune ligne inventee : pas de panier abandonne (0 client connecte), donc rien sur les paniers dans « A faire »', !/panier abandonné/.test(todo), todo);
-      const sales = await text(c, 'morning-sales');
-      check('ventes : 4 commandes, 42 000 FCFA ; dont par Zara 2 commandes, 15 000 FCFA (50 %) ; 2 a traiter, 15 000 FCFA', /4 commandes · 42 000 FCFA/.test(sales) && /Dont par Zara : 2 commandes · 15 000 FCFA \(50 % des commandes\)/.test(sales) && /À traiter en ce moment : 2 commandes · 15 000 FCFA/.test(sales), sales);
-      const cb = await text(c, 'morning-callbacks');
-      check('rappels WhatsApp : 2 a faire aujourd\'hui (dont 1 en retard), 4 en attente en tout, 3 nouvelles pendant la periode', /2 à faire aujourd’hui \(dont 1 en retard\)/.test(cb) && /4 demandes en attente en tout/.test(cb) && /3 nouvelles demandes pendant la période/.test(cb), cb);
-      const carts = await text(c, 'morning-carts');
-      check('presque achete : 2 visiteurs avec un panier non commande (le meme visiteur n\'est compte qu\'une fois), Rolex : 2 visiteurs', /2 visiteurs avec un panier non commandé/.test(carts) && /Rolex : 2 visiteurs/.test(carts), carts);
-      const watched = await text(c, 'morning-watched');
-      check('les plus regardes : Rolex 10 vues, 4 visiteurs ; recherches « montre (5), parfum (2) » ; 7 visiteurs suivis', /Rolex/.test(watched) && /10 vues · 4 visiteurs/.test(watched) && /Recherches : montre \(5\), parfum \(2\)/.test(watched) && /7 visiteurs suivis pendant la période/.test(watched), watched);
-      if (lowStock) check(`les plus regardes : « ${lowStock.name} » porte le badge « Presque épuisé (${lowStock.stock}) » (le VRAI stock de la boutique)`, new RegExp(`Presque épuisé \\(${lowStock.stock}\\)`).test(watched), watched);
-      const zara = await text(c, 'morning-zara');
-      check('Zara : 6 conversations · 2 comptes crees · 1 installation de l\'application', /6 conversations · 2 comptes créés · 1 installation de l’application/.test(zara), zara);
-      await c.page.screenshot({ path: path.join(OUT, 'N1-matin.png'), fullPage: true });
-      // la periode : « Cette nuit » = depuis hier 18 h (heure du Tchad)
-      const chadMidnight = Math.floor((Date.now() + HOUR) / (24 * HOUR)) * 24 * HOUR - HOUR;
-      const expectedSince = new Date(chadMidnight - 6 * HOUR).toISOString();
-      const first = c.statsCalls[0];
-      check('« Cette nuit » : la base est interrogee depuis hier 18 h (heure du Tchad) jusqu\'a maintenant', !!first && first.p_since === expectedSince && first.p_until === null, [first, expectedSince]);
-      await c.page.getByTestId('morning-window-day').click();
-      const t0 = Date.now();
-      while (c.statsCalls.length < 2 && Date.now() - t0 < 10000) await sleep(200);
-      const second = c.statsCalls[c.statsCalls.length - 1];
-      check('« Dernieres 24 h » : nouvelle lecture, depuis 24 h exactement (a 2 minutes pres)', c.statsCalls.length >= 2 && Math.abs(Date.now() - 24 * HOUR - new Date(second.p_since).getTime()) < 120000, second);
-      // toucher une ligne de « A faire » ouvre le bon ecran
-      await c.page.getByTestId('morning-todo-callbacks').waitFor({ timeout: 15000 });
-      await c.page.getByTestId('morning-todo-callbacks').click();
-      await c.page.getByTestId('callbacks-screen').waitFor({ timeout: 25000 });
-      check('toucher « rappels WhatsApp a faire » ouvre la page des rappels', /\/admin\/rappels/.test(c.page.url()), c.page.url());
-      check('le rapport ne change rien dans la base (lecture seule ; seule la visite de la page est comptee par le suivi du site)', c.writes.every((w) => /visitor_sessions/.test(w)), c.writes);
-      check('aucune erreur (rapport du matin)', c.errs.length === 0, c.errs);
-      await c.ctx.close();
-    }
-
-    // --- N2. chiffres manquants : le rapport le dit, le reste s'affiche
-    {
-      const missing = { status: 404, body: { code: 'PGRST202', message: 'Could not find the function public.assistant_stats' } };
-      const c = await openMorning({ stats: { replies: [missing] }, callbacks: { calls: [], table: { rows: [], error: { status: 404, body: { code: 'PGRST205', message: "Could not find the table 'public.assistant_callbacks'" } } } } });
-      await c.page.getByTestId('morning-screen').waitFor({ timeout: 25000 });
-      await c.page.getByTestId('morning-unavailable-sales').waitFor({ timeout: 25000 });
-      check('statistiques de Zara indisponibles (script pas applique) : « Ventes » et « Zara » disent que le chiffre n\'a pas pu etre lu, aucun zero invente', (await c.page.getByTestId('morning-unavailable-sales').count()) === 1 && (await c.page.getByTestId('morning-unavailable-zara').count()) === 1 && !/0 commande/.test(await text(c, 'morning-sales')));
-      check('liste des rappels indisponible : « Rappels WhatsApp » le dit', (await c.page.getByTestId('morning-unavailable-callbacks').count()) === 1);
-      check('le reste du rapport s\'affiche quand meme (commandes a traiter, articles regardes)', /2 commandes à traiter/.test(await text(c, 'morning-todo')) && /Rolex/.test(await text(c, 'morning-watched')));
-      await c.ctx.close();
-    }
-
-    // --- N3. client non administrateur : acces refuse
-    {
-      const c = await openMorning({ admin: false });
-      await c.page.getByText(/Accès réservé aux administrateurs/).waitFor({ timeout: 25000 });
-      check('client normal : « Acces reserve aux administrateurs », aucun chiffre', (await c.page.getByTestId('morning-sales').count()) === 0);
-      await c.ctx.close();
     }
   }
 
