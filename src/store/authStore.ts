@@ -9,6 +9,7 @@ import type { ProfileChanges } from '../lib/profileEdit';
 import { clearIntent, readIntent } from '../lib/assistantAttribution';
 import { isMissingColumn } from '../lib/dbErrors';
 import { loginEmailFor, phoneLoginEmail } from '../lib/phoneAuth';
+import { forgetSessionOnly, sessionShouldEnd } from '../lib/rememberLogin';
 
 export interface SignUpDetails {
   fullName: string;
@@ -146,6 +147,11 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 
   init: async () => {
     await consumeOAuthHashSession();
+    // connecté sans « Se souvenir de mon mot de passe », et le navigateur a été fermé depuis
+    if (sessionShouldEnd()) {
+      await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+      forgetSessionOnly();
+    }
     const { data } = await supabase.auth.getSession();
     if (data.session) {
       await get().refreshProfile();
