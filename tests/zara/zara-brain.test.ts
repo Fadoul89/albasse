@@ -15,6 +15,7 @@ import * as bo from '../../src/lib/browsingOverview.ts';
 import * as oc from '../../src/lib/assistantOccasions.ts';
 import * as sa from '../../src/lib/assistantSales.ts';
 import * as ps from '../../src/lib/assistantPersona.ts';
+import * as fb from '../../src/lib/facebookShare.ts';
 import { isMissingColumn } from '../../src/lib/dbErrors.ts';
 
 const KEY = process.env.SUPABASE_ANON_KEY!;
@@ -1235,6 +1236,24 @@ async function main() {
     ok('le metier valorise sans rien supposer : la phrase de reponse au metier ne parle ni de prix, ni de budget, ni d\'argent, et pose la question du style', [fr.persona.jobAck.pro, fr.persona.jobAck.student].every((t) => !/budget|prix|argent|riche|moyens|salaire/i.test(t.replace('petit prix', '')) && /élégant/.test(t)) && /\?/.test(fr.persona.jobAck.pro));
     ok('loyaute : les points affiches viennent du compte (parametre), le grade suivant seulement s\'il reste des points a gagner', /Vos points : 30/.test(fr.persona.loyal.points(30, 'argent', 20, 'or')) && /20 points pour le grade Or/.test(fr.persona.loyal.points(30, 'argent', 20, 'or')) && !/pour le grade/.test(fr.persona.loyal.points(100, 'diamond', 0, null)) && /Diamond/.test(fr.persona.loyal.points(100, 'diamond', 0, null)), [fr.persona.loyal.points(30, 'argent', 20, 'or'), fr.persona.loyal.points(100, 'diamond', 0, null)]);
     ok('comparer : le texte donne le prix, les couleurs, les tailles et l\'ecart exact ; une seule phrase « le plus accessible »', /Article : 12 500 FCFA · 2 couleurs/.test(fr.persona.compare.line('Article', '12 500 FCFA', ['2 couleurs'])) && /2 500 FCFA de moins/.test(fr.persona.compare.cheaper('Article', '2 500 FCFA')) && fr.persona.compare.colors(1) === '1 couleur' && fr.persona.compare.colors(3) === '3 couleurs');
+  }
+
+  {
+    console.log('\n== Partage Facebook d\'une fiche produit : l\'application Facebook sur telephone, pas le navigateur');
+    const page = 'https://www.albasseshopping.com/produit/rolex-or?ref=a&b=1';
+    const web = fb.facebookSharerUrl(page);
+    ok('la page de partage Facebook contient le lien de l\'article (encode une fois)', web === 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(page), web);
+    const android = fb.facebookShareTarget(page, 'android');
+    const m1 = /^intent:\/\/facewebmodal\/f\?href=([^#]+)#Intent;scheme=fb;package=com\.facebook\.katana;S\.browser_fallback_url=([^;]+);end$/.exec(android.url);
+    ok('Android (Chrome) : ouverture de l\'application Facebook (fb://facewebmodal), page de partage du site seulement sans l\'application', android.kind === 'intent' && !!m1 && decodeURIComponent(m1[1]) === web && decodeURIComponent(m1[2]) === web, android);
+    const app = fb.facebookShareTarget(page, 'android-app');
+    ok('Android dans l\'application Albasse : fb:// d\'abord, puis la page de partage si Facebook ne s\'ouvre pas', app.kind === 'app' && app.url === 'fb://facewebmodal/f?href=' + encodeURIComponent(web) && app.fallback === web, app);
+    ok('le lien de l\'article arrive intact dans l\'application Facebook (href decode -> u decode)', new URL(decodeURIComponent(app.url.split('href=')[1])).searchParams.get('u') === page);
+    const ios = fb.facebookShareTarget(page, 'ios');
+    ok('iPhone : le lien facebook.com touche (lien universel : l\'application Facebook s\'ouvre si elle est installee)', ios.kind === 'link' && ios.url === web, ios);
+    const desk = fb.facebookShareTarget(page, 'desktop');
+    ok('ordinateur : la page de partage dans un nouvel onglet (comme avant)', desk.kind === 'tab' && desk.url === web, desk);
+    ok('sans navigateur (tests) : appareil « ordinateur »', fb.currentFacebookDevice() === 'desktop');
   }
 
   console.log('\n' + (failures === 0 ? 'TOUT EST BON' : `${failures} ECHEC(S)`));

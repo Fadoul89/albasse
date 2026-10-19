@@ -24,6 +24,7 @@ import { useToastStore } from '../store/toastStore';
 import { useAuthStore } from '../store/authStore';
 import { trackProductView, trackAddToCart } from '../lib/analytics';
 import { endProductView, enrichProductMeta, startProductView, trackVariant } from '../lib/browsingTracker';
+import { facebookSharerUrl, shareOnFacebook } from '../lib/facebookShare';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { StarRating } from '../components/StarRating';
 import { GoldButton } from '../components/GoldButton';
@@ -189,8 +190,10 @@ export function ProductScreen({ route }: Props) {
     Linking.openURL(`https://wa.me/${ORDER_WHATSAPP}?text=${encodeURIComponent(lines.join('\n'))}`);
   };
 
+  // sur téléphone : l'application Facebook (pas le navigateur) ; la page de partage du site Facebook seulement sans l'application
   const shareToFacebook = () => {
-    Linking.openURL(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(getShareUrl())}`);
+    if (Platform.OS === 'web') shareOnFacebook(getShareUrl());
+    else Linking.openURL(facebookSharerUrl(getShareUrl()));
   };
 
   const handleShare = async () => {

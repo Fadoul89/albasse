@@ -13,7 +13,7 @@ const fs = require('fs');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const dist = process.argv[2] || '../../dist';
 const port = process.argv[3] || '4333';
-const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJTOFBCDE').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNTOFBCDE').toUpperCase();
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
 fs.mkdirSync(OUT, { recursive: true });
 const KEY = process.env.SUPABASE_ANON_KEY;
@@ -3279,6 +3279,88 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   }
 
   // =============================================== H. LE BOUTON DE ZARA : AU MILIEU, VIBRATION ET LUMIERE ===============================================
+  if (PARTS.includes('N')) {
+    console.log('\n== N. bouton « Facebook » d\'une fiche produit : l\'application Facebook sur telephone, pas le navigateur');
+    const prod = (await get('products?select=slug,name&is_active=eq.true&stock=gt.0&order=created_at.desc&limit=1'))[0];
+    const sharer = (u) => 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(u);
+    const pageUrl = `https://www.albasseshopping.com/produit/${prod.slug}`;
+    // les liens que la page fait « toucher » sont notes (et pas suivis) : on voit ce que le telephone recevrait
+    const catchLinks = () => {
+      window.__fbNav = [];
+      document.addEventListener('click', (e) => {
+        const a = e.target && e.target.closest ? e.target.closest('a') : null;
+        if (a && /^(intent|fb):|facebook\.com/.test(a.getAttribute('href') || '')) {
+          window.__fbNav.push(a.getAttribute('href'));
+          e.preventDefault();
+        }
+      }, true);
+    };
+    const openProduct = async (v) => {
+      await v.page.goto(`http://localhost:${port}/produit/${prod.slug}`, { waitUntil: 'load' });
+      await sleep(2500);
+      await v.page.keyboard.press('Escape');
+      await v.page.getByText('📘 Facebook').first().waitFor({ timeout: 15000 });
+    };
+    const shareOf = async (v) => (await v.page.evaluate(() => window.__fbNav || []));
+    // Android (Chrome)
+    {
+      const v = await newVisitor(phone, { initScripts: [catchLinks] });
+      await openProduct(v);
+      await v.page.getByText('📘 Facebook').first().click();
+      await sleep(600);
+      const nav = await shareOf(v);
+      const m = /^intent:\/\/facewebmodal\/f\?href=([^#]+)#Intent;scheme=fb;package=com\.facebook\.katana;S\.browser_fallback_url=([^;]+);end$/.exec(nav[0] || '');
+      check('Android : le bouton ouvre l\'application Facebook (et la page de partage seulement si l\'application manque)', nav.length === 1 && !!m && decodeURIComponent(m[1]) === sharer(pageUrl) && decodeURIComponent(m[2]) === sharer(pageUrl), nav);
+      check('Android : la fiche produit reste affichee (pas d\'onglet du navigateur ouvert)', v.ctx.pages().length === 1 && v.page.url().includes(`/produit/${prod.slug}`), v.ctx.pages().map((p) => p.url()));
+      check('aucune erreur (Facebook, Android)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+    // Android, dans l'application Albasse : fb:// d'abord ; sans reponse de Facebook, la page de partage 1,5 s plus tard
+    {
+      const v = await newVisitor(phone, { storage: { albasse_app_shell: '1' }, initScripts: [catchLinks] });
+      await openProduct(v);
+      await v.page.getByText('📘 Facebook').first().click();
+      await sleep(400);
+      const first = await shareOf(v);
+      check('application Albasse : l\'application Facebook est appelee tout de suite (fb://facewebmodal)', first.length === 1 && first[0] === 'fb://facewebmodal/f?href=' + encodeURIComponent(sharer(pageUrl)), first);
+      await sleep(1700);
+      const after = await shareOf(v);
+      check('application Albasse : Facebook ne s\'est pas ouvert -> la page de partage ensuite (une seule fois)', after.length === 2 && after[1] === sharer(pageUrl), after);
+      // Facebook s'ouvre (la page perd la main) : pas de page de partage en plus
+      await v.page.getByText('📘 Facebook').first().click();
+      await sleep(300);
+      await v.page.evaluate(() => window.dispatchEvent(new Event('blur')));
+      await sleep(1800);
+      const opened = await shareOf(v);
+      check('application Albasse : si Facebook s\'ouvre, rien d\'autre ne s\'ouvre', opened.length === 3 && opened[2].startsWith('fb://'), opened);
+      check('aucune erreur (Facebook, application Albasse)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+    // iPhone : le lien facebook.com (l'iPhone l'ouvre dans l'application Facebook quand elle est installee)
+    {
+      const v = await newVisitor({ ...devices['iPhone 13'], viewport: { width: 390, height: 800 } }, { initScripts: [catchLinks] });
+      await openProduct(v);
+      await v.page.getByText('📘 Facebook').first().click();
+      await sleep(600);
+      const nav = await shareOf(v);
+      check('iPhone : le lien Facebook est touche dans la page (lien universel vers l\'application Facebook)', nav.length === 1 && nav[0] === sharer(pageUrl), nav);
+      check('aucune erreur (Facebook, iPhone)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+    // ordinateur : un nouvel onglet avec la page de partage (comme avant)
+    {
+      const v = await newVisitor({ viewport: { width: 1280, height: 800 } }, { initScripts: [catchLinks] });
+      await openProduct(v);
+      const asked = [];
+      v.ctx.on('request', (r) => { if (/facebook\.com/.test(r.url())) asked.push(r.url()); }); // le test ne laisse rien sortir : on note l'adresse demandee
+      const [popup] = await Promise.all([v.ctx.waitForEvent('page', { timeout: 10000 }), v.page.getByText('📘 Facebook').first().click()]);
+      await sleep(800);
+      check('ordinateur : la page de partage Facebook s\'ouvre dans un nouvel onglet', popup !== v.page && asked.includes(sharer(pageUrl)) && v.page.url().includes(`/produit/${prod.slug}`), { asked, page: v.page.url() });
+      check('aucune erreur (Facebook, ordinateur)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+  }
+
   if (PARTS.includes('J')) {
     console.log('\n== J. anciens boutons de Zara : ceux qui menent quelque part restent touchables, les reponses passees partent');
     const oldLabels = async (p) => (await panelOf(p).getByTestId('assistant-chip-old').allInnerTexts()).map((t) => t.trim());
