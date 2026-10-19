@@ -31,6 +31,57 @@ if (typeof window !== 'undefined') {
   });
 }
 
+// Le téléphone a-t-il déjà Albasse Shopping ? Retenu sur l'appareil quand le site tourne en application (raccourci ouvert depuis
+// l'écran d'accueil), quand Chrome annonce l'installation (« appinstalled »), quand le visiteur accepte la boîte d'installation,
+// ou quand Chrome Android voit le raccourci déjà installé (manifest « related_applications »).
+const INSTALLED_KEY = 'albasse_app_installed';
+// posé par le suivi des installations (appInstallTracking) quand le visiteur a accepté la boîte d'installation
+const SHORTCUT_TRACKED_KEY = 'albasse_shortcut_install_tracked';
+
+export function rememberAppInstalled() {
+  try {
+    window.localStorage.setItem(INSTALLED_KEY, '1');
+  } catch {
+    // stockage bloqué : le bouton restera proposé
+  }
+}
+
+if (typeof window !== 'undefined') {
+  // installée (par le menu de Chrome ou un bouton du site) : l'ancienne invite gardée ne sert plus
+  window.addEventListener('appinstalled', () => {
+    window.__pwaInstallPrompt__ = undefined;
+    deferredPrompt = null;
+    rememberAppInstalled();
+  });
+  if (isRunningAsInstalledPwa()) rememberAppInstalled();
+  const nav = navigator as Navigator & { getInstalledRelatedApps?: () => Promise<unknown[]> };
+  nav
+    .getInstalledRelatedApps?.()
+    .then((apps) => {
+      if (Array.isArray(apps) && apps.length > 0) rememberAppInstalled();
+    })
+    .catch(() => {});
+}
+
+export function isAppInstalledOnDevice(): boolean {
+  if (typeof window === 'undefined') return false;
+  if (isRunningAsInstalledPwa()) return true;
+  // Chrome ne propose l'installation que si l'application n'est PAS installée : un ancien souvenir (désinstallée depuis) est oublié
+  if (getPrompt()) {
+    try {
+      window.localStorage.removeItem(INSTALLED_KEY);
+    } catch {
+      // ignore
+    }
+    return false;
+  }
+  try {
+    return window.localStorage.getItem(INSTALLED_KEY) === '1' || !!window.localStorage.getItem(SHORTCUT_TRACKED_KEY);
+  } catch {
+    return false;
+  }
+}
+
 function getPrompt(): BeforeInstallPromptEvent | null {
   if (typeof window === 'undefined') return null;
   return window.__pwaInstallPrompt__ ?? deferredPrompt ?? null;
@@ -70,6 +121,7 @@ export async function triggerPwaInstallPrompt(): Promise<'accepted' | 'dismissed
     const { outcome } = await promptEvent.userChoice;
     note(`choix dans la boîte de Chrome : ${outcome}`);
     lastOutcome = outcome;
+    if (outcome === 'accepted') rememberAppInstalled();
     return outcome;
   } catch (e) {
     note(`prompt() a échoué : ${describeError(e)}`);

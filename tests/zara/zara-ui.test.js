@@ -980,7 +980,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await ask(v.page, 'comment installer l’application sur mon téléphone', /Sur iPhone :/);
       const steps = await panelOf(v.page).getByText(/Sur iPhone :/).last().innerText();
       check('iPhone : Partager, puis « Sur l\'ecran d\'accueil », puis Ajouter (pas d\'installation native promise)', /Partager/.test(steps) && /Sur l’écran d’accueil/.test(steps) && /Ajouter/.test(steps) && !/Safari \(l’installation ne marche pas/.test(steps), steps);
-      check('iPhone : bouton tutoriel + menu', (await chipLabels(v.page)).join('|') === '🎬 Voir le tutoriel|🏠 Menu', await chipLabels(v.page));
+      check('iPhone : bouton tutoriel + « Oui, deja installee » + menu', (await chipLabels(v.page)).join('|') === '🎬 Voir le tutoriel|✅ Oui, déjà installée|🏠 Menu', await chipLabels(v.page));
       await chip(v.page, 'Voir le tutoriel').click();
       await v.page.locator('video').first().waitFor({ state: 'attached', timeout: 8000 });
       check('le tutoriel video existant de l\'iPhone s\'ouvre', (await v.page.locator('video').count()) >= 1);
@@ -1189,7 +1189,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const info = await img.evaluate((i) => ({ src: i.currentSrc || i.src, w: i.naturalWidth, h: i.naturalHeight, shownW: Math.round(i.getBoundingClientRect().width) }));
       check('iPhone : la photo « comment installer » est envoyee et se charge (1120 x 1960, a la bonne taille dans la bulle)', /\/ios-installer-photo\.jpg$/.test(info.src) && info.w === 1120 && info.h === 1960 && info.shownW >= 200 && info.shownW <= 300, info);
       const txt = await panelOf(v.page).getByText(/Sur iPhone :/).last().innerText();
-      check('iPhone : les etapes ecrites + « Touchez-la pour l\'agrandir » + boutons tutoriel video et menu', /Partager/.test(txt) && /Touchez-la pour l’agrandir/.test(txt) && (await chipLabels(v.page)).join('|') === '🎬 Voir le tutoriel|🏠 Menu', { txt, chips: await chipLabels(v.page) });
+      check('iPhone : les etapes ecrites + « Touchez-la pour l\'agrandir » + boutons tutoriel video et menu', /Partager/.test(txt) && /Touchez-la pour l’agrandir/.test(txt) && (await chipLabels(v.page)).join('|') === '🎬 Voir le tutoriel|✅ Oui, déjà installée|🏠 Menu', { txt, chips: await chipLabels(v.page) });
       check('la photo a un texte alternatif (lecteurs d\'ecran)', /Comment installer Albasse Shopping sur iPhone/.test((await photo.getAttribute('aria-label')) || ''));
       await v.page.screenshot({ path: path.join(OUT, 'P3-photo-iphone.png') });
       const [pop] = await Promise.all([v.ctx.waitForEvent('page', { timeout: 10000 }), photo.click()]);
@@ -1200,6 +1200,13 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.page.getByRole('button', { name: FAB_NAME }).click();
       await sleep(1500);
       check('apres un rechargement : la conversation garde la photo', (await v.page.getByTestId('assistant-photo').count()) === 1);
+      // l'iPhone ne dit pas si l'application est la : le client le dit, et le bouton d'installation ne revient plus
+      await chip(v.page, 'Oui, déjà installée').first().click();
+      await waitText(v.page, /Vous faites déjà partie de la famille Albasse Shopping/);
+      await tap(v.page, 'Promotions', /promotion|promo|offre/i);
+      await sleep(2500);
+      const left = [...(await chipLabels(v.page)), ...(await panelOf(v.page).getByTestId('assistant-chip-old').allInnerTexts())];
+      check('iPhone, « Oui, deja installee » apres les etapes : plus aucun bouton d\'installation (articles, anciens messages)', left.every((l) => !/Voir comment installer|Voir le tutoriel|Oui, déjà installée/.test(l)) && left.includes('🏠 Menu'), left);
       check('aucune erreur (iPhone, photo)', v.errs.length === 0, v.errs);
       await v.ctx.close();
     }
@@ -1260,6 +1267,59 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?/);
       await ask(v.page, 'installer', /trois points/);
       check("Android sans invite disponible : aucun bouton « Installer », seulement l'explication a la demande", (await chipLabels(v.page)).every((l) => !/Installer/.test(l)), await chipLabels(v.page));
+      await v.ctx.close();
+    }
+    // deja installee sur ce telephone, visite dans Chrome (souvenir sur l'appareil) : aucun bouton « Installer », ni chez Zara ni sur le site
+    {
+      const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali', albasse_app_installed: '1' } });
+      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      check('deja installee : pas de bandeau « Installer » du site', (await v.page.getByText("Albasse Shopping, l'app").count()) === 0);
+      await v.page.keyboard.press('Escape');
+      await v.page.getByRole('button', { name: FAB_NAME }).click();
+      await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?/);
+      check('deja installee : pas de bouton « Installer » dans le menu de Zara', (await chipLabels(v.page)).every((l) => !/Installer|Voir comment installer/.test(l)), await chipLabels(v.page));
+      await tap(v.page, 'Promotions', /promotion|promo|offre/i);
+      await sleep(2500);
+      const all = [...(await chipLabels(v.page)), ...(await panelOf(v.page).getByTestId('assistant-chip-old').allInnerTexts())];
+      check('deja installee : pas de bouton « Installer » sous les articles proposes, ni l\'astuce', all.every((l) => !/Installer|Voir comment installer/.test(l)) && (await panelOf(v.page).getByText(/Astuce : installez/).count()) === 0, all);
+      await ask(v.page, 'conseil', /Je suis là pour vous conseiller\. Que cherchez-vous \?/);
+      await sleep(2500);
+      check('deja installee : pas de question « Avez-vous deja installe l\'application ? »', (await panelOf(v.page).getByText(/Avez-vous déjà installé l’application/).count()) === 0);
+      await ask(v.page, 'installer l’application', /est déjà installé sur votre téléphone/);
+      check('deja installee : « comment installer ? » -> Zara dit que c\'est deja installe', true);
+      check('aucune erreur (deja installee, souvenir)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+    // une installation acceptee autrefois (suivi des installations du site) compte aussi
+    {
+      const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali', albasse_shortcut_install_tracked: 'abc-123' } });
+      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await v.page.keyboard.press('Escape');
+      await v.page.getByRole('button', { name: FAB_NAME }).click();
+      await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?/);
+      await ask(v.page, 'installer', /est déjà installé sur votre téléphone/);
+      check('installation acceptee autrefois : Zara sait que c\'est installe, aucun bouton', (await chipLabels(v.page)).every((l) => !/Installer/.test(l)), await chipLabels(v.page));
+      await v.ctx.close();
+    }
+    // souvenir perime (desinstallee depuis) : Chrome propose de nouveau l'installation -> le bouton revient
+    {
+      const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali', albasse_app_installed: '1' } });
+      await v.ctx.addInitScript(() => { window.__pwaInstallPrompt__ = { prompt: async () => {}, userChoice: Promise.resolve({ outcome: 'accepted' }) }; });
+      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await v.page.keyboard.press('Escape');
+      await v.page.getByRole('button', { name: FAB_NAME }).click();
+      await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?/);
+      check('desinstallee depuis (Chrome propose l\'installation) : le bouton « Installer » revient et le vieux souvenir est oublie', (await chipLabels(v.page)).includes('📲 Installer Albasse Shopping') && (await v.page.evaluate(() => localStorage.getItem('albasse_app_installed'))) === null, await chipLabels(v.page));
+      // Chrome annonce l'installation (menu de Chrome) : le bouton part tout de suite
+      await v.page.evaluate(() => window.dispatchEvent(new Event('appinstalled')));
+      await tap(v.page, 'Promotions', /promotion|promo|offre/i);
+      await sleep(2500);
+      const after = [...(await chipLabels(v.page)), ...(await panelOf(v.page).getByTestId('assistant-chip-old').allInnerTexts())];
+      check('« appinstalled » de Chrome : plus de bouton « Installer » (ni sous les articles ni sur les anciens messages), souvenir enregistre', after.every((l) => !/Installer/.test(l)) && (await v.page.evaluate(() => localStorage.getItem('albasse_app_installed'))) === '1', after);
+      check('aucune erreur (souvenir perime, appinstalled)', v.errs.length === 0, v.errs);
       await v.ctx.close();
     }
     // deja installe (mode application) et ordinateur

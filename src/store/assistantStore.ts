@@ -86,6 +86,7 @@ import {
   installNotReadyMessage,
   isAndroidDevice,
   isIosDevice,
+  isAppInstalledOnDevice,
   isPwaInstallPromptAvailable,
   isRunningAsInstalledPwa,
   triggerPwaInstallPrompt,
@@ -1942,7 +1943,9 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     if (!record) return false;
     return record.outcome === 'accepted' || (record.outcome === 'dismissed' && Date.now() - Number(record.at) < INSTALL_PAUSE_MS);
   }
-  const alreadyInstalled = () => isRunningAsInstalledPwa() || isRunningInsideApp();
+  // déjà installée sur ce téléphone (application Albasse, raccourci ouvert depuis l'écran d'accueil, ou installation retenue) :
+  // plus aucun bouton ni question d'installation
+  const alreadyInstalled = () => isRunningAsInstalledPwa() || isRunningInsideApp() || isAppInstalledOnDevice();
   // L'installation d'iPhone ne marche que depuis Safari (pas depuis Chrome, Facebook, Instagram...).
   const isSafariIos = () => !/CriOS|FxiOS|EdgiOS|OPiOS|FBAN|FBAV|Instagram|Line\//i.test(navigator.userAgent);
   const installChips = (ios: boolean): ChatAction[] => [
@@ -1969,7 +1972,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       if (!OLD_CHIP_KINDS.has(a.kind)) return false;
       if (a.kind === 'say') return !CONTEXT_SAYS.has(a.payload ?? '');
       if (a.kind === 'register' || a.kind === 'login') return guest;
-      if (a.kind === 'install' || a.kind === 'installHelp') return (installOk ??= installMenuChip() !== null);
+      if (a.kind === 'install' || a.kind === 'installHelp' || a.kind === 'iosGuide') return (installOk ??= installMenuChip() !== null);
       return true;
     });
   }
@@ -2019,7 +2022,8 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     const image: ChatImage | undefined = Platform.OS === 'web' ? { ...IOS_INSTALL_PHOTO, alt: T().install.photoAlt } : undefined;
     const text = `${T().install.iosSteps(isSafariIos())}${image ? `\n\n${T().install.photoHint}` : ''}`;
     logAssistantEvent('install_ios_guide');
-    await say(text, { image, actions: [{ label: T().chip.tutorial, kind: 'iosGuide' }, menuBtn()] });
+    // l'iPhone ne dit pas si l'application est déjà là : le client peut le dire, et le bouton d'installation ne revient plus
+    await say(text, { image, actions: [{ label: T().chip.tutorial, kind: 'iosGuide' }, { label: T().chip.alreadyInstalled, kind: 'installYes' }, menuBtn()] });
   }
 
   // Appelée directement par le toucher du client : la boîte d'installation de Chrome n'apparaît qu'après un geste volontaire.

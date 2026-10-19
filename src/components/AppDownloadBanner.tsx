@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, fonts, radius, spacing } from '../theme';
 import { trackAppDownloadClick } from '../lib/appDownloadTracking';
 import { isRunningInsideApp } from '../lib/runningInApp';
-import { installNotReadyMessage, isIosDevice, isRunningAsInstalledPwa, triggerPwaInstallPrompt } from '../lib/pwaInstallPrompt';
+import { installNotReadyMessage, isAppInstalledOnDevice, isIosDevice, isRunningAsInstalledPwa, triggerPwaInstallPrompt } from '../lib/pwaInstallPrompt';
 import { subscribeToWebPush } from '../lib/webPushSubscription';
 import { trackShortcutInstallIfNeeded } from '../lib/appInstallTracking';
 import { useInstallGuideStore } from '../store/installGuideStore';
@@ -13,7 +13,8 @@ const DISMISS_KEY = 'albasse_app_banner_dismissed';
 
 function isEligibleWeb() {
   if (Platform.OS !== 'web' || typeof navigator === 'undefined') return false;
-  if (isRunningInsideApp() || isRunningAsInstalledPwa()) return false;
+  // déjà installée sur ce téléphone : pas de bouton « Installer »
+  if (isRunningInsideApp() || isRunningAsInstalledPwa() || isAppInstalledOnDevice()) return false;
   return true;
 }
 

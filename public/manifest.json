@@ -7,6 +7,13 @@
   "background_color": "#072469",
   "theme_color": "#072469",
   "orientation": "portrait",
+  "related_applications": [
+    {
+      "platform": "webapp",
+      "url": "https://www.albasseshopping.com/manifest.json"
+    }
+  ],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/icon-192.png",
