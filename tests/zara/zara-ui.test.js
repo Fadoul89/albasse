@@ -13,7 +13,7 @@ const fs = require('fs');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const dist = process.argv[2] || '../../dist';
 const port = process.argv[3] || '4333';
-const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQITOFBCDE').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI1TOFBCDE').toUpperCase();
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
 fs.mkdirSync(OUT, { recursive: true });
 const KEY = process.env.SUPABASE_ANON_KEY;
@@ -43,7 +43,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   // rank : rang du jour renvoye par la fonction de la base (null : fonction pas installee). fakeUser : compte simule (token : reponse a une connexion par mot de passe ; delay : lenteur du profil en ms). fakeOrders : { list: [...], patches: [] } = fausse table des commandes.
   // zaraInstall : par defaut, le visiteur a deja repondu « Plus tard » a l'installation (Zara ne la propose pas) ; null = vrai nouveau
   // visiteur, pour les parties qui testent l'installation
-  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, fakeSales = null, fakeCallbacks = null, fakePushes = null, initScripts = [], zaraInstall = 'dismissed' } = {}) {
+  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, fakeSales = null, fakeCallbacks = null, fakePushes = null, fakeStore = null, initScripts = [], zaraInstall = 'dismissed' } = {}) {
     const ctx = await b.newContext(opts);
     if (cookies) await ctx.addCookies(cookies);
     if (lang) storage = { albasse_zara_lang: lang, ...storage };
@@ -182,6 +182,34 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         if (u.pathname === '/rest/v1/rpc/record_push_click' && m === 'POST') {
           pushClicks.push(JSON.parse(req.postData() || '{}'));
           return json(route, true);
+        }
+        // reglages de la boutique : la vraie ligne, avec une fausse colonne whatsapp_order_enabled. fakeStore.waOrder = sa valeur
+        // (undefined = colonne absente : script add-whatsapp-order-toggle.sql pas lance) ; patches = ce que la base aurait recu
+        if (fakeStore && u.pathname === '/rest/v1/store_settings') {
+          if (m === 'GET') {
+            (fakeStore.gets = fakeStore.gets || []).push({ select: u.searchParams.get('select'), waOrder: fakeStore.waOrder });
+            const fix = (row) => {
+              const r = { ...row };
+              if (fakeStore.waOrder === undefined) delete r.whatsapp_order_enabled;
+              else if (/^\*$|whatsapp_order_enabled/.test(u.searchParams.get('select') || '*')) r.whatsapp_order_enabled = fakeStore.waOrder;
+              return r;
+            };
+            const wait = fakeStore.delay ? sleep(fakeStore.delay) : Promise.resolve();
+            // la vraie ligne, lue avec la cle publique (la base refuserait la fausse session de l'admin)
+            return wait.then(() => route.fetch({ headers: { ...req.headers(), apikey: KEY, authorization: `Bearer ${KEY}` } })).then(async (res) => {
+              const data = await res.json();
+              return json(route, Array.isArray(data) ? data.map(fix) : fix(data), res.status());
+            });
+          }
+          if (m === 'PATCH') {
+            const body = JSON.parse(req.postData() || '{}');
+            (fakeStore.patches = fakeStore.patches || []).push(body);
+            if ('whatsapp_order_enabled' in body) {
+              if (fakeStore.waOrder === undefined) return json(route, { code: 'PGRST204', message: "Could not find the 'whatsapp_order_enabled' column of 'store_settings' in the schema cache" }, 400);
+              fakeStore.waOrder = body.whatsapp_order_enabled;
+            }
+            return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } });
+          }
         }
         // les promotions publiees en vrai sur le site (fenetre « offre du jour ») ne doivent pas couvrir les pages pendant les tests
         if (u.pathname === '/rest/v1/smart_promotions' && m === 'GET') return json(route, []);
@@ -3571,6 +3599,108 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const c = await openAdmin({ rows: rowsOf(), products }, false);
       await sleep(4000);
       check('client non administrateur : « Acces reserve aux administrateurs », aucune notification visible', (await c.page.getByText('Accès réservé aux administrateurs.').count()) === 1 && (await c.page.getByTestId('scheduled-pushes').count()) === 0);
+      await c.ctx.close();
+    }
+  }
+
+  if (PARTS.includes('1')) {
+    console.log('\n== 1. bouton « Commander sur WhatsApp » des articles : l\'admin le cache ou le remet (page Produits, fausse base)');
+    const uid = '33333333-3333-4333-8333-333333333333';
+    const JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzMzMzMzMzMy0zMzMzLTQzMzMtODMzMy0zMzMzMzMzMzMzMzMiLCJleHAiOjQxMDI0NDQ4MDAsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.c2ln';
+    const accountOf = ({ is_admin = true } = {}) => {
+      const auth = { id: uid, aud: 'authenticated', role: 'authenticated', email: 'admin@example.com', app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' };
+      const token = { access_token: JWT, refresh_token: 'fake-refresh', token_type: 'bearer', expires_in: 3600, expires_at: 4102444800, user: auth };
+      return { auth, token, session: JSON.stringify(token), profile: { id: uid, email: 'admin@example.com', full_name: 'Admin Albasse', phone: '66123456', banned: false, role: 'admin', is_admin } };
+    };
+    const SK = 'sb-xtitsmmccpkelxfjyqyh-auth-token';
+    const prod = (await get('products?select=slug,name&is_active=eq.true&stock=gt.0&order=created_at.desc&limit=1'))[0];
+    const waBtn = (pg) => pg.getByTestId('product-wa-order');
+    const openProduct = async (pg) => {
+      await pg.goto(`http://localhost:${port}/produit/${prod.slug}`, { waitUntil: 'load' });
+      await pg.getByText('Ajouter au panier').first().waitFor({ timeout: 25000 });
+      await sleep(1500);
+    };
+    // visiteur : le bouton suit le reglage (colonne absente = comme avant : visible)
+    for (const [waOrder, visible, what] of [[undefined, true, 'script SQL pas encore lance'], [true, true, 'active'], [false, false, 'desactive']]) {
+      const fs = { waOrder };
+      const v = await newVisitor(phone, { fakeStore: fs });
+      await openProduct(v.page);
+      const n = await waBtn(v.page).count();
+      const hint = await v.page.getByText('Sans créer de compte').count();
+      check(`visiteur, reglage ${what} : bouton « Commander sur WhatsApp » ${visible ? 'visible' : 'cache (et sa petite phrase aussi)'}`, visible ? n === 1 && hint === 1 : n === 0 && hint === 0, { n, hint });
+      if (!visible) {
+        check('desactive : le reste de la fiche est la (Ajouter au panier, partage WhatsApp et Facebook)',
+          (await v.page.getByText('Ajouter au panier').count()) > 0 && (await v.page.getByText('💬 WhatsApp').count()) > 0 && (await v.page.getByText('📘 Facebook').count()) > 0);
+      }
+      check(`aucune erreur (visiteur, ${what})`, v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+    // reglages lents : un bouton cache ne s'affiche pas un instant pendant le chargement
+    {
+      const fs = { waOrder: false, delay: 4000 };
+      const v = await newVisitor(phone, { fakeStore: fs });
+      await v.page.goto(`http://localhost:${port}/produit/${prod.slug}`, { waitUntil: 'load' });
+      let seen = 0;
+      for (let i = 0; i < 12; i++) {
+        seen += await waBtn(v.page).count();
+        await sleep(500);
+      }
+      check('reglages lents (desactive) : le bouton ne clignote jamais pendant le chargement', seen === 0, seen);
+      await v.ctx.close();
+    }
+    const statusText = async (pg) => (await pg.getByTestId('wa-order-status').innerText()).trim();
+    const openAdmin = async (fs, admin = true) => {
+      const fu = accountOf({ is_admin: admin });
+      const c = await newVisitor(phone, { lang: 'fr', storage: { [SK]: fu.session }, fakeUser: fu, fakeStore: fs });
+      await c.page.goto(`http://localhost:${port}/admin/produits`, { waitUntil: 'load' });
+      return c;
+    };
+    // l'admin desactive puis reactive
+    {
+      const fs = { waOrder: true, patches: [] };
+      const c = await openAdmin(fs);
+      await c.page.getByTestId('wa-order-toggle').waitFor({ timeout: 25000 });
+      await sleep(1500);
+      check('page Produits : l\'interrupteur est en haut, « Activé »', /Activé/.test(await statusText(c.page)), await statusText(c.page));
+      await c.page.getByTestId('wa-order-switch').click();
+      await c.page.getByText('🚫 WhatsApp désactivé').waitFor({ timeout: 10000 });
+      check('desactiver : la base recoit whatsapp_order_enabled = false', fs.patches.length === 1 && fs.patches[0].whatsapp_order_enabled === false && Object.keys(fs.patches[0]).length === 1, fs.patches);
+      check('desactiver : « Désactivé » en rouge et un message', /Désactivé/.test(await statusText(c.page)), await statusText(c.page));
+      await openProduct(c.page);
+      check('desactive : la fiche produit n\'a plus le bouton', (await waBtn(c.page).count()) === 0, fs.gets.map((g) => g.waOrder));
+      await c.page.goto(`http://localhost:${port}/admin/produits`, { waitUntil: 'load' });
+      await c.page.getByTestId('wa-order-toggle').waitFor({ timeout: 25000 });
+      await sleep(1500);
+      check('retour sur la page Produits : toujours « Désactivé »', /Désactivé/.test(await statusText(c.page)), await statusText(c.page));
+      await c.page.getByTestId('wa-order-switch').click();
+      await c.page.getByText('💬 WhatsApp activé').waitFor({ timeout: 10000 });
+      check('reactiver : la base recoit whatsapp_order_enabled = true', fs.patches.length === 2 && fs.patches[1].whatsapp_order_enabled === true, fs.patches);
+      check('reactiver : « Activé »', /Activé/.test(await statusText(c.page)), await statusText(c.page));
+      await openProduct(c.page);
+      check('reactive : le bouton revient sur la fiche produit', (await waBtn(c.page).count()) === 1);
+      check('aucune erreur (admin)', c.errs.length === 0, c.errs);
+      await c.ctx.close();
+    }
+    // script SQL pas encore lance : rien ne change, l'explication s'affiche
+    {
+      const fs = { waOrder: undefined, patches: [] };
+      const c = await openAdmin(fs);
+      await c.page.getByTestId('wa-order-toggle').waitFor({ timeout: 25000 });
+      await sleep(1500);
+      await c.page.getByTestId('wa-order-switch').click();
+      await c.page.getByText(/add-whatsapp-order-toggle\.sql/).waitFor({ timeout: 10000 });
+      await sleep(500);
+      check('colonne absente : message « Lancez d\'abord le script… » et l\'interrupteur reste « Activé »', /Activé/.test(await statusText(c.page)), await statusText(c.page));
+      const errs = c.errs.filter((e) => !/400|whatsapp_order_enabled|Failed to load resource/.test(String(e)));
+      check('aucune autre erreur (colonne absente)', errs.length === 0, c.errs);
+      await c.ctx.close();
+    }
+    // un client (pas admin) : la page Produits est refusee, pas d'interrupteur
+    {
+      const fs = { waOrder: true, patches: [] };
+      const c = await openAdmin(fs, false);
+      await c.page.getByText('Accès réservé aux administrateurs.').waitFor({ timeout: 25000 });
+      check('client non administrateur : pas d\'interrupteur', (await c.page.getByTestId('wa-order-toggle').count()) === 0 && fs.patches.length === 0);
       await c.ctx.close();
     }
   }
