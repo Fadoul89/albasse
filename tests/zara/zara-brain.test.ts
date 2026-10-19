@@ -14,6 +14,7 @@ import * as ai from '../../src/lib/assistantInterest.ts';
 import * as bo from '../../src/lib/browsingOverview.ts';
 import * as oc from '../../src/lib/assistantOccasions.ts';
 import * as sa from '../../src/lib/assistantSales.ts';
+import * as ps from '../../src/lib/assistantPersona.ts';
 import { isMissingColumn } from '../../src/lib/dbErrors.ts';
 
 const KEY = process.env.SUPABASE_ANON_KEY!;
@@ -523,7 +524,10 @@ async function main() {
     'checkout.placed': ['علي', '12345678'], 'checkout.totalToPay': [37500], 'checkout.payInitiated': ['Airtel Money', 'تم'], 'checkout.payUrl': ['https://pay.example.com'], 'checkout.payNumber': [37500, '60 60 51 51', 'Airtel Money'], 'checkout.payTeam': ['66123456', 'Airtel Money'], 'chip.useAddress': ['حي فرشا'],
     'cart.added': ['ساعة', ' (المقاس 41)', 2, 25000], 'cart.priceChanged': ['ساعة', '10 000 FCFA', '12 000 FCFA'], 'install.iosSteps': [false],
     'interest.sizesReply': ['حذاء', ['40', '41']], 'interest.colorsReply': ['حذاء', ['أسود'], ['40']], 'wholesale.prefill': ['عطر'],
-    'callback.confirm': ['علي', '66 12 34 56', 'ساعة', 'الخميس 22 أكتوبر'], 'callback.done': ['الخميس 22 أكتوبر'], 'closing.proof': [5], 'closing.pack': ['ساعة', 'عطر', 25000],
+    'callback.confirm': ['علي', '66 12 34 56', 'ساعة', 'الخميس 22 أكتوبر'], 'callback.done': ['الخميس 22 أكتوبر'],
+    'chip.take': ['ساعة'], 'persona.ranges.deal': ['ساعة', '12 500 FCFA'], 'persona.ranges.favorite': ['عطر', '18 000 FCFA'], 'persona.ranges.premium': ['حذاء', '45 000 FCFA'],
+    'persona.compare.line': ['ساعة', '12 500 FCFA', ['لونان', 'المقاسات 40, 41']], 'persona.compare.cheaper': ['ساعة', '2 500 FCFA'], 'persona.compare.moreChoice': ['ساعة'],
+    'persona.compare.colors': [3], 'persona.compare.sizes': ['40, 41'], 'persona.loyal.points': [30, 'argent', 20, 'or'], 'closing.proof': [5], 'closing.pack': ['ساعة', 'عطر', 25000],
   };
   const leaks: string[] = [];
   let count = 0;
@@ -1135,6 +1139,102 @@ async function main() {
     ok('jour ecrit hors de la liste ou illisible : rien n\'est devine (dimanche, le 30, bonjour)', pick('dimanche') === null && pick('le 30') === null && pick('bonjour') === null && pick('') === null);
     ok('la validite 48 h annoncee est la vraie regle de la boutique', fr.closing.validity.includes('48 h') && ar.closing.validity.includes('48'));
     ok('aucun paiement ni coordonnee bancaire dans les messages de conclusion et de rappel', !/airtel|moov|carte|iban|code secret|mot de passe/i.test(JSON.stringify([fr.closing, fr.callback, fr.chip.callback])));
+  }
+
+  console.log('\n== Psychologie commerciale de Zara : style dit par le client, metier (ton seulement), trois gammes, comparer, fidelite, regles ethiques');
+  {
+    const fr = tx.texts('fr'), ar = tx.texts('ar');
+    // --- le style que le client DIT aimer
+    const styleCases: [string, ps.StyleKey | null][] = [
+      ['j\'aime les tenues élégantes', 'elegant'], ['je cherche quelque chose de premium', 'elegant'], ['je veux du haut de gamme', 'elegant'], ['j\'aime le luxe', 'elegant'],
+      ['je veux quelque chose de moderne', 'trend'], ['j\'aime ce qui est tendance', 'trend'], ['plutôt à la mode', 'trend'],
+      ['j\'aime le sport', 'sport'], ['je cherche un look sportif', 'sport'], ['je veux un style décontracté', 'sport'],
+      ['je cherche un petit prix', 'budget'], ['je veux quelque chose d\'économique', 'budget'], ['j\'aime les bonnes affaires', 'budget'], ['je cherche un bon plan', 'budget'],
+      ['أحب الأناقة', 'elegant'], ['أريد شيئا فاخرا', 'elegant'], ['أحب ما هو عصري', 'trend'], ['أريد شيئا رياضيا', 'sport'], ['أبحث عن سعر مناسب', 'budget'],
+      ['chaussures', null], ['montre moi un survêtement', null], ['rolex', null], ['élégant', null], ['je veux un parfum et une montre', null], ['', null],
+      ['j\'aime l\'élégant mais aussi petit prix', null], // deux styles a la fois : Zara demande au lieu de deviner
+    ];
+    const badStyle = styleCases.filter(([t, k]) => ps.declaredStyle(t) !== k).map(([t]) => [t, ps.declaredStyle(t)]);
+    ok(`style dit par le client (${styleCases.length} phrases, francais et arabe) : reconnu seulement quand c'est une vraie preference, jamais devine d'un mot de recherche`, badStyle.length === 0, badStyle);
+    ok('un style par ses mots (reponse courte a la question « quel style ? ») : « élégant » -> elegant, « petit prix » -> budget, « sportif » -> sport', ps.styleWord('élégant') === 'elegant' && ps.styleWord('petit prix') === 'budget' && ps.styleWord('sportif') === 'sport' && ps.styleWord('bonjour') === null);
+
+    // --- le metier : seulement le TON, jamais le budget
+    const jobCases: [string, ps.JobKind | null][] = [
+      ['je suis ingénieur', 'pro'], ['Je suis banquier', 'pro'], ['moi je suis entrepreneur', 'pro'], ['je travaille comme comptable', 'pro'], ['je suis cadre dans une banque', 'pro'],
+      ['moi je suis étudiante', 'student'], ['je suis élève', 'student'], ['Bonjour je suis ingénieur chez Total', 'pro'],
+      ['أنا مهندس', 'pro'], ['أنا طالب', 'student'], ['أنا طالبة', 'student'],
+      ['je suis un cadre photo', null], ['je cherche un cadre', null], ['je suis Mahamat', null], ['ingénieur', null], ['je veux une montre', null],
+    ];
+    const badJob = jobCases.filter(([t, k]) => (ps.jobFrom(t)?.kind ?? null) !== k).map(([t]) => [t, ps.jobFrom(t)]);
+    ok(`metier dit par le client (${jobCases.length} phrases) : reconnu juste apres « je suis... », jamais dans « un cadre photo » ni dans un prenom`, badJob.length === 0, badJob);
+    ok('metier ecrit dans le compte (champ libre) : « Ingénieur » -> pro, « Étudiant en droit » -> student, « Commerçant » -> pro, vide ou inconnu -> rien', ps.jobKindOfProfession('Ingénieur') === 'pro' && ps.jobKindOfProfession('Étudiant en droit') === 'student' && ps.jobKindOfProfession('Commerçant') === 'pro' && ps.jobKindOfProfession('') === null && ps.jobKindOfProfession(null) === null && ps.jobKindOfProfession('Chanteur') === null);
+    const tones = (['pro', 'student', null] as (ps.JobKind | null)[]).map((j) => ps.toneOf({ style: null, hesitant: false, loyal: false }));
+    ok('REGLE : le metier ne dit rien du budget ni du style : sans preference dite par le client, le ton reste « neutral » (ingenieur, banquier, etudiant, inconnu)', tones.every((t) => t === 'neutral'));
+    ok('le metier change seulement l\'ORDRE des boutons de style (memes 4 styles, rien d\'ajoute ni de retire) : pro -> elegant d\'abord, etudiant -> tendance d\'abord', ps.styleOrder('pro')[0] === 'elegant' && ps.styleOrder('student')[0] === 'trend' && [...ps.styleOrder('pro')].sort().join() === [...ps.styleOrder('student')].sort().join() && ps.styleOrder(null).length === 4 && ps.styleOrder('pro').includes('budget') && ps.styleOrder('student').includes('elegant'));
+    ok('priorite du ton : le style dit par le client > hesitation > fidelite > neutre', ps.toneOf({ style: 'sport', hesitant: true, loyal: true }) === 'sport' && ps.toneOf({ style: null, hesitant: true, loyal: true }) === 'hesitant' && ps.toneOf({ style: null, hesitant: false, loyal: true }) === 'loyal' && ps.toneOf({ style: null, hesitant: false, loyal: false }) === 'neutral');
+
+    // --- classer selon le style (catalogue de test : prix, stock, nouveaute, sport)
+    const mkp = (id: string, price: number, extra: Partial<P> = {}): P => ({ id, name: `Article ${id}`, slug: `a-${id}`, price, compareAt: null, stock: 10, category: 'montre', categorySlug: 'montre', colors: [], sizes: [], image: 'x.jpg', createdAt: 1, nameTokens: [], catTokens: [], colorTokens: [], descTokens: [], ...extra } as unknown as P);
+    const L = [mkp('a', 20000, { createdAt: 5 }), mkp('b', 8000, { createdAt: 9, nameTokens: ['survetement'] }), mkp('c', 45000, { createdAt: 1 }), mkp('d', 12000, { createdAt: 7, descTokens: ['sport'] }), mkp('e', 8000, { createdAt: 2, compareAt: 10000 })];
+    const ids = (x: P[]) => x.map((p) => p.id).join('');
+    ok('style : sans style, la liste ne change pas (meme ordre)', ps.rankForStyle(L, null) === L);
+    ok('style « elegant » : du plus haut de gamme (prix) au plus accessible', ids(ps.rankForStyle(L, 'elegant')) === 'cadbe', ids(ps.rankForStyle(L, 'elegant')));
+    ok('style « petit prix » : du plus accessible, remise vraie en premier a prix egal (e avant b)', ids(ps.rankForStyle(L, 'budget')) === 'ebdac', ids(ps.rankForStyle(L, 'budget')));
+    ok('style « tendance » : les plus recents d\'abord', ids(ps.rankForStyle(L, 'trend')) === 'bdaec', ids(ps.rankForStyle(L, 'trend')));
+    ok('style « sport » : les articles de sport d\'abord (survetement, sport), puis les autres dans l\'ordre de depart', ids(ps.rankForStyle(L, 'sport')) === 'bdace', ids(ps.rankForStyle(L, 'sport')));
+    ok('classer ne change jamais le contenu : rien d\'ajoute, rien de retire, la liste d\'origine intacte', (['elegant', 'budget', 'trend', 'sport'] as ps.StyleKey[]).every((k) => ids(ps.rankForStyle(L, k)).split('').sort().join('') === 'abcde') && ids(L) === 'abcde');
+    // le budget du client reste respecte meme avec un style
+    const cat = [mkp('p1', 5000), mkp('p2', 15000), mkp('p3', 30000), mkp('p4', 60000)];
+    const inB = m.pickInBudget(cat, null, { min: 0, max: 35000 }, 4, 'elegant');
+    ok('budget + style : « elegant » avec un budget de 35 000 FCFA -> le plus haut de gamme DANS le budget en premier (30 000), jamais au-dessus du budget', inB.items.map((p) => p.id).join() === 'p3,p2,p1' && inB.items.every((p) => p.price <= 35000) && !inB.fallback, inB.items.map((p) => p.id));
+    ok('style « petit prix » : le moins cher d\'abord ; sans style, comme avant (aucun changement)', m.pickInBudget(cat, null, { min: 0, max: Infinity }, 4, 'budget').items[0].id === 'p1' && m.pickInBudget(cat, null, { min: 0, max: Infinity }, 4).items.map((p) => p.id).join() === m.pickInBudget(cat, null, { min: 0, max: Infinity }, 4, null).items.map((p) => p.id).join());
+
+    // --- trois gammes de prix : prix et stocks du catalogue seulement
+    const R = ps.threeRanges(cat);
+    ok('3 gammes : bon plan = le moins cher, style premium = le plus cher, coup de coeur = un autre article (le milieu sans gout connu) ; trois articles differents', !!R && R.deal.id === 'p1' && R.premium.id === 'p4' && !!R.favorite && ['p2', 'p3'].includes(R.favorite.id) && new Set([R.deal.id, R.favorite.id, R.premium.id]).size === 3, R && [R.deal.id, R.favorite?.id, R.premium.id]);
+    const R2 = ps.threeRanges(cat, { liked: ['p3', 'p2'] });
+    ok('3 gammes : le coup de coeur suit l\'article que le client a le plus regarde (p3), sans jamais prendre le bon plan ni le premium', R2?.favorite?.id === 'p3' && ps.threeRanges(cat, { liked: ['p1', 'p4'] })?.favorite?.id !== 'p1' && ps.threeRanges(cat, { liked: ['p1', 'p4'] })?.favorite?.id !== 'p4');
+    ok('3 gammes : avec un style dit (« tendance » : le plus recent), le coup de coeur le suit', ps.threeRanges([mkp('x', 5000), mkp('y', 15000, { createdAt: 1 }), mkp('z', 30000, { createdAt: 9 }), mkp('w', 60000)], { style: 'trend' })?.favorite?.id === 'z');
+    ok('3 gammes : deux articles seulement -> deux idees (pas de coup de coeur invente) ; moins de deux, ou prix presque egaux (moins de 20 % d\'ecart), ou meme prix -> aucune gamme', ps.threeRanges([mkp('a', 5000), mkp('b', 20000)])?.favorite === null && ps.threeRanges([mkp('a', 5000)]) === null && ps.threeRanges([mkp('a', 10000), mkp('b', 11000)]) === null && ps.threeRanges([mkp('a', 10000), mkp('b', 10000)]) === null && ps.threeRanges([]) === null);
+    ok('3 gammes : un article epuise (stock 0) ou sans prix n\'est jamais propose ; un article en double compte une fois', (() => { const r = ps.threeRanges([mkp('a', 5000, { stock: 0 }), mkp('b', 9000), mkp('c', 30000), mkp('c', 30000)]); return !!r && r.deal.id === 'b' && r.premium.id === 'c'; })());
+
+    // --- comparer deux articles : prix, couleurs, tailles (rien sur la qualite)
+    const cf = ps.compareFacts(mkp('a', 25000, { colors: ['noir', 'bleu', 'gris'], sizes: ['M', 'L'] }), mkp('b', 17500, { colors: ['noir'], sizes: ['M'] }));
+    ok('comparer : le moins cher (b), l\'ecart exact (7 500 FCFA), le plus de choix (a : 5 contre 2)', cf.cheaper?.id === 'b' && cf.diff === 7500 && cf.moreChoice?.id === 'a', cf);
+    const cf2 = ps.compareFacts(mkp('a', 10000, { colors: ['noir'] }), mkp('b', 10000, { colors: ['bleu'] }));
+    ok('comparer : meme prix -> aucun « moins cher », meme choix -> aucun « plus de choix » (rien d\'invente)', cf2.cheaper === null && cf2.diff === 0 && cf2.moreChoice === null);
+
+    // --- intentions : « trois gammes », « comparer »
+    const rangesYes = ['trois gammes de prix', 'je veux 3 options', 'plusieurs gammes de prix svp', 'donne moi trois idées', 'différents prix', 'ثلاثة خيارات بأسعار مختلفة', 'عندك عدة فئات سعرية؟'];
+    const compareYes = ['comparer ces articles', 'compare les deux', 'quelle différence entre ces deux modèles ?', 'lequel choisir ?', 'laquelle est mieux', 'قارن بين هذه المنتجات', 'ما الفرق بين الاثنين؟ الفرق بين'];
+    ok('intention « trois gammes » (francais et arabe) reconnue', rangesYes.every((t) => b.wantsRanges(t) && b.detectIntent(t) === 'ranges'), rangesYes.filter((t) => b.detectIntent(t) !== 'ranges'));
+    ok('intention « comparer » (francais et arabe) reconnue', compareYes.every((t) => b.wantsCompare(t) && b.detectIntent(t) === 'compare'), compareYes.filter((t) => b.detectIntent(t) !== 'compare'));
+    const notThose = ['rolex', 'chaussures', 'je veux commander', 'c\'est cher', 'promotions', 'livraison', 'je réfléchis', 'budget', 'trois chemises svp', 'bonjour', 'conseil'];
+    ok('pas de fausse alerte : les autres demandes gardent leur intention', notThose.every((t) => !b.wantsRanges(t) && !b.wantsCompare(t)), notThose.filter((t) => b.wantsRanges(t) || b.wantsCompare(t)));
+
+    // --- textes : completude (francais et arabe) et REGLES ETHIQUES
+    const tonesKeys = ['elegant', 'trend', 'sport', 'budget', 'hesitant', 'loyal', 'neutral'] as const;
+    ok('phrases de ton : au moins 3 pour chaque style (rotation sans repetition), 1 pour hesitation et fidelite, aucune pour « neutral » (l\'encouragement habituel sert) ; meme nombre en arabe', (['elegant', 'trend', 'sport', 'budget'] as const).every((k) => fr.persona.tone[k].length >= 3) && fr.persona.tone.hesitant.length >= 1 && fr.persona.tone.loyal.length >= 1 && fr.persona.tone.neutral.length === 0 && tonesKeys.every((k) => fr.persona.tone[k].length === ar.persona.tone[k].length));
+    const collect = (t: ReturnType<typeof tx.texts>, withArgs: boolean) => {
+      const x = t.persona;
+      const price = '12 500 FCFA';
+      return [
+        x.askStyle, x.compareOffer, x.jobAck.pro, x.jobAck.student, ...Object.values(x.styleSet), ...tonesKeys.flatMap((k) => x.tone[k]),
+        x.ranges.intro, x.ranges.closing, x.ranges.tooClose, x.ranges.deal('Article', price), x.ranges.favorite('Article', price), x.ranges.premium('Article', price),
+        x.compare.intro, x.compare.samePrice, x.compare.ask, x.compare.needTwo, x.compare.line('Article', price, [withArgs ? '2 couleurs' : 'لونان']), x.compare.cheaper('Article', '2 500 FCFA'), x.compare.moreChoice('Article'), x.compare.colors(2), x.compare.sizes('40, 41'),
+        x.loyal.intro, x.loyal.points(30, 'argent', 20, 'or'), x.loyal.points(100, 'diamond', 0, null),
+        t.chip.styleElegant, t.chip.styleTrend, t.chip.styleSport, t.chip.styleBudget, t.chip.myStyle, t.chip.ranges, t.chip.compare, t.chip.newForMe, t.chip.take('Article'),
+      ];
+    };
+    const allFr = collect(fr, true), allAr = collect(ar, false);
+    ok('REGLE ETHIQUE : aucune fausse rarete, exclusivite, urgence, pression ni mot qui rabaisse dans les textes de vente (francais et arabe)', [...allFr, ...allAr].every((t) => !ps.FORBIDDEN_CLAIMS.test(t)), [...allFr, ...allAr].filter((t) => ps.FORBIDDEN_CLAIMS.test(t)));
+    ok('REGLE ETHIQUE : aucun pourcentage, aucune remise ni promotion inventee dans ces textes (seuls les prix du catalogue passent en parametre)', [...allFr, ...allAr].every((t) => !/%|remise|promo|gratuit|offert|réduction|reduction|تخفيض|خصم|مجان/.test(t)), [...allFr, ...allAr].filter((t) => /%|remise|promo|gratuit|offert|réduction|reduction|تخفيض|خصم|مجان/.test(t)));
+    ok('REGLE ETHIQUE : « premium » est decrit par ce qui est vrai (le plus haut de gamme de la selection, par le prix), jamais par une qualite ou des finitions non verifiees', /le plus haut de gamme de cette sélection/.test(fr.persona.ranges.premium('A', '1 FCFA')) && !/finition|qualité supérieure|matière/i.test(allFr.join(' ')));
+    ok('REGLE : Zara ne revele jamais ce qu\'elle a vu de la navigation du client (« vous avez regarde », « historique », « j\'ai vu que vous »...) dans ses textes de vente', [...allFr, ...allAr].every((t) => !/vous avez (regard|consult|vu)|j ai vu|j'ai vu|j’ai vu|historique|je vous (suis|surveille)|مشاهدت|شاهدت|سجل تصفح|راقبت/i.test(t)), [...allFr, ...allAr].filter((t) => /vous avez (regard|consult|vu)|j’ai vu|historique|مشاهدت|شاهدت/i.test(t)));
+    ok('textes : tout est present en arabe (aucune chaine vide), sans mot francais', allAr.every((t) => t.length > 3) && allAr.every((t) => !/[A-Za-z]{4,}/.test(t.replace(/FCFA|Article/g, ''))), allAr.filter((t) => /[A-Za-z]{4,}/.test(t.replace(/FCFA|Article/g, ''))));
+    ok('le metier valorise sans rien supposer : la phrase de reponse au metier ne parle ni de prix, ni de budget, ni d\'argent, et pose la question du style', [fr.persona.jobAck.pro, fr.persona.jobAck.student].every((t) => !/budget|prix|argent|riche|moyens|salaire/i.test(t.replace('petit prix', '')) && /élégant/.test(t)) && /\?/.test(fr.persona.jobAck.pro));
+    ok('loyaute : les points affiches viennent du compte (parametre), le grade suivant seulement s\'il reste des points a gagner', /Vos points : 30/.test(fr.persona.loyal.points(30, 'argent', 20, 'or')) && /20 points pour le grade Or/.test(fr.persona.loyal.points(30, 'argent', 20, 'or')) && !/pour le grade/.test(fr.persona.loyal.points(100, 'diamond', 0, null)) && /Diamond/.test(fr.persona.loyal.points(100, 'diamond', 0, null)), [fr.persona.loyal.points(30, 'argent', 20, 'or'), fr.persona.loyal.points(100, 'diamond', 0, null)]);
+    ok('comparer : le texte donne le prix, les couleurs, les tailles et l\'ecart exact ; une seule phrase « le plus accessible »', /Article : 12 500 FCFA · 2 couleurs/.test(fr.persona.compare.line('Article', '12 500 FCFA', ['2 couleurs'])) && /2 500 FCFA de moins/.test(fr.persona.compare.cheaper('Article', '2 500 FCFA')) && fr.persona.compare.colors(1) === '1 couleur' && fr.persona.compare.colors(3) === '3 couleurs');
   }
 
   console.log('\n' + (failures === 0 ? 'TOUT EST BON' : `${failures} ECHEC(S)`));

@@ -39,6 +39,10 @@ export function PrivacyPolicyScreen() {
             uniquement pour vous répondre.
           </Text>
           <Text style={styles.p}>
+            Si vous dites à Zara ce que vous aimez (un style élégant, moderne, sportif ou un petit prix) ou votre métier, elle s'en souvient seulement
+            pendant votre visite, dans votre navigateur, pour mieux vous conseiller. Cela ne change jamais les prix, et ne sert pas à deviner votre budget.
+          </Text>
+          <Text style={styles.p}>
             Pour toute question, ou pour demander l'effacement de ces informations, contactez-nous à l'adresse indiquée
             plus bas. Si votre navigateur envoie le signal « Ne pas me suivre », nous le respectons.
           </Text>

@@ -13,7 +13,7 @@ const fs = require('fs');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const dist = process.argv[2] || '../../dist';
 const port = process.argv[3] || '4333';
-const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHTOFBCDE').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGTOFBCDE').toUpperCase();
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
 fs.mkdirSync(OUT, { recursive: true });
 const KEY = process.env.SUPABASE_ANON_KEY;
@@ -3510,6 +3510,258 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const g3 = await geo(w.page.getByTestId('assistant-fab'));
       check('bouton colle a droite : la bulle reste au-dessus, entiere dans l\'ecran, et toujours au-dessus du bouton', b2.bottom <= g3.y - 6 && b2.x >= 0 && b2.x + b2.w <= vp.width, { b2, g3 });
       await w.ctx.close();
+    }
+  }
+
+  // =============================================== G. PSYCHOLOGIE COMMERCIALE ET VENTE EMOTIONNELLE ===============================================
+  if (PARTS.includes('G')) {
+    console.log('\n== G. psychologie commerciale : metier (ton seulement), style dit par le client, trois gammes de prix, comparer, hesitation, fidelite, regles ethiques');
+    const base = `http://localhost:${port}`;
+    const uid = '11111111-1111-4111-8111-111111111111';
+    const JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMTExMTExMS0xMTExLTQxMTEtODExMS0xMTExMTExMTExMTEiLCJleHAiOjQxMDI0NDQ4MDAsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.c2ln';
+    const memberOf = (fullName, extra = {}) => {
+      const auth = { id: uid, aud: 'authenticated', role: 'authenticated', email: 'test@example.com', app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' };
+      const token = { access_token: JWT, refresh_token: 'fake-refresh', token_type: 'bearer', expires_in: 3600, expires_at: 4102444800, user: auth };
+      return { auth, token, session: JSON.stringify(token), profile: { id: uid, email: 'test@example.com', full_name: fullName, phone: '66123456', banned: false, role: 'customer', is_admin: false, loyalty_points: 0, ...extra } };
+    };
+    const norm = (t) => t.replace(/[\s  ]+/g, ' ').trim();
+    // les mots que Zara n'ecrit JAMAIS dans ses messages de vente (fausse rarete, exclusivite, urgence, pression)
+    const FORBID = /exclusi|élite|réservé aux|dernière chance|dépêchez|ne ratez|offre limitée|seulement pour vous|pièce unique|introuvable/i;
+    const visitor = (extra = {}) => newVisitor(phone, { lang: extra.lang || 'fr', storage: { albasse_zara_name: 'Ali' }, fakeUser: extra.fakeUser || null });
+    const openZara = async (v) => {
+      await v.page.goto(`${base}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await v.page.getByTestId('assistant-fab').click();
+      await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?|أنشئ حسابك|حسابك/, 25000);
+    };
+    const allText = async (v) => norm(await panelOf(v.page).innerText());
+    // le conseil en trois questions (pour qui, quel article, budget) -> les articles ; renvoie le nombre de fiches avant
+    const afterStyleFlow = async (v, kind) => {
+      const before = await cardsOf(v.page).count();
+      // le style est retenu, puis Zara demande l'article (une question a la fois) : « Que cherchez-vous ? », « C'est pour qui ? », le budget
+      await waitText(v.page, /Que cherchez-vous \?/, 20000);
+      await tap(v.page, 'Chaussures', /C’est pour qui \?/, 20000);
+      await tap(v.page, 'Pour un homme', /Quel est votre budget/, 20000);
+      await tap(v.page, 'Peu importe', /Voici mes meilleurs choix/, 25000);
+      return before;
+    };
+
+    // --- G1. le metier : Zara valorise, ne suppose AUCUN budget, demande ce qui fait plaisir ; l'ordre des boutons seul change
+    {
+      const v = await visitor();
+      await openZara(v);
+      const before = await cardsOf(v.page).count();
+      await ask(v.page, 'je suis ingénieur', /Merci de me parler de vous/, 20000);
+      const msg = norm(await panelOf(v.page).getByText(/Merci de me parler de vous/).last().innerText());
+      const chips = await chipLabels(v.page);
+      check('« je suis ingenieur » : Zara remercie et demande ce qui fait plaisir (elegant, tendance, sportif, petit prix) ; metier « pro » : elegant en premier', /Enchanté/.test(msg) && /style élégant/.test(msg) && chips.join('|') === '✨ Élégant / premium|🔥 Moderne et tendance|👟 Sportif|💰 Petit prix|🏠 Menu', [msg, chips]);
+      check('REGLE : le metier ne dit rien du budget : Zara ne parle ni de budget, ni de salaire, ni de moyens, et ne montre aucun article avant que le client dise ce qu\'il aime', !/budget|salaire|moyens|riche|argent/i.test(msg) && (await cardsOf(v.page).count()) === before, msg);
+      await v.page.screenshot({ path: path.join(OUT, 'G1-metier-style.png') });
+      check('aucune erreur (metier)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+      const w = await visitor();
+      await openZara(w);
+      await ask(w.page, 'moi je suis étudiante', /Merci de me parler de vous/, 20000);
+      const chips2 = await chipLabels(w.page);
+      check('« je suis etudiante » : memes 4 styles, seulement dans un autre ordre (tendance et petit prix d\'abord) : le metier change l\'ordre, pas l\'offre', chips2.join('|') === '🔥 Moderne et tendance|💰 Petit prix|👟 Sportif|✨ Élégant / premium|🏠 Menu', chips2);
+      await w.ctx.close();
+    }
+
+    // --- G2. style « elegant » : les choix du plus haut de gamme au plus accessible, phrase dans son style, aucune fausse rarete
+    {
+      const v = await visitor();
+      await openZara(v);
+      await ask(v.page, 'je suis banquier', /Merci de me parler de vous/, 20000);
+      await tap(v.page, 'Élégant', /Très bon choix ✨ Je vous montre des pièces élégantes/, 20000);
+      const before = await afterStyleFlow(v);
+      const prices = await pricesSince(v.page, before);
+      check('style « elegant » : les articles vont du plus haut de gamme (prix) au plus accessible (prix decroissants), tous en stock', prices.length >= 2 && prices.every((p, i) => i === 0 || prices[i - 1] >= p), prices);
+      const last = norm(await panelOf(v.page).getByText(/Voici mes meilleurs choix/).last().innerText());
+      const tail = norm(await panelOf(v.page).locator('[data-testid="assistant-message"], div').filter({ hasText: /Ce modèle pourrait vraiment compléter votre style|tenues soignées|Dites-moi laquelle vous parle le plus/ }).last().innerText().catch(() => ''));
+      check('une phrase valorisante dans le style du client (elegant), basee sur les photos et les tailles, jamais sur une qualite inventee', /(Ce modèle pourrait vraiment compléter votre style|tenues soignées|Dites-moi laquelle vous parle le plus)/.test(await allText(v)), tail);
+      const text = await allText(v);
+      const mine = text.slice(text.indexOf('Merci de me parler de vous'));
+      check('REGLE ETHIQUE : aucune fausse rarete, exclusivite, urgence ni pression dans toute la conversation de vente', !FORBID.test(mine), mine.match(FORBID));
+      check('un client qui a deja dit son style n\'a plus le bouton « Mon style » ni la question de style', (await chipLabels(v.page)).every((c) => !/Mon style/.test(c)));
+      await v.page.screenshot({ path: path.join(OUT, 'G2-elegant.png') });
+      check('aucune erreur (style elegant)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+
+    // --- G3. style « petit prix » : du plus accessible ; l'ecrit libre « je cherche un petit prix » marche aussi
+    {
+      const v = await visitor();
+      await openZara(v);
+      await ask(v.page, 'je cherche un petit prix', /Pas de souci 😊 On peut trouver quelque chose de stylé à un prix accessible/, 20000);
+      const before = await afterStyleFlow(v);
+      const prices = await pricesSince(v.page, before);
+      check('style « petit prix » : les articles vont du plus accessible au plus cher (prix croissants), toujours les vrais prix du site', prices.length >= 2 && prices.every((p, i) => i === 0 || prices[i - 1] <= p), prices);
+      check('phrase respectueuse pour ce client (« un look stylé sans trop dépenser », « respecte votre budget »), sans jamais le rabaisser', /(L’objectif : trouver un article qui vous plaît|On peut avoir un look stylé sans trop dépenser|Les prix affichés sont ceux du site)/.test(await allText(v)) && !/pas les moyens|bas de gamme|pauvre|radin/i.test(await allText(v)));
+      await v.ctx.close();
+      const w = await visitor();
+      await openZara(w);
+      await ask(w.page, 'je veux quelque chose de moderne', /Parfait 🔥 Du moderne, facile à associer avec d’autres pièces/, 20000);
+      await waitText(w.page, /Que cherchez-vous \?/, 20000);
+      check('ecrit libre « je veux quelque chose de moderne » : style tendance retenu, puis Zara demande l\'article (une question a la fois)', (await panelOf(w.page).getByText(/Que cherchez-vous \?/).count()) >= 1);
+      await w.ctx.close();
+    }
+
+    // --- G4. REGLE : un client dont le compte indique un metier recoit les MEMES choix qu'un autre (rien n'est suppose) ; un bouton « Mon style » lui laisse choisir
+    {
+      const fu = memberOf('Ahmed Hassan', { profession: 'Ingénieur' });
+      const m = await newVisitor(phone, { lang: 'fr', storage: { 'sb-xtitsmmccpkelxfjyqyh-auth-token': fu.session }, fakeUser: fu });
+      await m.page.goto(`${base}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await m.page.getByTestId('assistant-fab').click();
+      await waitText(m.page, /Salut Ahmed/, 30000);
+      await waitText(m.page, /À savoir avant de commander/, 20000);
+      const beforeM = await cardsOf(m.page).count();
+      await ask(m.page, 'chaussures', /C’est pour qui \?/, 20000);
+      await tap(m.page, 'Pour un homme', /Quel est votre budget/, 20000);
+      await tap(m.page, 'Peu importe', /Voici mes meilleurs choix/, 25000);
+      const namesM = (await Promise.all((await newCards(m.page, beforeM)).map((c) => c.getAttribute('aria-label')))).join('|');
+      const labelsM = await chipLabels(m.page);
+      await m.ctx.close();
+      const g = await visitor();
+      await openZara(g);
+      const beforeG = await cardsOf(g.page).count();
+      await ask(g.page, 'chaussures', /C’est pour qui \?/, 20000);
+      await tap(g.page, 'Pour un homme', /Quel est votre budget/, 20000);
+      await tap(g.page, 'Peu importe', /Voici mes meilleurs choix/, 25000);
+      const namesG = (await Promise.all((await newCards(g.page, beforeG)).map((c) => c.getAttribute('aria-label')))).join('|');
+      const labelsG = await chipLabels(g.page);
+      check('REGLE : « ingenieur » dans le compte ne change PAS les articles montres : exactement les memes que pour un visiteur sans metier (aucun budget suppose)', namesM.length > 0 && namesM === namesG, [namesM, namesG]);
+      check('le client dont le compte indique un metier a le bouton « Mon style » pour dire ce qu\'il aime ; le visiteur sans metier ne l\'a pas', labelsM.some((l) => /Mon style/.test(l)) && !labelsG.some((l) => /Mon style/.test(l)), [labelsM, labelsG]);
+      await g.ctx.close();
+    }
+
+    // --- G5. trois gammes de prix : vrais prix du catalogue, trois articles differents
+    {
+      const v = await visitor();
+      await openZara(v);
+      let before = await cardsOf(v.page).count();
+      await ask(v.page, 'chaussures', /C’est pour qui \?/, 20000);
+      await tap(v.page, 'Pour un homme', /Quel est votre budget/, 20000);
+      await tap(v.page, 'Peu importe', /Voici mes meilleurs choix/, 25000);
+      await chip(v.page, '3 gammes de prix').first().waitFor({ timeout: 20000 }).catch(() => {});
+      const labels = await chipLabels(v.page);
+      check('apres les articles, sans budget ni style : le bouton « 3 gammes de prix » est propose (les prix de la selection sont vraiment differents)', labels.includes('🎯 3 gammes de prix'), labels);
+      before = await cardsOf(v.page).count();
+      await tap(v.page, '3 gammes de prix', /J’ai trois idées pour vous/, 25000);
+      const msg = norm(await panelOf(v.page).getByText(/J’ai trois idées pour vous/).last().innerText());
+      const cards = await newCards(v.page, before);
+      const prices = await Promise.all(cards.map(cardPrice));
+      const money = (re) => { const m = msg.match(re); return m ? num(m[1]) : null; };
+      const dealP = money(/Bon plan : .+? — ([\d\s  ]+) FCFA/);
+      const premP = money(/Style premium : .+? — ([\d\s  ]+) FCFA/);
+      const favP = money(/Coup de cœur : .+? — ([\d\s  ]+) FCFA/);
+      check('3 gammes : un bon plan, un style premium (et un coup de coeur) ; 2 ou 3 fiches avec photo et prix', /Bon plan/.test(msg) && /Style premium/.test(msg) && cards.length >= 2 && cards.length <= 3, [msg, prices]);
+      check('3 gammes : les prix ecrits sont ceux des fiches (bon plan = le moins cher, premium = le plus cher), jamais inventes', dealP === Math.min(...prices) && premP === Math.max(...prices) && (favP === null || prices.includes(favP)) && dealP < premP, { dealP, premP, favP, prices });
+      check('3 gammes : « premium » est decrit comme le plus haut de gamme de la selection (par le prix), sans promesse de qualite ni d\'exclusivite', /le plus haut de gamme de cette sélection/.test(msg) && !FORBID.test(msg) && !/finition|qualité supérieure/i.test(msg), msg);
+      const after = await chipLabels(v.page);
+      check('apres les 3 gammes : budget, comparer, promotions, menu, WhatsApp', after.includes('💰 Mon budget') && after.includes('⚖️ Comparer') && after.includes('🏠 Menu'), after);
+      await v.page.screenshot({ path: path.join(OUT, 'G5-trois-gammes.png') });
+
+      // --- G6. comparer deux articles : prix exacts, ecart exact, choix de couleurs / tailles ; « Je prends » ajoute au panier
+      before = await cardsOf(v.page).count();
+      await tap(v.page, 'Comparer', /Comparons-les ensemble/, 25000);
+      const cmp = norm(await panelOf(v.page).getByText(/Comparons-les ensemble/).last().innerText());
+      const cc = await newCards(v.page, before);
+      const cp = await Promise.all(cc.map(cardPrice));
+      const lines = [...cmp.matchAll(/• .+? : ([\d\s  ]+) FCFA/g)].map((x) => num(x[1]));
+      check('comparer : deux articles, leurs prix exacts (ceux des fiches), la ligne « le plus accessible » avec l\'ecart exact', cc.length === 2 && lines.length === 2 && lines.every((p, i) => p === cp[i]) && (cp[0] === cp[1] ? /même prix/.test(cmp) : new RegExp(`Le plus accessible : .+? \\(${Math.abs(cp[0] - cp[1]).toLocaleString('fr-FR').replace(/\s/g, '\\s')} FCFA de moins\\)`).test(cmp.replace(/[  ]/g, ' ').replace(/(\d) (\d)/g, '$1 $2'))), [cmp, cp, lines]);
+      check('comparer : aucun mot sur la qualite, la marque ou l\'exclusivite (seulement prix, couleurs, tailles)', !FORBID.test(cmp) && !/meilleure qualité|de luxe|garanti/i.test(cmp), cmp);
+      const take = (await chipLabels(v.page)).filter((c) => /^✅ Je prends/.test(c));
+      check('comparer : un bouton « Je prends » pour chaque article', take.length === 2, take);
+      await chip(v.page, 'Je prends').first().click();
+      // l'article demande une couleur et/ou une taille : on choisit la premiere option proposee
+      for (let i = 0; i < 6; i++) {
+        if (await panelOf(v.page).getByText(/ajouté au panier\./).count()) break;
+        await sleep(1500);
+        if ((await panelOf(v.page).getByText(/Quelle (taille|couleur) pour/).count()) > 0 && (await panelOf(v.page).getByText(/ajouté au panier\./).count()) === 0) {
+          const q = await panelOf(v.page).getByText(/Quelle (taille|couleur) pour/).count();
+          const before = q;
+          await panelOf(v.page).getByTestId('assistant-chip').first().click();
+          const t0 = Date.now();
+          while ((await panelOf(v.page).getByText(/Quelle (taille|couleur) pour|ajouté au panier\./).count()) <= before && Date.now() - t0 < 8000) await sleep(300);
+        }
+      }
+      await waitText(v.page, /ajouté au panier\./, 25000);
+      check('« Je prends » : l\'article est ajoute au vrai panier du site (aucune commande n\'est annoncee avant la confirmation du systeme)', (await panelOf(v.page).getByText(/commande (est )?passée|paiement reçu|stock réservé/i).count()) === 0);
+      check('aucune erreur (gammes et comparaison)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+
+    // --- G7. un client qui hesite : Zara propose de comparer, sans pression
+    {
+      const v = await visitor();
+      await openZara(v);
+      await ask(v.page, 'chaussures', /C’est pour qui \?/, 20000);
+      await tap(v.page, 'Pour un homme', /Quel est votre budget/, 20000);
+      await tap(v.page, 'Peu importe', /Voici mes meilleurs choix/, 25000);
+      await ask(v.page, 'je réfléchis', /Prenez votre temps/, 25000);
+      const later = norm(await panelOf(v.page).getByText(/Prenez votre temps/).last().innerText());
+      const chips = await chipLabels(v.page);
+      check('« je reflechis » apres plusieurs articles : Zara propose de montrer les differences entre ces modeles (bouton « Comparer »), sans pression', /Je peux aussi vous montrer les différences entre ces modèles/.test(later) && chips.includes('⚖️ Comparer') && !FORBID.test(later), [later, chips]);
+      await tap(v.page, 'Comparer', /Comparons-les ensemble/, 25000);
+      check('apres « Comparer » : la comparaison s\'affiche (deux articles)', (await panelOf(v.page).getByText(/Comparons-les ensemble/).count()) >= 1);
+      await ask(v.page, 'comparer', /Comparons-les ensemble/, 25000);
+      await v.ctx.close();
+      // sans deux articles montres : Zara le dit simplement
+      const w = await visitor();
+      await openZara(w);
+      await ask(w.page, 'comparer', /il me faut deux articles/, 20000);
+      check('« comparer » sans articles montres : Zara demande lesquels, sans rien inventer (aucune fiche)', (await cardsOf(w.page).count()) === 0);
+      await w.ctx.close();
+    }
+
+    // --- G8. fidelite : les VRAIS points du compte, jamais inventes ; un visiteur ou un client sans point n'a aucune phrase de fidelite
+    {
+      const fu = memberOf('Ahmed Hassan', { loyalty_points: 30 });
+      const m = await newVisitor(phone, { lang: 'fr', storage: { 'sb-xtitsmmccpkelxfjyqyh-auth-token': fu.session }, fakeUser: fu });
+      await m.page.goto(`${base}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await m.page.getByTestId('assistant-fab').click();
+      await waitText(m.page, /Salut Ahmed/, 30000);
+      await waitText(m.page, /À savoir avant de commander/, 20000);
+      await ask(m.page, 'nouveautés', /Merci pour votre fidélité/, 25000);
+      const loyal = norm(await panelOf(m.page).getByText(/Merci pour votre fidélité/).last().innerText());
+      check('client avec 30 points : « Merci pour votre fidelite », ses points relus dans son compte (30, grade Argent) et ce qu\'il lui manque pour le grade Or (20 points)', /Vos points : 30 \(grade Argent/.test(loyal) && /il vous manque 20 points pour le grade Or/.test(loyal) && !FORBID.test(loyal), loyal);
+      await m.page.screenshot({ path: path.join(OUT, 'G8-fidelite.png') });
+      await m.ctx.close();
+      const z = memberOf('Ahmed Hassan', { loyalty_points: 0 });
+      const n = await newVisitor(phone, { lang: 'fr', storage: { 'sb-xtitsmmccpkelxfjyqyh-auth-token': z.session }, fakeUser: z });
+      await n.page.goto(`${base}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await n.page.getByTestId('assistant-fab').click();
+      await waitText(n.page, /Salut Ahmed/, 30000);
+      await waitText(n.page, /À savoir avant de commander/, 20000);
+      await ask(n.page, 'nouveautés', /Voici les nouveautés/, 25000).catch(() => {});
+      await sleep(1500);
+      check('client avec 0 point : aucune phrase de fidelite inventee', (await panelOf(n.page).getByText(/Merci pour votre fidélité|Vos points/).count()) === 0);
+      await n.ctx.close();
+      const g = await visitor();
+      await openZara(g);
+      await ask(g.page, 'nouveautés', /Voici les nouveautés/, 25000).catch(() => {});
+      await sleep(1500);
+      check('visiteur sans compte : aucune phrase de fidelite', (await panelOf(g.page).getByText(/Merci pour votre fidélité|Vos points/).count()) === 0);
+      await g.ctx.close();
+    }
+
+    // --- G9. en arabe : metier, boutons de style, reponse
+    {
+      const v = await visitor({ lang: 'ar' });
+      await v.page.goto(`${base}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await v.page.getByTestId('assistant-fab').click();
+      await waitText(v.page, /أنشئ حسابك|حسابك/, 25000);
+      await ask(v.page, 'أنا مهندس', /شكرا لأنك حدثتني عن نفسك/, 20000);
+      const chips = await chipLabels(v.page);
+      check('en arabe : « أنا مهندس » -> Zara remercie et demande le style (4 boutons arabes, elegant d\'abord)', chips[0] === '✨ أنيق / فاخر' && chips.length === 5 && chips.every((c) => /[؀-ۿ]/.test(c)), chips);
+      await tap(v.page, 'أنيق', /اختيار ممتاز/, 20000);
+      check('en arabe : le style choisi est reconnu et Zara continue avec ses questions', (await panelOf(v.page).getByText(/لمن|لرجل|لامرأة|هل هو/).count()) >= 0);
+      check('aucune erreur (arabe)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
     }
   }
 

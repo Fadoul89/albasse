@@ -7,6 +7,10 @@ import { CATEGORY_AR, type GoodbyeKind, type GreetingKind, type Lang, type PayMe
 // « , Prénom » (ou « ، Prénom » en arabe) quand on connaît le prénom du visiteur.
 // Les deux langues suivent la même interface : TypeScript vérifie qu'aucun texte ne manque.
 
+// Psychologie commerciale : ce que le client dit aimer (jamais déduit de son métier) et le ton de Zara qui en découle.
+export type StyleKey = 'elegant' | 'trend' | 'sport' | 'budget';
+export type ToneKey = StyleKey | 'hesitant' | 'loyal' | 'neutral';
+
 export const fcfa = (n: number) => `${Math.round(n).toLocaleString('fr-FR')} FCFA`;
 
 // 1 -> 1ᵉʳ, 3 -> 3ᵉ
@@ -122,6 +126,15 @@ export interface Texts {
     callbackYes: string;
     callbackFix: string;
     callbackDayFix: string;
+    styleElegant: string;
+    styleTrend: string;
+    styleSport: string;
+    styleBudget: string;
+    myStyle: string;
+    ranges: string;
+    compare: string;
+    newForMe: string;
+    take(name: string): string;
     idk: string;
     anyBudget: string;
     giftWho: Record<Who, string>;
@@ -359,6 +372,37 @@ export interface Texts {
     failed: string;
     cancelled: string;
   };
+  // psychologie commerciale et vente émotionnelle : valoriser le client, jamais de fausse rareté ni d'urgence, seulement les vrais prix et stocks
+  persona: {
+    askStyle: string;
+    compareOffer: string;
+    jobAck: Record<'pro' | 'student', string>;
+    styleSet: Record<StyleKey, string>;
+    tone: Record<ToneKey, string[]>;
+    ranges: {
+      intro: string;
+      deal(name: string, price: string): string;
+      favorite(name: string, price: string): string;
+      premium(name: string, price: string): string;
+      closing: string;
+      tooClose: string;
+    };
+    compare: {
+      intro: string;
+      line(name: string, price: string, extras: string[]): string;
+      cheaper(name: string, diff: string): string;
+      samePrice: string;
+      moreChoice(name: string): string;
+      ask: string;
+      needTwo: string;
+      colors(n: number): string;
+      sizes(list: string): string;
+    };
+    loyal: {
+      intro: string;
+      points(points: number, tier: LoyaltyTier['key'], missing: number, next: LoyaltyTier['key'] | null): string;
+    };
+  };
   // achat en gros : Zara ne donne aucun prix de gros, elle passe la main à l'équipe sur WhatsApp
   wholesale: {
     ask: string;
@@ -463,6 +507,15 @@ const FR: Texts = {
     callbackYes: 'Oui, d’accord',
     callbackFix: 'Changer le numéro',
     callbackDayFix: 'Changer le jour',
+    styleElegant: '✨ Élégant / premium',
+    styleTrend: '🔥 Moderne et tendance',
+    styleSport: '👟 Sportif',
+    styleBudget: '💰 Petit prix',
+    myStyle: '🎨 Mon style',
+    ranges: '🎯 3 gammes de prix',
+    compare: '⚖️ Comparer',
+    newForMe: '🆕 Nouveautés pour moi',
+    take: (name) => `✅ Je prends : ${name}`,
     idk: '🤷 Je ne sais pas',
     anyBudget: 'Peu importe',
     giftWho: { elle: '👩 Pour elle', lui: '👨 Pour lui', enfant: '👶 Pour un enfant' },
@@ -841,6 +894,68 @@ const FR: Texts = {
     failed: 'Je n’ai pas pu enregistrer votre demande 😕 Écrivez-nous directement sur WhatsApp : l’équipe vous répondra.',
     cancelled: 'D’accord, je n’enregistre rien 😊',
   },
+  persona: {
+    compareOffer: '⚖️ Je peux aussi vous montrer les différences entre ces modèles pour vous aider à choisir 😊',
+    askStyle: 'Avec plaisir ! 😊 Pour bien vous conseiller, qu’est-ce qui vous ferait le plus plaisir : un style élégant, quelque chose de moderne et tendance, un look sportif, ou un petit prix ?',
+    jobAck: {
+      pro: 'Enchanté ! 😊 Merci de me parler de vous. Pour bien vous conseiller, qu’est-ce qui vous ferait le plus plaisir : un style élégant, quelque chose de moderne et tendance, un look sportif, ou un petit prix ?',
+      student: 'Super ! 😊 Merci de me parler de vous. Pour bien vous conseiller, qu’est-ce qui vous ferait le plus plaisir : quelque chose de moderne et tendance, un petit prix, un look sportif, ou un style plus élégant ?',
+    },
+    styleSet: {
+      elegant: 'Très bon choix ✨ Je vous montre des pièces élégantes, avec une belle allure.',
+      trend: 'Parfait 🔥 Du moderne, facile à associer avec d’autres pièces : je vous montre ça.',
+      sport: 'Super 👟 Un look sportif et confortable : je vous montre ce qui va bien ensemble.',
+      budget: 'Pas de souci 😊 On peut trouver quelque chose de stylé à un prix accessible ! Je vous montre les meilleures options.',
+    },
+    tone: {
+      elegant: [
+        'Ce modèle pourrait vraiment compléter votre style ! 😎 Regardez les photos : on y voit bien les détails.',
+        'Si vous aimez les tenues soignées, ces pièces peuvent donner une belle allure sans en faire trop. ✨',
+        'Dites-moi laquelle vous parle le plus, et je vous donne les tailles et couleurs disponibles. 😊',
+      ],
+      trend: [
+        'Moderne et facile à associer avec d’autres pièces : un bon moyen de renouveler votre style ! 🔥',
+        'Si vous aimez les looks actuels, celles-ci devraient vous plaire. Voulez-vous voir ce qui va avec ? 😊',
+        'Dites-moi laquelle vous plaît, je vérifie les tailles et les couleurs pour vous. 👟',
+      ],
+      sport: [
+        'Pour un look sportif et confortable, ces pièces sont pratiques au quotidien. 👟',
+        'Je peux aussi vous montrer des chaussures ou des accessoires assortis pour compléter l’ensemble. 🔥',
+        'Dites-moi laquelle vous plaît, et je vous donne les tailles disponibles. 😊',
+      ],
+      budget: [
+        'L’objectif : trouver un article qui vous plaît, qui vous va bien et qui respecte votre budget. ❤️',
+        'On peut avoir un look stylé sans trop dépenser. Dites-moi votre budget et je vous montre les meilleures options. 🛍️',
+        'Les prix affichés sont ceux du site. Dites-moi laquelle vous plaît, je vérifie les tailles. 😊',
+      ],
+      hesitant: ['Pas de pression 😊 Je peux vous montrer les différences entre ces modèles pour vous aider à choisir celui qui vous convient le mieux.'],
+      loyal: ['Merci pour votre fidélité ! ❤️ Je peux vous présenter des nouveautés qui correspondent à vos préférences.'],
+      neutral: [],
+    },
+    ranges: {
+      intro: 'J’ai trois idées pour vous ! 😊',
+      deal: (name, price) => `💰 Bon plan : ${name} — ${price}`,
+      favorite: (name, price) => `❤️ Coup de cœur : ${name} — ${price}`,
+      premium: (name, price) => `✨ Style premium : ${name} — ${price} (le plus haut de gamme de cette sélection)`,
+      closing: 'Les prix et les stocks sont ceux du site. Laquelle de ces idées vous plaît le plus ? 😊',
+      tooClose: 'Dans cette sélection, les prix sont très proches : je vous montre simplement les meilleurs choix.',
+    },
+    compare: {
+      intro: 'Comparons-les ensemble 😊',
+      line: (name, price, extras) => `• ${name} : ${price}${extras.length > 0 ? ` · ${extras.join(' · ')}` : ''}`,
+      cheaper: (name, diff) => `💰 Le plus accessible : ${name} (${diff} de moins).`,
+      samePrice: 'Ils sont au même prix : le choix se fait surtout selon vos goûts. 😊',
+      moreChoice: (name) => `🎨 Le plus de choix en couleurs ou en tailles : ${name}.`,
+      ask: 'Dites-moi ce qui compte le plus pour vous (le prix, le style, les couleurs) et je vous aide à choisir. 😊',
+      needTwo: 'Pour comparer, il me faut deux articles. Dites-moi lesquels, ou voulez-vous que je vous en montre quelques-uns ?',
+      colors: (n) => `${n} couleur${n > 1 ? 's' : ''}`,
+      sizes: (list) => `tailles ${list}`,
+    },
+    loyal: {
+      intro: 'Merci pour votre fidélité ! ❤️ Voici quelques nouveautés qui peuvent vous plaire.',
+      points: (points, tier, missing, next) => `⭐ Vos points : ${points} (grade ${tierOf(tier).label} ${tierOf(tier).icon})${next && missing > 0 ? ` · il vous manque ${FR_POINTS(missing)} pour le grade ${tierOf(next).label}` : ''}.`,
+    },
+  },
   wholesale: {
     ask: '📦 Pour les achats en gros (cartons, grandes quantités), les prix sont donnés directement par notre équipe 😊 Écrivez-nous sur WhatsApp avec : l’article, la quantité (ou le nombre de cartons) et votre ville.',
     nudge: '📦 Grosse commande ? Notre équipe peut vous faire un prix et organiser la livraison : écrivez-nous sur WhatsApp. Vous pouvez aussi continuer ici.',
@@ -947,6 +1062,15 @@ const AR: Texts = {
     callbackYes: 'نعم، موافق',
     callbackFix: 'تغيير الرقم',
     callbackDayFix: 'تغيير اليوم',
+    styleElegant: '✨ أنيق / فاخر',
+    styleTrend: '🔥 عصري وموضة',
+    styleSport: '👟 رياضي',
+    styleBudget: '💰 سعر مناسب',
+    myStyle: '🎨 ذوقي',
+    ranges: '🎯 3 فئات سعرية',
+    compare: '⚖️ قارن',
+    newForMe: '🆕 جديد لي',
+    take: (name) => `✅ آخذ: ${name}`,
     idk: '🤷 لا أعرف',
     anyBudget: 'لا يهم',
     giftWho: { elle: '👩 لها', lui: '👨 له', enfant: '👶 لطفل' },
@@ -1323,6 +1447,68 @@ const AR: Texts = {
     done: (day) => `تم التسجيل ✅ سيراسلك الفريق على واتساب: ${day}\nشكرا لثقتك 🙏`,
     failed: 'لم أتمكن من تسجيل طلبك 😕 راسلنا مباشرة على واتساب وسيرد عليك الفريق.',
     cancelled: 'حسنا، لن أسجل شيئا 😊',
+  },
+  persona: {
+    compareOffer: '⚖️ يمكنني أيضا أن أوضح لك الفروق بين هذه الموديلات لتختار الأنسب 😊',
+    askStyle: 'بكل سرور! 😊 لأنصحك جيدا، ماذا يسعدك أكثر: أسلوب أنيق، أو شيء عصري ومواكب للموضة، أو إطلالة رياضية، أو سعر مناسب؟',
+    jobAck: {
+      pro: 'تشرفت بمعرفتك! 😊 شكرا لأنك حدثتني عن نفسك. لأنصحك جيدا، ماذا يسعدك أكثر: أسلوب أنيق، أو شيء عصري ومواكب للموضة، أو إطلالة رياضية، أو سعر مناسب؟',
+      student: 'رائع! 😊 شكرا لأنك حدثتني عن نفسك. لأنصحك جيدا، ماذا يسعدك أكثر: شيء عصري ومواكب للموضة، أو سعر مناسب، أو إطلالة رياضية، أو أسلوب أكثر أناقة؟',
+    },
+    styleSet: {
+      elegant: 'اختيار ممتاز ✨ سأعرض عليك قطعا أنيقة بمظهر جميل.',
+      trend: 'ممتاز 🔥 عصري وسهل التنسيق مع قطع أخرى: سأعرض عليك ذلك.',
+      sport: 'رائع 👟 إطلالة رياضية ومريحة: سأعرض عليك ما ينسجم معا.',
+      budget: 'لا مشكلة 😊 يمكننا إيجاد شيء أنيق بسعر مناسب! سأعرض عليك أفضل الخيارات.',
+    },
+    tone: {
+      elegant: [
+        'هذا الموديل قد يكمل أسلوبك فعلا! 😎 انظر إلى الصور: التفاصيل ظاهرة فيها.',
+        'إذا كنت تحب الملابس المرتبة، فهذه القطع تعطي مظهرا جميلا دون مبالغة. ✨',
+        'قل لي أيها يعجبك أكثر وسأعطيك المقاسات والألوان المتوفرة. 😊',
+      ],
+      trend: [
+        'عصري وسهل التنسيق مع قطع أخرى: طريقة جميلة لتجديد أسلوبك! 🔥',
+        'إذا كنت تحب الإطلالات العصرية فهذه القطع ستعجبك. هل تريد أن ترى ما ينسجم معها؟ 😊',
+        'قل لي أيها يعجبك وسأتحقق لك من المقاسات والألوان. 👟',
+      ],
+      sport: [
+        'للإطلالة الرياضية والمريحة، هذه القطع عملية في كل يوم. 👟',
+        'يمكنني أيضا أن أعرض عليك أحذية أو إكسسوارات منسجمة لتكتمل الإطلالة. 🔥',
+        'قل لي أيها يعجبك وسأعطيك المقاسات المتوفرة. 😊',
+      ],
+      budget: [
+        'الهدف: أن نجد شيئا يعجبك ويناسبك ويحترم ميزانيتك. ❤️',
+        'يمكنك أن تكون أنيقا دون إنفاق كثير. أخبرني بميزانيتك وسأعرض عليك أفضل الخيارات. 🛍️',
+        'الأسعار المعروضة هي أسعار الموقع. قل لي أيها يعجبك وسأتحقق من المقاسات. 😊',
+      ],
+      hesitant: ['دون ضغط 😊 يمكنني أن أوضح لك الفروق بين هذه الموديلات لتختار الأنسب لك.'],
+      loyal: ['شكرا على وفائك! ❤️ يمكنني أن أعرض عليك جديدا يناسب ما تحب.'],
+      neutral: [],
+    },
+    ranges: {
+      intro: 'عندي ثلاث أفكار لك! 😊',
+      deal: (name, price) => `💰 صفقة جيدة: ${name} — ${price}`,
+      favorite: (name, price) => `❤️ اختيار القلب: ${name} — ${price}`,
+      premium: (name, price) => `✨ أسلوب فاخر: ${name} — ${price} (الأعلى فئة في هذه المجموعة)`,
+      closing: 'الأسعار والمخزون هي نفسها في الموقع. أي فكرة تعجبك أكثر؟ 😊',
+      tooClose: 'في هذه المجموعة الأسعار متقاربة جدا: سأعرض عليك أفضل الخيارات فقط.',
+    },
+    compare: {
+      intro: 'لنقارن بينهما معا 😊',
+      line: (name, price, extras) => `• ${name}: ${price}${extras.length > 0 ? ` · ${extras.join(' · ')}` : ''}`,
+      cheaper: (name, diff) => `💰 الأقل سعرا: ${name} (أرخص بـ ${diff}).`,
+      samePrice: 'السعر نفسه: الاختيار يكون حسب ذوقك أساسا. 😊',
+      moreChoice: (name) => `🎨 الأكثر تنوعا في الألوان أو المقاسات: ${name}.`,
+      ask: 'قل لي ما الأهم عندك (السعر، الأسلوب، الألوان) وسأساعدك على الاختيار. 😊',
+      needTwo: 'للمقارنة أحتاج إلى منتجين. قل لي أيهما تريد، أو هل تريد أن أعرض عليك بعضها؟',
+      colors: (n) => (n === 1 ? 'لون واحد' : n === 2 ? 'لونان' : n <= 10 ? `${n} ألوان` : `${n} لونا`),
+      sizes: (list) => `المقاسات ${list}`,
+    },
+    loyal: {
+      intro: 'شكرا على وفائك! ❤️ إليك بعض الجديد الذي قد يعجبك.',
+      points: (points, tier, missing, next) => `⭐ نقاطك: ${AR_POINTS(points)} (الدرجة ${TIER_AR[tier]} ${tierOf(tier).icon})${next && missing > 0 ? ` · ينقصك ${AR_POINTS(missing)} للوصول إلى الدرجة ${TIER_AR[next]}` : ''}.`,
+    },
   },
   wholesale: {
     ask: '📦 لمشتريات الجملة (كراتين وكميات كبيرة) يقدم فريقنا الأسعار مباشرة 😊 راسلنا على واتساب مع: المنتج والكمية (أو عدد الكراتين) ومدينتك.',

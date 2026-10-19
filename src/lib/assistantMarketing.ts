@@ -1,6 +1,7 @@
 import { discount, newest, normalize, promotions, searchCatalog, tokenize, type CatalogProduct } from './assistantBrain';
 import { arabicToFrench, CATEGORY_WORDS, GENDERED_SLUGS, hasArabic, WHO_WORDS, type Lang, type Who } from './assistantLang';
 import { categoryLabel, fcfa, texts, type Range } from './assistantText';
+import { rankForStyle, type StyleKey } from './assistantPersona';
 
 // Conseil de Zara : fonctions simples (sans IA) pour comprendre le besoin du client, poser UNE question à la fois
 // (pour qui, quel article, quel budget), recommander avec des raisons vérifiées, proposer ce qui se complète,
@@ -241,9 +242,13 @@ export function candidatesFor(catalog: CatalogProduct[], ctx: Context | null): C
 }
 
 // Les meilleurs choix dans un budget. Si rien n'entre dans le budget : ce qui s'en approche le plus (fallback).
-export function pickInBudget(catalog: CatalogProduct[], ctx: Context | null, range: Range, limit = 4): { items: CatalogProduct[]; fallback: boolean } {
+// `style` : ce que le client dit aimer (élégant, tendance, sport, petit prix) classe les choix ; sans style, rien ne change.
+export function pickInBudget(catalog: CatalogProduct[], ctx: Context | null, range: Range, limit = 4, style: StyleKey | null = null): { items: CatalogProduct[]; fallback: boolean } {
   const all = candidatesFor(catalog, ctx);
-  const inside = all.filter((p) => p.price >= range.min && p.price <= range.max);
+  const inside = rankForStyle(
+    all.filter((p) => p.price >= range.min && p.price <= range.max),
+    style
+  );
   if (inside.length > 0) return { items: inside.slice(0, limit), fallback: false };
   const sorted = [...all].sort((a, b) => (range.min > 0 ? b.price - a.price : a.price - b.price));
   return { items: sorted.slice(0, limit), fallback: true };
