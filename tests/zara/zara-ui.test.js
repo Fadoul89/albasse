@@ -1685,7 +1685,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
 
     // --- M9. « Vous etes mon Ne client aujourd'hui » : le VRAI rang du jour, donne par la base, jamais invente
     {
-      const SAMPLE = 'Salut Moussa ! 😍👋 Bienvenue chez Albasse Shopping ! Vous êtes mon 3ᵉ client aujourd’hui, ça me fait plaisir de vous accueillir ! 🥰🛍️\n' + INVITE_FR;
+      const SAMPLE = 'Salut Moussa ! 😍👋 Bienvenue chez Albasse Shopping ! Vous êtes mon 3ᵉ client aujourd’hui, ça me fait plaisir de vous accueillir ! 🥰🛍️\n🇹🇩 Nous sommes une plateforme 100 % TCHADIENNE !\n' + INVITE_FR;
       const v = await newVisitor(phone, { lang: 'fr', storage: { albasse_zara_name: 'Moussa' }, rank: 3 });
       await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
       await sleep(2500);

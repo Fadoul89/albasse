@@ -449,7 +449,7 @@ const FR: Texts = {
   dir: 'ltr',
   roleTitle: 'Assistante marketing',
   welcome: (name, rank, greeted) =>
-    `${greeted ? '' : `Salut${name ? ` ${name}` : ''} ! 😍👋 `}Bienvenue chez Albasse Shopping ! ${rank ? `Vous êtes mon ${ordinalFr(rank)} client aujourd’hui, ça` : 'Ça'} me fait plaisir de vous accueillir ! 🥰🛍️\nDites-moi, qu’est-ce qui vous ferait plaisir aujourd’hui ? Je suis là pour vous aider à trouver les meilleurs articles ! ❤️`,
+    `${greeted ? '' : `Salut${name ? ` ${name}` : ''} ! 😍👋 `}Bienvenue chez Albasse Shopping ! ${rank ? `Vous êtes mon ${ordinalFr(rank)} client aujourd’hui, ça` : 'Ça'} me fait plaisir de vous accueillir ! 🥰🛍️\n🇹🇩 Nous sommes une plateforme 100 % TCHADIENNE !\nDites-moi, qu’est-ce qui vous ferait plaisir aujourd’hui ? Je suis là pour vous aider à trouver les meilleurs articles ! ❤️`,
   teaser: (name) => `Bonjour${name ? ` ${name}` : ''} ! Je suis ${ASSISTANT_NAME}, l'${ASSISTANT_ROLE} d'Albasse Shopping. 😊`,
   hello: (name) => `Salut ${name} ! 😍👋`,
   memberBack: (name) => `Salut ${name} ! 😍👋 Vous êtes bien connecté(e), ça me fait plaisir de vous retrouver ! 🥰`,
@@ -1025,7 +1025,7 @@ const AR: Texts = {
   dir: 'rtl',
   roleTitle: 'مساعدة التسويق',
   welcome: (name, rank, greeted) =>
-    `${greeted ? '' : `مرحباً${name ? ` ${name}` : ''}! 😍👋 `}أهلاً بك في Albasse Shopping! ${rank ? `أنت رقم ${rank} بين عملائي اليوم، ويسعدني` : 'يسعدني'} استقبالك! 🥰🛍️\nما الذي يسعدك اليوم؟ أنا هنا لمساعدتك في إيجاد أفضل المنتجات! ❤️`,
+    `${greeted ? '' : `مرحباً${name ? ` ${name}` : ''}! 😍👋 `}أهلاً بك في Albasse Shopping! ${rank ? `أنت رقم ${rank} بين عملائي اليوم، ويسعدني` : 'يسعدني'} استقبالك! 🥰🛍️\n🇹🇩 نحن منصة تشادية 100%!\nما الذي يسعدك اليوم؟ أنا هنا لمساعدتك في إيجاد أفضل المنتجات! ❤️`,
   teaser: (name) => `مرحبا${name ? ` ${name}` : ''}! أنا زارا كينغز، مساعدة التسويق في Albasse Shopping. 😊`,
   hello: (name) => `مرحباً ${name}! 😍👋`,
   memberBack: (name) => `مرحباً ${name}! 😍👋 تم تسجيل دخولك، ويسعدني لقاؤك من جديد! 🥰`,
