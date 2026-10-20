@@ -3756,8 +3756,16 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await waitWall(v.page);
       await sleep(1500);
       const txt = await wall(v.page).innerText();
-      check('compte obligatoire : l\'ecran « Créez votre compte » couvre l\'accueil', /Créez votre compte gratuit/.test(txt) && /Créer mon compte/.test(txt) && /J’ai déjà un compte/.test(txt), txt.slice(0, 200));
+      check('compte obligatoire : l\'ecran d\'entree couvre l\'accueil (ALBASSE SHOPPING, Bienvenue)', /ALBASSE SHOPPING/.test(txt) && /Bienvenue/.test(txt) && /Connectez-vous pour découvrir nos articles/.test(txt), txt.slice(0, 200));
+      const yOf = async (loc) => (await loc.boundingBox())?.y ?? -1;
+      const yLogin = await yOf(wall(v.page).getByTestId('login-identifier'));
+      const yCreate = await yOf(wall(v.page).getByText('Créer mon compte', { exact: true }));
+      check('connexion en haut (numero ou e-mail, mot de passe, « Se souvenir de mon mot de passe »), « Créer mon compte » en bas', yLogin > 0 && yCreate > yLogin && (await wall(v.page).getByTestId('login-password').count()) === 1 && /Se souvenir de mon mot de passe/.test(txt), { yLogin, yCreate });
+      check('« Se souvenir de mon mot de passe » coche au depart', (await wall(v.page).getByTestId('login-remember').getAttribute('aria-checked')) === 'true');
+      check('le telephone peut enregistrer et remplir le mot de passe (autocomplete username / current-password)', (await wall(v.page).getByTestId('login-identifier').getAttribute('autocomplete')) === 'username' && (await wall(v.page).getByTestId('login-password').getAttribute('autocomplete')) === 'current-password');
       check('l\'ecran dit que seuls le nom, le numero et un mot de passe sont demandes (e-mail facultatif)', /nom, votre numéro de téléphone et un mot de passe/.test(txt) && /facultatif/.test(txt));
+      check('plus de liens « Confidentialité » ni « Contact » sur l\'ecran d\'entree', !/Confidentialité/.test(txt) && !/Contact/.test(txt), txt);
+      check('page en francais (lang="fr") : Chrome ne la traduit plus (« ALBASSE SHOPPING » reste tel quel)', (await v.page.evaluate(() => document.documentElement.lang)) === 'fr');
       check('pas de bouton de Zara derriere le mur', (await fabCount(v.page)) === 0);
       await v.page.goto(`http://localhost:${port}/produit/${prod.slug}`, { waitUntil: 'load' });
       await waitWall(v.page);
@@ -3891,16 +3899,42 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
       await waitWall(v.page);
       await sleep(1000);
-      await shown(v.page, 'J’ai déjà un compte').click();
-      await v.page.getByTestId('login-identifier').waitFor({ timeout: 15000 });
-      await sleep(600);
-      check(`connexion (${what}) : la case dit « Numéro de téléphone ou e-mail »`, (await v.page.getByTestId('login-identifier').locator('visible=true').getAttribute('placeholder')) === 'Numéro de téléphone ou e-mail');
-      await v.page.getByTestId('login-identifier').locator('visible=true').fill(typed);
-      await v.page.getByTestId('login-password').locator('visible=true').fill('secret12');
-      await shown(v.page, 'Se connecter').click();
+      check(`connexion (${what}) : la case dit « Numéro de téléphone ou e-mail »`, (await wall(v.page).getByTestId('login-identifier').getAttribute('placeholder')) === 'Numéro de téléphone ou e-mail');
+      await wall(v.page).getByTestId('login-identifier').fill(typed);
+      await wall(v.page).getByTestId('login-password').fill('secret12');
+      await wall(v.page).getByText('Se connecter', { exact: true }).click();
       await sleep(4000);
       const call = (fu.tokenCalls || []).find((c) => c.grant === 'password') || {};
-      check(`connexion (${what}) : envoyee avec ${expected}, puis plus de mur`, call.email === expected && call.password === 'secret12' && (await wall(v.page).count()) === 0, { call, wall: await wall(v.page).count() });
+      check(`connexion depuis l'ecran d'entree (${what}) : envoyee avec ${expected}, puis plus de mur`, call.email === expected && call.password === 'secret12' && (await wall(v.page).count()) === 0, { call, wall: await wall(v.page).count() });
+      const kept = await v.page.evaluate(() => ({ id: localStorage.getItem('albasse_login_id'), only: localStorage.getItem('albasse_session_only') }));
+      check(`« Se souvenir » coche (${what}) : le numero (ou l'e-mail) est garde pour la prochaine fois, la connexion reste`, kept.id === typed && kept.only === null, kept);
+      await v.ctx.close();
+    }
+    // numero garde : la case est deja remplie ; « Se souvenir » decoche : rien n'est garde, la connexion s'arrete a la fermeture
+    {
+      const fu = accountOf({ filled: true });
+      const v = await newVisitor(phone, { fakeUser: fu, fakeStore: { waOrder: true, accountRequired: true }, storage: { albasse_login_id: '66 12 34 56' } });
+      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await waitWall(v.page);
+      await sleep(1000);
+      check('numero garde : la case est deja remplie', (await wall(v.page).getByTestId('login-identifier').inputValue()) === '66 12 34 56');
+      await wall(v.page).getByTestId('login-remember').click();
+      check('decocher « Se souvenir » : le navigateur ne propose plus de remplir (autocomplete off)', (await wall(v.page).getByTestId('login-remember').getAttribute('aria-checked')) === 'false' && (await wall(v.page).getByTestId('login-password').getAttribute('autocomplete')) === 'off');
+      await wall(v.page).getByTestId('login-password').fill('secret12');
+      await wall(v.page).getByText('Se connecter', { exact: true }).click();
+      await sleep(4000);
+      const kept = await v.page.evaluate(() => ({ id: localStorage.getItem('albasse_login_id'), only: localStorage.getItem('albasse_session_only'), tab: sessionStorage.getItem('albasse_session_tab') }));
+      check('decoche : connecte, mais le numero n\'est plus garde', (await wall(v.page).count()) === 0 && kept.id === null && kept.only === '1' && kept.tab === '1', kept);
+      await v.page.reload({ waitUntil: 'load' });
+      await sleep(5000);
+      check('decoche : la page rechargee (meme onglet) reste connectee', (await wall(v.page).count()) === 0);
+      // navigateur ferme puis rouvert = nouvel onglet sans la marque de l'onglet
+      const p2 = await v.ctx.newPage();
+      await p2.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await waitWall(p2);
+      const st2 = await p2.evaluate(() => ({ only: localStorage.getItem('albasse_session_only'), tab: sessionStorage.getItem('albasse_session_tab'), keys: Object.keys(localStorage).filter((k) => /auth-token/.test(k)) }));
+      // (la case n'est pas verifiee ici : le decor du test remet le numero garde a chaque nouvelle page)
+      check('decoche : navigateur rouvert = deconnecte (session effacee), l\'ecran d\'entree revient', (await wall(p2).count()) === 1 && st2.keys.length === 0 && st2.only === null, { wall: await wall(p2).count(), st2 });
       await v.ctx.close();
     }
     {
@@ -3914,8 +3948,13 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await shown(v.page, 'Se connecter').click();
       await v.page.getByText('Numéro (ou e-mail) ou mot de passe incorrect.').waitFor({ timeout: 10000 });
       check('mauvais mot de passe : « Numero (ou e-mail) ou mot de passe incorrect »', true);
-      // mot de passe oublie avec le numero : aide sur WhatsApp
-      await v.page.goto(`http://localhost:${port}/mot-de-passe-oublie`, { waitUntil: 'load' });
+      // « J'ai oublié mon mot de passe » (sur l'ecran d'entree) puis aide sur WhatsApp avec le numero
+      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await waitWall(v.page);
+      await sleep(800);
+      check('ecran d\'entree : lien « J’ai oublié mon mot de passe » sous la connexion', (await wall(v.page).getByTestId('login-forgot').innerText()).trim() === 'J’ai oublié mon mot de passe');
+      await wall(v.page).getByTestId('login-forgot').click();
+      await v.page.waitForURL(/\/mot-de-passe-oublie/, { timeout: 15000 });
       await v.page.getByTestId('forgot-identifier').waitFor({ timeout: 15000 });
       await sleep(600);
       check('mot de passe oublie : ouvert sans compte', (await wall(v.page).count()) === 0);

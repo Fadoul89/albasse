@@ -11,6 +11,7 @@ import { ScreenHeader } from '../../components/ScreenHeader';
 import { isSupabaseConfigured } from '../../lib/supabase';
 import { CityPicker } from '../../components/CityPicker';
 import { isValidEmail, phoneDigits } from '../../lib/phoneAuth';
+import { rememberLogin } from '../../lib/rememberLogin';
 
 export function RegisterScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -92,6 +93,7 @@ export function RegisterScreen() {
       );
     } else {
       showToast('Votre compte a bien été créé.', { title: 'Bienvenue ✓', type: 'success' });
+      rememberLogin(phone, true);
       // la page demandée à l'arrivée sur le site a déjà été rouverte (RootNavigator) : on n'y touche pas
       if (!navigation.isFocused()) return;
       if (navigation.canGoBack()) navigation.goBack();
@@ -106,6 +108,7 @@ export function RegisterScreen() {
         <Text style={styles.sectionLabel}>Informations obligatoires</Text>
         <TextInput
           testID="register-name"
+          autoComplete="name"
           value={fullName}
           onChangeText={setFullName}
           placeholder="Nom et prénom *"
@@ -114,6 +117,8 @@ export function RegisterScreen() {
         />
         <TextInput
           testID="register-phone"
+          autoComplete="tel"
+          textContentType="telephoneNumber"
           value={phone}
           onChangeText={setPhone}
           placeholder="Numéro de téléphone * (ex. 66 12 34 56)"
@@ -123,6 +128,8 @@ export function RegisterScreen() {
         />
         <TextInput
           testID="register-password"
+          autoComplete="new-password"
+          textContentType="newPassword"
           value={password}
           onChangeText={setPassword}
           placeholder="Mot de passe (min. 6 caractères) *"
@@ -135,6 +142,7 @@ export function RegisterScreen() {
         <Text style={styles.sectionLabel}>Informations optionnelles</Text>
         <TextInput
           testID="register-email"
+          autoComplete="email"
           value={email}
           onChangeText={setEmail}
           placeholder="E-mail (facultatif)"
