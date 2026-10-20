@@ -92,18 +92,23 @@ function rememberSynced(endpoint: string) {
   }
 }
 
-// L'autorisation est deja accordee et l'appareil a deja un abonnement, mais celui-ci
-// n'est jamais arrive sur le site (ancien echec d'enregistrement) : on le renvoie, une
-// seule fois. Aucun toucher n'est necessaire : rien n'est demande, on reutilise
-// l'abonnement existant.
+// L'autorisation est deja accordee mais l'abonnement n'est jamais arrive sur le site
+// (ancien echec d'enregistrement) ou a disparu du telephone : on le renvoie (ou on se
+// reabonne), une seule fois. Aucun toucher n'est necessaire : rien n'est demande.
 export async function syncWebPushSubscription(): Promise<void> {
   if (!isWebPushSupported() || !isSupabaseConfigured || Notification.permission !== 'granted') return;
   try {
     const registration =
       (await navigator.serviceWorker.getRegistration()) ?? (await navigator.serviceWorker.register('/sw.js'));
     await navigator.serviceWorker.ready;
-    const subscription = await registration.pushManager.getSubscription();
-    if (!subscription) return;
+    // abonnement perdu (expiré, données du navigateur effacées) alors que l'autorisation est toujours là : on se réabonne, sans rien
+    // demander au client
+    const subscription =
+      (await registration.pushManager.getSubscription()) ??
+      (await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) as BufferSource,
+      }));
     const json = subscription.toJSON();
     if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) return;
     if (window.localStorage.getItem(SYNCED_KEY) === json.endpoint) return;

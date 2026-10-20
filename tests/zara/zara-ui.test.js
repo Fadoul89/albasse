@@ -13,7 +13,7 @@ const fs = require('fs');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const dist = process.argv[2] || '../../dist';
 const port = process.argv[3] || '4333';
-const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI12TOFBCDE').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI123TOFBCDE').toUpperCase();
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
 fs.mkdirSync(OUT, { recursive: true });
 const KEY = process.env.SUPABASE_ANON_KEY;
@@ -43,27 +43,46 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   // rank : rang du jour renvoye par la fonction de la base (null : fonction pas installee). fakeUser : compte simule (token : reponse a une connexion par mot de passe ; delay : lenteur du profil en ms). fakeOrders : { list: [...], patches: [] } = fausse table des commandes.
   // zaraInstall : par defaut, le visiteur a deja repondu « Plus tard » a l'installation (Zara ne la propose pas) ; null = vrai nouveau
   // visiteur, pour les parties qui testent l'installation
-  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, fakeSales = null, fakeCallbacks = null, fakePushes = null, fakeStore = null, initScripts = [], zaraInstall = 'dismissed' } = {}) {
+  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, fakeSales = null, fakeCallbacks = null, fakePushes = null, fakeStore = null, initScripts = [], zaraInstall = 'dismissed', zaraPush = 'later', pushPerm = null, pushAnswer = 'granted' } = {}) {
     const ctx = await b.newContext(opts);
     if (cookies) await ctx.addCookies(cookies);
     if (lang) storage = { albasse_zara_lang: lang, ...storage };
     for (const code of initScripts) await ctx.addInitScript(code);
-    await ctx.addInitScript(([entries, sessionEntries, installDefault]) => {
+    // notifications du telephone (faux) : pushPerm = ce que le telephone repond deja ('default' pas encore demande, 'granted', 'denied'),
+    // pushAnswer = la reponse du client a la question « Autoriser les notifications ? » ; l'abonnement est un faux (aucun vrai service)
+    if (pushPerm) {
+      await ctx.addInitScript(([perm, answer]) => {
+        let current = perm;
+        Object.defineProperty(Notification, 'permission', { get: () => current, configurable: true });
+        Notification.requestPermission = async () => {
+          window.__pushAsked = (window.__pushAsked || 0) + 1;
+          current = answer;
+          return answer;
+        };
+        const fakeSub = { endpoint: 'https://push.example.test/abonnement-1', toJSON() { return { endpoint: this.endpoint, keys: { p256dh: 'BPfaux', auth: 'authfaux' } }; } };
+        PushManager.prototype.getSubscription = async function () { return window.__pushSub || null; };
+        PushManager.prototype.subscribe = async function () { window.__pushSub = fakeSub; return fakeSub; };
+      }, [pushPerm, pushAnswer]);
+    }
+    await ctx.addInitScript(([entries, sessionEntries, installDefault, pushDefault]) => {
       try {
         localStorage.setItem('albasse_app_banner_dismissed', '1');
         localStorage.setItem('albasse_app_popup_seen_' + new Date().toISOString().slice(0, 10), '1');
         for (const [k, v] of Object.entries(entries)) localStorage.setItem(k, v);
         if (installDefault && !localStorage.getItem('albasse_zara_install')) localStorage.setItem('albasse_zara_install', JSON.stringify({ at: Date.now(), outcome: installDefault }));
+        // rappel des notifications de Zara : deja repondu « Plus tard » par defaut (zaraPush: null = jamais demande)
+        if (pushDefault && !localStorage.getItem('albasse_zara_push')) localStorage.setItem('albasse_zara_push', JSON.stringify({ at: Date.now(), outcome: pushDefault }));
         // la conversation et le « deja salue » de l'onglet ne sont mis qu'a la premiere page (pas apres un rechargement)
         if (!sessionStorage.getItem('__zara_test_seeded')) {
           for (const [k, v] of Object.entries(sessionEntries)) sessionStorage.setItem(k, v);
           sessionStorage.setItem('__zara_test_seeded', '1');
         }
       } catch (e) {}
-    }, [storage, session, zaraInstall]);
+    }, [storage, session, zaraInstall, zaraPush]);
     const writes = [];
     const rpcCalls = [];
     const pushClicks = []; // clics de notifications comptes (record_push_click)
+    const pushSubs = []; // telephones abonnes aux notifications (faux enregistrement)
     // statistiques de Zara : ce que le site envoie a la base (appareil du compteur, gestes d'installation, installations, demandes de la page admin)
     const chatStarts = [];
     const events = [];
@@ -178,6 +197,11 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
             return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } });
           }
         }
+        // un telephone s'abonne aux notifications (faux enregistrement : rien n'arrive dans la vraie base)
+        if (u.pathname === '/rest/v1/web_push_subscriptions' && m === 'POST') {
+          pushSubs.push(JSON.parse(req.postData() || '{}'));
+          return route.fulfill({ status: 201, headers: { 'access-control-allow-origin': '*' }, body: '' });
+        }
         // un client a touche une notification programmee : le site compte le clic (fausse base)
         if (u.pathname === '/rest/v1/rpc/record_push_click' && m === 'POST') {
           pushClicks.push(JSON.parse(req.postData() || '{}'));
@@ -204,7 +228,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
           };
           const wait = fs.delay ? sleep(fs.delay) : Promise.resolve();
           // avec fakeStore, la vraie ligne est lue avec la cle publique (la base refuserait la fausse session de l'admin)
-          const fetchOpts = fakeStore ? { headers: { ...req.headers(), apikey: KEY, authorization: `Bearer ${KEY}` } } : undefined;
+          const fetchOpts = fakeStore || fakeUser ? { headers: { ...req.headers(), apikey: KEY, authorization: `Bearer ${KEY}` } } : undefined;
           return wait.then(() => route.fetch(fetchOpts)).then(async (res) => {
             const text = await res.text();
             let data = null;
@@ -339,7 +363,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     page.on('console', (msg) => {
       if (msg.type() === 'error' && !/Failed to load resource|net::ERR|Erreur creation session visiteur/.test(msg.text())) errs.push(msg.text());
     });
-    return { ctx, page, errs, writes, rpcCalls, pushClicks, chatStarts, events, installs, statsCalls, browsingCalls, browsingApplied, forgets, net, overviewCalls };
+    return { ctx, page, errs, writes, rpcCalls, pushClicks, pushSubs, chatStarts, events, installs, statsCalls, browsingCalls, browsingApplied, forgets, net, overviewCalls };
   }
 
   const panelOf = (p) => p.getByTestId('assistant-panel');
@@ -3990,6 +4014,119 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await waitWall(v2.page);
       check('remis : un nouveau visiteur voit de nouveau le mur', (await wall(v2.page).count()) === 1);
       await v2.ctx.close();
+    }
+  }
+
+  if (PARTS.includes('3')) {
+    console.log('\n== 3. Zara rappelle d\'activer les notifications a ceux qui ont installe Albasse Shopping (faux telephone, faux enregistrement)');
+    const ASK = /les notifications ne sont pas encore activées/;
+    const ENABLE = '🔔 Activer les notifications';
+    const installed = { albasse_zara_name: 'Ali', albasse_app_installed: '1' };
+    const pushRecord = (pg) => pg.evaluate(() => JSON.parse(localStorage.getItem('albasse_zara_push') || 'null'));
+    const openZara = async (v) => {
+      await v.page.keyboard.press('Escape');
+      await v.page.getByRole('button', { name: FAB_NAME }).click();
+      await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?/);
+    };
+    // installe, notifications jamais demandees : la bulle, puis Zara propose, le client active
+    {
+      const v = await newVisitor(phone, { zaraPush: null, pushPerm: 'default', pushAnswer: 'granted', storage: installed });
+      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.getByText(/activez les notifications pour ne rater aucune promo/).waitFor({ timeout: 15000 });
+      check('bulle de Zara : « 🔔 Ali, activez les notifications pour ne rater aucune promo ! »', (await v.page.getByText('🔔 Ali, activez les notifications pour ne rater aucune promo !').count()) === 1);
+      await openZara(v);
+      await waitText(v.page, ASK);
+      const labels = await chipLabels(v.page);
+      check('Zara rappelle : boutons « 🔔 Activer les notifications » et « Plus tard »', labels.includes(ENABLE) && labels.includes('Plus tard'), labels);
+      check('le menu a aussi le bouton « 🔔 Activer les notifications »', (await panelOf(v.page).getByTestId('assistant-chip-old').allInnerTexts()).some((l) => l.trim() === ENABLE));
+      check('rappel note (pas redit avant demain)', (await pushRecord(v.page))?.outcome === 'asked', await pushRecord(v.page));
+      await chip(v.page, ENABLE).first().click();
+      await waitText(v.page, /C’est activé ! Vous recevrez nos promotions/);
+      const asked = await v.page.evaluate(() => window.__pushAsked || 0);
+      check('toucher le bouton : le telephone demande « Autoriser les notifications ? » une fois, puis le telephone est enregistre', asked === 1 && v.pushSubs.length === 1 && v.pushSubs[0].endpoint === 'https://push.example.test/abonnement-1', { asked, subs: v.pushSubs });
+      check('active : plus de bouton « Activer » (ni sur les anciens messages)', ![...(await chipLabels(v.page)), ...(await panelOf(v.page).getByTestId('assistant-chip-old').allInnerTexts())].some((l) => l.trim() === ENABLE));
+      check('aucune erreur (rappel accepte)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+    // « Plus tard » : pas de rappel ni de bulle pendant 3 jours, mais le bouton reste dans le menu
+    {
+      const v = await newVisitor(phone, { zaraPush: null, pushPerm: 'default', storage: installed });
+      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(2000);
+      await openZara(v);
+      await waitText(v.page, ASK);
+      await chip(v.page, 'Plus tard').first().click();
+      await waitText(v.page, /Je vous le rappellerai plus tard/);
+      check('« Plus tard » : note pour 3 jours', (await pushRecord(v.page))?.outcome === 'later');
+      const p2 = await v.ctx.newPage();
+      await p2.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(7000);
+      check('« Plus tard » : la bulle ne parle plus des notifications', (await p2.getByText(/activez les notifications/).count()) === 0);
+      await p2.close();
+      await v.ctx.close();
+      const w = await newVisitor(phone, { zaraPush: 'later', pushPerm: 'default', storage: installed });
+      await w.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(2000);
+      await openZara(w);
+      await sleep(3000);
+      check('« Plus tard » : Zara ne le redit pas, mais « 🔔 Activer les notifications » reste dans le menu', (await panelOf(w.page).getByText(ASK).count()) === 0 && (await chipLabels(w.page)).includes(ENABLE), await chipLabels(w.page));
+      await chip(w.page, ENABLE).first().click();
+      await waitText(w.page, /C’est activé !/);
+      check('le bouton du menu active aussi', w.pushSubs.length === 1);
+      await w.ctx.close();
+    }
+    // le client refuse dans la question du telephone : les etapes pour debloquer ; il la ferme sans repondre : « je vous le rappellerai »
+    for (const [answer, re, what] of [['denied', /Restez appuyé sur l’icône Albasse Shopping/, 'refuse'], ['default', /n’ont pas été autorisées/, 'ferme sans repondre']]) {
+      const v = await newVisitor(phone, { zaraPush: null, pushPerm: 'default', pushAnswer: answer, storage: installed });
+      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(2000);
+      await openZara(v);
+      await waitText(v.page, ASK);
+      await chip(v.page, ENABLE).first().click();
+      await waitText(v.page, re);
+      check(`le client ${what} : Zara repond (${answer === 'denied' ? 'etapes pour autoriser dans les reglages' : 'rappel plus tard'}), rien n'est enregistre`, v.pushSubs.length === 0 && (await pushRecord(v.page))?.outcome === (answer === 'denied' ? 'steps' : 'later'), await pushRecord(v.page));
+      await v.ctx.close();
+    }
+    // deja bloquees : Zara donne les etapes d'elle-meme (une fois par semaine), sans bouton « Activer »
+    {
+      const v = await newVisitor(phone, { zaraPush: null, pushPerm: 'denied', storage: installed });
+      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(2000);
+      await openZara(v);
+      await waitText(v.page, /sont bloquées sur ce téléphone/);
+      check('bloquees : les etapes (icone, Infos sur l’appli, Notifications, Autoriser), pas de bouton « Activer »', !(await chipLabels(v.page)).includes(ENABLE) && (await pushRecord(v.page))?.outcome === 'steps');
+      await v.ctx.close();
+    }
+    // pas installe, ou deja active : rien
+    for (const [opts, what] of [[{ pushPerm: 'default', storage: { albasse_zara_name: 'Ali' } }, 'pas installe'], [{ pushPerm: 'granted', storage: installed }, 'deja active']]) {
+      const v = await newVisitor(phone, { zaraPush: null, ...opts });
+      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(7000);
+      const bubble = await v.page.getByText(/activez les notifications/).count();
+      await openZara(v);
+      await sleep(3000);
+      check(`${what} : ni bulle, ni rappel, ni bouton « Activer les notifications »`, bubble === 0 && (await panelOf(v.page).getByText(ASK).count()) === 0 && !(await chipLabels(v.page)).includes(ENABLE), await chipLabels(v.page));
+      await v.ctx.close();
+    }
+    // autorisation deja donnee mais abonnement perdu : le site se reabonne tout seul, sans rien demander
+    {
+      const v = await newVisitor(phone, { zaraPush: null, pushPerm: 'granted', storage: { albasse_zara_name: 'Ali' } });
+      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(5000);
+      check('abonnement perdu : reabonnement automatique, sans question', v.pushSubs.length === 1 && (await v.page.evaluate(() => window.__pushAsked || 0)) === 0, v.pushSubs);
+      await v.ctx.close();
+    }
+    // en arabe
+    {
+      const v = await newVisitor(phone, { lang: 'ar', zaraPush: null, pushPerm: 'default', storage: { ...installed, albasse_zara_name: 'علي' } });
+      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.getByText('🔔 علي، فعّل الإشعارات حتى لا تفوتك أي عروض!').waitFor({ timeout: 15000 });
+      check('arabe : la bulle « 🔔 علي، فعّل الإشعارات حتى لا تفوتك أي عروض! »', true);
+      await v.page.keyboard.press('Escape');
+      await v.page.getByRole('button', { name: /التحدث مع زارا كينغز|Discuter avec Zara Kings/ }).first().click();
+      await waitText(v.page, /لكن الإشعارات غير مفعّلة بعد/, 25000);
+      check('arabe : le rappel et le bouton « 🔔 تفعيل الإشعارات »', (await chipLabels(v.page)).includes('🔔 تفعيل الإشعارات'), await chipLabels(v.page));
+      await v.ctx.close();
     }
   }
 

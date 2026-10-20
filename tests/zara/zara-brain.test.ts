@@ -1336,6 +1336,25 @@ async function main() {
     ok('pages ouvertes sans compte : connexion, inscription, mot de passe, confidentialite, retours, contact ; le reste est couvert', ['Login', 'Register', 'ForgotPassword', 'ResetPassword', 'PrivacyPolicy', 'ReturnPolicy', 'Contact'].every((r) => !aw.wallCovers(r)) && ['Tabs', 'Product', 'Category', 'Checkout', undefined].every((r) => aw.wallCovers(r)));
   }
 
+  {
+    console.log('\n== rappel des notifications (installe sans notifications)');
+    const pr = await import('../../src/lib/pushReminderRule.ts');
+    const now = Date.UTC(2026, 9, 20, 10);
+    const day = 24 * 3600 * 1000;
+    const base = { supported: true, permission: 'default' as const, installed: true, record: null, now };
+    ok('installe, jamais demande : Zara propose d\'activer', pr.pushReminder(base) === 'ask');
+    ok('pas installe, pas pris en charge (application Albasse, Safari hors ecran d\'accueil) ou deja active : rien', pr.pushReminder({ ...base, installed: false }) === 'none' && pr.pushReminder({ ...base, supported: false }) === 'none' && pr.pushReminder({ ...base, permission: 'granted' }) === 'none' && pr.pushReminder({ ...base, permission: null }) === 'none');
+    ok('bloquees : les etapes pour debloquer', pr.pushReminder({ ...base, permission: 'denied' }) === 'blocked');
+    const after = (outcome: string, ms: number) => pr.pushReminder({ ...base, record: { at: now - ms, outcome } });
+    ok('question ignoree : redit le lendemain, pas avant', after('asked', day - 60000) === 'none' && after('asked', day + 60000) === 'ask');
+    ok('« Plus tard » : 3 jours de pause', after('later', 3 * day - 60000) === 'none' && after('later', 3 * day + 60000) === 'ask');
+    ok('etapes donnees : 7 jours de pause', pr.pushReminder({ ...base, permission: 'denied', record: { at: now - 6 * day, outcome: 'steps' } }) === 'none' && pr.pushReminder({ ...base, permission: 'denied', record: { at: now - 8 * day, outcome: 'steps' } }) === 'blocked');
+    ok('le bouton du menu ignore la pause (tant que ce n\'est pas active)', pr.pushReminder({ ...base, record: { at: now, outcome: 'later' }, ignorePause: true }) === 'ask');
+    const fr = tx.texts('fr');
+    const ar = tx.texts('ar');
+    ok('textes en francais et en arabe (rappel, bouton, bulle)', [fr.push.ask, fr.push.done, fr.push.later, fr.push.notGranted, fr.push.failed, fr.push.blockedAndroid, fr.push.blockedIos, ar.push.ask, ar.push.done, ar.push.later, ar.push.blockedAndroid].every((t) => t.length > 20) && fr.chip.enablePush === '🔔 Activer les notifications' && ar.chip.enablePush === '🔔 تفعيل الإشعارات' && fr.teaserPush('Ali') === '🔔 Ali, activez les notifications pour ne rater aucune promo !' && fr.teaserPush(null) === '🔔 Activez les notifications pour ne rater aucune promo !');
+  }
+
   console.log('\n' + (failures === 0 ? 'TOUT EST BON' : `${failures} ECHEC(S)`));
   process.exit(failures === 0 ? 0 : 1);
 }

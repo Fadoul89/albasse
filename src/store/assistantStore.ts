@@ -73,6 +73,8 @@ import { fetchCartStatus, fetchLoyaltyPoints, fetchPaymentNumbers, fetchProductF
 import { compareFacts, declaredStyle, jobFrom, jobKindOfProfession, rankForStyle, styleOrder, threeRanges, toneOf, type JobKind, type StyleKey } from '../lib/assistantPersona';
 import { callbackDays, callbackNote, dayFromText, LOW_STOCK_MAX, pickComplement, provenSales, type CallbackDay } from '../lib/assistantSales';
 import { clearIntent, currentDevice, markIntent } from '../lib/assistantAttribution';
+import { pushReminderNow, recordPushReminder } from '../lib/pushReminder';
+import { getWebPushIssue, isWebPushBlocked, PUSH_PERMISSION_NOT_GRANTED, subscribeToWebPush } from '../lib/webPushSubscription';
 import { trackShortcutInstallIfNeeded } from '../lib/appInstallTracking';
 import { occasionOf, stripOccasion, upcomingOccasion, type OccasionKey } from '../lib/assistantOccasions';
 import { availability, familyPicks, isFamily, moreInCategory, perfumesInStock, planSuggestion, similarProducts, type PlannedChip } from '../lib/assistantInterest';
@@ -134,6 +136,8 @@ export interface ChatAction {
     | 'installHelp'
     | 'iosGuide'
     | 'installLater'
+    | 'pushOn'
+    | 'pushLater'
     | 'orderCity'
     | 'orderPay'
     | 'orderGift'
@@ -461,7 +465,7 @@ const RANGES_SAY: Record<Lang, string> = { fr: 'trois gammes de prix', ar: 'ثل
 // panier, compte, WhatsApp, menu, installer). Les réponses à une question passée (taille, jour, budget, pour qui, confirmer...) partent.
 const OLD_CHIP_KINDS = new Set<ChatAction['kind']>([
   'say', 'whatsapp', 'register', 'login', 'orders', 'account', 'category', 'menu', 'cart', 'checkout', 'link', 'policy', 'pair', 'add',
-  'install', 'installHelp', 'iosGuide', 'interest', 'style', 'orderPage', 'categoryPage', 'openChrome',
+  'install', 'installHelp', 'iosGuide', 'interest', 'style', 'orderPage', 'categoryPage', 'openChrome', 'pushOn',
 ]);
 // Ces phrases parlent de ce qui est affiché en ce moment (le budget de ces articles, les comparer) : pas sur un ancien message.
 const CONTEXT_SAYS = new Set(['budget', ...Object.values(COMPARE_SAY), ...Object.values(RANGES_SAY)]);
@@ -585,6 +589,8 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     if (!isGuest()) actions.push({ label: c.orders, kind: 'orders' }, sayBtn(c.points, T().loyalty.mineQuery));
     const install = installMenuChip();
     if (install) actions.push(install);
+    const push = pushMenuChip();
+    if (push) actions.push(push);
     actions.push(wa(), langAction());
     return actions;
   };
@@ -640,7 +646,9 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     await say(T().info);
     if (isGuest()) await accountInvitation();
     else await showMenu(T().menuIntro);
-    // une suggestion discrète d'après les articles regardés, seulement si Zara n'a pas déjà parlé du produit ou du panier
+    // installé sans notifications : le rappel d'abord ; sinon une suggestion discrète d'après les articles regardés, seulement si Zara
+    // n'a pas déjà parlé du produit ou du panier
+    if (await maybeRemindPush()) return;
     if (!spoke) await maybeSuggest();
   }
 
@@ -2004,6 +2012,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       if (a.kind === 'say') return !CONTEXT_SAYS.has(a.payload ?? '');
       if (a.kind === 'register' || a.kind === 'login') return guest;
       if (a.kind === 'install' || a.kind === 'installHelp' || a.kind === 'iosGuide' || a.kind === 'openChrome') return (installOk ??= installMenuChip() !== null);
+      if (a.kind === 'pushOn') return pushMenuChip() !== null;
       return true;
     });
   }
@@ -2065,6 +2074,50 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     logAssistantEvent('install_ios_guide');
     // l'iPhone ne dit pas si l'application est déjà là : le client peut le dire, et le bouton d'installation ne revient plus
     await say(text, { image, actions: [{ label: T().chip.tutorial, kind: 'iosGuide' }, { label: T().chip.alreadyInstalled, kind: 'installYes' }, menuBtn()] });
+  }
+
+  // Notifications : installé sur le téléphone mais pas encore autorisées. Le bouton du menu reste là tant que ce n'est pas fait ;
+  // le rappel lui-même revient le lendemain s'il est ignoré, 3 jours après « Plus tard », 7 jours après les étapes pour débloquer.
+  function pushMenuChip(): ChatAction | null {
+    return pushReminderNow(true) === 'ask' ? { label: T().chip.enablePush, kind: 'pushOn' } : null;
+  }
+  const pushBlockedSteps = () => (isIosDevice() ? T().push.blockedIos : T().push.blockedAndroid);
+
+  async function maybeRemindPush(extra: ChatAction[] = []): Promise<boolean> {
+    const state = pushReminderNow();
+    if (state === 'none') return false;
+    if (state === 'blocked') {
+      // refusé autrefois : le téléphone ne repose plus la question, seules les étapes des réglages peuvent les débloquer
+      recordPushReminder('steps');
+      await say(pushBlockedSteps(), { actions: [...extra, menuBtn()] });
+      return true;
+    }
+    recordPushReminder('asked'); // on ne le redit pas avant demain, même s'il l'ignore
+    await say(T().push.ask, {
+      actions: [...extra, { label: T().chip.enablePush, kind: 'pushOn', highlight: true }, { label: T().chip.notNow, kind: 'pushLater' }],
+    });
+    return true;
+  }
+
+  // Appelée directement par le toucher du client : le téléphone ne montre « Autoriser les notifications ? » qu'après un geste.
+  async function pushOn(label: string) {
+    userSays(label);
+    if (await subscribeToWebPush()) {
+      recordPushReminder('accepted');
+      await say(T().push.done, { fast: true, actions: afterAnswerActions() });
+      return;
+    }
+    if (isWebPushBlocked()) {
+      recordPushReminder('steps');
+      await say(pushBlockedSteps(), { fast: true, actions: afterAnswerActions() });
+      return;
+    }
+    if (getWebPushIssue() === PUSH_PERMISSION_NOT_GRANTED) {
+      recordPushReminder('later');
+      await say(T().push.notGranted, { fast: true, actions: afterAnswerActions() });
+      return;
+    }
+    await say(T().push.failed, { fast: true, actions: [{ label: T().chip.enablePush, kind: 'pushOn', highlight: true }, menuBtn()] });
   }
 
   // Appelée directement par le toucher du client : la boîte d'installation de Chrome n'apparaît qu'après un geste volontaire.
@@ -3007,6 +3060,14 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       case 'iosGuide':
         useInstallGuideStore.getState().show();
         return;
+      case 'pushOn':
+        await pushOn(action.label);
+        return;
+      case 'pushLater':
+        userSays(action.label);
+        recordPushReminder('later');
+        await say(T().push.later, { fast: true, actions: afterAnswerActions() });
+        return;
       case 'installLater':
         userSays(action.label);
         recordInstall('dismissed');
@@ -3032,10 +3093,14 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     return at < 0 ? 0 : all.slice(at + 1).filter((m) => m.role === 'user').length;
   }
 
-  // Après deux messages du client (une fois la présentation finie), si ce n'est pas déjà fait : la proposition d'installer le raccourci (une seule fois).
+  // Après deux messages du client (une fois la présentation finie), si ce n'est pas déjà fait : la proposition d'installer le raccourci (une seule fois),
+  // ou, déjà installé, le rappel d'activer les notifications.
   async function afterTurn() {
     if (get().step.startsWith('co_') || get().step.startsWith('cb_')) return; // jamais au milieu d'une commande ni d'une demande de rappel
-    if (userMessagesAfterIntro() >= INSTALL_OFFER_AFTER_MESSAGES) await maybeOfferInstall();
+    if (userMessagesAfterIntro() < INSTALL_OFFER_AFTER_MESSAGES) return;
+    await maybeOfferInstall();
+    // déjà installé (la proposition d'installer ne vient donc pas) : le rappel des notifications, s'il est dû
+    await maybeRemindPush();
   }
 
   return {
@@ -3055,6 +3120,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       if (get().loading) return;
       if (get().messages.length === 0) void run(begin);
       else if (shouldGreetMember()) get().greetMember();
+      else if (pushReminderNow() !== 'none') void run(async () => void (await maybeRemindPush()));
       else if (suggestionPossible()) void run(async () => void (await maybeSuggest()));
     },
     greetMember: () => {
