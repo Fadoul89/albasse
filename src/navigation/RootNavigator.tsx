@@ -40,6 +40,7 @@ import { AdminCustomerDetailScreen } from '../screens/admin/AdminCustomerDetailS
 import { AdminDashboardScreen } from '../screens/admin/AdminDashboardScreen';
 import { AdminSourcePerformanceScreen } from '../screens/admin/AdminSourcePerformanceScreen';
 import { AdminZaraStatsScreen } from '../screens/admin/AdminZaraStatsScreen';
+import { AdminMarketingScreen } from '../screens/admin/AdminMarketingScreen';
 import { AdminBrowsingScreen } from '../screens/admin/AdminBrowsingScreen';
 import { AdminCallbacksScreen } from '../screens/admin/AdminCallbacksScreen';
 import { AdminAbandonedCartsScreen } from '../screens/admin/AdminAbandonedCartsScreen';
@@ -99,6 +100,7 @@ const linking: LinkingOptions<RootStackParamList> = {
       AdminDashboard: 'admin/tableau-de-bord',
       AdminSourcePerformance: 'admin/performance-par-source',
       AdminZaraStats: 'admin/statistiques-zara',
+      AdminMarketing: 'admin/assistant-marketing',
       AdminBrowsing: 'admin/suivi-navigation',
       AdminCallbacks: 'admin/rappels',
       AdminAbandonedCarts: 'admin/paniers-abandonnes',
@@ -246,6 +248,7 @@ export function RootNavigator() {
             <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
             <Stack.Screen name="AdminSourcePerformance" component={AdminSourcePerformanceScreen} />
             <Stack.Screen name="AdminZaraStats" component={AdminZaraStatsScreen} />
+            <Stack.Screen name="AdminMarketing" component={AdminMarketingScreen} />
             <Stack.Screen name="AdminBrowsing" component={AdminBrowsingScreen} />
             <Stack.Screen name="AdminCallbacks" component={AdminCallbacksScreen} />
             <Stack.Screen name="AdminAbandonedCarts" component={AdminAbandonedCartsScreen} />
