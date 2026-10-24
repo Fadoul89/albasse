@@ -7,6 +7,7 @@ import { trackAppDownloadClick } from '../lib/appDownloadTracking';
 import { isRunningInsideApp } from '../lib/runningInApp';
 import { inAppName, installNotReadyMessage, isAndroidDevice, isAppInstalledOnDevice, isInAppBrowser, isIosDevice, isRunningAsInstalledPwa, openInChromeChecked, triggerPwaInstallPrompt } from '../lib/pwaInstallPrompt';
 import { navigationRef } from '../navigation/navigationRef';
+import { appPopupSeenKey as seenKey } from '../lib/installAfterSignUp';
 import { subscribeToWebPush } from '../lib/webPushSubscription';
 import { trackShortcutInstallIfNeeded } from '../lib/appInstallTracking';
 import { useInstallGuideStore } from '../store/installGuideStore';
@@ -15,10 +16,7 @@ const SHOW_DELAY_MS = 2500;
 
 // Reapparait une fois par jour (comme les promos) plutot que d'etre
 // definitivement ferme, pour vraiment solliciter le visiteur a chaque
-// visite au lieu d'un simple bandeau qu'on oublie.
-function seenKey() {
-  return `albasse_app_popup_seen_${new Date().toISOString().slice(0, 10)}`;
-}
+// visite au lieu d'un simple bandeau qu'on oublie (cle : lib/installAfterSignUp).
 
 function isEligibleWeb() {
   if (Platform.OS !== 'web' || typeof navigator === 'undefined') return false;

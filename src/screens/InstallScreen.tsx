@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -19,6 +19,7 @@ import {
   triggerPwaInstallPrompt,
 } from '../lib/pwaInstallPrompt';
 import { trackAppDownloadClick } from '../lib/appDownloadTracking';
+import { markInstallPageShown } from '../lib/installAfterSignUp';
 import { trackShortcutInstallIfNeeded } from '../lib/appInstallTracking';
 import {
   getWebPushIssue,
@@ -42,6 +43,11 @@ export function InstallScreen() {
   const [pushOn, setPushOn] = useState(() => hasWebPushPermission());
   const [pushBusy, setPushBusy] = useState(false);
   const [pushMessage, setPushMessage] = useState<string | null>(null);
+
+  // la page est ouverte : pas de fenêtre « Installer » en plus aujourd'hui, ni de page automatique après l'inscription, ni de question de Zara
+  useEffect(() => {
+    markInstallPageShown();
+  }, []);
 
   const ios = isIosDevice();
   const inApp = isInAppBrowser();

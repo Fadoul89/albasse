@@ -43,7 +43,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   // rank : rang du jour renvoye par la fonction de la base (null : fonction pas installee). fakeUser : compte simule (token : reponse a une connexion par mot de passe ; delay : lenteur du profil en ms). fakeOrders : { list: [...], patches: [] } = fausse table des commandes.
   // zaraInstall : par defaut, le visiteur a deja repondu « Plus tard » a l'installation (Zara ne la propose pas) ; null = vrai nouveau
   // visiteur, pour les parties qui testent l'installation
-  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, fakeSales = null, fakeCallbacks = null, fakePushes = null, fakeStore = null, fakeCats = null, fakeOnline = null, initScripts = [], zaraInstall = 'dismissed', zaraPush = 'later', pushPerm = null, pushAnswer = 'granted', fakeAi = null } = {}) {
+  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, fakeSales = null, fakeCallbacks = null, fakePushes = null, fakeStore = null, fakeCats = null, fakeOnline = null, initScripts = [], zaraInstall = 'dismissed', zaraPush = 'later', installAfterSignUp = '1', pushPerm = null, pushAnswer = 'granted', fakeAi = null } = {}) {
     const ctx = await b.newContext(opts);
     if (cookies) await ctx.addCookies(cookies);
     if (lang) storage = { albasse_zara_lang: lang, ...storage };
@@ -64,12 +64,14 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         PushManager.prototype.subscribe = async function () { window.__pushSub = fakeSub; return fakeSub; };
       }, [pushPerm, pushAnswer]);
     }
-    await ctx.addInitScript(([entries, sessionEntries, installDefault, pushDefault]) => {
+    await ctx.addInitScript(([entries, sessionEntries, installDefault, pushDefault, afterSignUp]) => {
       try {
         localStorage.setItem('albasse_app_banner_dismissed', '1');
         localStorage.setItem('albasse_app_popup_seen_' + new Date().toISOString().slice(0, 10), '1');
         for (const [k, v] of Object.entries(entries)) localStorage.setItem(k, v);
         if (installDefault && !localStorage.getItem('albasse_zara_install')) localStorage.setItem('albasse_zara_install', JSON.stringify({ at: Date.now(), outcome: installDefault }));
+        // page d'installation montree juste apres l'inscription : par defaut deja vue (installAfterSignUp: null = vrai nouveau telephone)
+        if (afterSignUp && !localStorage.getItem('albasse_install_after_signup')) localStorage.setItem('albasse_install_after_signup', afterSignUp);
         // rappel des notifications de Zara : deja repondu « Plus tard » par defaut (zaraPush: null = jamais demande)
         if (pushDefault && !localStorage.getItem('albasse_zara_push')) localStorage.setItem('albasse_zara_push', JSON.stringify({ at: Date.now(), outcome: pushDefault }));
         // la conversation et le « deja salue » de l'onglet ne sont mis qu'a la premiere page (pas apres un rechargement)
@@ -78,7 +80,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
           sessionStorage.setItem('__zara_test_seeded', '1');
         }
       } catch (e) {}
-    }, [storage, session, zaraInstall, zaraPush]);
+    }, [storage, session, zaraInstall, zaraPush, installAfterSignUp]);
     const writes = [];
     const rpcCalls = [];
     const pushClicks = []; // clics de notifications comptes (record_push_click)
@@ -3833,6 +3835,25 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.page.goto(`http://localhost:${port}/compte`, { waitUntil: 'load' });
       await sleep(4000);
       check('Mon compte : l\'adresse « @tel.albasseshopping.com » n\'est jamais montree', !/tel\.albasseshopping\.com/.test(await v.page.locator('body').innerText()));
+      await v.ctx.close();
+    }
+    // 5b) juste apres l'inscription, sur un telephone sans le raccourci : la page d'installation (une seule fois)
+    {
+      const fu = accountOf();
+      const v = await newVisitor(phone, { fakeUser: fu, fakeStore: { waOrder: true, accountRequired: true }, installAfterSignUp: null });
+      await v.page.goto(`http://localhost:${port}/produit/${prod.slug}`, { waitUntil: 'load' });
+      await waitWall(v.page);
+      await register(v);
+      await v.page.getByText('Bienvenue ✓').waitFor({ timeout: 15000 });
+      await v.page.getByTestId('install-screen').waitFor({ timeout: 15000 });
+      check('apres l\'inscription (telephone sans le raccourci) : la page d\'installation s\'affiche, sans mur', new URL(v.page.url()).pathname === '/installer' && (await wall(v.page).count()) === 0, v.page.url());
+      check('...avec le lien pour continuer vers la plateforme', (await v.page.getByText('Continuer vers la plateforme').count()) === 1);
+      await v.page.getByText('Continuer vers la plateforme').click();
+      await sleep(1500);
+      check('« Continuer vers la plateforme » : la boutique, sans mur', (await wall(v.page).count()) === 0 && new URL(v.page.url()).pathname !== '/installer', v.page.url());
+      await sleep(3500);
+      check('pas de fenetre « Installer » en plus, et Zara ne repose pas la question', (await v.page.getByText('📥 Installer').count()) === 0 && (await panelOf(v.page).getByText(/Avez-vous déjà installé/).count()) === 0);
+      check('aucune erreur (installation apres inscription)', v.errs.length === 0, v.errs);
       await v.ctx.close();
     }
     // 6) inscription avec un e-mail : il va dans le profil, le compte reste celui du numero
