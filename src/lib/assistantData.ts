@@ -4,6 +4,7 @@ import { currentDevice, type DeviceLabel } from './assistantAttribution';
 import { buildZaraStats, classifyStatsError, periodBounds, type StatsPeriod, type StatsFailure, type ZaraStats } from './assistantStats';
 import { buildBrowsingOverview, type BrowsingOverview } from './browsingOverview';
 import { buildSalesMap, SALES_WINDOW_DAYS, type SalesMap } from './assistantSales';
+import { sortCategories } from './categoryOrder';
 import type { Product } from '../types';
 
 // Donnees publiques lues pour Zara (catalogue, villes, categories, infos de la boutique), gardees
@@ -90,9 +91,10 @@ function cached<T>(load: () => Promise<T>) {
 }
 
 export const getCategories = cached<CategoryInfo[]>(async () => {
-  const { data, error } = await supabase.from('categories').select('name,slug').order('name');
+  // toutes les colonnes : sort_order n'existe qu'après le script add-category-order.sql
+  const { data, error } = await supabase.from('categories').select('*');
   if (error) throw error;
-  return (data ?? []) as CategoryInfo[];
+  return sortCategories((data ?? []) as (CategoryInfo & { sort_order?: number | null })[]).map(({ name, slug }) => ({ name, slug }));
 });
 
 export const getCatalog = cached<CatalogProduct[]>(async () => {

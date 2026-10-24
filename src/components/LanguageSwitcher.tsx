@@ -1,25 +1,25 @@
-import React from 'react';
-import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
-import { colors, fonts, radius } from '../theme';
-import { translateToArabic, translateToFrench } from '../lib/googleTranslate';
+import React, { useState } from 'react';
+import { Text, Pressable, StyleSheet, Platform } from 'react-native';
+import { fonts, radius } from '../theme';
+import { isArabicPage, translateToArabic, translateToFrench } from '../lib/googleTranslate';
 
+// Un seul bouton : celui de l'autre langue (« العربية » sur le site en français, « 🇫🇷 FR » sur le site traduit en arabe).
 export function LanguageSwitcher() {
+  const [arabic] = useState(isArabicPage);
   if (Platform.OS !== 'web') return null;
 
-  return (
-    <View style={styles.row}>
-      <Pressable style={[styles.btn, styles.btnArabic]} onPress={translateToArabic}>
-        <Text style={styles.btnText}>العربية</Text>
-      </Pressable>
-      <Pressable style={[styles.btn, styles.btnFrench]} onPress={translateToFrench}>
-        <Text style={styles.btnText}>🇫🇷 FR</Text>
-      </Pressable>
-    </View>
+  return arabic ? (
+    <Pressable testID="lang-fr" style={[styles.btn, styles.btnFrench]} onPress={translateToFrench}>
+      <Text style={styles.btnText}>🇫🇷 FR</Text>
+    </Pressable>
+  ) : (
+    <Pressable testID="lang-ar" style={[styles.btn, styles.btnArabic]} onPress={translateToArabic}>
+      <Text style={styles.btnText}>العربية</Text>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', gap: 6 },
   btn: {
     borderRadius: radius.pill,
     paddingHorizontal: 10,

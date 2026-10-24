@@ -51,6 +51,12 @@ export function initGoogleTranslate() {
   document.body.appendChild(script);
 }
 
+// Le site est-il affiché en arabe (traduction Google choisie avec le bouton « العربية ») ?
+export function isArabicPage(): boolean {
+  if (Platform.OS !== 'web' || typeof document === 'undefined') return false;
+  return /(?:^|;\s*)googtrans=\/[a-z-]+\/ar/.test(document.cookie);
+}
+
 export function translateToArabic() {
   if (Platform.OS !== 'web' || typeof window === 'undefined') return;
   setGoogTransCookie('/fr/ar');

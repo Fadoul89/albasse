@@ -6,6 +6,8 @@ export interface Category {
   name: string;
   image_url: string | null;
   affiliate_commission_rate: number | null;
+  // ordre choisi par l'admin (1 = la première) ; absent avant le script add-category-order.sql
+  sort_order?: number | null;
 }
 
 export interface ProductVariantOption {

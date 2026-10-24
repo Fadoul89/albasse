@@ -13,7 +13,7 @@ const fs = require('fs');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const dist = process.argv[2] || '../../dist';
 const port = process.argv[3] || '4333';
-const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI123TOFBCDE').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI1234TOFBCDE').toUpperCase();
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
 fs.mkdirSync(OUT, { recursive: true });
 const KEY = process.env.SUPABASE_ANON_KEY;
@@ -43,7 +43,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   // rank : rang du jour renvoye par la fonction de la base (null : fonction pas installee). fakeUser : compte simule (token : reponse a une connexion par mot de passe ; delay : lenteur du profil en ms). fakeOrders : { list: [...], patches: [] } = fausse table des commandes.
   // zaraInstall : par defaut, le visiteur a deja repondu « Plus tard » a l'installation (Zara ne la propose pas) ; null = vrai nouveau
   // visiteur, pour les parties qui testent l'installation
-  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, fakeSales = null, fakeCallbacks = null, fakePushes = null, fakeStore = null, initScripts = [], zaraInstall = 'dismissed', zaraPush = 'later', pushPerm = null, pushAnswer = 'granted' } = {}) {
+  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, fakeSales = null, fakeCallbacks = null, fakePushes = null, fakeStore = null, fakeCats = null, fakeOnline = null, initScripts = [], zaraInstall = 'dismissed', zaraPush = 'later', pushPerm = null, pushAnswer = 'granted' } = {}) {
     const ctx = await b.newContext(opts);
     if (cookies) await ctx.addCookies(cookies);
     if (lang) storage = { albasse_zara_lang: lang, ...storage };
@@ -206,6 +206,40 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         if (u.pathname === '/rest/v1/rpc/record_push_click' && m === 'POST') {
           pushClicks.push(JSON.parse(req.postData() || '{}'));
           return json(route, true);
+        }
+        // vrai nombre de personnes en ligne (add-online-count.sql) : fakeOnline.n = le nombre renvoye (fakeOnline.calls = appels) ;
+        // sans fakeOnline : fonction absente (script pas lance), le compteur est cache
+        if (u.pathname === '/rest/v1/rpc/online_visitors_count' && m === 'POST') {
+          if (!fakeOnline) return json(route, { code: 'PGRST202', message: 'Could not find the function public.online_visitors_count without parameters in the schema cache' }, 404);
+          fakeOnline.calls = (fakeOnline.calls || 0) + 1;
+          return json(route, fakeOnline.n);
+        }
+        // ordre des categories (add-category-order.sql) : les vraies categories avec un faux sort_order. fakeCats.order = { slug: numero } ;
+        // missing = colonne absente (script pas lance) ; patches = numeros recus de la page admin ({ id, sort_order })
+        if (fakeCats && u.pathname === '/rest/v1/categories') {
+          fakeCats.order = fakeCats.order || {};
+          fakeCats.slugOf = fakeCats.slugOf || {};
+          if (m === 'PATCH') {
+            const id = (u.searchParams.get('id') || '').replace('eq.', '');
+            const body = JSON.parse(req.postData() || '{}');
+            (fakeCats.patches = fakeCats.patches || []).push({ id, ...body });
+            if (fakeCats.missing) return json(route, { code: 'PGRST204', message: "Could not find the 'sort_order' column of 'categories' in the schema cache" }, 400);
+            if (fakeCats.slugOf[id] && 'sort_order' in body) fakeCats.order[fakeCats.slugOf[id]] = body.sort_order;
+            return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } });
+          }
+          if (m === 'GET') {
+            return route.fetch({ headers: { ...req.headers(), apikey: KEY, authorization: `Bearer ${KEY}` } }).then(async (res) => {
+              const data = await res.json();
+              if (!Array.isArray(data)) return json(route, data, res.status());
+              return json(route, data.map((c) => {
+                if (c.id && c.slug) fakeCats.slugOf[c.id] = c.slug;
+                const r = { ...c };
+                delete r.sort_order;
+                if (!fakeCats.missing) r.sort_order = fakeCats.order[c.slug] ?? null;
+                return r;
+              }), res.status());
+            }).catch(() => {}); // page deja fermee pendant la lecture
+          }
         }
         // reglages de la boutique : la vraie ligne, avec deux fausses colonnes. fakeStore.waOrder = whatsapp_order_enabled (undefined = colonne
         // absente : script add-whatsapp-order-toggle.sql pas lance) ; fakeStore.accountRequired = account_required ('missing' = colonne absente,
@@ -4137,6 +4171,130 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.page.getByRole('button', { name: /التحدث مع زارا كينغز|Discuter avec Zara Kings/ }).first().click();
       await waitText(v.page, /لكن الإشعارات غير مفعّلة بعد/, 25000);
       check('arabe : le rappel et le bouton « 🔔 تفعيل الإشعارات »', (await chipLabels(v.page)).includes('🔔 تفعيل الإشعارات'), await chipLabels(v.page));
+      await v.ctx.close();
+    }
+  }
+
+  if (PARTS.includes('4')) {
+    console.log('\n== 4. haut de l\'accueil (vrai nombre en ligne, un seul bouton de langue) et ordre des categories choisi par l\'admin');
+    const uid = '44444444-4444-4444-8444-444444444444';
+    const JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0NDQ0NDQ0NC00NDQ0LTQ0NDQtODQ0NC00NDQ0NDQ0NDQ0NDQiLCJleHAiOjQxMDI0NDQ4MDAsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.c2ln';
+    const adminAccount = () => {
+      const auth = { id: uid, aud: 'authenticated', role: 'authenticated', email: 'admin@example.com', app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' };
+      const token = { access_token: JWT, refresh_token: 'fake-refresh', token_type: 'bearer', expires_in: 3600, expires_at: 4102444800, user: auth };
+      return { auth, token, session: JSON.stringify(token), profile: { id: uid, email: 'admin@example.com', full_name: 'Admin Albasse', phone: '66123456', banned: false, role: 'admin', is_admin: true } };
+    };
+    const SK = 'sb-xtitsmmccpkelxfjyqyh-auth-token';
+    const openHome = async (v) => {
+      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.getByTestId('home-categories').waitFor({ timeout: 30000 });
+      await sleep(2500);
+    };
+    // haut de l'accueil : plus de « Bienvenue », le vrai nombre en ligne a droite, seulement le bouton « العربية »
+    {
+      const fo = { n: 3 };
+      const v = await newVisitor(phone, { fakeOnline: fo });
+      await openHome(v);
+      check('« 👋 Bienvenue » retire du haut de l\'accueil', (await v.page.getByText('👋 Bienvenue', { exact: true }).count()) === 0);
+      check('site en francais : seulement le bouton « العربية » (pas « 🇫🇷 FR »)', (await v.page.getByTestId('lang-ar').count()) === 1 && (await v.page.getByTestId('lang-fr').count()) === 0);
+      const online = (await v.page.getByTestId('home-online').innerText()).trim();
+      check('compteur : le vrai nombre de la base, « 3 en ligne »', online === '3 en ligne' && fo.calls >= 1, { online, calls: fo.calls });
+      const ar = await v.page.getByTestId('lang-ar').boundingBox();
+      const on = await v.page.getByTestId('home-online').boundingBox();
+      check('une seule ligne : le bouton de langue a gauche, le compteur au milieu (plus petit)', Math.abs((ar.y + ar.height / 2) - (on.y + on.height / 2)) < 4 && Math.abs(on.x + on.width / 2 - 195) < 3 && on.height <= 24 && ar.x < 30, { ar, on });
+      check('plus de nombre invente (« personnes en ligne »)', (await v.page.getByText(/personnes en ligne/).count()) === 0);
+      fo.n = 5;
+      await sleep(31000);
+      check('relu toutes les 30 s : « 5 en ligne »', (await v.page.getByTestId('home-online').innerText()).trim() === '5 en ligne', fo.calls);
+      await v.ctx.close();
+    }
+    {
+      const fo = { n: 0 };
+      const v = await newVisitor(phone, { fakeOnline: fo });
+      await openHome(v);
+      check('la base dit 0 (signal pas encore arrive) : « 1 en ligne » (la personne qui regarde)', (await v.page.getByTestId('home-online').innerText()).trim() === '1 en ligne');
+      await v.ctx.close();
+    }
+    {
+      const v = await newVisitor(phone);
+      await openHome(v);
+      check('script SQL pas encore lance : compteur cache (aucun nombre invente)', (await v.page.getByTestId('home-online').count()) === 0 && (await v.page.getByText(/\d+ (?:personnes )?en ligne/).count()) === 0);
+      check('aucune ecriture reelle', v.writes.every((w) => /visitor_sessions/.test(w)), v.writes);
+      await v.ctx.close();
+    }
+    {
+      const v = await newVisitor(phone, { lang: null, fakeOnline: { n: 2 }, cookies: [{ name: 'googtrans', value: '/fr/ar', url: `http://localhost:${port}` }] });
+      await openHome(v);
+      check('site traduit en arabe : seulement le bouton « 🇫🇷 FR »', (await v.page.getByTestId('lang-fr').count()) === 1 && (await v.page.getByTestId('lang-ar').count()) === 0);
+      await v.ctx.close();
+    }
+    {
+      const fu = adminAccount();
+      const v = await newVisitor(phone, { storage: { [SK]: fu.session }, fakeUser: fu, fakeOnline: { n: 4 } });
+      await openHome(v);
+      const on = await v.page.getByTestId('home-online').boundingBox();
+      const bell = await v.page.getByText('🔔', { exact: true }).first().boundingBox();
+      check('client connecte : compteur toujours au milieu, la cloche tout a droite', bell && Math.abs(on.x + on.width / 2 - 195) < 3 && bell.x + bell.width > 390 - 40 && Math.abs((bell.y + bell.height / 2) - (on.y + on.height / 2)) < 6, { on, bell });
+      await v.ctx.close();
+    }
+    // ordre des categories : fleches ▲ ▼ sur la page admin « Categories »
+    const rowsOf = async (pg) => (await pg.locator('[data-testid^="category-row-"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid').replace('category-row-', ''))));
+    const cats = (await get('categories?select=slug,name&order=name')).map((c) => c.slug);
+    {
+      const fc = { order: {}, patches: [] };
+      const fu = adminAccount();
+      const v = await newVisitor(phone, { storage: { [SK]: fu.session }, fakeUser: fu, fakeCats: fc });
+      await v.page.goto(`http://localhost:${port}/admin/categories`, { waitUntil: 'load' });
+      await v.page.getByTestId(`category-row-${cats[0]}`).waitFor({ timeout: 30000 });
+      await sleep(1000);
+      const start = await rowsOf(v.page);
+      check('avant tout choix : ordre alphabetique, numeros 1, 2, 3…', start.join() === cats.join() && (await v.page.getByTestId(`category-row-${cats[0]}`).innerText()).trim().startsWith('1'), { start, cats });
+      check('petite explication « la n° 1 s’affiche en premier »', (await v.page.getByText(/la n° 1 s’affiche en premier/).count()) === 1);
+      await v.page.getByTestId(`category-up-${cats[2]}`).click();
+      await sleep(1500);
+      const after = await rowsOf(v.page);
+      check(`▲ sur la 3e (${cats[2]}) : elle passe 2e`, after[1] === cats[2] && after[2] === cats[1], after);
+      check('1er enregistrement : chaque categorie recoit son numero (et rien d\'autre)', fc.patches.length === cats.length && fc.patches.every((p) => Object.keys(p).join() === 'id,sort_order') && fc.order[cats[2]] === 2 && fc.order[cats[1]] === 3 && fc.order[cats[0]] === 1, fc.patches.slice(0, 4));
+      await v.page.getByTestId(`category-down-${cats[0]}`).click();
+      await sleep(1500);
+      const after2 = await rowsOf(v.page);
+      check('▼ sur la 1re : elle passe 2e, seulement 2 numeros envoyes', after2[0] === cats[2] && after2[1] === cats[0] && fc.patches.length === cats.length + 2, { after2, n: fc.patches.length });
+      await v.page.reload({ waitUntil: 'load' });
+      await v.page.getByTestId(`category-row-${cats[0]}`).waitFor({ timeout: 30000 });
+      await sleep(1000);
+      check('page rouverte : l\'ordre est garde', (await rowsOf(v.page)).join() === after2.join());
+      const upFirst = v.page.getByTestId(`category-up-${after2[0]}`);
+      check('▲ de la 1re et ▼ de la derniere desactives', (await upFirst.getAttribute('aria-disabled')) === 'true' && (await v.page.getByTestId(`category-down-${after2[after2.length - 1]}`).getAttribute('aria-disabled')) === 'true');
+      check('aucune erreur dans la page', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+    {
+      const fc = { missing: true, patches: [] };
+      const fu = adminAccount();
+      const v = await newVisitor(phone, { storage: { [SK]: fu.session }, fakeUser: fu, fakeCats: fc });
+      await v.page.goto(`http://localhost:${port}/admin/categories`, { waitUntil: 'load' });
+      await v.page.getByTestId(`category-row-${cats[0]}`).waitFor({ timeout: 30000 });
+      await sleep(1000);
+      await v.page.getByTestId(`category-up-${cats[1]}`).click();
+      await v.page.getByText('Lancez d’abord le script add-category-order.sql dans Supabase.').waitFor({ timeout: 10000 });
+      await sleep(1500);
+      check('script SQL pas lance : message clair et l\'ordre revient comme avant', (await rowsOf(v.page)).join() === cats.join());
+      await v.ctx.close();
+    }
+    // l'accueil et Zara suivent l'ordre choisi
+    {
+      const order = { parfum: 1, montre: 2 };
+      const v = await newVisitor(phone, { fakeCats: { order }, storage: { albasse_zara_name: 'Ali' } });
+      await openHome(v);
+      const tiles = (await v.page.getByTestId('home-categories').innerText()).split('\n').map((t) => t.trim()).filter(Boolean);
+      check('accueil : Parfum 1re, Montre 2e, puis les autres par ordre alphabetique', tiles[0] === 'Parfum' && tiles[1] === 'Montre' && tiles[2] === (await get('categories?select=name&order=name'))[0].name, tiles.slice(0, 4));
+      await v.page.keyboard.press('Escape');
+      await v.page.getByRole('button', { name: FAB_NAME }).click();
+      await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?/);
+      await tap(v.page, '🛍️ Catégories', /Choisissez une catégorie/);
+      await sleep(800);
+      const chips = await chipLabels(v.page);
+      check('Zara : les boutons des categories suivent le meme ordre (Parfum avant Montre)', chips.indexOf('Parfum') !== -1 && chips.indexOf('Parfum') < chips.indexOf('Montre'), chips);
       await v.ctx.close();
     }
   }
