@@ -18,7 +18,7 @@ import { GiftWrapOption } from '../components/GiftWrapOption';
 import { trackTikTokEvent } from '../lib/tiktokPixel';
 import type { PaymentMethod, City } from '../types';
 import { isHomeCity } from '../lib/deliveryRules';
-import { fetchDeliveredOrderCount, loyaltyDiscount, ordersBeforeDiscount } from '../lib/loyaltyDiscount';
+import { fetchLoyaltyStatus, loyaltyDiscount, ordersBeforeDiscount, type LoyaltyStatus } from '../lib/loyaltyDiscount';
 import { DELIVERY_HOURS, GIFT_WRAP_FEE, HOME_CITY, ORDER_VALIDITY_HOURS } from '../constants/shopRules';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
@@ -66,12 +66,12 @@ export function CheckoutScreen() {
   const { settings: paymentSettings } = usePaymentSettings();
 
   const [giftWrap, setGiftWrap] = useState(false);
-  // remise fidélité : −10 % des articles dès 2 commandes livrées
-  const [delivered, setDelivered] = useState<number | null>(null);
+  // remise fidélité : −10 % des articles à la 7ᵉ commande, une seule fois
+  const [loyalty, setLoyalty] = useState<LoyaltyStatus | null>(null);
   useEffect(() => {
-    if (profile?.id) fetchDeliveredOrderCount(profile.id).then(setDelivered);
+    if (profile?.id) fetchLoyaltyStatus(profile.id).then(setLoyalty);
   }, [profile?.id]);
-  const discount = loyaltyDiscount(total, delivered ?? 0);
+  const discount = loyaltyDiscount(total, loyalty);
   const deliveryFee = selectedCity?.delivery_fee ?? null;
   const grandTotal = total - discount + (deliveryFee ?? 0) + (giftWrap ? GIFT_WRAP_FEE : 0);
 
@@ -333,9 +333,9 @@ export function CheckoutScreen() {
             <Text style={styles.totalLabel}>Total</Text>
             <Text style={styles.totalValue}>{formatXAF(grandTotal)}</Text>
           </View>
-          {delivered !== null && discount === 0 ? (
+          {loyalty && !loyalty.used && discount === 0 ? (
             <Text style={styles.discountHint} testID="checkout-loyalty-hint">
-              {`⭐ Encore ${ordersBeforeDiscount(delivered)} commande(s) livrée(s) et vous aurez −10 % sur vos articles !`}
+              {`⭐ Encore ${ordersBeforeDiscount(loyalty.delivered)} commande(s) livrée(s) et vous aurez −10 % sur vos articles (une fois) !`}
             </Text>
           ) : null}
         </View>

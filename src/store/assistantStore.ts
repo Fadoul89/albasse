@@ -82,7 +82,7 @@ import { availability, familyPicks, isFamily, moreInCategory, perfumesInStock, p
 import * as bi from '../lib/browsingInsights';
 import { getBrowsingProfile, recordSuggestion, setTrackingChoice, trackingState } from '../lib/browsingTracker';
 import { createOrder, generateOrderId } from '../lib/orders';
-import { fetchDeliveredOrderCount, loyaltyDiscount } from '../lib/loyaltyDiscount';
+import { fetchLoyaltyStatus, loyaltyDiscount, type LoyaltyStatus } from '../lib/loyaltyDiscount';
 import { trackTikTokEvent } from '../lib/tiktokPixel';
 import { initiatePayment } from '../lib/payments';
 import { getLoyaltyStatus, LOYALTY_FCFA_PER_POINT } from '../lib/loyalty';
@@ -209,8 +209,8 @@ export interface OrderDraft {
   city: { name: string; fee: number | null; agency: string | null } | null;
   method: PayMethodKey | null;
   giftWrap: boolean | null;
-  // commandes déjà livrées du client (remise fidélité −10 % dès 2) ; absent dans une commande commencée avant cette règle
-  delivered?: number;
+  // remise fidélité (−10 % à la 7ᵉ commande, une fois) ; absente dans une commande commencée avant cette règle : pas de remise
+  loyalty?: LoyaltyStatus;
 }
 
 interface AssistantState {
@@ -1440,7 +1440,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
   function orderTotals(d: OrderDraft) {
     const items = useCartStore.getState().items;
     const subtotal = items.reduce((sum, i) => sum + i.product.price * i.quantity, 0);
-    const discount = loyaltyDiscount(subtotal, d.delivered ?? 0);
+    const discount = loyaltyDiscount(subtotal, d.loyalty ?? null);
     return { items, subtotal, discount, total: subtotal - discount + (d.city?.fee ?? 0) + (d.giftWrap ? GIFT_WRAP_FEE : 0) };
   }
 
@@ -1458,8 +1458,8 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         // la ville sera demandée
       }
     }
-    const delivered = profile ? await fetchDeliveredOrderCount(profile.id) : 0;
-    setOrder({ id: generateOrderId(), name: fullNameFrom(profile?.full_name ?? ''), phone: phoneFrom(profile?.phone ?? ''), address: null, city, method: null, giftWrap: null, delivered });
+    const loyalty = profile ? await fetchLoyaltyStatus(profile.id) : undefined;
+    setOrder({ id: generateOrderId(), name: fullNameFrom(profile?.full_name ?? ''), phone: phoneFrom(profile?.phone ?? ''), address: null, city, method: null, giftWrap: null, loyalty });
     // comme à l'ouverture de la page de commande : le début de la commande est signalé à TikTok (publicités)
     const cartItems = useCartStore.getState().items;
     trackTikTokEvent('InitiateCheckout', { value: cartTotals().total, currency: 'XAF', content_id: cartItems.map((i) => i.product.id), contents: cartItems.map((i) => ({ content_id: i.product.id, quantity: i.quantity })) });
