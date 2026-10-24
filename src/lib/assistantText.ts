@@ -27,6 +27,7 @@ export interface RecapData {
   city: string;
   fee: number | null; // null : frais à confirmer par l'équipe
   gift: boolean;
+  discount?: number; // remise fidélité (FCFA) déjà déduite du total
   total: number;
   name: string;
   phone: string;
@@ -62,6 +63,7 @@ export interface Texts {
   teaserMember(name: string): string;
   // bulle pour ceux qui ont installé Albasse Shopping sans activer les notifications
   teaserPush(name: string | null): string;
+  teaserInstall(name: string | null): string;
   askName: string;
   askNameGuest: string;
   askNameMember: string;
@@ -428,6 +430,7 @@ const FR: Texts = {
   memberBack: (name) => `Salut ${name} ! 😍👋 Vous êtes bien connecté(e), ça me fait plaisir de vous retrouver ! 🥰`,
   teaserMember: (name) => `Salut ${name} ! 😍👋 ${ASSISTANT_NAME} est à votre service 🛍️`,
   teaserPush: (name) => `🔔 ${name ? `${name}, activez` : 'Activez'} les notifications pour ne rater aucune promo !`,
+  teaserInstall: (name) => `📲 ${name ? `${name}, installez` : 'Installez'} l'application Albasse : promos en avant-première et suivi de vos commandes !`,
   askName: 'Comment puis-je vous appeler ?',
   askNameGuest: 'Comment puis-je vous appeler ? Si vous avez déjà un compte, connectez-vous : je vous reconnaîtrai 😊',
   askNameMember: 'Je vois que vous êtes connecté(e) 😊 Votre compte n’a pas encore de prénom : comment puis-je vous appeler ?',
@@ -658,6 +661,7 @@ const FR: Texts = {
         ...d.lines.map((l) => `• ${l.name}${l.variant} × ${l.qty} : ${fcfa(l.subtotal)}`),
         `🚚 Livraison à ${d.city} : ${d.fee === null ? 'à confirmer par l’équipe' : d.fee === 0 ? 'gratuite' : fcfa(d.fee)}`,
         ...(d.gift ? [`🎁 Emballage cadeau : ${fcfa(GIFT_WRAP_FEE)}`] : []),
+        ...(d.discount ? [`⭐ Remise fidélité −10 % (vous êtes un client fidèle, merci !) : −${fcfa(d.discount)}`] : []),
         `💰 Total : ${fcfa(d.total)}`,
         `👤 ${d.name} · 📞 ${d.phone}`,
         `📍 ${d.address}, ${d.city}`,
@@ -976,6 +980,7 @@ const AR: Texts = {
   memberBack: (name) => `مرحباً ${name}! 😍👋 تم تسجيل دخولك، ويسعدني لقاؤك من جديد! 🥰`,
   teaserMember: (name) => `مرحباً ${name}! 😍👋 زارا كينغز في خدمتك 🛍️`,
   teaserPush: (name) => `🔔 ${name ? `${name}، ` : ''}فعّل الإشعارات حتى لا تفوتك أي عروض!`,
+  teaserInstall: (name) => `📲 ${name ? `${name}، ` : ''}ثبّت تطبيق Albasse: العروض أولاً ومتابعة طلباتك!`,
   askName: 'كيف يمكنني أن أناديك؟',
   askNameGuest: 'كيف يمكنني أن أناديك؟ إذا كان لديك حساب، سجّل الدخول وسأتعرف عليك 😊',
   askNameMember: 'أرى أنك مسجّل الدخول 😊 حسابك لا يحتوي على اسم بعد، فكيف يمكنني أن أناديك؟',
@@ -1208,6 +1213,7 @@ const AR: Texts = {
         ...d.lines.map((l) => `• ${l.name}${l.variant} × ${l.qty}: ${fcfa(l.subtotal)}`),
         `🚚 التوصيل إلى ${d.city}: ${d.fee === null ? 'سيؤكدها الفريق' : d.fee === 0 ? 'مجاني' : fcfa(d.fee)}`,
         ...(d.gift ? [`🎁 تغليف الهدية: ${fcfa(GIFT_WRAP_FEE)}`] : []),
+        ...(d.discount ? [`⭐ خصم الوفاء 10% (أنت زبون وفي، شكراً!): -${fcfa(d.discount)}`] : []),
         `💰 المجموع: ${fcfa(d.total)}`,
         `👤 ${d.name} · 📞 ${d.phone}`,
         `📍 ${d.address}، ${d.city}`,

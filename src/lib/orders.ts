@@ -16,6 +16,8 @@ export interface CreateOrderInput {
   shippingAddress: string;
   shippingCity: string;
   giftWrap?: boolean;
+  // Remise fidélité (FCFA) déjà déduite de total : notée sur la commande pour l'équipe.
+  loyaltyDiscount?: number;
   // Numéro de commande choisi à l'avance : si on réessaie après une coupure de réseau, la même commande n'est pas enregistrée deux fois.
   id?: string;
   // Commande passée par Zara dans le chat : la commande note l'appareil du client (statistiques de Zara).
@@ -61,6 +63,7 @@ export async function createOrder(input: CreateOrderInput): Promise<{ order: Ord
     referrer_source: getCurrentReferrerSource(),
     is_flagged_fake: false,
     gift_wrap: !!input.giftWrap,
+    ...(input.loyaltyDiscount ? { loyalty_discount: input.loyaltyDiscount } : {}),
     created_at: new Date().toISOString(),
   };
 
@@ -88,12 +91,18 @@ export async function createOrder(input: CreateOrderInput): Promise<{ order: Ord
     referrer_source: order.referrer_source,
     // le champ n'est envoye que si le service est choisi : les commandes normales ne changent pas
     ...(order.gift_wrap ? { gift_wrap: true } : {}),
+    ...(order.loyalty_discount ? { loyalty_discount: order.loyalty_discount } : {}),
   };
-  const payload: Record<string, unknown> = input.viaAssistant ? { ...row, assistant_device: currentDevice() } : row;
+  let payload: Record<string, unknown> = input.viaAssistant ? { ...row, assistant_device: currentDevice() } : row;
   let { error } = await supabase.from('orders').insert(payload);
-  // La colonne des statistiques de Zara n'existe pas encore dans la base : la commande ne doit JAMAIS échouer pour ça, on la refait sans.
-  if (input.viaAssistant && error && isMissingColumn(error, 'assistant_device')) {
-    ({ error } = await supabase.from('orders').insert(row));
+  // Une colonne facultative (statistiques de Zara, remise fidélité) n'existe pas encore dans la base : la commande ne doit
+  // JAMAIS échouer pour ça, on la refait sans.
+  for (let tries = 0; error && tries < 2; tries++) {
+    const missing = ['assistant_device', 'loyalty_discount'].find((c) => c in payload && isMissingColumn(error, c));
+    if (!missing) break;
+    const { [missing]: _dropped, ...rest } = payload;
+    payload = rest;
+    ({ error } = await supabase.from('orders').insert(payload));
   }
 
   // Numéro déjà enregistré par un essai précédent (réponse perdue) : la commande existe bien, on ne la refait pas.

@@ -82,6 +82,7 @@ import { availability, familyPicks, isFamily, moreInCategory, perfumesInStock, p
 import * as bi from '../lib/browsingInsights';
 import { getBrowsingProfile, recordSuggestion, setTrackingChoice, trackingState } from '../lib/browsingTracker';
 import { createOrder, generateOrderId } from '../lib/orders';
+import { fetchDeliveredOrderCount, loyaltyDiscount } from '../lib/loyaltyDiscount';
 import { trackTikTokEvent } from '../lib/tiktokPixel';
 import { initiatePayment } from '../lib/payments';
 import { getLoyaltyStatus, LOYALTY_FCFA_PER_POINT } from '../lib/loyalty';
@@ -208,6 +209,8 @@ export interface OrderDraft {
   city: { name: string; fee: number | null; agency: string | null } | null;
   method: PayMethodKey | null;
   giftWrap: boolean | null;
+  // commandes déjà livrées du client (remise fidélité −10 % dès 2) ; absent dans une commande commencée avant cette règle
+  delivered?: number;
 }
 
 interface AssistantState {
@@ -226,6 +229,10 @@ interface AssistantState {
   name: string | null;
   teaserDismissed: boolean;
   openChat: () => void;
+  // La bulle de Zara invite chaque visiteur en ligne : installer l'application (téléphone, pas encore installée) ou activer les
+  // notifications (installée sans notifications). Toucher la bulle ouvre Zara directement sur cette proposition.
+  installInviteDue: () => boolean;
+  openFor: (intent: 'install' | 'push') => void;
   // client qui vient de se connecter pendant la conversation : Zara le reconnaît à son prénom (une seule fois par visite)
   greetMember: () => void;
   closeChat: () => void;
@@ -1433,7 +1440,8 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
   function orderTotals(d: OrderDraft) {
     const items = useCartStore.getState().items;
     const subtotal = items.reduce((sum, i) => sum + i.product.price * i.quantity, 0);
-    return { items, subtotal, total: subtotal + (d.city?.fee ?? 0) + (d.giftWrap ? GIFT_WRAP_FEE : 0) };
+    const discount = loyaltyDiscount(subtotal, d.delivered ?? 0);
+    return { items, subtotal, discount, total: subtotal - discount + (d.city?.fee ?? 0) + (d.giftWrap ? GIFT_WRAP_FEE : 0) };
   }
 
   async function startCheckoutFlow() {
@@ -1450,7 +1458,8 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         // la ville sera demandée
       }
     }
-    setOrder({ id: generateOrderId(), name: fullNameFrom(profile?.full_name ?? ''), phone: phoneFrom(profile?.phone ?? ''), address: null, city, method: null, giftWrap: null });
+    const delivered = profile ? await fetchDeliveredOrderCount(profile.id) : 0;
+    setOrder({ id: generateOrderId(), name: fullNameFrom(profile?.full_name ?? ''), phone: phoneFrom(profile?.phone ?? ''), address: null, city, method: null, giftWrap: null, delivered });
     // comme à l'ouverture de la page de commande : le début de la commande est signalé à TikTok (publicités)
     const cartItems = useCartStore.getState().items;
     trackTikTokEvent('InitiateCheckout', { value: cartTotals().total, currency: 'XAF', content_id: cartItems.map((i) => i.product.id), contents: cartItems.map((i) => ({ content_id: i.product.id, quantity: i.quantity })) });
@@ -1553,7 +1562,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     const d = get().order;
     if (!d || !d.name || !d.phone || !d.address || !d.city || !d.method || d.giftWrap === null) return;
     setStep('co_confirm');
-    const { items, total } = orderTotals(d);
+    const { items, total, discount } = orderTotals(d);
     const chips = T().chip;
     await say(
       T().checkout.recap({
@@ -1561,6 +1570,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         city: d.city.name,
         fee: d.city.fee,
         gift: d.giftWrap,
+        discount,
         total,
         name: d.name,
         phone: d.phone,
@@ -1612,7 +1622,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       await askPayment();
       return;
     }
-    const { items, total } = orderTotals(d);
+    const { items, total, discount } = orderTotals(d);
     const label = c.methodLabel(d.method);
     let created: Awaited<ReturnType<typeof createOrder>>;
     try {
@@ -1627,6 +1637,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         shippingAddress: d.address,
         shippingCity: d.city.name,
         giftWrap: d.giftWrap,
+        loyaltyDiscount: discount,
         viaAssistant: true, // la commande note l'appareil : statistiques de Zara
       });
     } catch (e) {
@@ -3086,6 +3097,14 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       else if (shouldGreetMember()) get().greetMember();
       else if (pushReminderNow() !== 'none') void run(async () => void (await maybeRemindPush()));
       else if (suggestionPossible()) void run(async () => void (await maybeSuggest()));
+    },
+    installInviteDue: () =>
+      Platform.OS === 'web' && typeof window !== 'undefined' && (isIosDevice() || isAndroidDevice()) && !alreadyInstalled() && !installDeclined(),
+    openFor: (intent) => {
+      set({ open: true, teaserDismissed: true });
+      if (get().loading) return;
+      if (intent === 'install') void run(installReply);
+      else void run(async () => void (await maybeRemindPush()));
     },
     greetMember: () => {
       if (get().loading || !shouldGreetMember()) return;
