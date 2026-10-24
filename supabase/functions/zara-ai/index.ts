@@ -1,11 +1,11 @@
 // Zara IA : vendeuse et conseillère marketing. Répond aux messages écrits librement par les clients (français ou arabe) avec
-// Claude Haiku 5.5, en cherchant dans les vrais articles de la boutique (lecture seule : rien n'est jamais modifié). Limite : 20 messages par visiteur et par
+// Claude Sonnet 5.5, en cherchant dans les vrais articles de la boutique (lecture seule : rien n'est jamais modifié). Limite : 20 messages par visiteur et par
 // jour (et 200 par adresse IP), comptés dans la base par zara_ai_take (add-zara-ai.sql). Sans clé ANTHROPIC_API_KEY ou sans
 // le script SQL, la fonction répond { ok: false } et Zara garde ses réponses habituelles.
 import Anthropic from "npm:@anthropic-ai/sdk";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const MODEL = "claude-haiku-5-5";
+const MODEL = "claude-sonnet-5-5";
 const DAILY_LIMIT = 20;
 const IP_DAILY_LIMIT = 200;
 const MAX_ROUNDS = 4; // appels au modèle par message du client (recherche, cartes, réponse)
@@ -18,6 +18,7 @@ const CORS = {
 };
 
 const SYSTEM = `Tu es Zara Kings, vendeuse et conseillère marketing d'Albasse Shopping, boutique en ligne au Tchad (N'Djamena).
+Aujourd'hui : {{DATE}}.
 Ton but : aider chaque client à trouver l'article qui lui plaît vraiment et l'amener, avec respect, jusqu'à la commande.
 
 Méthode de vente :
@@ -32,6 +33,8 @@ Communication :
 - Ton chaleureux, respectueux et positif, comme une vendeuse attentionnée de N'Djamena. Vouvoie le client et utilise son prénom s'il est connu.
 - Réponds en arabe simple (compris au Tchad) si le client écrit en arabe, sinon en français.
 - Phrases courtes (2 à 5 phrases), 1 ou 2 émojis au plus, pas de longues listes.
+- Mets en avant les articles déjà vendus (deja_vendus) et ceux qui sont aimés (jaime) quand c'est vrai : « un des plus demandés ». N'invente jamais ce nombre.
+- Pense aux fêtes et moments forts (Tabaski, Ramadan, fête des mères, Saint-Valentin, Black Friday, rentrée) quand la date s'y prête, sans forcer.
 
 Vérité :
 - N'invente jamais un article, un prix, une remise, un stock ou un avis : uniquement ce que renvoient search_products et list_promotions. Les prix sont en FCFA. Un article avec stock 0 est épuisé : propose une alternative.
@@ -92,9 +95,13 @@ type Item = {
   sizes: string[];
   description: string;
   likes: number;
+  sold: number;
   flashEndsAt: string | null;
   hay: { name: string; cat: string; desc: string };
 };
+
+// date du jour à N'Djamena, pour les fêtes et les moments forts
+const today = () => new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Africa/Ndjamena" });
 
 const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\u0600-\u06ff]+/g, " ").trim();
 const stem = (w: string) => (w.length > 3 && w.endsWith("s") ? w.slice(0, -1) : w);
@@ -109,6 +116,15 @@ async function catalog(db: any): Promise<Item[]> {
   ]);
   if (error) throw error;
   const catName = new Map<string, string>((cats ?? []).map((c: { id: string; name: string }) => [c.id, c.name]));
+  // articles vendus (commandes non annulées), pour recommander ce qui marche
+  const sold = new Map<string, number>();
+  const { data: orders } = await db.from("orders").select("items,status").neq("status", "cancelled").limit(5000);
+  for (const o of (orders ?? []) as { items: { product_id?: string; quantity?: number }[] }[]) {
+    for (const it of Array.isArray(o.items) ? o.items : []) {
+      const id = String(it.product_id ?? "");
+      if (id) sold.set(id, (sold.get(id) ?? 0) + Number(it.quantity ?? 1));
+    }
+  }
   const items: Item[] = (prods ?? []).map((p: Record<string, unknown>) => {
     const category = catName.get(String(p.category_id)) ?? "";
     const description = String(p.description ?? "").replace(/\s+/g, " ").trim();
@@ -123,6 +139,7 @@ async function catalog(db: any): Promise<Item[]> {
       sizes: Array.isArray(p.sizes) ? (p.sizes as string[]) : [],
       description,
       likes: Number(p.likes_count ?? 0),
+      sold: sold.get(String(p.id)) ?? 0,
       flashEndsAt: p.is_flash_sale && p.flash_sale_ends_at && Date.parse(String(p.flash_sale_ends_at)) > Date.now() ? String(p.flash_sale_ends_at) : null,
       hay: { name: norm(String(p.name ?? "")), cat: norm(category), desc: norm(description) },
     };
@@ -143,6 +160,7 @@ function card(p: Item) {
     stock: p.stock,
     stock_faible: p.stock > 0 && p.stock <= 3,
     jaime: p.likes,
+    deja_vendus: p.sold,
     vente_flash_fin: p.flashEndsAt,
     categorie: p.category,
     couleurs: p.colors,
@@ -222,6 +240,7 @@ Deno.serve(async (req) => {
   const messages: Anthropic.MessageParam[] = [...history, { role: "user", content: message }];
 
   const client = new Anthropic({ apiKey });
+  const system = SYSTEM.replace("{{DATE}}", today());
   const shown: string[] = [];
   let text = "";
   try {
@@ -231,7 +250,7 @@ Deno.serve(async (req) => {
       const res = await client.messages.create({
         model: MODEL,
         max_tokens: 2000,
-        system: name ? [{ type: "text", text: SYSTEM }, { type: "text", text: `Le client s'appelle ${name}.` }] : SYSTEM,
+        system: name ? [{ type: "text", text: system }, { type: "text", text: `Le client s'appelle ${name}.` }] : system,
         tools: TOOLS,
         messages,
         output_config: { effort: "medium" },
