@@ -80,8 +80,9 @@ import { trackShortcutInstallIfNeeded } from '../lib/appInstallTracking';
 import { occasionOf, stripOccasion, upcomingOccasion, type OccasionKey } from '../lib/assistantOccasions';
 import { availability, familyPicks, isFamily, moreInCategory, perfumesInStock, planSuggestion, similarProducts, type PlannedChip } from '../lib/assistantInterest';
 import * as bi from '../lib/browsingInsights';
-import { getBrowsingProfile, recordSuggestion, setTrackingChoice, trackingState } from '../lib/browsingTracker';
+import { getBrowsingProfile, getVisitorId, recordSuggestion, setTrackingChoice, trackingState } from '../lib/browsingTracker';
 import { createOrder, generateOrderId } from '../lib/orders';
+import { askZaraAi } from '../lib/zaraAi';
 import { fetchLoyaltyStatus, loyaltyDiscount, type LoyaltyStatus } from '../lib/loyaltyDiscount';
 import { trackTikTokEvent } from '../lib/tiktokPixel';
 import { initiatePayment } from '../lib/payments';
@@ -427,6 +428,8 @@ function loadStyle(): StyleKey | null {
 }
 let clientStyle: StyleKey | null = loadStyle();
 let clientJob: JobKind | null = null;
+// le message en cours a été écrit par le client (pas un bouton) : seul ce cas part à Zara IA
+let typedTurn = false;
 let hesitating = false;
 let hesitatingAt = 0; // nombre de messages quand il a dit qu'il réfléchit : l'hésitation ne colle pas à toute la conversation
 const HESITATION_MESSAGES = 6;
@@ -896,6 +899,22 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
 
   // Demande précise (« rolex », « chaussures noires moins de 20000 ») : on montre tout de suite.
   // Le budget écrit dans la phrase est pris en compte ; l'arabe est ramené au français pour chercher.
+  // Zara IA : un message ÉCRIT par le client (pas un bouton) part à l'IA, qui cherche dans les vrais articles.
+  // false : pas de réponse de l'IA (pas installée, limite du jour, réseau) : les règles habituelles répondent.
+  async function aiReply(text: string, catalog: CatalogProduct[]): Promise<boolean> {
+    if (!typedTurn) return false;
+    const history = get()
+      .messages.filter((m) => m.text)
+      .slice(-7, -1)
+      .map((m) => ({ role: m.role, text: m.text }));
+    const answer = await askZaraAi(text, history, getVisitorId());
+    if (!answer) return false;
+    const items = answer.productIds.map((id) => catalog.find((p) => p.id === id)).filter((p): p is CatalogProduct => !!p);
+    if (items.length > 0) await showProducts(answer.text, items, { kind: 'query', query: text }, catalog);
+    else await say(answer.text, { actions: [sayBtn(T().chip.categories, 'catégories'), sayBtn(T().chip.promotions, 'promotions'), wa()] });
+    return true;
+  }
+
   async function searchReply(text: string, parsed: Parsed = parseNeed(text)) {
     try {
       const catalog = await getCatalog();
@@ -907,6 +926,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         else await startNeed({ lang: get().lang, gift: false, rest: [], query: '' }, range);
         return;
       }
+      if (hasWords && (await aiReply(text, catalog))) return;
       const shown = hasWords ? stripBudget(text) : text;
       const ctx: Context = { kind: 'query', query: hasWords ? parsed.query : text };
       if (range) {
@@ -3114,10 +3134,15 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     dismissTeaser: () => set({ teaserDismissed: true }),
     send: async (text) => {
       if (get().loading) return;
-      await run(async () => {
-        await respondTo(text);
-        await afterTurn();
-      });
+      typedTurn = true; // écrit par le client : Zara IA peut répondre
+      try {
+        await run(async () => {
+          await respondTo(text);
+          await afterTurn();
+        });
+      } finally {
+        typedTurn = false;
+      }
     },
     choose: async (action) => {
       if (get().loading) return;

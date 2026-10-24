@@ -55,6 +55,9 @@ function uuid(): string {
   });
 }
 
+// l'identifiant anonyme du visiteur (aussi pour la limite des messages de Zara IA)
+export const getVisitorId = (): string => visitorId();
+
 function visitorId(): string {
   const s = store();
   try {
