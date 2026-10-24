@@ -17,9 +17,19 @@ import {
   openInChrome,
   triggerPwaInstallPrompt,
 } from '../lib/pwaInstallPrompt';
+import { trackShortcutInstallIfNeeded } from '../lib/appInstallTracking';
+import {
+  getWebPushIssue,
+  hasWebPushPermission,
+  isWebPushBlocked,
+  isWebPushSupported,
+  PUSH_PERMISSION_NOT_GRANTED,
+  subscribeToWebPush,
+} from '../lib/webPushSubscription';
 
 // Page « albasseshopping.com/installer » (ou /app) : le lien à donner dans les publicités. Un seul bouton installe le raccourci
-// du site sur Android ; iPhone et navigateurs de Facebook / TikTok / WhatsApp ont leurs propres étapes. Ouverte sans compte.
+// du site sur Android et active les notifications push ; iPhone et navigateurs de Facebook / TikTok / WhatsApp ont leurs propres
+// étapes. Ouverte sans compte.
 export function InstallScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const showIosGuide = useInstallGuideStore((s) => s.show);
@@ -27,6 +37,9 @@ export function InstallScreen() {
   const [justInstalled, setJustInstalled] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [pushOn, setPushOn] = useState(() => hasWebPushPermission());
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushMessage, setPushMessage] = useState<string | null>(null);
 
   const ios = isIosDevice();
   const inApp = isInAppBrowser();
@@ -36,9 +49,27 @@ export function InstallScreen() {
     setMessage(null);
     const outcome = await triggerPwaInstallPrompt();
     setBusy(false);
-    if (outcome === 'accepted') setJustInstalled(true);
-    else setMessage(installNotReadyMessage());
+    if (outcome === 'accepted') {
+      setJustInstalled(true);
+      trackShortcutInstallIfNeeded();
+      // même geste que la fenêtre d'installation du site ; le bouton « Activer les notifications » ci-dessous prend le relais
+      // si le téléphone ne montre pas la demande tout de suite
+      subscribeToWebPush().then((ok) => ok && setPushOn(true));
+    } else setMessage(installNotReadyMessage());
   };
+
+  const enablePush = async () => {
+    setPushBusy(true);
+    setPushMessage(null);
+    const ok = await subscribeToWebPush();
+    setPushBusy(false);
+    if (ok) setPushOn(true);
+    else if (getWebPushIssue() === PUSH_PERMISSION_NOT_GRANTED) setPushMessage("Vous n'avez pas autorisé les notifications. Touchez le bouton pour réessayer.");
+    else setPushMessage(`Activation impossible pour le moment (${getWebPushIssue() || 'erreur'}). Réessayez dans un instant.`);
+  };
+
+  const installedHere = alreadyInstalled || justInstalled;
+  const showPush = Platform.OS === 'web' && installedHere && isWebPushSupported();
 
   const goToShop = () => navigation.navigate('Tabs', { screen: 'Home' } as never);
 
@@ -57,7 +88,7 @@ export function InstallScreen() {
           <Text style={styles.benefit}>✅ Les promotions et les alertes de commande sur votre téléphone</Text>
         </View>
 
-        {alreadyInstalled || justInstalled ? (
+        {installedHere ? (
           <View style={styles.box} testID="install-done">
             <Text style={styles.boxTitle}>{justInstalled ? '✅ Installation lancée' : '✅ Albasse est déjà installée'}</Text>
             <Text style={styles.boxText}>
@@ -87,6 +118,25 @@ export function InstallScreen() {
             {message ? <Text style={styles.hint} testID="install-message">{message}</Text> : null}
           </View>
         )}
+
+        {showPush ? (
+          <View style={styles.box} testID="install-push">
+            <Text style={styles.boxTitle}>{pushOn ? '🔔 Notifications activées' : '🔔 Recevez les promotions et vos alertes de commande'}</Text>
+            {pushOn ? (
+              <Text style={styles.boxText}>Vous recevrez les ventes flash et les nouvelles de vos commandes sur ce téléphone.</Text>
+            ) : isWebPushBlocked() ? (
+              <Text style={styles.boxText}>
+                Les notifications sont bloquées sur ce téléphone. Autorisez-les dans les réglages du site (le cadenas à côté de l'adresse
+                dans Chrome), puis revenez ici.
+              </Text>
+            ) : (
+              <>
+                <GoldButton label="🔔 Activer les notifications" onPress={enablePush} loading={pushBusy} />
+                {pushMessage ? <Text style={styles.hint} testID="install-push-message">{pushMessage}</Text> : null}
+              </>
+            )}
+          </View>
+        ) : null}
 
         <Pressable onPress={goToShop} style={styles.skip} accessibilityRole="button">
           <Text style={styles.skipText}>Continuer vers la plateforme →</Text>
