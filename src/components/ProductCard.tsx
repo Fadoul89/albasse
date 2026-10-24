@@ -40,11 +40,11 @@ export function ProductCard({ product, columns = 2 }: { product: Product; column
           </View>
         )}
         <FavoriteButton productId={product.id} style={styles.favoriteBtn} />
-        {/* badges de confiance de la boutique, en bas à gauche de la photo */}
-        <View style={styles.trustRow} pointerEvents="none" testID="card-trust-badges">
-          <Image source={BADGE_VERIFIED} style={styles.trustVerified} contentFit="contain" accessibilityLabel="Vendeur vérifié" />
-          <Image source={BADGE_YEARS} style={styles.trustYears} contentFit="contain" accessibilityLabel="13 ans d’expérience" />
-        </View>
+      </View>
+      {/* badges de confiance de la boutique, sous la photo */}
+      <View style={styles.trustRow} pointerEvents="none" testID="card-trust-badges">
+        <Image source={BADGE_VERIFIED} style={styles.trustVerified} contentFit="contain" accessibilityLabel="Vendeur vérifié" />
+        <Image source={BADGE_YEARS} style={styles.trustYears} contentFit="contain" accessibilityLabel="13 ans d’expérience" />
       </View>
       <Text style={styles.name} numberOfLines={1}>
         {product.name}
@@ -81,7 +81,7 @@ const styles = StyleSheet.create({
   },
   badgeText: { color: colors.cream, fontFamily: fonts.bodyBold, fontSize: 11 },
   favoriteBtn: { position: 'absolute', top: 8, right: 8 },
-  trustRow: { position: 'absolute', left: 6, bottom: 6, flexDirection: 'row', alignItems: 'center', gap: 3 },
+  trustRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: -4, marginBottom: 6 },
   trustVerified: { width: 30, height: 30 },
   trustYears: { width: 69, height: 23 },
   name: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 13, marginBottom: 4 },
