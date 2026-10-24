@@ -8,6 +8,8 @@ import { useToastStore } from '../store/toastStore';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { isValidEmail, phoneDigits } from '../lib/phoneAuth';
 import { rememberLogin } from '../lib/rememberLogin';
+import { installAfterSignUpDue, markInstallPageShown } from '../lib/installAfterSignUp';
+import { navigationRef } from '../navigation/navigationRef';
 import { GoldButton } from './GoldButton';
 import { CityPicker } from './CityPicker';
 
@@ -92,6 +94,14 @@ export function RegisterForm({ onSuccess, onPrivacy }: { onSuccess: () => void; 
       showToast('Votre compte a bien été créé.', { title: 'Bienvenue ✓', type: 'success' });
       rememberLogin(phone, true);
       onSuccess();
+      // téléphone sans le raccourci : juste après l'inscription, la page d'installation (une seule fois). Le court délai laisse
+      // RootNavigator rouvrir la page demandée avant (sinon elle effacerait la page d'installation).
+      if (installAfterSignUpDue()) {
+        markInstallPageShown();
+        setTimeout(() => {
+          if (navigationRef.isReady()) navigationRef.navigate('Install');
+        }, 800);
+      }
     }
   };
 
