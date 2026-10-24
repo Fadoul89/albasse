@@ -290,35 +290,7 @@ export function ProductScreen({ route }: Props) {
             )}
           </View>
 
-          {/* badges de confiance de la boutique, côte à côte sous le prix */}
-          <View style={styles.trustRow} testID="product-trust-badges">
-            <Image source={BADGE_VERIFIED} style={styles.badgeVerified} contentFit="contain" accessibilityLabel="Vendeur vérifié" />
-            <Image source={BADGE_YEARS} style={styles.badgeYears} contentFit="contain" accessibilityLabel="13 ans d’expérience" />
-          </View>
-
-          {showWhatsAppOrder && (
-            <>
-              <Pressable style={styles.waOrderBtn} onPress={orderOnWhatsApp} testID="product-wa-order">
-                <Text style={styles.waOrderText}>💬 Commander sur WhatsApp</Text>
-              </Pressable>
-              <Text style={styles.waOrderHint}>
-                {storeSettings.account_required ? '' : 'Sans créer de compte · '}💵 Paiement à la livraison possible
-              </Text>
-            </>
-          )}
-
-          <View style={styles.shareRow}>
-            <Text style={styles.shareLabel}>Partager :</Text>
-            <Pressable style={[styles.shareBtn, styles.shareBtnWhatsApp]} onPress={shareToWhatsApp}>
-              <Text style={styles.shareBtnText}>💬 WhatsApp</Text>
-            </Pressable>
-            <Pressable style={[styles.shareBtn, styles.shareBtnFacebook]} onPress={shareToFacebook}>
-              <Text style={styles.shareBtnText}>📘 Facebook</Text>
-            </Pressable>
-          </View>
-
-          <Text style={styles.description}>{product.description}</Text>
-
+          {/* choix couleur / taille / quantité juste sous le prix */}
           {product.colors.length > 0 && (
             <View style={styles.selectorSection}>
               <Text style={styles.selectorLabel}>Couleur</Text>
@@ -379,6 +351,35 @@ export function ProductScreen({ route }: Props) {
               </Pressable>
             </View>
           </View>
+
+          {/* badges de confiance de la boutique, côte à côte sous le prix */}
+          <View style={styles.trustRow} testID="product-trust-badges">
+            <Image source={BADGE_VERIFIED} style={styles.badgeVerified} contentFit="contain" accessibilityLabel="Vendeur vérifié" />
+            <Image source={BADGE_YEARS} style={styles.badgeYears} contentFit="contain" accessibilityLabel="13 ans d’expérience" />
+          </View>
+
+          {showWhatsAppOrder && (
+            <>
+              <Pressable style={styles.waOrderBtn} onPress={orderOnWhatsApp} testID="product-wa-order">
+                <Text style={styles.waOrderText}>💬 Commander sur WhatsApp</Text>
+              </Pressable>
+              <Text style={styles.waOrderHint}>
+                {storeSettings.account_required ? '' : 'Sans créer de compte · '}💵 Paiement à la livraison possible
+              </Text>
+            </>
+          )}
+
+          <View style={styles.shareRow}>
+            <Text style={styles.shareLabel}>Partager :</Text>
+            <Pressable style={[styles.shareBtn, styles.shareBtnWhatsApp]} onPress={shareToWhatsApp}>
+              <Text style={styles.shareBtnText}>💬 WhatsApp</Text>
+            </Pressable>
+            <Pressable style={[styles.shareBtn, styles.shareBtnFacebook]} onPress={shareToFacebook}>
+              <Text style={styles.shareBtnText}>📘 Facebook</Text>
+            </Pressable>
+          </View>
+
+          <Text style={styles.description}>{product.description}</Text>
 
           <View style={styles.reviewsSection}>
             <Text style={styles.selectorLabel}>Avis clients ({reviews.length})</Text>
