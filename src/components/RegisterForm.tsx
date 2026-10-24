@@ -2,7 +2,7 @@
 // en premier sur l'écran d'entrée quand le compte est obligatoire.
 import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet, Pressable } from 'react-native';
-import { colors, fonts, radius, spacing } from '../theme';
+import { colors, fonts, radius, spacing, accountField, accountFieldPlaceholder } from '../theme';
 import { useAuthStore } from '../store/authStore';
 import { useToastStore } from '../store/toastStore';
 import { isSupabaseConfigured } from '../lib/supabase';
@@ -104,8 +104,8 @@ export function RegisterForm({ onSuccess, onPrivacy }: { onSuccess: () => void; 
         value={fullName}
         onChangeText={setFullName}
         placeholder="Nom et prénom *"
-        placeholderTextColor={colors.creamFaint}
-        style={styles.input}
+        placeholderTextColor={accountFieldPlaceholder}
+        style={accountField}
       />
       <TextInput
         testID="register-phone"
@@ -114,9 +114,9 @@ export function RegisterForm({ onSuccess, onPrivacy }: { onSuccess: () => void; 
         value={phone}
         onChangeText={setPhone}
         placeholder="Numéro de téléphone * (ex. 66 12 34 56)"
-        placeholderTextColor={colors.creamFaint}
+        placeholderTextColor={accountFieldPlaceholder}
         keyboardType="phone-pad"
-        style={styles.input}
+        style={accountField}
       />
       <TextInput
         testID="register-password"
@@ -125,9 +125,9 @@ export function RegisterForm({ onSuccess, onPrivacy }: { onSuccess: () => void; 
         value={password}
         onChangeText={setPassword}
         placeholder="Mot de passe (min. 6 caractères) *"
-        placeholderTextColor={colors.creamFaint}
+        placeholderTextColor={accountFieldPlaceholder}
         secureTextEntry
-        style={styles.input}
+        style={accountField}
       />
       <Text style={styles.fieldHint}>Pour vous connecter : votre numéro de téléphone et ce mot de passe.</Text>
 
@@ -138,41 +138,41 @@ export function RegisterForm({ onSuccess, onPrivacy }: { onSuccess: () => void; 
         value={email}
         onChangeText={setEmail}
         placeholder="E-mail (facultatif)"
-        placeholderTextColor={colors.creamFaint}
+        placeholderTextColor={accountFieldPlaceholder}
         autoCapitalize="none"
         keyboardType="email-address"
-        style={styles.input}
+        style={accountField}
       />
       <TextInput
         value={whatsappNumber}
         onChangeText={setWhatsappNumber}
         placeholder="Numéro WhatsApp (si différent du téléphone)"
-        placeholderTextColor={colors.creamFaint}
+        placeholderTextColor={accountFieldPlaceholder}
         keyboardType="phone-pad"
-        style={styles.input}
+        style={accountField}
       />
       <TextInput
         value={profession}
         onChangeText={setProfession}
         placeholder="Profession"
-        placeholderTextColor={colors.creamFaint}
-        style={styles.input}
+        placeholderTextColor={accountFieldPlaceholder}
+        style={accountField}
       />
       <Text style={styles.fieldLabel}>📍 Ville</Text>
-      <CityPicker value={region} onChange={(v) => setRegion(v)} />
+      <CityPicker value={region} onChange={(v) => setRegion(v)} light />
       <TextInput
         value={country}
         onChangeText={setCountry}
         placeholder="Pays"
-        placeholderTextColor={colors.creamFaint}
-        style={styles.input}
+        placeholderTextColor={accountFieldPlaceholder}
+        style={accountField}
       />
       <TextInput
         value={address}
         onChangeText={setAddress}
         placeholder="Adresse"
-        placeholderTextColor={colors.creamFaint}
-        style={styles.input}
+        placeholderTextColor={accountFieldPlaceholder}
+        style={accountField}
       />
 
       <Text style={styles.privacyNote}>
@@ -238,17 +238,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginBottom: spacing.sm,
     marginTop: spacing.md,
-  },
-  input: {
-    backgroundColor: colors.panel,
-    borderRadius: radius.md,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: colors.cream,
-    fontFamily: fonts.body,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: spacing.sm,
   },
   fieldLabel: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 12, marginBottom: 6 },
   fieldHint: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11, marginTop: -2, marginBottom: spacing.sm },
