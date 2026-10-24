@@ -77,7 +77,7 @@ type Item = {
   hay: { name: string; cat: string; desc: string };
 };
 
-const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9؀-ۿ]+/g, " ").trim();
+const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\u0600-\u06ff]+/g, " ").trim();
 const stem = (w: string) => (w.length > 3 && w.endsWith("s") ? w.slice(0, -1) : w);
 
 let cache: { at: number; items: Item[] } | null = null;
