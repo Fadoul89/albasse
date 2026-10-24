@@ -65,7 +65,8 @@ export function AdminMarketingScreen() {
       setError(d?.reason === 'no_key' ? "La clé de l'IA n'est pas encore installée." : 'Impossible d’écrire le texte pour le moment. Réessayez dans un instant.');
       return;
     }
-    setResult(d.text);
+    // pas de mise en forme markdown dans l'écran : on retire les étoiles du gras et de l'italique
+    setResult(d.text.replace(/\*+/g, ''));
   };
 
   return (
