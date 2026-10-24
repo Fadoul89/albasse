@@ -8,6 +8,7 @@ import type { RootStackParamList } from './types';
 import { colors } from '../theme';
 import { SocialProofTicker } from '../components/SocialProofTicker';
 import { Assistant } from '../components/Assistant';
+import { AdminOrderAlert } from '../components/AdminOrderAlert';
 import { AppDownloadBanner } from '../components/AppDownloadBanner';
 import { trackPageView } from '../lib/analytics';
 import { startShortcutInstallTracking, trackAppInstallIfNeeded } from '../lib/appInstallTracking';
@@ -274,6 +275,7 @@ export function RootNavigator() {
           {showWall && <AccountWall />}
         </View>
         <FavoritesSync />
+        <AdminOrderAlert />
         {!signUpFirst && (
           <>
             <Assistant />
