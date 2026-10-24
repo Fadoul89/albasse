@@ -22,7 +22,6 @@ import { useAssistantStore, type ChatAction, type ChatImage, type ChatMessage } 
 import type { AssistantProduct } from '../lib/assistantData';
 import { hasArabic, type Lang } from '../lib/assistantLang';
 import { currentDevice, markIntent } from '../lib/assistantAttribution';
-import { CartBar, ChatCart } from './AssistantCart';
 import { texts } from '../lib/assistantText';
 import { openInChrome } from '../lib/pwaInstallPrompt';
 import { ASSISTANT_NAME, WHATSAPP_URL } from '../constants/assistant';
@@ -116,21 +115,22 @@ function ProductCards({ products, lang, onOpen, onAdd }: { products: AssistantPr
                 <Text style={styles.cardPrice}>{formatXAF(p.price)}</Text>
                 {discount && p.compare_at_price ? <Text style={styles.cardOldPrice}>{formatXAF(p.compare_at_price)}</Text> : null}
               </View>
-              {p.in_stock ? (
-                <Pressable
-                  testID="assistant-card-add"
-                  onPress={() => onAdd(p.slug)}
-                  style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}
-                  accessibilityRole="button"
-                  accessibilityLabel={t.card.addLabel(p.name)}
-                  hitSlop={6}
-                >
-                  <Text style={styles.addPlus}>+</Text>
-                </Pressable>
-              ) : null}
             </View>
             {p.in_stock && typeof p.stock === 'number' && p.stock >= 1 && p.stock <= 5 ? (
               <Text style={[styles.cardLow, rtl]}>🔥 {p.stock === 1 ? t.card.last : t.card.only(p.stock)}</Text>
+            ) : null}
+            {/* « Commander » : Zara prend la commande de cet article tout de suite (plus de panier) */}
+            {p.in_stock ? (
+              <Pressable
+                testID="assistant-card-add"
+                onPress={() => onAdd(p.slug)}
+                style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}
+                accessibilityRole="button"
+                accessibilityLabel={t.card.addLabel(p.name)}
+                hitSlop={4}
+              >
+                <Text style={styles.addText}>{t.card.order}</Text>
+              </Pressable>
             ) : null}
             {!p.in_stock ? <Text style={[styles.cardOut, rtl]}>{t.card.soldOut}</Text> : <Text style={[styles.cardSee, rtl]}>{t.card.see}</Text>}
           </Pressable>
@@ -177,22 +177,16 @@ function Bubble({
   message,
   actions,
   old,
-  city,
   onOpenProduct,
   onAdd,
   onChoose,
-  onCheckout,
-  onOpenFull,
 }: {
   message: ChatMessage;
   actions: ChatAction[];
   old: boolean;
-  city: { name: string; fee: number | null } | null;
   onOpenProduct: (slug: string) => void;
   onAdd: (slug: string) => void;
   onChoose: (action: ChatAction) => void;
-  onCheckout: () => void;
-  onOpenFull: () => void;
 }) {
   const mine = message.role === 'user';
   // Zara écrit de droite à gauche quand elle parle arabe ; ce que tape le visiteur suit ses propres lettres.
@@ -219,7 +213,6 @@ function Bubble({
           )}
           {!mine && message.image ? <ChatPhoto image={message.image} /> : null}
           {!mine && message.products && message.products.length > 0 ? <ProductCards products={message.products} lang={lang} onOpen={onOpenProduct} onAdd={onAdd} /> : null}
-          {!mine && message.cart ? <ChatCart lang={lang} city={city} onCheckout={onCheckout} onOpenFull={onOpenFull} /> : null}
         </View>
       </View>
       {!mine && actions.length > 0 ? <ActionChips actions={actions} onChoose={onChoose} old={old} /> : null}
@@ -240,9 +233,7 @@ export function AssistantPanel() {
   const reset = useAssistantStore((s) => s.reset);
   const oldChips = useAssistantStore((s) => s.oldChips);
   const toggleLang = useAssistantStore((s) => s.toggleLang);
-  const deliveryCity = useAssistantStore((s) => s.deliveryCity);
-  const addToCart = useAssistantStore((s) => s.addToCart);
-  const openCart = useAssistantStore((s) => s.openCart);
+  const orderProduct = useAssistantStore((s) => s.orderProduct);
   const startCheckout = useAssistantStore((s) => s.startCheckout);
 
   const t = texts(lang);
@@ -289,11 +280,10 @@ export function AssistantPanel() {
 
   const openProduct = (slug: string) => go(() => navigationRef.navigate('Product', { slug }));
 
-  // « Commander » : Zara vérifie le panier (prix, stock, compte) puis finalise la commande avec le client, dans la conversation.
+  // « Terminer ma commande » : Zara vérifie l'article (prix, stock, compte) puis finalise la commande avec le client, dans la conversation.
   const checkout = () => {
     void startCheckout();
   };
-  const openFullCart = () => go(() => navigationRef.navigate('Tabs', { screen: 'Cart' } as never));
 
   const onChoose = (action: ChatAction) => {
     switch (action.kind) {
@@ -309,7 +299,7 @@ export function AssistantPanel() {
         go(() => navigationRef.navigate('Login'));
         return;
       case 'orders':
-        go(() => navigationRef.navigate('Orders'));
+        go(() => navigationRef.navigate('Tabs', { screen: 'Orders' } as never));
         return;
       case 'account':
         go(() => navigationRef.navigate('Tabs', { screen: 'Account' } as never));
@@ -318,14 +308,13 @@ export function AssistantPanel() {
       case 'categoryPage':
         if (action.payload) go(() => navigationRef.navigate('Category', { slug: action.payload as string }));
         return;
+      // ancien bouton « Voir mon panier » : il n'y a plus de panier, la commande commencée reprend
       case 'cart':
-        openCart();
-        return;
       case 'checkout':
         checkout();
         return;
       case 'orderPage':
-        go(() => navigationRef.navigate('Checkout')); // la page de commande du site, si le client préfère (panier gardé)
+        go(() => navigationRef.navigate('Checkout')); // la page de commande du site, si le client préfère (l'article reste choisi)
         return;
       case 'link':
         if (action.payload) Linking.openURL(action.payload);
@@ -426,12 +415,9 @@ export function AssistantPanel() {
             message={m}
             actions={loading || !m.actions ? NO_ACTIONS : i === lastIndex ? m.actions : oldChips(m.actions)}
             old={i !== lastIndex}
-            city={deliveryCity}
             onOpenProduct={openProduct}
-            onAdd={addToCart}
+            onAdd={orderProduct}
             onChoose={onChoose}
-            onCheckout={checkout}
-            onOpenFull={openFullCart}
           />
         ))}
 
@@ -445,7 +431,6 @@ export function AssistantPanel() {
         ) : null}
       </ScrollView>
 
-      <CartBar lang={lang} onOpen={openCart} />
 
       <View style={[styles.inputBar, !desktop ? { paddingBottom: spacing.sm + (area ? 0 : insets.bottom) } : null]}>
         <TextInput
@@ -587,9 +572,10 @@ const styles = StyleSheet.create({
   cardPrice: { color: colors.goldLight, fontFamily: fonts.bodyBold, fontSize: 14 },
   cardOldPrice: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11.5, textDecorationLine: 'line-through' },
   addButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    marginHorizontal: 9,
+    marginTop: 8,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: colors.gold,
     alignItems: 'center',
     justifyContent: 'center',
@@ -599,8 +585,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
   },
-  addButtonPressed: { opacity: 0.7, transform: [{ scale: 0.92 }] },
-  addPlus: { color: '#1b1405', fontFamily: fonts.bodyBold, fontSize: 24, lineHeight: 26 },
+  addButtonPressed: { opacity: 0.7, transform: [{ scale: 0.96 }] },
+  addText: { color: '#1b1405', fontFamily: fonts.bodyBold, fontSize: 13 },
   cardSee: { color: colors.gold, fontFamily: fonts.bodySemiBold, fontSize: 12, paddingHorizontal: 9, marginTop: 6 },
   cardOut: { color: colors.error, fontFamily: fonts.bodySemiBold, fontSize: 12, paddingHorizontal: 9, marginTop: 6 },
   cardLow: { color: '#ffb347', fontFamily: fonts.bodySemiBold, fontSize: 11.5, paddingHorizontal: 9, marginTop: 5 },

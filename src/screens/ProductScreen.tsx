@@ -11,6 +11,7 @@ import {
   Linking,
 } from 'react-native';
 import { Image } from 'expo-image';
+
 import type { RouteProp } from '@react-navigation/native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -33,6 +34,10 @@ import { FavoriteButton } from '../components/FavoriteButton';
 import { useStoreSettings } from '../hooks/useStoreSettings';
 import { WebPushBanner } from '../components/WebPushBanner';
 
+// badges de confiance (fond transparent, réduits pour le téléphone)
+const BADGE_VERIFIED = require('../../assets/badge-vendeur-verifie.png');
+const BADGE_YEARS = require('../../assets/badge-13-ans.png');
+
 const { width } = Dimensions.get('window');
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
 const SITE_URL = 'https://www.albasseshopping.com';
@@ -49,7 +54,7 @@ export function ProductScreen({ route }: Props) {
   const { product, redirectSlug, isLoading } = useProductBySlug(slug);
   const { products: allProducts } = useProducts();
   const { reviews } = useReviews(product?.id ?? '');
-  const addItem = useCartStore((s) => s.addItem);
+  const setOrderItem = useCartStore((s) => s.setOrderItem);
   const showToast = useToastStore((s) => s.show);
   const profile = useAuthStore((s) => s.profile);
   const { settings: storeSettings, isLoading: storeSettingsLoading } = useStoreSettings();
@@ -144,14 +149,20 @@ export function ProductScreen({ route }: Props) {
     })
     .slice(0, 8);
 
-  const handleAddToCart = () => {
-    addItem(product, quantity, color, size);
-    trackAddToCart(product.id);
-    showToast(`${product.name} (x${quantity})`, { title: 'Ajouté au panier ✓', type: 'success' });
-  };
-
-  const handleBuyNow = () => {
-    addItem(product, quantity, color, size);
+  // Plus de panier : « Commander » ouvre directement la page de commande avec cet article (une commande = un article).
+  const handleOrder = () => {
+    // une seule taille / couleur : choisie d'office ; plusieurs : le client choisit avant de commander (comme avec Zara)
+    const pickedSize = size ?? (product.sizes.length === 1 ? product.sizes[0] : null);
+    const pickedColor = color ?? (product.colors.length === 1 ? product.colors[0] : null);
+    if (product.sizes.length > 1 && !pickedSize) {
+      showToast('Choisissez votre taille avant de commander.', { title: 'Taille', type: 'info' });
+      return;
+    }
+    if (product.colors.length > 1 && !pickedColor) {
+      showToast('Choisissez votre couleur avant de commander.', { title: 'Couleur', type: 'info' });
+      return;
+    }
+    setOrderItem(product, quantity, pickedColor, pickedSize);
     trackAddToCart(product.id);
     if (!profile) {
       showToast('Créez un compte ou connectez-vous pour passer une commande.', {
@@ -279,6 +290,12 @@ export function ProductScreen({ route }: Props) {
             )}
           </View>
 
+          {/* badges de confiance de la boutique, côte à côte sous le prix */}
+          <View style={styles.trustRow} testID="product-trust-badges">
+            <Image source={BADGE_VERIFIED} style={styles.badgeVerified} contentFit="contain" accessibilityLabel="Vendeur vérifié" />
+            <Image source={BADGE_YEARS} style={styles.badgeYears} contentFit="contain" accessibilityLabel="13 ans d’expérience" />
+          </View>
+
           {showWhatsAppOrder && (
             <>
               <Pressable style={styles.waOrderBtn} onPress={orderOnWhatsApp} testID="product-wa-order">
@@ -393,8 +410,7 @@ export function ProductScreen({ route }: Props) {
       </ScrollView>
 
       <View style={styles.footer}>
-        <GoldButton label="Ajouter au panier" variant="outline" onPress={handleAddToCart} style={{ flex: 1 }} />
-        <GoldButton label="Acheter" variant="gold" onPress={handleBuyNow} style={{ flex: 1 }} />
+        <GoldButton label="Commander" variant="gold" onPress={handleOrder} style={{ flex: 1 }} />
       </View>
     </View>
   );
@@ -420,6 +436,9 @@ const styles = StyleSheet.create({
   body: { paddingHorizontal: spacing.md, paddingTop: spacing.md },
   name: { fontFamily: fonts.display, fontSize: 22, color: colors.cream, marginBottom: 6 },
   priceRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 },
+  trustRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 },
+  badgeVerified: { width: 64, height: 64 },
+  badgeYears: { width: 168, height: 56 },
   price: { fontFamily: fonts.bodyBold, fontSize: 20, color: colors.success },
   comparePrice: {
     fontFamily: fonts.body,

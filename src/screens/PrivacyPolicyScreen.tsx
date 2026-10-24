@@ -28,7 +28,7 @@ export function PrivacyPolicyScreen() {
             Pour que notre assistante Zara puisse vous conseiller, nous retenons aussi les articles que vous regardez :
             le nombre de fois où vous ouvrez une fiche, le temps pendant lequel vous la consultez réellement (un onglet
             laissé ouvert ou un téléphone en veille ne compte pas), les couleurs, tailles et photos que vous touchez,
-            les articles ajoutés ou retirés du panier, les catégories ouvertes et vos recherches. Ces informations sont
+            les articles dont vous commencez la commande, les catégories ouvertes et vos recherches. Ces informations sont
             liées à un identifiant anonyme de votre appareil (ou à votre compte si vous êtes connecté), jamais à votre
             nom, et servent seulement à vous proposer des articles disponibles qui peuvent vous plaire et à améliorer la
             boutique. Elles sont conservées 90 jours, puis effacées.

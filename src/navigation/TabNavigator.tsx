@@ -5,9 +5,8 @@ import type { TabParamList } from './types';
 import { colors, fonts, radius } from '../theme';
 import { HomeScreen } from '../screens/HomeScreen';
 import { SearchScreen } from '../screens/SearchScreen';
-import { CartScreen } from '../screens/CartScreen';
+import { OrdersScreen } from '../screens/OrdersScreen';
 import { AccountScreen } from '../screens/AccountScreen';
-import { useCartStore } from '../store/cartStore';
 import { TAB_BAR_HEIGHT, TAB_CENTER_GAP } from './tabLayout';
 
 const Tab = createBottomTabNavigator<TabParamList>();
@@ -15,20 +14,18 @@ const Tab = createBottomTabNavigator<TabParamList>();
 const ICONS: Record<keyof TabParamList, string> = {
   Home: '🏠',
   Search: '🔍',
-  Cart: '🛒',
+  Orders: '📦',
   Account: '👤',
 };
 
 const LABELS: Record<keyof TabParamList, string> = {
   Home: 'Accueil',
   Search: 'Recherche',
-  Cart: 'Panier',
+  Orders: 'Commandes',
   Account: 'Compte',
 };
 
 export function TabNavigator() {
-  const count = useCartStore((s) => s.count());
-
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -48,20 +45,20 @@ export function TabNavigator() {
           shadowOffset: { width: 0, height: -3 },
           elevation: 10,
         },
-        // l'espace du milieu (entre Recherche et Panier) est la place du bouton de Zara
+        // l'espace du milieu (entre Recherche et Commandes) est la place du bouton de Zara
         tabBarItemStyle:
-          route.name === 'Search' ? { marginRight: TAB_CENTER_GAP / 2 } : route.name === 'Cart' ? { marginLeft: TAB_CENTER_GAP / 2 } : undefined,
+          route.name === 'Search' ? { marginRight: TAB_CENTER_GAP / 2 } : route.name === 'Orders' ? { marginLeft: TAB_CENTER_GAP / 2 } : undefined,
         tabBarActiveTintColor: colors.gold,
         tabBarInactiveTintColor: colors.creamFaint,
         tabBarLabel: ({ color, focused }) => {
-          const isCart = route.name === 'Cart';
+          const isOrders = route.name === 'Orders';
           const isAccount = route.name === 'Account';
-          const labelColor = isCart ? '#3b9eff' : isAccount ? colors.gold : color;
+          const labelColor = isOrders ? '#3b9eff' : isAccount ? colors.gold : color;
           return (
             <Text
               style={{
                 color: labelColor,
-                fontFamily: focused || isCart || isAccount ? fonts.bodySemiBold : fonts.bodyMedium,
+                fontFamily: focused || isOrders || isAccount ? fonts.bodySemiBold : fonts.bodyMedium,
                 fontSize: 11.5,
                 marginTop: 2,
               }}
@@ -71,13 +68,13 @@ export function TabNavigator() {
           );
         },
         tabBarIcon: ({ focused }) => {
-          const isCart = route.name === 'Cart';
+          const isOrders = route.name === 'Orders';
           const isAccount = route.name === 'Account';
           return (
             <View
               style={[
                 styles.iconWrap,
-                isCart ? styles.iconWrapBlue : isAccount ? styles.iconWrapGold : focused && styles.iconWrapActive,
+                isOrders ? styles.iconWrapBlue : isAccount ? styles.iconWrapGold : focused && styles.iconWrapActive,
               ]}
             >
               <Text style={{ fontSize: focused ? 26 : 23 }}>
@@ -86,21 +83,11 @@ export function TabNavigator() {
             </View>
           );
         },
-        tabBarBadge:
-          route.name === 'Cart' && count > 0 ? count : undefined,
-        tabBarBadgeStyle: {
-          backgroundColor: colors.red,
-          color: colors.cream,
-          fontSize: 11,
-          minWidth: 18,
-          height: 18,
-          borderRadius: 9,
-        },
       })}
     >
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Search" component={SearchScreen} />
-      <Tab.Screen name="Cart" component={CartScreen} />
+      <Tab.Screen name="Orders" component={OrdersScreen} />
       <Tab.Screen name="Account" component={AccountScreen} />
     </Tab.Navigator>
   );

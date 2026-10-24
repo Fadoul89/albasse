@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { Image } from 'expo-image';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
@@ -33,6 +34,9 @@ export function CheckoutScreen() {
   const items = useCartStore((s) => s.items);
   const total = useCartStore((s) => s.total());
   const clearCart = useCartStore((s) => s.clear);
+  const updateQuantity = useCartStore((s) => s.updateQuantity);
+  // une commande = un article (choisi avec « Commander » sur la fiche ou dans Zara)
+  const item = items[0] ?? null;
   const profile = useAuthStore((s) => s.profile);
 
   useEffect(() => {
@@ -154,10 +158,64 @@ export function CheckoutScreen() {
 
   if (!profile) return null;
 
+  if (!item) {
+    return (
+      <View style={styles.screen}>
+        <ScreenHeader title="Commande" showBack />
+        <View style={styles.emptyBox} testID="checkout-empty">
+          <Text style={styles.emptyText}>Choisissez d’abord un article, puis touchez « Commander » sur sa fiche.</Text>
+          <GoldButton label="Voir les articles" onPress={() => navigation.navigate('Tabs', { screen: 'Home' } as never)} style={{ marginTop: spacing.md }} />
+        </View>
+      </View>
+    );
+  }
+
+  const variant = [item.size ? `Taille ${item.size}` : null, item.color].filter(Boolean).join(' · ');
+  const maxQty = Math.max(1, item.product.stock);
+
   return (
     <View style={styles.screen}>
       <ScreenHeader title="Commande" showBack />
       <ScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.sectionTitle}>Votre article</Text>
+        <View style={styles.itemCard} testID="checkout-item">
+          {item.product.images[0] ? (
+            <Image source={{ uri: item.product.images[0] }} style={styles.itemImage} contentFit="cover" />
+          ) : (
+            <View style={styles.itemImage} />
+          )}
+          <View style={styles.itemBody}>
+            <Text style={styles.itemName} numberOfLines={2}>
+              {item.product.name}
+            </Text>
+            {variant ? <Text style={styles.itemVariant}>{variant}</Text> : null}
+            <Text style={styles.itemPrice}>{formatXAF(item.product.price)}</Text>
+          </View>
+          <View style={styles.qtyCol}>
+            <Pressable
+              testID="checkout-qty-plus"
+              style={[styles.qtyBtn, item.quantity >= maxQty && styles.qtyBtnOff]}
+              onPress={() => updateQuantity(item.id, Math.min(maxQty, item.quantity + 1))}
+              disabled={item.quantity >= maxQty}
+              accessibilityLabel="Ajouter un exemplaire"
+            >
+              <Text style={styles.qtyBtnText}>+</Text>
+            </Pressable>
+            <Text style={styles.qtyValue} testID="checkout-qty">
+              {item.quantity}
+            </Text>
+            <Pressable
+              testID="checkout-qty-minus"
+              style={[styles.qtyBtn, item.quantity <= 1 && styles.qtyBtnOff]}
+              onPress={() => updateQuantity(item.id, Math.max(1, item.quantity - 1))}
+              disabled={item.quantity <= 1}
+              accessibilityLabel="Retirer un exemplaire"
+            >
+              <Text style={styles.qtyBtnText}>−</Text>
+            </Pressable>
+          </View>
+        </View>
+
         <Text style={styles.sectionTitle}>Livraison</Text>
         <TextInput
           value={name}
@@ -282,6 +340,36 @@ export function CheckoutScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   content: { paddingHorizontal: spacing.md, paddingBottom: 60 },
+  emptyBox: { padding: spacing.lg, alignItems: 'stretch' },
+  emptyText: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 14, lineHeight: 20, textAlign: 'center' },
+  itemCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: colors.panel,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.sm,
+  },
+  itemImage: { width: 72, height: 72, borderRadius: radius.sm, backgroundColor: colors.panelAlt },
+  itemBody: { flex: 1 },
+  itemName: { color: colors.cream, fontFamily: fonts.bodySemiBold, fontSize: 14 },
+  itemVariant: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 12, marginTop: 2 },
+  itemPrice: { color: colors.goldLight, fontFamily: fonts.bodyBold, fontSize: 14, marginTop: 4 },
+  qtyCol: { alignItems: 'center', gap: 4 },
+  qtyBtn: {
+    width: 30,
+    height: 28,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.gold,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qtyBtnOff: { opacity: 0.3 },
+  qtyBtnText: { color: colors.gold, fontFamily: fonts.bodyBold, fontSize: 16 },
+  qtyValue: { color: colors.cream, fontFamily: fonts.bodyBold, fontSize: 15 },
   sectionTitle: {
     fontFamily: fonts.display,
     fontSize: 17,

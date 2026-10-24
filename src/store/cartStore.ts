@@ -4,10 +4,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { CartItem, Product } from '../types';
 import { trackCartEvent } from '../lib/browsingTracker';
 
+// Plus de panier : le client commande un article à la fois (avec sa quantité). Ce magasin garde seulement l'article de la
+// commande en cours (fiche produit ou Zara → page de commande), pour la reprendre s'il part avant de confirmer.
 interface CartState {
   items: CartItem[];
   updatedAt: number | null;
-  addItem: (product: Product, quantity: number, color: string | null, size: string | null) => void;
+  setOrderItem: (product: Product, quantity: number, color: string | null, size: string | null) => void;
   removeItem: (itemId: string) => void;
   updateQuantity: (itemId: string, quantity: number) => void;
   clear: () => void;
@@ -18,7 +20,7 @@ interface CartState {
 const makeItemId = (productId: string, color: string | null, size: string | null) =>
   `${productId}__${color ?? 'nc'}__${size ?? 'ns'}`;
 
-// Pour le suivi de Zara : le produit, tel qu'il est dans le panier.
+// Pour le suivi de Zara : le produit, tel qu'il est dans la commande commencée.
 const metaOf = (p: Product) => ({ id: p.id, name: p.name, slug: p.slug, categoryId: p.category_id });
 
 export const useCartStore = create<CartState>()(
@@ -27,24 +29,10 @@ export const useCartStore = create<CartState>()(
       items: [],
       updatedAt: null,
 
-      addItem: (product, quantity, color, size) => {
+      // l'article choisi remplace le précédent : une commande = un article
+      setOrderItem: (product, quantity, color, size) => {
         trackCartEvent(metaOf(product), 'add');
-        const id = makeItemId(product.id, color, size);
-        set((state) => {
-          const existing = state.items.find((i) => i.id === id);
-          if (existing) {
-            return {
-              items: state.items.map((i) =>
-                i.id === id ? { ...i, quantity: i.quantity + quantity } : i
-              ),
-              updatedAt: Date.now(),
-            };
-          }
-          return {
-            items: [...state.items, { id, product, quantity, color, size }],
-            updatedAt: Date.now(),
-          };
-        });
+        set({ items: [{ id: makeItemId(product.id, color, size), product, quantity, color, size }], updatedAt: Date.now() });
       },
 
       removeItem: (itemId) => {
@@ -74,6 +62,9 @@ export const useCartStore = create<CartState>()(
     {
       name: 'albasse-cart',
       storage: createJSONStorage(() => AsyncStorage),
+      // les anciens paniers (plusieurs articles) sont vidés : on repart d'une commande à un article
+      version: 1,
+      migrate: () => ({ items: [], updatedAt: null }),
     }
   )
 );

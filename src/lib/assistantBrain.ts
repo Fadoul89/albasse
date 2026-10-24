@@ -495,7 +495,7 @@ export function detectIntent(text: string): Intent {
   if (LOYALTY_RE.test(n)) return 'loyalty';
   // installer l'application / ajouter à l'écran d'accueil
   if (has(tokens, ['installer', 'installe', 'installation', 'telecharger', 'raccourci', 'pwa', 'appli', 'application', 'تثبيت', 'ثبت', 'تحميل', 'تطبيق']) || /ecran d accueil|ecran accueil|الشاشه الرئيسيه/.test(n)) return 'install';
-  // panier : ajouter un article, voir le panier ou le total (« comment ... » reste une question d'aide)
+  // « mon panier », le total : il n'y a plus de panier, Zara reprend la commande commencée (« comment ... » reste une question d'aide)
   const how = has(tokens, ['comment', 'كيف']);
   if (!how && has(tokens, ['ajoute', 'ajouter', 'ajoutez', 'rajoute', 'rajouter', 'mets', 'mettre', 'prends', 'prend', 'prendre', 'اضف', 'اضيفي', 'ضيف', 'ضع', 'خذ'])) return 'add';
   if (!how && (has(tokens, ['panier', 'سلتي', 'سله']) || /combien (ca|cela) fait|montant total|le total|mon total|combien je dois|المجموع|الاجمالي/.test(n))) return 'cart';

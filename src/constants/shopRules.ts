@@ -24,4 +24,3 @@ export const GIFT_WRAP_FEE = 2000;
 // Grosses commandes : à partir de ces seuils (ou si le client parle de gros, de cartons, de grandes quantités), Zara propose de passer
 // par l'équipe sur WhatsApp, qui donne les prix de gros. Zara n'annonce JAMAIS de prix de gros elle-même.
 export const BULK_MIN_QTY = 10; // pièces d'un même article
-export const BULK_MIN_TOTAL = 500000; // FCFA, total du panier

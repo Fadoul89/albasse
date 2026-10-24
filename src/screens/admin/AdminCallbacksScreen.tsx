@@ -10,7 +10,7 @@ import { chadDayIso, dayLabelOf } from '../../lib/assistantSales';
 const SOURCE_LABELS: Record<CallbackSource, string> = {
   later: 'A dit « je réfléchis »',
   price: 'Trouve que c’est cher',
-  cart: 'Panier en attente',
+  cart: 'Commande commencée',
   chat: 'A demandé un rappel',
 };
 

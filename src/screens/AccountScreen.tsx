@@ -231,7 +231,7 @@ export function AccountScreen() {
         <Text style={styles.menuIcon}>⚙️</Text>
         <Text style={styles.menuLabel}>Réglages des notifications</Text>
       </Pressable>
-      <Pressable style={styles.menuItem} onPress={() => navigation.navigate('Orders')}>
+      <Pressable style={styles.menuItem} onPress={() => navigation.navigate('Tabs', { screen: 'Orders' } as never)}>
         <Text style={styles.menuIcon}>📦</Text>
         <Text style={styles.menuLabel}>Mes commandes</Text>
       </Pressable>

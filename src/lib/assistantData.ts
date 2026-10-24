@@ -270,7 +270,7 @@ export interface CartProductStatus {
   is_active: boolean;
 }
 
-// Prix, ancien prix et stock actuels des produits du panier.
+// Prix, ancien prix et stock actuels de l'article de la commande commencée.
 export async function fetchCartStatus(ids: string[]): Promise<CartProductStatus[]> {
   const { data, error } = await withTimeout(
     Promise.resolve(supabase.from('products').select('id,price,compare_at_price,stock,is_active').in('id', ids)),

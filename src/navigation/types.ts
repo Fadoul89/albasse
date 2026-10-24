@@ -3,7 +3,6 @@ export type RootStackParamList = {
   Category: { slug: string };
   Product: { slug: string };
   Checkout: undefined;
-  Orders: undefined;
   Travel: undefined;
   Login: undefined;
   Register: undefined;
@@ -50,6 +49,6 @@ export type RootStackParamList = {
 export type TabParamList = {
   Home: undefined;
   Search: undefined;
-  Cart: undefined;
+  Orders: undefined;
   Account: undefined;
 };
