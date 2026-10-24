@@ -4,6 +4,7 @@ export type RootStackParamList = {
   Product: { slug: string };
   Checkout: undefined;
   Travel: undefined;
+  Install: undefined;
   Login: undefined;
   Register: undefined;
   ForgotPassword: undefined;

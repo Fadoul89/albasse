@@ -1,7 +1,7 @@
 // Compte obligatoire à l'entrée du site (réglage store_settings.account_required, interrupteur sur la page admin « Clients »).
-// Restent ouvertes sans compte : connexion, inscription, mot de passe oublié, confidentialité, conditions de retour et contact.
+// Restent ouvertes sans compte : connexion, inscription, mot de passe oublié, confidentialité, conditions de retour, contact et la page d'installation (/installer).
 // Les robots de Google et Facebook voient le site (articles trouvés sur Google, aperçus des liens partagés).
-export const WALL_FREE_ROUTES = ['Login', 'Register', 'ForgotPassword', 'ResetPassword', 'PrivacyPolicy', 'ReturnPolicy', 'Contact'];
+export const WALL_FREE_ROUTES = ['Login', 'Register', 'ForgotPassword', 'ResetPassword', 'PrivacyPolicy', 'ReturnPolicy', 'Contact', 'Install'];
 
 // noms précis seulement (« bot » seul attraperait des téléphones comme les Cubot)
 const CRAWLER =

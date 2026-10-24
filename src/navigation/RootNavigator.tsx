@@ -60,6 +60,7 @@ import { FavoritesSync } from '../components/FavoritesSync';
 import { AdminCitiesScreen } from '../screens/admin/AdminCitiesScreen';
 import { PrivacyPolicyScreen } from '../screens/PrivacyPolicyScreen';
 import { ReturnPolicyScreen } from '../screens/ReturnPolicyScreen';
+import { InstallScreen } from '../screens/InstallScreen';
 import { MessagesScreen } from '../screens/MessagesScreen';
 import { AdminMessagesScreen } from '../screens/admin/AdminMessagesScreen';
 import { AffiliateApplyScreen } from '../screens/AffiliateApplyScreen';
@@ -93,6 +94,8 @@ const linking: LinkingOptions<RootStackParamList> = {
       Product: 'produit/:slug',
       Checkout: 'commande',
       Travel: 'voyage',
+      // le lien à donner dans les publicités : albasseshopping.com/installer (ou /app)
+      Install: { path: 'installer', alias: ['app'] },
       Login: 'connexion',
       Register: 'inscription',
       ForgotPassword: 'mot-de-passe-oublie',
@@ -233,6 +236,7 @@ export function RootNavigator() {
             <Stack.Screen name="Product" component={ProductScreen} />
             <Stack.Screen name="Checkout" component={CheckoutScreen} />
             <Stack.Screen name="Travel" component={TravelScreen} />
+            <Stack.Screen name="Install" component={InstallScreen} />
             <Stack.Screen name="Login" component={LoginScreen} options={{ presentation: 'modal' }} />
             <Stack.Screen name="Register" component={RegisterScreen} options={{ presentation: 'modal' }} />
             <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ presentation: 'modal' }} />
