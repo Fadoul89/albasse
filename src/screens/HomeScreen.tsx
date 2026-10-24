@@ -212,16 +212,22 @@ export function HomeScreen() {
         </View>
       )}
 
-      <Pressable style={styles.travelBanner} onPress={() => navigation.navigate('Travel')}>
+      {/* juste sous la vente flash : les cartes ont déjà leur marge en bas */}
+      <Pressable
+        style={[styles.travelBanner, flashSale.length > 0 && flashEndsAt ? styles.travelAfterFlash : null]}
+        onPress={() => navigation.navigate('Travel')}
+      >
         <Text style={styles.travelIcon}>✈️</Text>
         <View style={{ flex: 1 }}>
           <Text style={styles.travelTitle}>Voyage — Billet d'avion</Text>
-          <Text style={styles.travelSubtitle}>Demandez votre réservation en quelques clics</Text>
+          <Text style={styles.travelSubtitle} numberOfLines={1}>
+            Réservez en quelques clics
+          </Text>
         </View>
         <Text style={styles.travelArrow}>→</Text>
       </Pressable>
 
-      <View style={styles.section}>
+      <View style={styles.collectionSection}>
         <Text style={styles.sectionTitle}>Toute la collection</Text>
         <View style={styles.grid}>
           {products.map((p) => (
@@ -363,7 +369,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   flashSubtitle: { fontFamily: fonts.body, fontSize: 12, color: colors.creamFaint, marginTop: 6 },
-  section: { marginTop: spacing.xl, paddingHorizontal: spacing.md },
+  collectionSection: { marginTop: spacing.md, paddingHorizontal: spacing.md },
   // les catégories remontent juste sous le bandeau ALBASSE SHOPPING
   categoriesSection: { marginTop: spacing.md, paddingHorizontal: spacing.md },
   mobileAdsSection: { flexDirection: 'row', marginTop: spacing.lg, paddingHorizontal: spacing.md, gap: spacing.md },
@@ -380,12 +386,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.gold,
     borderRadius: radius.lg,
-    padding: spacing.md,
+    paddingVertical: 10,
+    paddingHorizontal: spacing.md,
     marginHorizontal: spacing.md,
-    marginTop: spacing.xl,
+    marginTop: spacing.lg,
     gap: 12,
   },
-  travelIcon: { fontSize: 26 },
+  travelAfterFlash: { marginTop: 0 },
+  travelIcon: { fontSize: 22 },
   travelTitle: { color: colors.background, fontFamily: fonts.bodyBold, fontSize: 15 },
   travelSubtitle: { color: colors.background, fontFamily: fonts.bodyMedium, fontSize: 12, marginTop: 2, opacity: 0.75 },
   travelArrow: { color: colors.background, fontSize: 18, fontFamily: fonts.bodyBold },
