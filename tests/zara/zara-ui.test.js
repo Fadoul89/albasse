@@ -5137,7 +5137,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const recap2 = await panelOf(c.page).getByText(/Récapitulatif de votre commande/).last().innerText();
       check('apres la modification : nouveau recapitulatif avec la nouvelle adresse (le reste ne change pas)', /📍 Quartier Chagoua, rue 5,/.test(recap2) && /📞 66123456/.test(recap2) && !/Moursal/.test(recap2), recap2);
       await tapExact(c.page, 'Annuler la commande', /j’ai arrêté la commande/);
-      check('annuler : le panier est garde, rien n\'est enregistre, boutons du panier', (await cartCount(c.page)) === 1 && db.attempts.length === 0 && (await chipLabels(c.page)).includes('✅ Commander'), await chipLabels(c.page));
+      check('annuler : l\'article reste choisi, rien n\'est enregistre, « Terminer ma commande » pour reprendre', (await cartCount(c.page)) === 1 && db.attempts.length === 0 && (await chipLabels(c.page)).includes('✅ Terminer ma commande'), await chipLabels(c.page));
       check('aucune erreur (controles)', c.errs.length === 0, c.errs);
       await c.ctx.close();
     }
