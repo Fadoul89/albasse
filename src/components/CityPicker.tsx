@@ -80,7 +80,7 @@ export function CityPicker({
   }
 
   return (
-    <View>
+    <View style={styles.wrap}>
       <TextInput
         value={query}
         onChangeText={(t) => {
@@ -145,27 +145,35 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     marginBottom: spacing.sm,
   },
+  // la liste s'ouvre au-dessus du champ, pour rester visible même quand le champ est bas dans l'écran
+  wrap: { position: 'relative', zIndex: 50 },
   dropdown: {
+    position: 'absolute',
+    bottom: '100%',
+    left: 0,
+    right: 0,
+    zIndex: 50,
+    elevation: 8,
     backgroundColor: colors.panel,
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border,
-    marginTop: -spacing.xs,
-    marginBottom: spacing.sm,
-    maxHeight: 220,
+    marginBottom: spacing.xs,
+    maxHeight: 260,
     overflow: 'hidden',
   },
-  dropdownScroll: { maxHeight: 220 },
+  dropdownScroll: { maxHeight: 260 },
   option: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    minHeight: 48,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  optionText: { color: colors.cream, fontFamily: fonts.body, fontSize: 13 },
+  optionText: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 15 },
   optionFee: { color: colors.goldLight, fontFamily: fonts.bodyMedium, fontSize: 11 },
   deliveryBox: {
     backgroundColor: colors.panelAlt,
