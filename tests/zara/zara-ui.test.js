@@ -1362,6 +1362,19 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('aucune erreur (visiteur tout neuf)', v.errs.length === 0, v.errs);
       await v.ctx.close();
     }
+    // Android sans installation en un toucher : sous les articles proposes, le bouton « Voir comment installer » (question deja posee ailleurs)
+    {
+      const w = await newVisitor(phone, { zaraInstall: 'asked', storage: { albasse_zara_name: 'Ali' } });
+      await w.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await w.page.keyboard.press('Escape');
+      await w.page.getByRole('button', { name: FAB_NAME }).click();
+      await waitText(w.page, /Créez votre compte gratuit(?:, Ali)?/);
+      await tap(w.page, 'Promotions', /promotion|promo|offre/i);
+      await waitText(w.page, /Astuce : installez Albasse Shopping/);
+      check('Android sans installation en un toucher : « Voir comment installer » sous les articles proposes', (await chipLabels(w.page)).includes('📲 Voir comment installer'), await chipLabels(w.page));
+      await w.ctx.close();
+    }
     // Android sans installation en un toucher (Chrome pas encore pret, autre navigateur) : Zara propose quand meme, avec les etapes
     {
       const v = await newVisitor(phone, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' } });
@@ -1373,11 +1386,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const menu = await chipLabels(v.page);
       check('Android sans installation en un toucher : le menu a « Voir comment installer » (juste avant WhatsApp)', menu.includes('📲 Voir comment installer') && menu.indexOf('📲 Voir comment installer') === menu.indexOf('💬 WhatsApp') - 1, menu);
       await tap(v.page, 'Promotions', /promotion|promo|offre/i);
-      await waitText(v.page, /Astuce : installez Albasse Shopping/);
-      check('Android sans installation en un toucher : « Voir comment installer » sous les articles proposes', (await chipLabels(v.page)).includes('📲 Voir comment installer'), await chipLabels(v.page));
-      await ask(v.page, 'conseil', /Je suis là pour vous conseiller\. Que cherchez-vous \?/);
       await waitText(v.page, /Avez-vous déjà installé l’application Albasse Shopping/);
-      check('Android sans installation en un toucher : apres deux messages, la question avec « Voir comment installer », « Oui, deja installee », « Plus tard »', (await chipLabels(v.page)).join('|') === '📲 Voir comment installer|✅ Oui, déjà installée|Plus tard', await chipLabels(v.page));
+      check('Android sans installation en un toucher : apres le premier message, la question avec « Voir comment installer », « Oui, deja installee », « Plus tard »', (await chipLabels(v.page)).join('|') === '📲 Voir comment installer|✅ Oui, déjà installée|Plus tard', await chipLabels(v.page));
       await chip(v.page, 'Voir comment installer').click();
       await waitText(v.page, /trois points \(⋮\) en haut à droite de Chrome/);
       check('Android : les etapes de Chrome (⋮ puis « Installer l\'application » / « Ajouter a l\'ecran d\'accueil ») + « Oui, deja installee » + menu', (await chipLabels(v.page)).join('|') === '✅ Oui, déjà installée|🏠 Menu', await chipLabels(v.page));
