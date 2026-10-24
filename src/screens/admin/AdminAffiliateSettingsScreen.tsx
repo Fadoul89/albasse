@@ -80,12 +80,6 @@ export function AdminAffiliateSettingsScreen() {
           onPress={() => navigation.navigate('AdminAffiliateCommissions' as never)}
           style={{ marginTop: spacing.xl }}
         />
-        <GoldButton
-          label="Message à tous les clients"
-          variant="outline"
-          onPress={() => navigation.navigate('AdminMessages' as never)}
-          style={{ marginTop: spacing.sm }}
-        />
       </ScrollView>
     </View>
   );

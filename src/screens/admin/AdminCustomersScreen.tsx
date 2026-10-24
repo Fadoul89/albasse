@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, TextInput, StyleSheet, FlatList, Pressable } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, TextInput, StyleSheet, FlatList, Pressable, Linking } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
@@ -15,6 +15,8 @@ import {
   ACCOUNT_STATUS_LABEL,
 } from '../../lib/formatDuration';
 import { getLoyaltyStatus } from '../../lib/loyalty';
+import { phoneDigits, visibleEmail } from '../../lib/phoneAuth';
+import { fetchBrowsingOverview } from '../../lib/assistantData';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { StoreSettingToggle } from '../../components/StoreSettingToggle';
 import type { CustomerSummary } from '../../types';
@@ -30,7 +32,9 @@ type FilterKey =
   | 'withoutOrders'
   | 'statusActive'
   | 'statusInactive'
-  | 'statusBanned';
+  | 'statusBanned'
+  | 'highInterest'
+  | 'away';
 
 const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'all', label: 'Tous' },
@@ -41,7 +45,33 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'statusActive', label: '🟢 Actifs' },
   { key: 'statusInactive', label: '🟡 Inactifs' },
   { key: 'statusBanned', label: '🔴 Bannis' },
+  { key: 'highInterest', label: '💙 Intérêt élevé' },
+  { key: 'away', label: '⏰ Absents 7 j et +' },
 ];
+
+const AWAY_DAYS = 7;
+
+// Jours depuis la dernière connexion (ou l'inscription si le client ne s'est jamais reconnecté).
+function daysAway(c: CustomerSummary, now: number = Date.now()): number {
+  const last = new Date(c.profile.last_login_at ?? c.profile.created_at).getTime();
+  return Number.isFinite(last) ? Math.floor((now - last) / 86_400_000) : 0;
+}
+
+const firstName = (c: CustomerSummary) => (c.profile.full_name ?? '').trim().split(/\s+/)[0] ?? '';
+
+function whatsappUrl(c: CustomerSummary): string | null {
+  const digits = phoneDigits(c.profile.whatsapp_number ?? '') ?? phoneDigits(c.profile.phone ?? '');
+  if (!digits) return null;
+  const text = `Bonjour ${firstName(c)}, ici l'équipe Albasse Shopping 😊`.replace('Bonjour ,', 'Bonjour,');
+  return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
+}
+
+function emailUrl(c: CustomerSummary): string | null {
+  const email = visibleEmail(c.profile.email);
+  if (!email) return null;
+  const body = `Bonjour ${firstName(c)},\n\n`.replace('Bonjour ,', 'Bonjour,');
+  return `mailto:${email}?subject=${encodeURIComponent('Albasse Shopping')}&body=${encodeURIComponent(body)}`;
+}
 
 function isTestEmail(email: string | null | undefined): boolean {
   if (!email) return false;
@@ -65,6 +95,21 @@ export function AdminCustomersScreen() {
   const [filter, setFilter] = useState<FilterKey>('all');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [hideTestAccounts, setHideTestAccounts] = useState(true);
+  // comptes que Zara a notés « Intérêt élevé » (30 derniers jours) : le suivi donne « C- » + 8 premiers caractères du compte
+  const [highInterest, setHighInterest] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!profile?.is_admin) return;
+    let alive = true;
+    fetchBrowsingOverview('30d').then((res) => {
+      if (!alive || !res.ok) return;
+      const refs = res.overview.rows.filter((r) => r.interest === 'eleve' && r.accountRef).map((r) => r.accountRef!.slice(2));
+      setHighInterest(new Set(refs));
+    });
+    return () => {
+      alive = false;
+    };
+  }, [profile?.is_admin]);
 
   if (!profile?.is_admin) {
     return (
@@ -126,10 +171,14 @@ export function AdminCustomersScreen() {
         return list.filter((c) => accountStatus(c.profile.banned, c.profile.last_login_at) === 'inactive');
       case 'statusBanned':
         return list.filter((c) => c.profile.banned);
+      case 'highInterest':
+        return list.filter((c) => highInterest.has(c.profile.id.slice(0, 8)));
+      case 'away':
+        return list.filter((c) => daysAway(c) >= AWAY_DAYS);
       default:
         return list;
     }
-  }, [customers, query, filter, hideTestAccounts]);
+  }, [customers, query, filter, hideTestAccounts, highInterest]);
 
   const visible = filtered.slice(0, visibleCount);
 
@@ -142,7 +191,11 @@ export function AdminCustomersScreen() {
         contentContainerStyle={{ padding: spacing.md }}
         refreshing={isLoading}
         renderItem={({ item }) => (
-          <CustomerRow customer={item} onPress={() => navigation.navigate('AdminCustomerDetail', { userId: item.profile.id })} />
+          <CustomerRow
+            customer={item}
+            highInterest={highInterest.has(item.profile.id.slice(0, 8))}
+            onPress={() => navigation.navigate('AdminCustomerDetail', { userId: item.profile.id })}
+          />
         )}
         ListHeaderComponent={
           <View>
@@ -240,18 +293,44 @@ function StatCard({ icon, label, value }: { icon: string; label: string; value: 
   );
 }
 
-function CustomerRow({ customer, onPress }: { customer: CustomerSummary; onPress: () => void }) {
+function CustomerRow({
+  customer,
+  highInterest,
+  onPress,
+}: {
+  customer: CustomerSummary;
+  highInterest: boolean;
+  onPress: () => void;
+}) {
   const level = engagementLevel(customer.totalDurationSeconds);
   const status = accountStatus(customer.profile.banned, customer.profile.last_login_at);
   const loyalty = getLoyaltyStatus(customer.profile.loyalty_points);
+  const away = daysAway(customer);
+  const isAway = away >= AWAY_DAYS;
+  const wa = whatsappUrl(customer);
+  const mail = emailUrl(customer);
   return (
-    <Pressable style={styles.row} onPress={onPress}>
+    <Pressable style={[styles.row, isAway && styles.rowAway]} onPress={onPress} testID="admin-customer-row">
       <View style={styles.rowHeader}>
-        <Text style={styles.rowName} numberOfLines={1}>
-          {customer.profile.full_name ?? customer.profile.email}
+        <Text style={[styles.rowName, isAway && styles.rowNameAway]} numberOfLines={1}>
+          {customer.profile.full_name ?? visibleEmail(customer.profile.email) ?? customer.profile.phone ?? 'Client'}
         </Text>
         <Text style={styles.rowBadge}>{ACCOUNT_STATUS_LABEL[status]}</Text>
       </View>
+      {(highInterest || isAway) && (
+        <View style={styles.tagsRow}>
+          {highInterest && (
+            <View style={styles.tagInterest} testID="customer-high-interest">
+              <Text style={styles.tagText}>💙 Intérêt élevé (Zara)</Text>
+            </View>
+          )}
+          {isAway && (
+            <View style={styles.tagAway} testID="customer-away">
+              <Text style={styles.tagText}>⏰ Pas connecté depuis {away} j</Text>
+            </View>
+          )}
+        </View>
+      )}
       <Text style={styles.rowLoyalty}>
         {loyalty.current.icon} {loyalty.current.label} · {customer.profile.loyalty_points ?? 0} pts
       </Text>
@@ -270,6 +349,20 @@ function CustomerRow({ customer, onPress }: { customer: CustomerSummary; onPress
         <Text style={styles.rowFooterText}>🛒 {customer.orderCount} commande(s)</Text>
         <Text style={styles.rowFooterText}>{formatXAF(customer.totalSpent)}</Text>
       </View>
+      {(wa || mail) && (
+        <View style={styles.contactRow}>
+          {wa && (
+            <Pressable style={[styles.contactBtn, styles.contactWa]} onPress={() => Linking.openURL(wa)} testID="customer-contact-whatsapp">
+              <Text style={styles.contactText}>💬 WhatsApp</Text>
+            </Pressable>
+          )}
+          {mail && (
+            <Pressable style={[styles.contactBtn, styles.contactMail]} onPress={() => Linking.openURL(mail)} testID="customer-contact-email">
+              <Text style={styles.contactText}>✉️ E-mail</Text>
+            </Pressable>
+          )}
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -348,7 +441,18 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   rowHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  rowAway: { borderWidth: 1.5, borderColor: colors.red },
   rowName: { flex: 1, color: colors.cream, fontFamily: fonts.bodySemiBold, fontSize: 14 },
+  rowNameAway: { color: '#ff6b6b' },
+  tagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 4 },
+  tagInterest: { backgroundColor: '#1e88e5', borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3 },
+  tagAway: { backgroundColor: colors.red, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3 },
+  tagText: { color: '#fff', fontFamily: fonts.bodySemiBold, fontSize: 10 },
+  contactRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  contactBtn: { flex: 1, alignItems: 'center', borderRadius: radius.pill, paddingVertical: 8 },
+  contactWa: { backgroundColor: '#25D366' },
+  contactMail: { backgroundColor: '#1e88e5' },
+  contactText: { color: '#fff', fontFamily: fonts.bodyBold, fontSize: 12 },
   rowBadge: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 11, marginLeft: 8 },
   rowEngagement: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 10, marginBottom: 2 },
   rowLoyalty: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 11, marginBottom: 2 },
