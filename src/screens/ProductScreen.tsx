@@ -11,6 +11,7 @@ import {
   Linking,
 } from 'react-native';
 import { Image } from 'expo-image';
+
 import type { RouteProp } from '@react-navigation/native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -32,6 +33,10 @@ import { ProductCard } from '../components/ProductCard';
 import { FavoriteButton } from '../components/FavoriteButton';
 import { useStoreSettings } from '../hooks/useStoreSettings';
 import { WebPushBanner } from '../components/WebPushBanner';
+
+// badges de confiance (fond transparent, réduits pour le téléphone)
+const BADGE_VERIFIED = require('../../assets/badge-vendeur-verifie.png');
+const BADGE_YEARS = require('../../assets/badge-13-ans.png');
 
 const { width } = Dimensions.get('window');
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
@@ -285,6 +290,12 @@ export function ProductScreen({ route }: Props) {
             )}
           </View>
 
+          {/* badges de confiance de la boutique, côte à côte sous le prix */}
+          <View style={styles.trustRow} testID="product-trust-badges">
+            <Image source={BADGE_VERIFIED} style={styles.badgeVerified} contentFit="contain" accessibilityLabel="Vendeur vérifié" />
+            <Image source={BADGE_YEARS} style={styles.badgeYears} contentFit="contain" accessibilityLabel="13 ans d’expérience" />
+          </View>
+
           {showWhatsAppOrder && (
             <>
               <Pressable style={styles.waOrderBtn} onPress={orderOnWhatsApp} testID="product-wa-order">
@@ -425,6 +436,9 @@ const styles = StyleSheet.create({
   body: { paddingHorizontal: spacing.md, paddingTop: spacing.md },
   name: { fontFamily: fonts.display, fontSize: 22, color: colors.cream, marginBottom: 6 },
   priceRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 },
+  trustRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 },
+  badgeVerified: { width: 64, height: 64 },
+  badgeYears: { width: 168, height: 56 },
   price: { fontFamily: fonts.bodyBold, fontSize: 20, color: colors.success },
   comparePrice: {
     fontFamily: fonts.body,
