@@ -1083,7 +1083,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const iphone = { ...devices['iPhone 13'], viewport: { width: 390, height: 800 } };
     // iPhone (Safari) : aide pas a pas, tutoriel
     {
-      const v = await newVisitor(iphone, { zaraInstall: 'asked', storage: { albasse_zara_name: 'Ali' } });
+      const v = await newVisitor(iphone, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' } });
       await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
       await sleep(2500);
       await v.page.getByRole('button', { name: FAB_NAME }).click();
@@ -1147,7 +1147,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const all = await get('products?select=id,name,slug,price,stock,sizes,colors,images&is_active=eq.true&stock=gt.3&limit=1000');
       const BAD = /montre|parfum|chaussure|sac|robe|homme|femme|enfant|bebe|lunette|cadeau|sandale|basket|veste|costume|chemise|pantalon|creme|jouet|velo|meuble|maison|electri|voiture|aliment|budget|panier|promo|livraison|conseil|ajout|total/i;
       const p = all.find((x) => (x.images || [])[0] && /^[A-Za-zÀ-ÿ]{4,14}$/.test(x.name.trim()) && !BAD.test(x.name) && all.filter((y) => y.name.trim() === x.name.trim()).length === 1 && (x.sizes || []).length === 0 && (x.colors || []).length <= 1);
-      const v = await newVisitor(phone, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' } });
+      const v = await newVisitor(phone, { zaraInstall: 'asked', storage: { albasse_zara_name: 'Ali' } });
       await v.ctx.addInitScript(() => { window.__pwaInstallPrompt__ = { prompt: async () => {}, userChoice: Promise.resolve({ outcome: 'accepted' }) }; });
       await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
       await sleep(2500);
@@ -1184,7 +1184,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await waitText(v.page, /Avez-vous déjà installé l’application Albasse Shopping/);
       check('apres le PREMIER message : Zara demande « Avez-vous deja installe l\'application ? » avec « Installer », « Oui, deja installee » et « Plus tard »', (await chipLabels(v.page)).join('|') === '📲 Installer Albasse Shopping|✅ Oui, déjà installée|Plus tard', await chipLabels(v.page));
       await v.page.screenshot({ path: path.join(OUT, 'P2-proposition-installer.png') });
-      await ask(v.page, 'conseil', /Je suis là pour vous conseiller\. Que cherchez-vous \?/);
+      await ask(v.page, 'promotions', /promotion|promo|offre/i);
       await sleep(3500);
       check('la proposition n\'est pas repetee apres le 2e message', (await panelOf(v.page).getByText(/Avez-vous déjà installé l’application Albasse Shopping/).count()) === 1);
       await chip(v.page, 'Menu').first().click();
