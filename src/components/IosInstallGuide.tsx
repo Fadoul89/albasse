@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, Pressable, StyleSheet, Modal, ScrollView, Platform, useWindowDimensions } from 'react-native';
 import { colors, fonts, radius, spacing } from '../theme';
 import { useInstallGuideStore } from '../store/installGuideStore';
+import { inAppName } from '../lib/pwaInstallPrompt';
 
 // Fichiers dans public/ : tutoriel de 45 secondes, format vertical, avec les 4 etapes.
 const VIDEO_URL = '/tutoriel-iphone.mp4';
@@ -22,6 +23,8 @@ function GuideVideo({ width }: { width: number }) {
   });
 }
 
+const IN_APP_LABEL: Record<string, string> = { tiktok: 'TikTok', facebook: 'Facebook', instagram: 'Instagram', whatsapp: 'WhatsApp' };
+
 function B({ children }: { children: React.ReactNode }) {
   return <Text style={styles.bold}>{children}</Text>;
 }
@@ -41,6 +44,8 @@ export function IosInstallGuide() {
   const visible = useInstallGuideStore((s) => s.visible);
   const hide = useInstallGuideStore((s) => s.hide);
   const { width, height } = useWindowDimensions();
+  // le site est ouvert dans le navigateur d'une application (TikTok, Facebook...) : on ne peut pas y installer, il faut passer par Safari
+  const inApp = Platform.OS === 'web' ? inAppName() : null;
 
   if (Platform.OS !== 'web') return null;
 
@@ -57,6 +62,14 @@ export function IosInstallGuide() {
 
           <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
             <Text style={styles.title}>📲 Installer Albasse sur iPhone</Text>
+            {inApp ? (
+              <View style={styles.warn} testID="ios-guide-inapp">
+                <Text style={styles.warnText}>
+                  ⚠️ Vous êtes dans <B>{IN_APP_LABEL[inApp] ?? 'une autre application'}</B> : l'installation ne marche pas ici. Touchez d'abord{' '}
+                  <B>⋯</B>, puis <B>«&nbsp;Ouvrir dans Safari&nbsp;»</B> (ou «&nbsp;Ouvrir dans le navigateur&nbsp;»). Revenez ensuite à ces étapes.
+                </Text>
+              </View>
+            ) : null}
             <Text style={styles.intro}>Regardez la vidéo (45&nbsp;secondes), c'est très simple.</Text>
 
             <GuideVideo width={videoWidth} />
@@ -78,7 +91,7 @@ export function IosInstallGuide() {
             </View>
 
             <Text style={styles.note}>
-              Le site s'est ouvert dans WhatsApp, Facebook ou Instagram&nbsp;? Ouvrez-le d'abord dans Safari. Les alertes demandent un
+              Le site s'est ouvert dans TikTok, WhatsApp, Facebook ou Instagram&nbsp;? Ouvrez-le d'abord dans Safari. Les alertes demandent un
               iPhone sous iOS&nbsp;16.4 ou plus récent.
             </Text>
 
@@ -112,6 +125,16 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
     paddingHorizontal: spacing.md,
   },
+  warn: {
+    alignSelf: 'stretch',
+    backgroundColor: colors.panel,
+    borderRadius: radius.md,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.red,
+    padding: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  warnText: { color: colors.cream, fontFamily: fonts.body, fontSize: 12, lineHeight: 18 },
   intro: { color: colors.cream, fontFamily: fonts.body, fontSize: 13, lineHeight: 19, textAlign: 'center', marginBottom: spacing.md },
   hint: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 12, textAlign: 'center', marginTop: spacing.sm },
   steps: { alignSelf: 'stretch', gap: 10, marginTop: spacing.md },

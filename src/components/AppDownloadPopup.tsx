@@ -5,7 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, fonts, radius, spacing } from '../theme';
 import { trackAppDownloadClick } from '../lib/appDownloadTracking';
 import { isRunningInsideApp } from '../lib/runningInApp';
-import { installNotReadyMessage, isAndroidDevice, isAppInstalledOnDevice, isInAppBrowser, isIosDevice, isRunningAsInstalledPwa, openInChrome, triggerPwaInstallPrompt } from '../lib/pwaInstallPrompt';
+import { installNotReadyMessage, isAndroidDevice, isAppInstalledOnDevice, isInAppBrowser, isIosDevice, isRunningAsInstalledPwa, manualInstallInstructions, openInChromeChecked, triggerPwaInstallPrompt } from '../lib/pwaInstallPrompt';
 import { subscribeToWebPush } from '../lib/webPushSubscription';
 import { trackShortcutInstallIfNeeded } from '../lib/appInstallTracking';
 import { useInstallGuideStore } from '../store/installGuideStore';
@@ -51,20 +51,23 @@ export function AppDownloadPopup() {
   };
 
   const install = async () => {
-    trackAppDownloadClick('popup');
     if (isIosDevice()) {
       // Safari n'a pas de boite d'installation : on ferme cette fenetre et on ouvre le tutoriel video.
+      trackAppDownloadClick('popup', 'ios-guide');
       await dismiss();
       useInstallGuideStore.getState().show();
       return;
     }
-    // navigateur de Facebook, WhatsApp... : on ouvre la page dans Chrome, où l'installation marche (Facebook demande lui-même
-    // « Vous quittez notre application ? » : aucun autre message de notre part)
+    // navigateur de TikTok, Facebook, WhatsApp... : on ouvre la page dans Chrome, où l'installation marche. Si le navigateur bloque
+    // le lien (la page reste affichée), on explique comment l'ouvrir à la main : sans ça, le visiteur retouche « Installer » sans fin.
     if (isAndroidDevice() && isInAppBrowser()) {
-      openInChrome();
+      const left = await openInChromeChecked();
+      trackAppDownloadClick('popup', left ? 'chrome-intent' : 'chrome-bloque');
+      if (!left) window.alert(manualInstallInstructions());
       return;
     }
     const outcome = await triggerPwaInstallPrompt();
+    trackAppDownloadClick('popup', outcome === 'accepted' ? 'accepte' : outcome === 'dismissed' ? 'refuse' : 'indisponible');
     if (outcome === 'unavailable') {
       // La fenetre reste ouverte : le visiteur peut reessayer dans un instant.
       window.alert(installNotReadyMessage());

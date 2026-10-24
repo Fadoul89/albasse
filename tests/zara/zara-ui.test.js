@@ -1147,7 +1147,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const all = await get('products?select=id,name,slug,price,stock,sizes,colors,images&is_active=eq.true&stock=gt.3&limit=1000');
       const BAD = /montre|parfum|chaussure|sac|robe|homme|femme|enfant|bebe|lunette|cadeau|sandale|basket|veste|costume|chemise|pantalon|creme|jouet|velo|meuble|maison|electri|voiture|aliment|budget|panier|promo|livraison|conseil|ajout|total/i;
       const p = all.find((x) => (x.images || [])[0] && /^[A-Za-zÀ-ÿ]{4,14}$/.test(x.name.trim()) && !BAD.test(x.name) && all.filter((y) => y.name.trim() === x.name.trim()).length === 1 && (x.sizes || []).length === 0 && (x.colors || []).length <= 1);
-      const v = await newVisitor(phone, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' } });
+      const v = await newVisitor(phone, { zaraInstall: 'asked', storage: { albasse_zara_name: 'Ali' } });
       await v.ctx.addInitScript(() => { window.__pwaInstallPrompt__ = { prompt: async () => {}, userChoice: Promise.resolve({ outcome: 'accepted' }) }; });
       await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
       await sleep(2500);
@@ -1162,11 +1162,11 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await waitText(v.page, /Très bon choix/);
       await waitText(v.page, /créez votre compte ou connectez-vous/);
       await sleep(2500);
-      check('Android : « Commander » n\'est pas interrompu par la proposition d\'installer (elle vient apres deux messages ou apres la commande)', (await panelOf(v.page).getByText(/Avez-vous déjà installé l’application Albasse Shopping/).count()) === 0 && (await chipLabels(v.page)).join('|') === '👤 Créer mon compte|Me connecter|🏠 Menu', await chipLabels(v.page));
+      check('Android : « Commander » n\'est pas interrompu par la proposition d\'installer (elle n\'est jamais posee au milieu d\'une commande)', (await panelOf(v.page).getByText(/Avez-vous déjà installé l’application Albasse Shopping/).count()) === 0 && (await chipLabels(v.page)).join('|') === '👤 Créer mon compte|Me connecter|🏠 Menu', await chipLabels(v.page));
       check('aucune erreur (Android)', v.errs.length === 0, v.errs);
       await v.ctx.close();
     }
-    // Android avec invite : bouton « Installer » dans le menu, proposition apres deux messages (une seule fois), bouton retire apres « Plus tard »
+    // Android avec invite : bouton « Installer » dans le menu, proposition apres le premier message (une seule fois), bouton retire apres « Plus tard »
     {
       const v = await newVisitor(phone, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' } });
       await v.ctx.addInitScript(() => {
@@ -1181,15 +1181,12 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('Android, pas encore installe : le menu a un bouton « Installer Albasse Shopping » (juste avant WhatsApp), sans message insistant', menu.includes('📲 Installer Albasse Shopping') && menu.indexOf('📲 Installer Albasse Shopping') === menu.indexOf('💬 WhatsApp') - 1 && (await panelOf(v.page).getByText(/Avez-vous déjà installé l’application Albasse Shopping/).count()) === 0, menu);
       await v.page.screenshot({ path: path.join(OUT, 'P1-menu-installer.png') });
       await tap(v.page, 'Promotions', /promotion|promo|offre/i);
-      await sleep(1500);
-      check('apres UN seul message du client : toujours pas de proposition (on le laisse discuter)', (await panelOf(v.page).getByText(/Avez-vous déjà installé l’application Albasse Shopping/).count()) === 0);
-      await ask(v.page, 'conseil', /Je suis là pour vous conseiller\. Que cherchez-vous \?/);
       await waitText(v.page, /Avez-vous déjà installé l’application Albasse Shopping/);
-      check('apres DEUX messages : Zara demande « Avez-vous deja installe l\'application ? » avec « Installer », « Oui, deja installee » et « Plus tard »', (await chipLabels(v.page)).join('|') === '📲 Installer Albasse Shopping|✅ Oui, déjà installée|Plus tard', await chipLabels(v.page));
+      check('apres le PREMIER message : Zara demande « Avez-vous deja installe l\'application ? » avec « Installer », « Oui, deja installee » et « Plus tard »', (await chipLabels(v.page)).join('|') === '📲 Installer Albasse Shopping|✅ Oui, déjà installée|Plus tard', await chipLabels(v.page));
       await v.page.screenshot({ path: path.join(OUT, 'P2-proposition-installer.png') });
       await ask(v.page, 'promotions', /promotion|promo|offre/i);
       await sleep(3500);
-      check('la proposition n\'est pas repetee apres le 3e message', (await panelOf(v.page).getByText(/Avez-vous déjà installé l’application Albasse Shopping/).count()) === 1);
+      check('la proposition n\'est pas repetee apres le 2e message', (await panelOf(v.page).getByText(/Avez-vous déjà installé l’application Albasse Shopping/).count()) === 1);
       await chip(v.page, 'Menu').first().click();
       await sleep(1800);
       check('le bouton « Installer » reste dans le menu tant que le client n\'a pas dit non', (await chipLabels(v.page)).includes('📲 Installer Albasse Shopping'), await chipLabels(v.page));
@@ -1222,9 +1219,9 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('aucune erreur (arabe, installation)', v.errs.length === 0, v.errs);
       await v.ctx.close();
     }
-    // iPhone : bouton « Ajouter a l'ecran d'accueil » dans le menu -> les etapes ; proposition apres deux messages
+    // iPhone : bouton « Ajouter a l'ecran d'accueil » dans le menu -> les etapes ; proposition apres le premier message
     {
-      const v = await newVisitor(iphone, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' } });
+      const v = await newVisitor(iphone, { zaraInstall: 'asked', storage: { albasse_zara_name: 'Ali' } });
       await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
       await sleep(2500);
       await v.page.getByRole('button', { name: FAB_NAME }).click();
@@ -1235,10 +1232,18 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await waitText(v.page, /Astuce : installez Albasse Shopping sur votre écran d’accueil/);
       const promoChips = await chipLabels(v.page);
       check('iPhone : sous les articles proposes, le bouton « Voir comment installer » (juste avant Menu) + l\'astuce une seule fois', promoChips.includes('📲 Voir comment installer') && promoChips.indexOf('📲 Voir comment installer') === promoChips.indexOf('🏠 Menu') - 1 && (await panelOf(v.page).getByText(/Astuce : installez Albasse Shopping/).count()) === 1, promoChips);
-      check('iPhone : apres un seul message, pas de proposition', (await panelOf(v.page).getByText(/Avez-vous déjà installé l’application Albasse Shopping/).count()) === 0);
-      await ask(v.page, 'conseil', /Je suis là pour vous conseiller\. Que cherchez-vous \?/);
+      check('aucune erreur (iPhone, astuce sous les articles)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+    {
+      const v = await newVisitor(iphone, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' } });
+      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await v.page.getByRole('button', { name: FAB_NAME }).click();
+      await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?/);
+      await tap(v.page, 'Promotions', /promotion|promo|offre/i);
       await waitText(v.page, /Avez-vous déjà installé l’application Albasse Shopping/);
-      check('iPhone : apres deux messages, Zara propose l\'aide pas a pas (une seule fois)', (await chipLabels(v.page)).join('|') === '📲 Voir comment installer|✅ Oui, déjà installée|Plus tard', await chipLabels(v.page));
+      check('iPhone : apres le premier message, Zara propose l\'aide pas a pas (une seule fois)', (await chipLabels(v.page)).join('|') === '📲 Voir comment installer|✅ Oui, déjà installée|Plus tard', await chipLabels(v.page));
       await chip(v.page, 'Voir comment installer').click();
       await waitText(v.page, /Sur iPhone :/);
       check('iPhone : le bouton donne les etapes (Partager, puis Sur l\'ecran d\'accueil, puis Ajouter)', /Partager/.test(await panelOf(v.page).getByText(/Sur iPhone :/).last().innerText()));
@@ -1254,8 +1259,6 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.page.getByRole('button', { name: FAB_NAME }).click();
       await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?/);
       await tap(v.page, 'Promotions', /promotion|promo|offre/i);
-      await sleep(1500);
-      await ask(v.page, 'conseil', /Je suis là pour vous conseiller\. Que cherchez-vous \?/);
       await waitText(v.page, /Avez-vous déjà installé l’application Albasse Shopping/);
       const q = await panelOf(v.page).getByText(/Avez-vous déjà installé l’application/).first().innerText();
       check('la question de Zara : « Avez-vous deja installe l\'application ? » + ce que ca apporte (commander plus vite, suivre ses commandes)', /sur votre téléphone \?/.test(q) && /commandez plus vite/.test(q) && /suivez vos commandes/.test(q), q);
@@ -1342,11 +1345,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const menu = await chipLabels(v.page);
       check('visiteur tout neuf : la langue et « Passer » ne comptent pas, la question n\'arrive pas pendant la presentation (le menu reste)', (await panelOf(v.page).getByText(/Avez-vous déjà installé l’application/).count()) === 0 && menu.includes('🔥 Promotions') && menu.includes('📲 Voir comment installer'), menu);
       await tap(v.page, 'Promotions', /promotion|promo|offre/i);
-      await sleep(2500);
-      check('apres UN vrai message : toujours pas de question', (await panelOf(v.page).getByText(/Avez-vous déjà installé l’application/).count()) === 0);
-      await ask(v.page, 'conseil', /Je suis là pour vous conseiller\. Que cherchez-vous \?/);
       await waitText(v.page, /Avez-vous déjà installé l’application Albasse Shopping/);
-      check('apres DEUX vrais messages : la question arrive (iPhone : « Voir comment installer »)', (await chipLabels(v.page)).join('|') === '📲 Voir comment installer|✅ Oui, déjà installée|Plus tard', await chipLabels(v.page));
+      check('apres le PREMIER vrai message : la question arrive (iPhone : « Voir comment installer »)', (await chipLabels(v.page)).join('|') === '📲 Voir comment installer|✅ Oui, déjà installée|Plus tard', await chipLabels(v.page));
       await chip(v.page, 'Plus tard').click();
       await waitText(v.page, /je ne vous le propose plus pour le moment/);
       const back = await chipLabels(v.page);
@@ -1390,7 +1390,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     }
     // Android dans le navigateur de Facebook / WhatsApp : ouvrir Chrome d'abord ; Samsung Internet : ses propres etapes
     for (const [ua, re, label] of [
-      ['Mozilla/5.0 (Linux; Android 14; Pixel 7 Build/UQ1A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/124.0.0.0 Mobile Safari/537.36 [FBAN/EMA;FBLC/fr_FR;FBAV/400.0.0.0;]', /Vous êtes dans le navigateur de Facebook, WhatsApp ou Instagram/, 'navigateur de Facebook'],
+      ['Mozilla/5.0 (Linux; Android 14; Pixel 7 Build/UQ1A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/124.0.0.0 Mobile Safari/537.36 [FBAN/EMA;FBLC/fr_FR;FBAV/400.0.0.0;]', /Vous êtes dans le navigateur de TikTok, Facebook, WhatsApp ou Instagram/, 'navigateur de Facebook'],
+      ['Mozilla/5.0 (Linux; Android 12; SM-A125F Build/SP1A.210812.016; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/120.0.0.0 Mobile Safari/537.36 musical_ly_2023 BytedanceWebview/d8a21c6', /Vous êtes dans le navigateur de TikTok, Facebook, WhatsApp ou Instagram/, 'navigateur de TikTok'],
       ['Mozilla/5.0 (Linux; Android 14; SM-A546B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/25.0 Chrome/121.0.0.0 Mobile Safari/537.36', /menu \(☰\) en bas de Samsung Internet/, 'Samsung Internet'],
     ]) {
       const catchIntents = () => {
@@ -1974,8 +1975,6 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const reachQuestion = async (v) => {
       await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?/);
       await tap(v.page, 'Promotions', /promotion|promo|offre/i);
-      await sleep(1500);
-      await ask(v.page, 'conseil', /Je suis là pour vous conseiller\. Que cherchez-vous \?/);
       await waitText(v.page, /Avez-vous déjà installé l’application Albasse Shopping/);
     };
     const eventNames = (v) => v.events.map((e) => `${e.p_event}:${e.p_device}`);

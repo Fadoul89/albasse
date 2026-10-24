@@ -446,11 +446,11 @@ function setClientStyle(style: StyleKey | null) {
 
 let callbackDraft: { name: string | null; phone: string | null; source: CallbackSource; day: CallbackDay | null; options: CallbackDay[] } | null = null;
 
-// Proposition d'installer le raccourci : une seule fois, puis pause de 14 jours. Elle vient après deux messages du client
-// (il a commencé à discuter), jamais dès l'accueil ; entre-temps, un bouton du menu reste là pour ceux qui veulent.
+// Proposition d'installer le raccourci : une seule fois, puis pause de 14 jours. Elle vient juste après la première réponse de Zara
+// à une demande du client (jamais dans le tout premier message d'accueil) ; un bouton du menu reste là pour ceux qui veulent.
 const INSTALL_KEY = 'albasse_zara_install';
 const INSTALL_PAUSE_MS = 14 * 24 * 3600 * 1000;
-const INSTALL_OFFER_AFTER_MESSAGES = 2;
+const INSTALL_OFFER_AFTER_MESSAGES = 1;
 // La photo « comment installer sur iPhone » : 4 images du tutoriel vidéo (Partager, En voir plus, Sur l'écran d'accueil, C'est prêt).
 const IOS_INSTALL_PHOTO = { src: '/ios-installer-photo.jpg', ratio: 1120 / 1960 };
 
@@ -1958,6 +1958,11 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       // ignore : la proposition pourra revenir
     }
   }
+  // Le client vient lui-même de parler d'installation (demande, bouton « Installer », étapes) : la question « Avez-vous déjà installé... ? »
+  // ne vient pas juste derrière.
+  function markInstallTalk() {
+    if (!installRecord()) recordInstall('asked');
+  }
   function installRecord(): { at: number; outcome: string } | null {
     try {
       const raw = window.localStorage.getItem(INSTALL_KEY);
@@ -2035,6 +2040,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
 
   // Le visiteur le demande lui-même (« comment installer l'application ? ») : réponse tout de suite.
   async function installReply() {
+    markInstallTalk();
     if (alreadyInstalled()) {
       await say(T().install.already, { actions: afterAnswerActions() });
       return;
@@ -2118,6 +2124,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
 
   // Appelée directement par le toucher du client : la boîte d'installation de Chrome n'apparaît qu'après un geste volontaire.
   async function installNow() {
+    markInstallTalk();
     userSays(T().chip.installApp);
     // Il vient de toucher « Installer » chez Zara : si l'installation se fait, elle est comptée « grâce à Zara ».
     markIntent('install', currentDevice());
@@ -3050,6 +3057,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         await say(T().install.yes, { fast: true, actions: afterAnswerActions() });
         return;
       case 'installHelp':
+        markInstallTalk();
         userSays(action.label);
         if (isIosDevice()) await installSteps();
         else await androidSteps();

@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, fonts, radius, spacing } from '../theme';
 import { trackAppDownloadClick } from '../lib/appDownloadTracking';
 import { isRunningInsideApp } from '../lib/runningInApp';
-import { installNotReadyMessage, isAndroidDevice, isAppInstalledOnDevice, isInAppBrowser, isIosDevice, isRunningAsInstalledPwa, openInChrome, triggerPwaInstallPrompt } from '../lib/pwaInstallPrompt';
+import { installNotReadyMessage, isAndroidDevice, isAppInstalledOnDevice, isInAppBrowser, isIosDevice, isRunningAsInstalledPwa, manualInstallInstructions, openInChromeChecked, triggerPwaInstallPrompt } from '../lib/pwaInstallPrompt';
 import { subscribeToWebPush } from '../lib/webPushSubscription';
 import { trackShortcutInstallIfNeeded } from '../lib/appInstallTracking';
 import { useInstallGuideStore } from '../store/installGuideStore';
@@ -36,19 +36,22 @@ export function AppDownloadBanner() {
   };
 
   const install = async () => {
-    trackAppDownloadClick('banner');
     if (isIosDevice()) {
       // Safari n'a pas de boite d'installation : tutoriel video + etapes.
+      trackAppDownloadClick('banner', 'ios-guide');
       useInstallGuideStore.getState().show();
       return;
     }
-    // navigateur de Facebook, WhatsApp... : on ouvre la page dans Chrome, où l'installation marche (Facebook demande lui-même
-    // « Vous quittez notre application ? » : aucun autre message de notre part)
+    // navigateur de TikTok, Facebook, WhatsApp... : on ouvre la page dans Chrome, où l'installation marche. Si le navigateur bloque
+    // le lien (la page reste affichée), on explique comment l'ouvrir à la main : sans ça, le visiteur retouche « Installer » sans fin.
     if (isAndroidDevice() && isInAppBrowser()) {
-      openInChrome();
+      const left = await openInChromeChecked();
+      trackAppDownloadClick('banner', left ? 'chrome-intent' : 'chrome-bloque');
+      if (!left) window.alert(manualInstallInstructions());
       return;
     }
     const outcome = await triggerPwaInstallPrompt();
+    trackAppDownloadClick('banner', outcome === 'accepted' ? 'accepte' : outcome === 'dismissed' ? 'refuse' : 'indisponible');
     if (outcome === 'unavailable') {
       window.alert(installNotReadyMessage());
     } else if (outcome === 'accepted') {

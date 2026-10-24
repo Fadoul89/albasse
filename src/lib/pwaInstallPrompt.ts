@@ -174,6 +174,26 @@ export function openInChrome(): void {
   a.remove();
 }
 
+// Nom du navigateur intégré (pour les statistiques) : tiktok, facebook, instagram, whatsapp, ou « appli » pour un autre.
+export function inAppName(): string | null {
+  if (!isInAppBrowser()) return null;
+  const ua = navigator.userAgent;
+  if (/musical_ly|TikTok|BytedanceWebview/i.test(ua)) return 'tiktok';
+  if (/FBAN|FBAV|FB_IAB|Messenger/i.test(ua)) return 'facebook';
+  if (/Instagram/i.test(ua)) return 'instagram';
+  if (/WhatsApp/i.test(ua)) return 'whatsapp';
+  return 'appli';
+}
+
+// Ouvre la page dans Chrome, puis dit si on a bien quitté la page. Le navigateur de TikTok ou de Facebook peut bloquer le lien :
+// la page reste alors affichée, et l'appelant montre le mode d'emploi à la main (menu ⋯ puis « Ouvrir dans le navigateur »).
+export function openInChromeChecked(waitMs = 2000): Promise<boolean> {
+  openInChrome();
+  return new Promise((resolve) => {
+    setTimeout(() => resolve(typeof document !== 'undefined' && document.visibilityState === 'hidden'), waitMs);
+  });
+}
+
 // Instructions manuelles quand la boite d'installation automatique n'est pas
 // disponible. Le libelle du menu Chrome Android varie selon la version.
 export function manualInstallInstructions(): string {
@@ -181,7 +201,7 @@ export function manualInstallInstructions(): string {
     return "Pour installer : appuyez sur le bouton Partager (le carré avec une flèche) en bas de Safari, puis « Sur l'écran d'accueil ». Ouvrez ensuite l'icône Albasse et touchez « Activer » dans le bandeau vert pour recevoir les alertes.";
   }
   if (isAndroidDevice() && isInAppBrowser()) {
-    return "Vous êtes dans le navigateur de Facebook ou WhatsApp : l'installation n'y marche pas. Touchez les trois points (⋮) en haut puis « Ouvrir dans Chrome » (ou « Ouvrir dans le navigateur »), puis touchez « Installer » dans Chrome.";
+    return "Vous êtes dans le navigateur de TikTok, Facebook ou WhatsApp : l'installation n'y marche pas. Touchez les trois points (⋮ ou ⋯) en haut à droite, puis « Ouvrir dans le navigateur » (ou « Ouvrir dans Chrome »), puis touchez « Installer » dans Chrome.";
   }
   if (isAndroidDevice()) {
     return "Pour installer : appuyez sur les trois points (⋮) en haut à droite de Chrome, puis sur « Installer et créer un raccourci » (ou « Installer l'application » / « Ajouter à l'écran d'accueil » selon votre version).";
