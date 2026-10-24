@@ -11,6 +11,7 @@ import {
   installNotReadyMessage,
   isAndroidDevice,
   isAppInstalledOnDevice,
+  inAppName,
   isInAppBrowser,
   isIosDevice,
   manualInstallInstructions,
@@ -44,6 +45,8 @@ export function InstallScreen() {
 
   const ios = isIosDevice();
   const inApp = isInAppBrowser();
+  // TikTok refuse d'ouvrir Chrome tout seul (« L'action ne peut pas être réalisée ») : ses visiteurs suivent des étapes, sans bouton qui échoue
+  const tiktok = inAppName() === 'tiktok';
 
   const install = async () => {
     setBusy(true);
@@ -122,6 +125,17 @@ export function InstallScreen() {
               {manualInstallInstructions()}
             </Text>
           </View>
+        ) : tiktok && isAndroidDevice() ? (
+          <View style={styles.box} testID="install-tiktok-steps">
+            <Text style={styles.boxTitle}>📲 Pour installer, ouvrez cette page dans votre navigateur</Text>
+            <Text style={styles.boxText}>1️⃣ Touchez les trois points <Text style={styles.strong}>•••</Text> en haut à droite de TikTok ↗️</Text>
+            <Text style={styles.boxText}>2️⃣ Touchez <Text style={styles.strong}>« Ouvrir dans le navigateur »</Text></Text>
+            <Text style={styles.boxText}>3️⃣ Dans Chrome, touchez <Text style={styles.strong}>« Installer l'application »</Text></Text>
+            <Pressable onPress={openChrome} accessibilityRole="button" style={styles.tryLink}>
+              <Text style={styles.skipText}>Essayer d'ouvrir Chrome automatiquement</Text>
+            </Pressable>
+            {message ? <Text style={styles.hint} testID="install-inapp-hint">{message}</Text> : null}
+          </View>
         ) : inApp && isAndroidDevice() ? (
           <View style={styles.actions}>
             <GoldButton label="🌐 Ouvrir dans Chrome pour installer" onPress={openChrome} />
@@ -190,6 +204,8 @@ const styles = StyleSheet.create({
   },
   boxTitle: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 15 },
   boxText: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 13, lineHeight: 19 },
+  strong: { color: colors.goldLight, fontFamily: fonts.bodySemiBold },
+  tryLink: { paddingTop: spacing.xs },
   skip: { paddingVertical: spacing.md },
   skipText: { color: colors.gold, fontFamily: fonts.bodyMedium, fontSize: 13 },
 });
