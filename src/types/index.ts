@@ -35,6 +35,8 @@ export interface Product {
   affiliate_commission_rate: number | null;
   rating: number;
   review_count: number;
+  // nombre de « j'aime » (cœurs) de l'article ; absent tant que add-product-likes.sql n'est pas lancé
+  likes_count?: number;
   created_at: string;
 }
 

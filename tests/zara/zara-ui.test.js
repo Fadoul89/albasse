@@ -13,7 +13,7 @@ const fs = require('fs');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const dist = process.argv[2] || '../../dist';
 const port = process.argv[3] || '4333';
-const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI1234TOFBCDE').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI12345TOFBCDE').toUpperCase();
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
 fs.mkdirSync(OUT, { recursive: true });
 const KEY = process.env.SUPABASE_ANON_KEY;
@@ -43,7 +43,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   // rank : rang du jour renvoye par la fonction de la base (null : fonction pas installee). fakeUser : compte simule (token : reponse a une connexion par mot de passe ; delay : lenteur du profil en ms). fakeOrders : { list: [...], patches: [] } = fausse table des commandes.
   // zaraInstall : par defaut, le visiteur a deja repondu « Plus tard » a l'installation (Zara ne la propose pas) ; null = vrai nouveau
   // visiteur, pour les parties qui testent l'installation
-  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, fakeSales = null, fakeCallbacks = null, fakePushes = null, fakeStore = null, fakeCats = null, fakeOnline = null, initScripts = [], zaraInstall = 'dismissed', zaraPush = 'later', pushPerm = null, pushAnswer = 'granted' } = {}) {
+  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, fakeSales = null, fakeCallbacks = null, fakePushes = null, fakeStore = null, fakeCats = null, fakeOnline = null, initScripts = [], zaraInstall = 'dismissed', zaraPush = 'later', pushPerm = null, pushAnswer = 'granted', fakeAi = null } = {}) {
     const ctx = await b.newContext(opts);
     if (cookies) await ctx.addCookies(cookies);
     if (lang) storage = { albasse_zara_lang: lang, ...storage };
@@ -96,6 +96,9 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const browsingApplied = [];
     const forgets = [];
     const seenBatches = new Set();
+    // Zara IA (fonction serveur zara-ai) : simulee, jamais la vraie IA. fakeAi : reponse (objet ou fonction du message) ;
+    // par defaut « pas installee » (Zara repond avec ses regles). aiCalls : ce que le site envoie.
+    const aiCalls = [];
     const json = (route, body, status = 200) =>
       route.fulfill({ status, headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' }, body: JSON.stringify(body) });
     await ctx.route('**/*', (route) => {
@@ -108,6 +111,11 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       if (u.hostname.endsWith('.supabase.co')) {
         if (m === 'OPTIONS') return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' } });
         if (blockPath && u.pathname.includes(blockPath)) return route.abort();
+        if (u.pathname === '/functions/v1/zara-ai' && m === 'POST') {
+          const body = JSON.parse(req.postData() || '{}');
+          aiCalls.push(body);
+          return json(route, typeof fakeAi === 'function' ? fakeAi(body) : fakeAi || { ok: false, reason: 'no_key' });
+        }
         // « Vous etes mon Ne client aujourd'hui » : la fonction de la base est simulee (absente si rank est null)
         if (u.pathname === '/rest/v1/rpc/assistant_chat_start' && m === 'POST') {
           const body = JSON.parse(req.postData() || '{}');
@@ -397,7 +405,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     page.on('console', (msg) => {
       if (msg.type() === 'error' && !/Failed to load resource|net::ERR|Erreur creation session visiteur/.test(msg.text())) errs.push(msg.text());
     });
-    return { ctx, page, errs, writes, rpcCalls, pushClicks, pushSubs, chatStarts, events, installs, statsCalls, browsingCalls, browsingApplied, forgets, net, overviewCalls };
+    return { ctx, page, errs, writes, rpcCalls, pushClicks, pushSubs, chatStarts, events, installs, statsCalls, browsingCalls, browsingApplied, forgets, net, overviewCalls, aiCalls };
   }
 
   const panelOf = (p) => p.getByTestId('assistant-panel');
@@ -2845,7 +2853,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         check('ligne 1 : visiteur anonyme, produit, categorie, vues, temps actif, derniere visite, clics, intention, suggestion', /Sandales AL madjaz/.test(r0) && /Chaussures · Visiteur V-a1b2c3/.test(r0) && /Élevé/.test(r0) && /VUES 4/.test(r0) && /VISITES 2/.test(r0) && /TEMPS ACTIF 3 min 05 s/.test(r0) && /DERNIÈRE VISITE 1 min 02 s · il y a 5 min/.test(r0) && /CLICS \(PHOTOS, TAILLES, COULEURS\) 7/.test(r0) && /INTENTION Commande commencée/.test(r0) && /COMMANDE —/.test(r0) && /Tailles \/ modèles similaires · il y a 3 min/.test(r0), r0);
         check('ligne 1 : visiteur sans compte -> pas de numero de session', /SESSION sans compte/.test(r0));
         const r1 = await text(c, 'browsing-row-1');
-        check('ligne 2 : client connecte (code C-, jamais son nom), achete, commande livree, suggestion « parfums »', /Parfum · Compte C-9f8e7d6c/.test(r1) && /SESSION s-1/.test(r1) && !/Admin|Ahmed|@/.test(r1) && /Moyen/.test(r1) && /PANIER Acheté/.test(r1) && /COMMANDE Livrée/.test(r1) && /Familles de parfums · il y a 2 h/.test(r1), r1);
+        check('ligne 2 : client connecte (code C-, jamais son nom), achete, commande livree, suggestion « parfums »', /Parfum · Compte C-9f8e7d6c/.test(r1) && /SESSION s-1/.test(r1) && !/Admin|Ahmed|@/.test(r1) && /Moyen/.test(r1) && /INTENTION Acheté/.test(r1) && /COMMANDE Livrée/.test(r1) && /Familles de parfums · il y a 2 h/.test(r1), r1);
         const r2 = await text(c, 'browsing-row-2');
         check('ligne 3 : interet leger, 8 s, vue il y a 2 jours, aucune suggestion', /Léger/.test(r2) && /TEMPS ACTIF 8 s/.test(r2) && /il y a 2 j/.test(r2) && /DERNIÈRE SUGGESTION DE ZARA —/.test(r2), r2);
         check('la page explique comment lire (temps actif, estimation, jamais une certitude, 90 jours)', (await c.page.getByText(/le temps passé seul ne suffit jamais/).count()) === 1 && (await c.page.getByText(/effacées après 90 jours/).count()) === 1);
@@ -3959,6 +3967,56 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await waitWall(v2.page);
       check('remis : un nouveau visiteur voit de nouveau le mur', (await wall(v2.page).count()) === 1);
       await v2.ctx.close();
+    }
+  }
+
+  if (PARTS.includes('5')) {
+    console.log('\n== 5. Zara IA : un message ecrit part a l IA (simulee), les cartes des vrais articles s affichent ; sans IA, les regles repondent');
+    const res = await fetch(`${REST}/products?select=id,name&is_active=eq.true&stock=gt.0&limit=1`, { headers: { apikey: KEY, authorization: `Bearer ${KEY}` } });
+    const [prod] = await res.json();
+    const openZara = async (v) => {
+      await v.page.keyboard.press('Escape');
+      await v.page.getByRole('button', { name: FAB_NAME }).click();
+      await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?/);
+    };
+    const QUESTION = 'Vous avez une montre étanche pour nager ?';
+    {
+      const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' }, fakeAi: () => ({ ok: true, text: `Bonne idée Ali ! Voici ${prod.name} 😊`, productIds: [prod.id, 'id-inconnu'] }) });
+      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await openZara(v);
+      await ask(v.page, QUESTION, /Bonne idée Ali ! Voici/, 30000);
+      const call = v.aiCalls[0] || {};
+      check('message ecrit : envoye a Zara IA avec le texte, l identifiant du visiteur et l historique', v.aiCalls.length === 1 && call.message === QUESTION && typeof call.visitorId === 'string' && call.visitorId.length > 8 && Array.isArray(call.history), call);
+      await sleep(1500);
+      const cards = await panelOf(v.page).getByTestId('assistant-card-add').count();
+      check('la reponse de l IA montre la carte du vrai article (id inconnu ignore), avec « Commander »', cards === 1 && (await panelOf(v.page).getByText(prod.name, { exact: false }).count()) >= 1, cards);
+      const before = v.aiCalls.length;
+      const labels = await chipLabels(v.page);
+      const promo = labels.find((l) => /Promotions/.test(l));
+      if (promo) {
+        await chip(v.page, promo).first().click();
+        await sleep(3000);
+      }
+      check('toucher un bouton ne passe pas par l IA', !!promo && v.aiCalls.length === before, { labels, calls: v.aiCalls.length });
+      check('aucune erreur (Zara IA)', v.errs.length === 0, v.errs);
+      check('Zara IA ne fait aucune autre demande au serveur', !v.writes.some((w) => /functions|orders|products/.test(w)), v.writes);
+      await v.ctx.close();
+    }
+    {
+      const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
+      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await openZara(v);
+      const n = (await panelOf(v.page).innerText()).length;
+      await typeIn(v.page, QUESTION);
+      const t0 = Date.now();
+      while ((await panelOf(v.page).innerText()).length <= n + QUESTION.length + 5 && Date.now() - t0 < 20000) await sleep(300);
+      await sleep(2000);
+      check('IA pas installee : Zara repond quand meme (ses regles)', (await panelOf(v.page).innerText()).length > n + QUESTION.length + 5);
+      await typeIn(v.page, 'Et un parfum pour femme ?');
+      await sleep(4000);
+      check('IA pas installee : on ne la redemande pas a chaque message (pause de 10 min)', v.aiCalls.length === 1, v.aiCalls.length);
+      check('aucune erreur (sans IA)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
     }
   }
 
