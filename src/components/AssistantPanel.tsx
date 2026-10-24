@@ -25,6 +25,7 @@ import { currentDevice, markIntent } from '../lib/assistantAttribution';
 import { texts } from '../lib/assistantText';
 import { openInChrome } from '../lib/pwaInstallPrompt';
 import { ASSISTANT_NAME, WHATSAPP_URL } from '../constants/assistant';
+import { sizedImage } from '../lib/imageSize';
 
 const AVATAR = require('../../assets/assistante-avatar.jpg');
 const DESKTOP_WIDTH = 640;
@@ -95,7 +96,7 @@ function ProductCards({ products, lang, onOpen, onAdd }: { products: AssistantPr
           <Pressable key={p.slug} testID="assistant-card" style={styles.card} onPress={() => onOpen(p.slug)} accessibilityRole="link" accessibilityLabel={`${t.card.see} ${p.name}`}>
             <View style={styles.cardImageWrap}>
               {p.image ? (
-                <Image source={{ uri: p.image }} style={styles.cardImage} contentFit="cover" transition={150} />
+                <Image source={{ uri: sizedImage(p.image, 400) }} style={styles.cardImage} contentFit="cover" transition={150} />
               ) : (
                 <View style={[styles.cardImage, styles.cardNoImage]}>
                   <Text style={styles.cardNoImageText}>🛍️</Text>

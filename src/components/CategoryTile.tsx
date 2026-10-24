@@ -6,6 +6,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import type { Category } from '../types';
 import { colors, fonts, radius } from '../theme';
+import { sizedImage } from '../lib/imageSize';
 
 const ICONS: Record<string, string> = {
   costumes: '🕴️',
@@ -24,7 +25,7 @@ export function CategoryTile({ category }: { category: Category }) {
       onPress={() => navigation.navigate('Category', { slug: category.slug })}
     >
       {category.image_url ? (
-        <Image source={{ uri: category.image_url }} style={styles.image} contentFit="cover" />
+        <Image source={{ uri: sizedImage(category.image_url, 300) }} style={styles.image} contentFit="cover" />
       ) : (
         <Text style={styles.icon}>{ICONS[category.slug] ?? '✨'}</Text>
       )}

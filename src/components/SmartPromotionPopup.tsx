@@ -13,6 +13,7 @@ import { useToastStore } from '../store/toastStore';
 import { supabase } from '../lib/supabase';
 import { getCurrentSessionId } from '../lib/analytics';
 import { colors, fonts, radius, spacing } from '../theme';
+import { sizedImage } from '../lib/imageSize';
 
 const SHOW_DELAY_MS = 1500;
 
@@ -107,7 +108,7 @@ export function SmartPromotionPopup() {
           </Pressable>
 
           {promotion.image_url && (
-            <Image source={{ uri: promotion.image_url }} style={styles.image} contentFit="cover" />
+            <Image source={{ uri: sizedImage(promotion.image_url, 700) }} style={styles.image} contentFit="cover" />
           )}
 
           <Text style={styles.greeting}>{greeting}</Text>

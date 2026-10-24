@@ -8,6 +8,7 @@ import type { Product } from '../types';
 import { colors, fonts, radius, spacing } from '../theme';
 import { StarRating } from './StarRating';
 import { FavoriteButton } from './FavoriteButton';
+import { sizedImage } from '../lib/imageSize';
 
 const { width } = Dimensions.get('window');
 const BADGE_VERIFIED = require('../../assets/badge-vendeur-verifie.png');
@@ -33,7 +34,7 @@ export function ProductCard({ product, columns = 2 }: { product: Product; column
       onPress={() => navigation.navigate('Product', { slug: product.slug })}
     >
       <View style={styles.imageWrap}>
-        <Image source={{ uri: product.images[0] }} style={styles.image} contentFit="cover" transition={150} />
+        <Image source={{ uri: sizedImage(product.images[0], 400) }} style={styles.image} contentFit="cover" transition={150} />
         {discount && (
           <View style={styles.badge}>
             <Text style={styles.badgeText}>-{discount}%</Text>

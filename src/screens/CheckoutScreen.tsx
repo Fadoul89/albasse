@@ -20,6 +20,7 @@ import type { PaymentMethod, City } from '../types';
 import { isHomeCity } from '../lib/deliveryRules';
 import { fetchLoyaltyStatus, loyaltyDiscount, ordersBeforeDiscount, type LoyaltyStatus } from '../lib/loyaltyDiscount';
 import { DELIVERY_HOURS, GIFT_WRAP_FEE, HOME_CITY, ORDER_VALIDITY_HOURS } from '../constants/shopRules';
+import { sizedImage } from '../lib/imageSize';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
 const CHAD_PHONE_REGEX = /^[69]\d{7}$/;
@@ -188,7 +189,7 @@ export function CheckoutScreen() {
         <Text style={styles.sectionTitle}>Votre article</Text>
         <View style={styles.itemCard} testID="checkout-item">
           {item.product.images[0] ? (
-            <Image source={{ uri: item.product.images[0] }} style={styles.itemImage} contentFit="cover" />
+            <Image source={{ uri: sizedImage(item.product.images[0], 200) }} style={styles.itemImage} contentFit="cover" />
           ) : (
             <View style={styles.itemImage} />
           )}
