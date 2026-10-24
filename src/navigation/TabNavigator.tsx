@@ -6,6 +6,8 @@ import { colors, fonts, radius } from '../theme';
 import { HomeScreen } from '../screens/HomeScreen';
 import { SearchScreen } from '../screens/SearchScreen';
 import { OrdersScreen } from '../screens/OrdersScreen';
+import { AdminOrdersScreen } from '../screens/admin/AdminOrdersScreen';
+import { useAuthStore } from '../store/authStore';
 import { AccountScreen } from '../screens/AccountScreen';
 import { TAB_BAR_HEIGHT, TAB_CENTER_GAP } from './tabLayout';
 
@@ -24,6 +26,12 @@ const LABELS: Record<keyof TabParamList, string> = {
   Orders: 'Commandes',
   Account: 'Compte',
 };
+
+// Onglet « Commandes » : les commandes reçues pour l'administrateur, « Mes commandes » pour un client.
+function OrdersTab() {
+  const isAdmin = useAuthStore((s) => !!s.profile?.is_admin);
+  return isAdmin ? <AdminOrdersScreen /> : <OrdersScreen />;
+}
 
 export function TabNavigator() {
   return (
@@ -87,7 +95,7 @@ export function TabNavigator() {
     >
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Search" component={SearchScreen} />
-      <Tab.Screen name="Orders" component={OrdersScreen} />
+      <Tab.Screen name="Orders" component={OrdersTab} />
       <Tab.Screen name="Account" component={AccountScreen} />
     </Tab.Navigator>
   );
