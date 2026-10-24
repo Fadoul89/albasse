@@ -1390,7 +1390,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     }
     // Android dans le navigateur de Facebook / WhatsApp : ouvrir Chrome d'abord ; Samsung Internet : ses propres etapes
     for (const [ua, re, label] of [
-      ['Mozilla/5.0 (Linux; Android 14; Pixel 7 Build/UQ1A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/124.0.0.0 Mobile Safari/537.36 [FBAN/EMA;FBLC/fr_FR;FBAV/400.0.0.0;]', /Vous êtes dans le navigateur de Facebook, WhatsApp ou Instagram/, 'navigateur de Facebook'],
+      ['Mozilla/5.0 (Linux; Android 14; Pixel 7 Build/UQ1A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/124.0.0.0 Mobile Safari/537.36 [FBAN/EMA;FBLC/fr_FR;FBAV/400.0.0.0;]', /Vous êtes dans le navigateur de TikTok, Facebook, WhatsApp ou Instagram/, 'navigateur de Facebook'],
+      ['Mozilla/5.0 (Linux; Android 12; SM-A125F Build/SP1A.210812.016; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/120.0.0.0 Mobile Safari/537.36 musical_ly_2023 BytedanceWebview/d8a21c6', /Vous êtes dans le navigateur de TikTok, Facebook, WhatsApp ou Instagram/, 'navigateur de TikTok'],
       ['Mozilla/5.0 (Linux; Android 14; SM-A546B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/25.0 Chrome/121.0.0.0 Mobile Safari/537.36', /menu \(☰\) en bas de Samsung Internet/, 'Samsung Internet'],
     ]) {
       const catchIntents = () => {

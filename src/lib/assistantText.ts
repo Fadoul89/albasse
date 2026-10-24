@@ -815,7 +815,7 @@ const FR: Texts = {
     iosSteps: (safari) =>
       `${safari ? '' : '⚠️ Ouvrez d’abord albasseshopping.com dans Safari (l’installation ne marche pas depuis ce navigateur).\n'}Sur iPhone :\n1. Touchez « Partager » (le carré avec une flèche) en bas de l’écran\n2. Faites défiler et touchez « Sur l’écran d’accueil »\n3. Touchez « Ajouter »`,
     androidManual: 'Pour installer : touchez les trois points (⋮) en haut à droite de Chrome, puis « Installer l’application » ou « Ajouter à l’écran d’accueil » (selon votre version).',
-    androidOpenChrome: '⚠️ Vous êtes dans le navigateur de Facebook, WhatsApp ou Instagram : l’installation n’y marche pas.\n1. Touchez « Ouvrir dans Chrome » ci-dessous (ou les trois points ⋮ puis « Ouvrir dans le navigateur »)\n2. Dans Chrome, touchez les trois points (⋮) en haut à droite, puis « Installer l’application » ou « Ajouter à l’écran d’accueil »',
+    androidOpenChrome: '⚠️ Vous êtes dans le navigateur de TikTok, Facebook, WhatsApp ou Instagram : l’installation n’y marche pas.\n1. Touchez « Ouvrir dans Chrome » ci-dessous (ou les trois points ⋮ puis « Ouvrir dans le navigateur »)\n2. Dans Chrome, touchez les trois points (⋮) en haut à droite, puis « Installer l’application » ou « Ajouter à l’écran d’accueil »',
     androidSamsung: 'Pour installer : touchez le menu (☰) en bas de Samsung Internet, puis « Ajouter la page à » et « Écran d’accueil ».',
     desktop: 'Pour installer : cliquez sur l’icône d’installation ⊕ dans la barre d’adresse de Chrome, ou sur les trois points (⋮) puis « Installer Albasse Shopping ».',
     productNudge: '📲 Astuce : installez Albasse Shopping sur votre écran d’accueil pour retrouver nos articles en un toucher.',
@@ -1364,7 +1364,7 @@ const AR: Texts = {
     iosSteps: (safari) =>
       `${safari ? '' : '⚠️ افتح أولا albasseshopping.com في متصفح Safari (التثبيت لا يعمل من هذا المتصفح).\n'}على الآيفون:\n1. اضغط «مشاركة» (المربع مع السهم) أسفل الشاشة\n2. مرر لأسفل واضغط «إضافة إلى الشاشة الرئيسية»\n3. اضغط «إضافة»`,
     androidManual: 'للتثبيت: اضغط على النقاط الثلاث (⋮) أعلى يمين Chrome ثم «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية» حسب إصدارك.',
-    androidOpenChrome: '⚠️ أنت في متصفح فيسبوك أو واتساب أو إنستغرام: التثبيت لا يعمل فيه.\n1. اضغط «افتح في Chrome» بالأسفل (أو النقاط الثلاث ⋮ ثم «فتح في المتصفح»)\n2. في Chrome، اضغط على النقاط الثلاث (⋮) أعلى اليمين، ثم «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية»',
+    androidOpenChrome: '⚠️ أنت في متصفح تيك توك أو فيسبوك أو واتساب أو إنستغرام: التثبيت لا يعمل فيه.\n1. اضغط «افتح في Chrome» بالأسفل (أو النقاط الثلاث ⋮ ثم «فتح في المتصفح»)\n2. في Chrome، اضغط على النقاط الثلاث (⋮) أعلى اليمين، ثم «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية»',
     androidSamsung: 'للتثبيت: اضغط على القائمة (☰) أسفل متصفح Samsung Internet، ثم «إضافة الصفحة إلى» ثم «الشاشة الرئيسية».',
     desktop: 'للتثبيت: اضغط على أيقونة التثبيت ⊕ في شريط عنوان Chrome، أو على النقاط الثلاث (⋮) ثم «تثبيت Albasse Shopping».',
     productNudge: '📲 نصيحة: ثبّت Albasse Shopping على شاشتك الرئيسية لتجد منتجاتنا بلمسة واحدة.',
