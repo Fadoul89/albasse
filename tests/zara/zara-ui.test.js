@@ -3780,14 +3780,21 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await waitWall(v.page);
       await sleep(1500);
       const txt = await wall(v.page).innerText();
-      check('compte obligatoire : l\'ecran d\'entree couvre l\'accueil (ALBASSE SHOPPING, Bienvenue)', /ALBASSE SHOPPING/.test(txt) && /Bienvenue/.test(txt) && /Connectez-vous pour découvrir nos articles/.test(txt), txt.slice(0, 200));
+      check('compte obligatoire : l\'ecran d\'entree couvre l\'accueil (ALBASSE SHOPPING, Bienvenue)', /ALBASSE SHOPPING/.test(txt) && /Bienvenue/.test(txt) && /Créez votre compte gratuit pour découvrir nos articles/.test(txt), txt.slice(0, 200));
       const yOf = async (loc) => (await loc.boundingBox())?.y ?? -1;
-      const yLogin = await yOf(wall(v.page).getByTestId('login-identifier'));
-      const yCreate = await yOf(wall(v.page).getByText('Créer mon compte', { exact: true }));
-      check('connexion en haut (numero ou e-mail, mot de passe, « Se souvenir de mon mot de passe »), « Créer mon compte » en bas', yLogin > 0 && yCreate > yLogin && (await wall(v.page).getByTestId('login-password').count()) === 1 && /Se souvenir de mon mot de passe/.test(txt), { yLogin, yCreate });
+      const yForm = await yOf(wall(v.page).getByTestId('register-name'));
+      const ySwitch = await yOf(wall(v.page).getByText('J’ai déjà un compte', { exact: true }));
+      check('le formulaire « Créer un compte » s\'affiche en premier (nom, telephone, mot de passe), « J’ai déjà un compte » en dessous', yForm > 0 && ySwitch > yForm && (await wall(v.page).getByTestId('register-phone').count()) === 1 && (await wall(v.page).getByTestId('register-password').count()) === 1 && (await wall(v.page).getByTestId('login-identifier').count()) === 0, { yForm, ySwitch });
+      check('formulaire de creation : autocomplete name / tel / new-password (le telephone propose un mot de passe)', (await wall(v.page).getByTestId('register-name').getAttribute('autocomplete')) === 'name' && (await wall(v.page).getByTestId('register-phone').getAttribute('autocomplete')) === 'tel' && (await wall(v.page).getByTestId('register-password').getAttribute('autocomplete')) === 'new-password');
+      await wall(v.page).getByText('J’ai déjà un compte', { exact: true }).click();
+      await wall(v.page).getByTestId('login-identifier').waitFor({ timeout: 10000 });
+      check('« J’ai déjà un compte » : la connexion (numero ou e-mail, mot de passe, « Se souvenir de mon mot de passe »), et « Créer mon compte » pour revenir', /Connectez-vous pour découvrir nos articles/.test(await wall(v.page).innerText()) && /Se souvenir de mon mot de passe/.test(await wall(v.page).innerText()) && (await wall(v.page).getByText('Créer mon compte', { exact: true }).count()) === 1);
       check('« Se souvenir de mon mot de passe » coche au depart', (await wall(v.page).getByTestId('login-remember').getAttribute('aria-checked')) === 'true');
       check('le telephone peut enregistrer et remplir le mot de passe (autocomplete username / current-password)', (await wall(v.page).getByTestId('login-identifier').getAttribute('autocomplete')) === 'username' && (await wall(v.page).getByTestId('login-password').getAttribute('autocomplete')) === 'current-password');
-      check('l\'ecran dit que seuls le nom, le numero et un mot de passe sont demandes (e-mail facultatif)', /nom, votre numéro de téléphone et un mot de passe/.test(txt) && /facultatif/.test(txt));
+      await wall(v.page).getByText('Créer mon compte', { exact: true }).click();
+      await wall(v.page).getByTestId('register-name').waitFor({ timeout: 10000 });
+      check('« Créer mon compte » : retour au formulaire de creation', (await wall(v.page).getByTestId('login-identifier').count()) === 0);
+      check('formulaire court : obligatoires nom, telephone, mot de passe ; e-mail facultatif', /Informations obligatoires/i.test(txt) && /Informations optionnelles/i.test(txt) && (await wall(v.page).getByTestId('register-email').getAttribute('placeholder')) === 'E-mail (facultatif)');
       check('plus de liens « Confidentialité » ni « Contact » sur l\'ecran d\'entree', !/Confidentialité/.test(txt) && !/Contact/.test(txt), txt);
       check('page en francais (lang="fr") : Chrome ne la traduit plus (« ALBASSE SHOPPING » reste tel quel)', (await v.page.evaluate(() => document.documentElement.lang)) === 'fr');
       check('pas de bouton de Zara derriere le mur', (await fabCount(v.page)) === 0);
@@ -3834,7 +3841,6 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     }
     // 5) inscription depuis le mur : nom, numero, mot de passe ; on revient sur la fiche demandee
     const register = async (v, { name = 'Ali Mahamat', phoneNo = '66 12 34 56', password = 'secret12', email = '', terms = true } = {}) => {
-      await shown(v.page, 'Créer mon compte').click();
       await v.page.getByTestId('register-phone').waitFor({ timeout: 15000 });
       await sleep(800);
       if (name) await v.page.getByTestId('register-name').locator('visible=true').fill(name);
@@ -3850,10 +3856,9 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.page.goto(`http://localhost:${port}/produit/${prod.slug}`, { waitUntil: 'load' });
       await waitWall(v.page);
       await sleep(1000);
-      await shown(v.page, 'Créer mon compte').click();
       await v.page.getByTestId('register-phone').waitFor({ timeout: 15000 });
       await sleep(800);
-      check('« Créer mon compte » : le formulaire s\'ouvre, sans le mur par-dessus', (await wall(v.page).count()) === 0);
+      check('fiche ouverte depuis un lien : le formulaire de creation est directement sur l\'ecran d\'entree', (await wall(v.page).getByTestId('register-phone').count()) === 1);
       const form = await v.page.locator('body').innerText();
       check('formulaire court : e-mail, WhatsApp et profession dans « facultatif »', /E-mail \(facultatif\)|Informations optionnelles/i.test(form) && !/Email \*/.test(form) && !/Profession \*/.test(form) && !/Numéro WhatsApp \*/.test(form));
       // il manque le numero : rien n'est envoye
@@ -3923,6 +3928,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
       await waitWall(v.page);
       await sleep(1000);
+      await wall(v.page).getByText('J’ai déjà un compte', { exact: true }).click();
+      await wall(v.page).getByTestId('login-identifier').waitFor({ timeout: 10000 });
       check(`connexion (${what}) : la case dit « Numéro de téléphone ou e-mail »`, (await wall(v.page).getByTestId('login-identifier').getAttribute('placeholder')) === 'Numéro de téléphone ou e-mail');
       await wall(v.page).getByTestId('login-identifier').fill(typed);
       await wall(v.page).getByTestId('login-password').fill('secret12');
@@ -3941,6 +3948,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
       await waitWall(v.page);
       await sleep(1000);
+      await wall(v.page).getByText('J’ai déjà un compte', { exact: true }).click();
+      await wall(v.page).getByTestId('login-identifier').waitFor({ timeout: 10000 });
       check('numero garde : la case est deja remplie', (await wall(v.page).getByTestId('login-identifier').inputValue()) === '66 12 34 56');
       await wall(v.page).getByTestId('login-remember').click();
       check('decocher « Se souvenir » : le navigateur ne propose plus de remplir (autocomplete off)', (await wall(v.page).getByTestId('login-remember').getAttribute('aria-checked')) === 'false' && (await wall(v.page).getByTestId('login-password').getAttribute('autocomplete')) === 'off');
@@ -3976,6 +3985,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
       await waitWall(v.page);
       await sleep(800);
+      await wall(v.page).getByText('J’ai déjà un compte', { exact: true }).click();
+      await wall(v.page).getByTestId('login-identifier').waitFor({ timeout: 10000 });
       check('ecran d\'entree : lien « J’ai oublié mon mot de passe » sous la connexion', (await wall(v.page).getByTestId('login-forgot').innerText()).trim() === 'J’ai oublié mon mot de passe');
       await wall(v.page).getByTestId('login-forgot').click();
       await v.page.waitForURL(/\/mot-de-passe-oublie/, { timeout: 15000 });
