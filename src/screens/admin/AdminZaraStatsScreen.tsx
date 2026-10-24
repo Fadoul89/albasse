@@ -3,7 +3,9 @@ import { View, Text, StyleSheet, ScrollView, Pressable, RefreshControl } from 'r
 import { useAuthStore } from '../../store/authStore';
 import { colors, fonts, radius, spacing } from '../../theme';
 import { ScreenHeader } from '../../components/ScreenHeader';
-import { fetchAssistantStats, type AssistantStatsResult } from '../../lib/assistantData';
+import { fetchAssistantStats, fetchBrowsingOverview, type AssistantStatsResult } from '../../lib/assistantData';
+import { formatSeconds } from '../../lib/browsingOverview';
+import { supabase } from '../../lib/supabase';
 import { DEVICES, DEVICE_LABELS, PERIOD_LABELS, PERIOD_ORDER, type Device, type StatsPeriod, type ZaraStats } from '../../lib/assistantStats';
 
 const formatXAF = (n: number) => `${Math.round(n).toLocaleString('fr-FR')} FCFA`;
@@ -63,6 +65,8 @@ export function AdminZaraStatsScreen() {
         {result && !result.ok ? <Problem reason={result.reason} message={result.message} onRetry={() => load(period)} /> : null}
 
         {result && result.ok ? <Stats stats={result.stats} dimmed={loading} /> : null}
+
+        <TopProducts period={period} />
       </ScrollView>
     </View>
   );
@@ -92,6 +96,88 @@ function Problem({ reason, message, onRetry }: { reason: 'not_installed' | 'forb
           <Text style={styles.retryText}>Réessayer</Text>
         </Pressable>
       ) : null}
+    </View>
+  );
+}
+
+type TopLine = { id: string; name: string; value: string; sub: string };
+
+// Les produits qui retiennent le plus les visiteurs (temps passé sur la fiche, pendant la période) et les plus aimés (cœurs, depuis le début).
+function TopProducts({ period }: { period: StatsPeriod }) {
+  const [watched, setWatched] = useState<TopLine[] | null>(null);
+  const [liked, setLiked] = useState<TopLine[] | null>(null);
+  const [likedError, setLikedError] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    void fetchBrowsingOverview(period).then((res) => {
+      if (!alive) return;
+      if (!res.ok) return setWatched([]);
+      const byProduct = new Map<string, { name: string; seconds: number; views: number }>();
+      for (const r of res.overview.rows) {
+        const cur = byProduct.get(r.productId) ?? { name: r.productName, seconds: 0, views: 0 };
+        cur.seconds += r.activeSeconds;
+        cur.views += r.views;
+        byProduct.set(r.productId, cur);
+      }
+      const top = [...byProduct.entries()]
+        .sort((a, b) => b[1].seconds - a[1].seconds)
+        .slice(0, 3)
+        .map(([id, v]) => ({ id, name: v.name, value: formatSeconds(v.seconds), sub: `${v.views} vue(s) sur la période` }));
+      setWatched(top);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [period]);
+
+  useEffect(() => {
+    let alive = true;
+    Promise.resolve(supabase.from('products').select('id,name,likes_count').order('likes_count', { ascending: false }).limit(3)).then(({ data, error }) => {
+      if (!alive) return;
+      if (error || !data) return setLikedError(true);
+      setLiked(
+        (data as { id: string; name: string; likes_count: number | null }[])
+          .filter((p) => (p.likes_count ?? 0) > 0)
+          .map((p) => ({ id: p.id, name: p.name, value: `❤️ ${p.likes_count ?? 0}`, sub: 'cœurs depuis le début' }))
+      );
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  return (
+    <View testID="zara-stats-top-products">
+      <Text style={styles.sectionTitle}>👀 Ce que les visiteurs regardent le plus longtemps</Text>
+      <TopTable lines={watched} empty="Aucune visite de fiche sur cette période" />
+
+      <Text style={styles.sectionTitle}>❤️ Les produits les plus aimés</Text>
+      <TopTable
+        lines={liked}
+        empty={likedError ? "Compteur de « j'aime » pas encore activé (lancez add-product-likes.sql)" : 'Aucun cœur pour le moment'}
+      />
+    </View>
+  );
+}
+
+function TopTable({ lines, empty }: { lines: TopLine[] | null; empty: string }) {
+  if (lines === null) return <Text style={styles.loading}>Chargement…</Text>;
+  if (lines.length === 0) return <Text style={styles.note}>{empty}</Text>;
+  return (
+    <View style={styles.table}>
+      {lines.map((l, i) => (
+        <View key={l.id} style={styles.topRow}>
+          <Text style={styles.topRank}>{i + 1}</Text>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={styles.topName} numberOfLines={1}>
+              {l.name}
+            </Text>
+            <Text style={styles.topSub}>{l.sub}</Text>
+          </View>
+          <Text style={styles.topValue}>{l.value}</Text>
+        </View>
+      ))}
     </View>
   );
 }
@@ -249,6 +335,11 @@ const styles = StyleSheet.create({
   bigLine1: { color: colors.cream, fontFamily: fonts.bodySemiBold, fontSize: 14 },
   bigLine: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 12, marginTop: 2 },
   sectionTitle: { color: colors.cream, fontFamily: fonts.display, fontSize: 16, marginBottom: spacing.sm },
+  topRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
+  topRank: { color: colors.gold, fontFamily: fonts.bodyBold, fontSize: 14, width: 18, textAlign: 'center' },
+  topName: { color: colors.cream, fontFamily: fonts.bodySemiBold, fontSize: 13 },
+  topSub: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11, marginTop: 2 },
+  topValue: { color: colors.goldLight, fontFamily: fonts.bodyBold, fontSize: 13 },
   table: { backgroundColor: colors.panel, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.sm, marginBottom: spacing.lg },
   tableHeader: { flexDirection: 'row', paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: colors.border },
   th: { flex: 1, color: colors.creamFaint, fontFamily: fonts.bodySemiBold, fontSize: 10, textTransform: 'uppercase', textAlign: 'center' },
