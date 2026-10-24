@@ -280,14 +280,24 @@ export function ProductScreen({ route }: Props) {
         )}
 
         <View style={styles.body}>
-          <Text style={styles.name}>{product.name}</Text>
-          <StarRating rating={product.rating} showValue reviewCount={product.review_count} />
+          <View style={styles.headRow}>
+            <View style={styles.headMain}>
+              <Text style={styles.name}>{product.name}</Text>
+              <StarRating rating={product.rating} showValue reviewCount={product.review_count} />
 
-          <View style={styles.priceRow}>
-            <Text style={styles.price}>{formatXAF(product.price)}</Text>
-            {product.compare_at_price && (
-              <Text style={styles.comparePrice}>{formatXAF(product.compare_at_price)}</Text>
-            )}
+              <View style={styles.priceRow}>
+                <Text style={styles.price}>{formatXAF(product.price)}</Text>
+                {product.compare_at_price && (
+                  <Text style={styles.comparePrice}>{formatXAF(product.compare_at_price)}</Text>
+                )}
+              </View>
+            </View>
+
+            {/* badges de confiance de la boutique, petits, à droite du nom et du prix */}
+            <View style={styles.trustCol} testID="product-trust-badges">
+              <Image source={BADGE_VERIFIED} style={styles.badgeVerified} contentFit="contain" accessibilityLabel="Vendeur vérifié" />
+              <Image source={BADGE_YEARS} style={styles.badgeYears} contentFit="contain" accessibilityLabel="13 ans d’expérience" />
+            </View>
           </View>
 
           {/* choix couleur / taille / quantité juste sous le prix */}
@@ -350,12 +360,6 @@ export function ProductScreen({ route }: Props) {
                 <Text style={styles.qtyBtnText}>+</Text>
               </Pressable>
             </View>
-          </View>
-
-          {/* badges de confiance de la boutique, côte à côte sous le prix */}
-          <View style={styles.trustRow} testID="product-trust-badges">
-            <Image source={BADGE_VERIFIED} style={styles.badgeVerified} contentFit="contain" accessibilityLabel="Vendeur vérifié" />
-            <Image source={BADGE_YEARS} style={styles.badgeYears} contentFit="contain" accessibilityLabel="13 ans d’expérience" />
           </View>
 
           {showWhatsAppOrder && (
@@ -436,10 +440,12 @@ const styles = StyleSheet.create({
   thumbActive: { borderColor: colors.gold, borderWidth: 2 },
   body: { paddingHorizontal: spacing.md, paddingTop: spacing.md },
   name: { fontFamily: fonts.display, fontSize: 22, color: colors.cream, marginBottom: 6 },
-  priceRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 },
-  trustRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 },
-  badgeVerified: { width: 64, height: 64 },
-  badgeYears: { width: 168, height: 56 },
+  headRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headMain: { flex: 1, minWidth: 0 },
+  priceRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 10, marginTop: 10 },
+  trustCol: { alignItems: 'center', gap: 4 },
+  badgeVerified: { width: 46, height: 46 },
+  badgeYears: { width: 102, height: 34 },
   price: { fontFamily: fonts.bodyBold, fontSize: 20, color: colors.success },
   comparePrice: {
     fontFamily: fonts.body,
@@ -477,8 +483,8 @@ const styles = StyleSheet.create({
   },
   selectorSection: { marginTop: spacing.lg },
   selectorLabel: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 13,
+    fontFamily: fonts.bodyBold,
+    fontSize: 14,
     color: colors.cream,
     marginBottom: spacing.sm,
     textTransform: 'uppercase',
@@ -486,29 +492,27 @@ const styles = StyleSheet.create({
   },
   optionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   optionChip: {
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 2,
+    borderColor: colors.gold,
     borderRadius: radius.pill,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    backgroundColor: colors.panel,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    backgroundColor: colors.panelAlt,
   },
-  optionChipActive: { borderColor: colors.gold, backgroundColor: colors.panelAlt },
-  optionText: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.creamMuted },
-  optionTextActive: { color: colors.goldLight },
-  qtyRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  optionChipActive: { borderColor: colors.goldLight, backgroundColor: colors.gold },
+  optionText: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: colors.cream },
+  optionTextActive: { color: colors.background, fontFamily: fonts.bodyBold },
+  qtyRow: { flexDirection: 'row', alignItems: 'center', gap: 18 },
   qtyBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.panel,
-    borderWidth: 1,
-    borderColor: colors.border,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.gold,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  qtyBtnText: { color: colors.gold, fontSize: 18, fontFamily: fonts.bodyBold },
-  qtyValue: { color: colors.cream, fontFamily: fonts.bodySemiBold, fontSize: 16, minWidth: 20, textAlign: 'center' },
+  qtyBtnText: { color: colors.background, fontSize: 22, fontFamily: fonts.bodyBold },
+  qtyValue: { color: colors.cream, fontFamily: fonts.bodyBold, fontSize: 20, minWidth: 24, textAlign: 'center' },
   reviewsSection: { marginTop: spacing.xl },
   noReviews: { fontFamily: fonts.body, color: colors.creamFaint, fontSize: 13 },
   reviewCard: {
