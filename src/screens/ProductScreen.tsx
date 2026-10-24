@@ -280,14 +280,24 @@ export function ProductScreen({ route }: Props) {
         )}
 
         <View style={styles.body}>
-          <Text style={styles.name}>{product.name}</Text>
-          <StarRating rating={product.rating} showValue reviewCount={product.review_count} />
+          <View style={styles.headRow}>
+            <View style={styles.headMain}>
+              <Text style={styles.name}>{product.name}</Text>
+              <StarRating rating={product.rating} showValue reviewCount={product.review_count} />
 
-          <View style={styles.priceRow}>
-            <Text style={styles.price}>{formatXAF(product.price)}</Text>
-            {product.compare_at_price && (
-              <Text style={styles.comparePrice}>{formatXAF(product.compare_at_price)}</Text>
-            )}
+              <View style={styles.priceRow}>
+                <Text style={styles.price}>{formatXAF(product.price)}</Text>
+                {product.compare_at_price && (
+                  <Text style={styles.comparePrice}>{formatXAF(product.compare_at_price)}</Text>
+                )}
+              </View>
+            </View>
+
+            {/* badges de confiance de la boutique, petits, à droite du nom et du prix */}
+            <View style={styles.trustCol} testID="product-trust-badges">
+              <Image source={BADGE_VERIFIED} style={styles.badgeVerified} contentFit="contain" accessibilityLabel="Vendeur vérifié" />
+              <Image source={BADGE_YEARS} style={styles.badgeYears} contentFit="contain" accessibilityLabel="13 ans d’expérience" />
+            </View>
           </View>
 
           {/* choix couleur / taille / quantité juste sous le prix */}
@@ -350,12 +360,6 @@ export function ProductScreen({ route }: Props) {
                 <Text style={styles.qtyBtnText}>+</Text>
               </Pressable>
             </View>
-          </View>
-
-          {/* badges de confiance de la boutique, côte à côte sous le prix */}
-          <View style={styles.trustRow} testID="product-trust-badges">
-            <Image source={BADGE_VERIFIED} style={styles.badgeVerified} contentFit="contain" accessibilityLabel="Vendeur vérifié" />
-            <Image source={BADGE_YEARS} style={styles.badgeYears} contentFit="contain" accessibilityLabel="13 ans d’expérience" />
           </View>
 
           {showWhatsAppOrder && (
@@ -436,10 +440,12 @@ const styles = StyleSheet.create({
   thumbActive: { borderColor: colors.gold, borderWidth: 2 },
   body: { paddingHorizontal: spacing.md, paddingTop: spacing.md },
   name: { fontFamily: fonts.display, fontSize: 22, color: colors.cream, marginBottom: 6 },
-  priceRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 },
-  trustRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 },
-  badgeVerified: { width: 64, height: 64 },
-  badgeYears: { width: 168, height: 56 },
+  headRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headMain: { flex: 1, minWidth: 0 },
+  priceRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 10, marginTop: 10 },
+  trustCol: { alignItems: 'center', gap: 4 },
+  badgeVerified: { width: 46, height: 46 },
+  badgeYears: { width: 102, height: 34 },
   price: { fontFamily: fonts.bodyBold, fontSize: 20, color: colors.success },
   comparePrice: {
     fontFamily: fonts.body,
