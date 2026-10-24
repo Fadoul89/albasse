@@ -1345,11 +1345,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const menu = await chipLabels(v.page);
       check('visiteur tout neuf : la langue et « Passer » ne comptent pas, la question n\'arrive pas pendant la presentation (le menu reste)', (await panelOf(v.page).getByText(/Avez-vous déjà installé l’application/).count()) === 0 && menu.includes('🔥 Promotions') && menu.includes('📲 Voir comment installer'), menu);
       await tap(v.page, 'Promotions', /promotion|promo|offre/i);
-      await sleep(2500);
-      check('apres UN vrai message : toujours pas de question', (await panelOf(v.page).getByText(/Avez-vous déjà installé l’application/).count()) === 0);
-      await ask(v.page, 'conseil', /Je suis là pour vous conseiller\. Que cherchez-vous \?/);
       await waitText(v.page, /Avez-vous déjà installé l’application Albasse Shopping/);
-      check('apres DEUX vrais messages : la question arrive (iPhone : « Voir comment installer »)', (await chipLabels(v.page)).join('|') === '📲 Voir comment installer|✅ Oui, déjà installée|Plus tard', await chipLabels(v.page));
+      check('apres le PREMIER vrai message : la question arrive (iPhone : « Voir comment installer »)', (await chipLabels(v.page)).join('|') === '📲 Voir comment installer|✅ Oui, déjà installée|Plus tard', await chipLabels(v.page));
       await chip(v.page, 'Plus tard').click();
       await waitText(v.page, /je ne vous le propose plus pour le moment/);
       const back = await chipLabels(v.page);
