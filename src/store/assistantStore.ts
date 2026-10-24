@@ -907,7 +907,9 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       .messages.filter((m) => m.text)
       .slice(-7, -1)
       .map((m) => ({ role: m.role, text: m.text }));
-    const answer = await askZaraAi(text, history, getVisitorId());
+    const auth = useAuthStore.getState();
+    const first = (auth.isAuthenticated ? firstNameOfFullName(auth.profile?.full_name) : null) ?? get().name;
+    const answer = await askZaraAi(text, history, getVisitorId(), first);
     if (!answer) return false;
     const items = answer.productIds.map((id) => catalog.find((p) => p.id === id)).filter((p): p is CatalogProduct => !!p);
     if (items.length > 0) await showProducts(answer.text, items, { kind: 'query', query: text }, catalog);

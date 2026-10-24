@@ -18,10 +18,10 @@ const PAUSE_MS = 10 * 60 * 1000;
 // après « limite atteinte » ou « pas installé », on ne redemande pas pendant 10 minutes (Zara répond tout de suite)
 let pausedUntil = 0;
 
-export async function askZaraAi(message: string, history: ZaraAiTurn[], visitorId: string): Promise<ZaraAiAnswer | null> {
+export async function askZaraAi(message: string, history: ZaraAiTurn[], visitorId: string, name: string | null = null): Promise<ZaraAiAnswer | null> {
   if (!isSupabaseConfigured || Date.now() < pausedUntil) return null;
   try {
-    const call = supabase.functions.invoke('zara-ai', { body: { message, history, visitorId } });
+    const call = supabase.functions.invoke('zara-ai', { body: { message, history, visitorId, ...(name ? { name } : {}) } });
     const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), TIMEOUT_MS));
     const { data, error } = await Promise.race([call, timeout]);
     if (error || !data) return null;
