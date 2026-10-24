@@ -33,7 +33,6 @@ import { ProductCard } from '../components/ProductCard';
 import { FavoriteButton } from '../components/FavoriteButton';
 import { useStoreSettings } from '../hooks/useStoreSettings';
 import { WebPushBanner } from '../components/WebPushBanner';
-import { sizedImage } from '../lib/imageSize';
 
 // badges de confiance (fond transparent, réduits pour le téléphone)
 const BADGE_VERIFIED = require('../../assets/badge-vendeur-verifie.png');
@@ -254,7 +253,7 @@ export function ProductScreen({ route }: Props) {
       />
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }}>
         <Image
-          source={{ uri: sizedImage(product.images[activeImage], 900) }}
+          source={{ uri: product.images[activeImage] }}
           style={styles.mainImage}
           contentFit="cover"
           transition={150}
@@ -271,7 +270,7 @@ export function ProductScreen({ route }: Props) {
                 }}
               >
                 <Image
-                  source={{ uri: sizedImage(uri, 200) }}
+                  source={{ uri }}
                   style={[styles.thumb, i === activeImage && styles.thumbActive]}
                   contentFit="cover"
                 />
