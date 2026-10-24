@@ -9,7 +9,8 @@ const TRANSITION_MS = 700;
 const NEON_PURPLE = '#C400FF';
 const VISIBLE_COUNT = 3;
 
-export function SideAdBanner({ items }: { items: AdItem[] }) {
+// height : la hauteur de la bande (plus haute sur téléphone, où chaque bande prend toute la largeur)
+export function SideAdBanner({ items, height = 120 }: { items: AdItem[]; height?: number }) {
   const visibleCount = Math.min(VISIBLE_COUNT, items.length);
   const [index, setIndex] = useState(0);
   const fade = useRef(new Animated.Value(1)).current;
@@ -58,7 +59,7 @@ export function SideAdBanner({ items }: { items: AdItem[] }) {
   };
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, { height }]}>
       {slots.map((item, i) => (
         <React.Fragment key={`slot-${i}`}>
           {i > 0 && <View style={styles.divider} />}
@@ -72,7 +73,6 @@ export function SideAdBanner({ items }: { items: AdItem[] }) {
 const styles = StyleSheet.create({
   wrap: {
     width: '100%',
-    height: 120,
     flexDirection: 'row',
     backgroundColor: colors.panel,
     borderRadius: radius.md,

@@ -28,23 +28,28 @@ export function CategoryTile({ category }: { category: Category }) {
       ) : (
         <Text style={styles.icon}>{ICONS[category.slug] ?? '✨'}</Text>
       )}
-      <Text style={styles.label}>{category.name}</Text>
+      <Text style={styles.label} numberOfLines={2}>
+        {category.name}
+      </Text>
     </Pressable>
   );
 }
 
+// Carte plus petite, photo plus grande (demande du patron) : la photo occupe presque toute la largeur de la carte.
 const styles = StyleSheet.create({
   tile: {
-    width: 84,
+    width: 76,
     alignItems: 'center',
     backgroundColor: colors.panel,
-    borderRadius: radius.lg,
-    paddingVertical: 14,
-    marginRight: 12,
+    borderRadius: radius.md,
+    paddingTop: 6,
+    paddingBottom: 6,
+    paddingHorizontal: 4,
+    marginRight: 8,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  icon: { fontSize: 24, marginBottom: 6 },
-  image: { width: 40, height: 40, borderRadius: 20, marginBottom: 6 },
-  label: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 11, textAlign: 'center' },
+  icon: { fontSize: 32, lineHeight: 62, marginBottom: 4 },
+  image: { width: 64, height: 64, borderRadius: 12, marginBottom: 4 },
+  label: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 10.5, lineHeight: 13, textAlign: 'center' },
 });

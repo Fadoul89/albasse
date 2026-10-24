@@ -35,6 +35,7 @@ export function HomeScreen() {
   const { width } = useWindowDimensions();
   const hasAdItems = settings.left_ad_items.length > 0 || settings.right_ad_items.length > 0;
   const showMobileAds = hasAdItems;
+  const phoneAds = width < 700;
   const gridColumns = width >= 700 ? 4 : 2;
 
   const flashSale = products.filter((p) => p.is_flash_sale);
@@ -144,29 +145,29 @@ export function HomeScreen() {
         </View>
       </LinearGradient>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Catégories</Text>
+      {/* une seule ligne qui défile, sans titre « Catégories » (demande du patron) */}
+      <View style={styles.categoriesSection} testID="home-categories">
         <FlatList
           data={categories}
           horizontal
           showsHorizontalScrollIndicator={false}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ paddingHorizontal: spacing.md }}
           renderItem={({ item }) => <CategoryTile category={item} />}
           initialNumToRender={50}
         />
       </View>
 
       {showMobileAds && (
-        <View style={styles.mobileAdsSection}>
+        // téléphone : chaque bande de publicité prend toute la largeur, plus haute (les photos se voient en grand)
+        <View style={[styles.mobileAdsSection, phoneAds && styles.mobileAdsStacked]} testID="home-ads">
           {settings.left_ad_items.length > 0 && (
-            <View style={{ flex: 1 }}>
-              <SideAdBanner items={settings.left_ad_items} />
+            <View style={phoneAds ? undefined : { flex: 1 }}>
+              <SideAdBanner items={settings.left_ad_items} height={phoneAds ? 150 : 120} />
             </View>
           )}
           {settings.right_ad_items.length > 0 && (
-            <View style={{ flex: 1 }}>
-              <SideAdBanner items={settings.right_ad_items} />
+            <View style={phoneAds ? undefined : { flex: 1 }}>
+              <SideAdBanner items={settings.right_ad_items} height={phoneAds ? 150 : 120} />
             </View>
           )}
         </View>
@@ -298,7 +299,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   banner: {
-    paddingVertical: 48,
+    paddingVertical: 22,
     alignItems: 'center',
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
@@ -363,7 +364,10 @@ const styles = StyleSheet.create({
   },
   flashSubtitle: { fontFamily: fonts.body, fontSize: 12, color: colors.creamFaint, marginTop: 6 },
   section: { marginTop: spacing.xl, paddingHorizontal: spacing.md },
-  mobileAdsSection: { flexDirection: 'row', marginTop: spacing.xl, paddingHorizontal: spacing.md, gap: spacing.md },
+  // les catégories remontent juste sous le bandeau ALBASSE SHOPPING
+  categoriesSection: { marginTop: spacing.md, paddingHorizontal: spacing.md },
+  mobileAdsSection: { flexDirection: 'row', marginTop: spacing.lg, paddingHorizontal: spacing.md, gap: spacing.md },
+  mobileAdsStacked: { flexDirection: 'column', gap: spacing.sm },
   sectionTitle: {
     fontFamily: fonts.display,
     fontSize: 20,
