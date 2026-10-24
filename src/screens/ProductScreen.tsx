@@ -244,7 +244,7 @@ export function ProductScreen({ route }: Props) {
         showBack
         right={
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <FavoriteButton productId={product.id} />
+            <FavoriteButton productId={product.id} likes={product.likes_count} />
             <Pressable onPress={handleShare} hitSlop={10}>
               <Text style={styles.shareIcon}>↗</Text>
             </Pressable>

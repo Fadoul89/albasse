@@ -39,7 +39,7 @@ export function ProductCard({ product, columns = 2 }: { product: Product; column
             <Text style={styles.badgeText}>-{discount}%</Text>
           </View>
         )}
-        <FavoriteButton productId={product.id} style={styles.favoriteBtn} />
+        <FavoriteButton productId={product.id} likes={product.likes_count} style={styles.favoriteBtn} />
       </View>
       {/* badges de confiance de la boutique, sous la photo */}
       <View style={styles.trustRow} pointerEvents="none" testID="card-trust-badges">

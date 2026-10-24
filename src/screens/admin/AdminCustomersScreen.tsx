@@ -17,6 +17,7 @@ import {
 import { getLoyaltyStatus } from '../../lib/loyalty';
 import { phoneDigits, visibleEmail } from '../../lib/phoneAuth';
 import { fetchBrowsingOverview } from '../../lib/assistantData';
+import { supabase } from '../../lib/supabase';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { StoreSettingToggle } from '../../components/StoreSettingToggle';
 import type { CustomerSummary } from '../../types';
@@ -97,6 +98,8 @@ export function AdminCustomersScreen() {
   const [hideTestAccounts, setHideTestAccounts] = useState(true);
   // comptes que Zara a notés « Intérêt élevé » (30 derniers jours) : le suivi donne « C- » + 8 premiers caractères du compte
   const [highInterest, setHighInterest] = useState<Set<string>>(new Set());
+  // « j'aime » (cœurs) donnés par chaque client : un client qui aime des articles est aussi « Intérêt élevé »
+  const [likesByUser, setLikesByUser] = useState<Map<string, number>>(new Map());
 
   useEffect(() => {
     if (!profile?.is_admin) return;
@@ -105,6 +108,12 @@ export function AdminCustomersScreen() {
       if (!alive || !res.ok) return;
       const refs = res.overview.rows.filter((r) => r.interest === 'eleve' && r.accountRef).map((r) => r.accountRef!.slice(2));
       setHighInterest(new Set(refs));
+    });
+    Promise.resolve(supabase.from('favorites').select('user_id')).then(({ data }) => {
+      if (!alive || !data) return;
+      const m = new Map<string, number>();
+      for (const r of data as { user_id: string }[]) m.set(r.user_id, (m.get(r.user_id) ?? 0) + 1);
+      setLikesByUser(m);
     });
     return () => {
       alive = false;
@@ -172,13 +181,13 @@ export function AdminCustomersScreen() {
       case 'statusBanned':
         return list.filter((c) => c.profile.banned);
       case 'highInterest':
-        return list.filter((c) => highInterest.has(c.profile.id.slice(0, 8)));
+        return list.filter((c) => highInterest.has(c.profile.id.slice(0, 8)) || (likesByUser.get(c.profile.id) ?? 0) > 0);
       case 'away':
         return list.filter((c) => daysAway(c) >= AWAY_DAYS);
       default:
         return list;
     }
-  }, [customers, query, filter, hideTestAccounts, highInterest]);
+  }, [customers, query, filter, hideTestAccounts, highInterest, likesByUser]);
 
   const visible = filtered.slice(0, visibleCount);
 
@@ -193,7 +202,8 @@ export function AdminCustomersScreen() {
         renderItem={({ item }) => (
           <CustomerRow
             customer={item}
-            highInterest={highInterest.has(item.profile.id.slice(0, 8))}
+            highInterest={highInterest.has(item.profile.id.slice(0, 8)) || (likesByUser.get(item.profile.id) ?? 0) > 0}
+            likes={likesByUser.get(item.profile.id) ?? 0}
             onPress={() => navigation.navigate('AdminCustomerDetail', { userId: item.profile.id })}
           />
         )}
@@ -296,10 +306,12 @@ function StatCard({ icon, label, value }: { icon: string; label: string; value: 
 function CustomerRow({
   customer,
   highInterest,
+  likes,
   onPress,
 }: {
   customer: CustomerSummary;
   highInterest: boolean;
+  likes: number;
   onPress: () => void;
 }) {
   const level = engagementLevel(customer.totalDurationSeconds);
@@ -317,11 +329,16 @@ function CustomerRow({
         </Text>
         <Text style={styles.rowBadge}>{ACCOUNT_STATUS_LABEL[status]}</Text>
       </View>
-      {(highInterest || isAway) && (
+      {(highInterest || isAway || likes > 0) && (
         <View style={styles.tagsRow}>
           {highInterest && (
             <View style={styles.tagInterest} testID="customer-high-interest">
-              <Text style={styles.tagText}>💙 Intérêt élevé (Zara)</Text>
+              <Text style={styles.tagText}>💙 Intérêt élevé</Text>
+            </View>
+          )}
+          {likes > 0 && (
+            <View style={styles.tagLikes} testID="customer-likes">
+              <Text style={styles.tagText}>{`❤️ ${likes} article${likes > 1 ? 's' : ''} aimé${likes > 1 ? 's' : ''}`}</Text>
             </View>
           )}
           {isAway && (
@@ -446,6 +463,7 @@ const styles = StyleSheet.create({
   rowNameAway: { color: '#ff6b6b' },
   tagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 4 },
   tagInterest: { backgroundColor: '#1e88e5', borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3 },
+  tagLikes: { backgroundColor: '#c2185b', borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3 },
   tagAway: { backgroundColor: colors.red, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3 },
   tagText: { color: '#fff', fontFamily: fonts.bodySemiBold, fontSize: 10 },
   contactRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
