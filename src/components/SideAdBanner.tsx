@@ -3,6 +3,7 @@ import { View, Pressable, StyleSheet, Linking, Animated, Easing } from 'react-na
 import { Image } from 'expo-image';
 import { colors, radius } from '../theme';
 import type { AdItem } from '../types';
+import { sizedImage } from '../lib/imageSize';
 
 const ROTATE_MS = 4500;
 const TRANSITION_MS = 700;
@@ -18,7 +19,7 @@ export function SideAdBanner({ items, height = 120 }: { items: AdItem[]; height?
 
   useEffect(() => {
     if (items.length === 0) return;
-    Image.prefetch(items.map((item) => item.image_url)).catch(() => {});
+    Image.prefetch(items.map((item) => sizedImage(item.image_url, 500))).catch(() => {});
   }, [items]);
 
   useEffect(() => {
@@ -46,7 +47,7 @@ export function SideAdBanner({ items, height = 120 }: { items: AdItem[]; height?
   const renderSlot = (item: AdItem) => {
     const image = (
       <Animated.View style={{ flex: 1, opacity: fade, transform: [{ translateY: slide }] }}>
-        <Image source={{ uri: item.image_url }} style={styles.image} contentFit="cover" />
+        <Image source={{ uri: sizedImage(item.image_url, 500) }} style={styles.image} contentFit="cover" />
       </Animated.View>
     );
     return item.link ? (

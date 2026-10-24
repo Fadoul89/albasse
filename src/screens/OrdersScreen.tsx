@@ -16,6 +16,7 @@ import { useToastStore } from '../store/toastStore';
 import { CountdownTimer } from '../components/CountdownTimer';
 import { formatOrderDate, getOrderDay } from '../lib/formatDuration';
 import type { Order, OrderStatus } from '../types';
+import { sizedImage } from '../lib/imageSize';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
 const FLAG_DEADLINE_MS = 48 * 60 * 60 * 1000;
@@ -217,7 +218,7 @@ function OrderCard({
         {order.items.map((oi, idx) => (
           <View key={`${oi.product_id}-${idx}`} style={styles.itemRow}>
             {oi.product_image ? (
-              <Image source={{ uri: oi.product_image }} style={styles.itemImage} contentFit="cover" />
+              <Image source={{ uri: sizedImage(oi.product_image, 200) }} style={styles.itemImage} contentFit="cover" />
             ) : (
               <View style={styles.itemImagePlaceholder} />
             )}
