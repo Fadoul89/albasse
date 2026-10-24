@@ -2,7 +2,7 @@
 // Sur la page Connexion et en haut de l'écran d'entrée « compte obligatoire ».
 import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet, Pressable } from 'react-native';
-import { colors, fonts, radius, spacing } from '../theme';
+import { colors, fonts, spacing, accountField, accountFieldPlaceholder } from '../theme';
 import { useAuthStore } from '../store/authStore';
 import { useToastStore } from '../store/toastStore';
 import { isSupabaseConfigured } from '../lib/supabase';
@@ -47,24 +47,24 @@ export function LoginForm({ onSuccess, onForgot }: { onSuccess: () => void; onFo
         value={identifier}
         onChangeText={setIdentifier}
         placeholder="Numéro de téléphone ou e-mail"
-        placeholderTextColor={colors.creamFaint}
+        placeholderTextColor={accountFieldPlaceholder}
         autoCapitalize="none"
         autoCorrect={false}
         autoComplete={remember ? 'username' : 'off'}
         textContentType="username"
-        style={styles.input}
+        style={accountField}
       />
       <TextInput
         testID="login-password"
         value={password}
         onChangeText={setPassword}
         placeholder="Mot de passe"
-        placeholderTextColor={colors.creamFaint}
+        placeholderTextColor={accountFieldPlaceholder}
         secureTextEntry
         autoComplete={remember ? 'current-password' : 'off'}
         textContentType="password"
         onSubmitEditing={handleSubmit}
-        style={styles.input}
+        style={accountField}
       />
       <Pressable
         testID="login-remember"
@@ -87,17 +87,6 @@ export function LoginForm({ onSuccess, onForgot }: { onSuccess: () => void; onFo
 }
 
 const styles = StyleSheet.create({
-  input: {
-    backgroundColor: colors.panel,
-    borderRadius: radius.md,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: colors.cream,
-    fontFamily: fonts.body,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: spacing.sm,
-  },
   checkboxRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 2 },
   checkbox: {
     width: 20,

@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text, TextInput, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { useCities } from '../hooks/useCities';
-import { colors, fonts, radius, spacing } from '../theme';
+import { colors, fonts, radius, spacing, accountField, accountFieldPlaceholder } from '../theme';
 import type { City } from '../types';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
@@ -11,6 +11,8 @@ interface CityPickerProps {
   onChange: (value: string, city: City | null) => void;
   placeholder?: string;
   showDeliveryInfo?: boolean;
+  // cases claires des formulaires de compte (inscription)
+  light?: boolean;
 }
 
 export function CityPicker({
@@ -18,7 +20,10 @@ export function CityPicker({
   onChange,
   placeholder = 'Rechercher une ville...',
   showDeliveryInfo = false,
+  light = false,
 }: CityPickerProps) {
+  const inputStyle = light ? accountField : styles.input;
+  const placeholderColor = light ? accountFieldPlaceholder : colors.creamFaint;
   const { cities } = useCities();
   const [query, setQuery] = useState(value);
   const [isOpen, setIsOpen] = useState(false);
@@ -67,8 +72,8 @@ export function CityPicker({
           value={value}
           onChangeText={(t) => onChange(t, null)}
           placeholder="Veuillez préciser votre ville"
-          placeholderTextColor={colors.creamFaint}
-          style={styles.input}
+          placeholderTextColor={placeholderColor}
+          style={inputStyle}
         />
       </View>
     );
@@ -84,8 +89,8 @@ export function CityPicker({
         }}
         onFocus={() => setIsOpen(true)}
         placeholder={`📍 ${placeholder}`}
-        placeholderTextColor={colors.creamFaint}
-        style={styles.input}
+        placeholderTextColor={placeholderColor}
+        style={inputStyle}
       />
       {isOpen && (
         <View style={styles.dropdown}>

@@ -3,7 +3,7 @@ import { View, Text, TextInput, StyleSheet, Linking } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
-import { colors, fonts, radius, spacing } from '../../theme';
+import { colors, fonts, spacing, accountField, accountFieldPlaceholder } from '../../theme';
 import { useAuthStore } from '../../store/authStore';
 import { useToastStore } from '../../store/toastStore';
 import { GoldButton } from '../../components/GoldButton';
@@ -88,10 +88,10 @@ export function ForgotPasswordScreen() {
               onChangeText={setEmail}
               testID="forgot-identifier"
               placeholder="E-mail ou numéro de téléphone"
-              placeholderTextColor={colors.creamFaint}
+              placeholderTextColor={accountFieldPlaceholder}
               autoCapitalize="none"
               autoCorrect={false}
-              style={styles.input}
+              style={accountField}
             />
             <GoldButton
               label="Continuer"
@@ -118,15 +118,4 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   info: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 14, lineHeight: 21, marginBottom: spacing.md },
-  input: {
-    backgroundColor: colors.panel,
-    borderRadius: radius.md,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: colors.cream,
-    fontFamily: fonts.body,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: spacing.sm,
-  },
 });
