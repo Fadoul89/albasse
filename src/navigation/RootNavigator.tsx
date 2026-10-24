@@ -283,13 +283,14 @@ export function RootNavigator() {
         </View>
         <FavoritesSync />
         <AdminOrderAlert />
+        {/* le tutoriel iPhone reste disponible sans compte : la page /installer le demande aux visiteurs qui n'ont pas encore de compte */}
+        <IosInstallGuide />
         {!signUpFirst && (
           <>
             <Assistant />
             <SmartPromotionPopup />
             <WheelPopup />
             <AppDownloadPopup />
-            <IosInstallGuide />
             <GlowBorder />
           </>
         )}

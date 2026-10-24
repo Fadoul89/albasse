@@ -14,9 +14,10 @@ import {
   isInAppBrowser,
   isIosDevice,
   manualInstallInstructions,
-  openInChrome,
+  openInChromeChecked,
   triggerPwaInstallPrompt,
 } from '../lib/pwaInstallPrompt';
+import { trackAppDownloadClick } from '../lib/appDownloadTracking';
 import { trackShortcutInstallIfNeeded } from '../lib/appInstallTracking';
 import {
   getWebPushIssue,
@@ -49,6 +50,7 @@ export function InstallScreen() {
     setMessage(null);
     const outcome = await triggerPwaInstallPrompt();
     setBusy(false);
+    trackAppDownloadClick('page', outcome === 'accepted' ? 'accepte' : outcome === 'dismissed' ? 'refuse' : 'indisponible');
     if (outcome === 'accepted') {
       setJustInstalled(true);
       trackShortcutInstallIfNeeded();
@@ -56,6 +58,19 @@ export function InstallScreen() {
       // si le téléphone ne montre pas la demande tout de suite
       subscribeToWebPush().then((ok) => ok && setPushOn(true));
     } else setMessage(installNotReadyMessage());
+  };
+
+  // navigateur de TikTok / Facebook : la page s'ouvre dans Chrome ; si le lien est bloqué, on dit comment faire à la main
+  const openChrome = async () => {
+    setMessage(null);
+    const left = await openInChromeChecked();
+    trackAppDownloadClick('page', left ? 'chrome-intent' : 'chrome-bloque');
+    if (!left) setMessage(`Le lien n'a pas pu s'ouvrir tout seul. ${manualInstallInstructions()}`);
+  };
+
+  const showGuide = () => {
+    trackAppDownloadClick('page', 'ios-guide');
+    showIosGuide();
   };
 
   const enablePush = async () => {
@@ -99,7 +114,7 @@ export function InstallScreen() {
           </View>
         ) : ios ? (
           <View style={styles.actions}>
-            <GoldButton label="📲 Voir comment installer sur iPhone" onPress={showIosGuide} />
+            <GoldButton label="📲 Voir comment installer sur iPhone" onPress={showGuide} />
             <Text style={styles.hint}>
               {inApp
                 ? "Vous êtes dans Instagram, Facebook ou TikTok : ouvrez d'abord ce lien dans Safari (menu ⋯ puis « Ouvrir dans le navigateur »). "
@@ -109,8 +124,8 @@ export function InstallScreen() {
           </View>
         ) : inApp && isAndroidDevice() ? (
           <View style={styles.actions}>
-            <GoldButton label="🌐 Ouvrir dans Chrome pour installer" onPress={openInChrome} />
-            <Text style={styles.hint}>{manualInstallInstructions()}</Text>
+            <GoldButton label="🌐 Ouvrir dans Chrome pour installer" onPress={openChrome} />
+            <Text style={styles.hint} testID="install-inapp-hint">{message ?? manualInstallInstructions()}</Text>
           </View>
         ) : (
           <View style={styles.actions}>
