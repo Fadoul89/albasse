@@ -4,7 +4,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, fonts, radius, spacing } from '../theme';
 import { trackAppDownloadClick } from '../lib/appDownloadTracking';
 import { isRunningInsideApp } from '../lib/runningInApp';
-import { installNotReadyMessage, isAndroidDevice, isAppInstalledOnDevice, isInAppBrowser, isIosDevice, isRunningAsInstalledPwa, manualInstallInstructions, openInChromeChecked, triggerPwaInstallPrompt } from '../lib/pwaInstallPrompt';
+import { inAppName, installNotReadyMessage, isAndroidDevice, isAppInstalledOnDevice, isInAppBrowser, isIosDevice, isRunningAsInstalledPwa, openInChromeChecked, triggerPwaInstallPrompt } from '../lib/pwaInstallPrompt';
+import { navigationRef } from '../navigation/navigationRef';
 import { subscribeToWebPush } from '../lib/webPushSubscription';
 import { trackShortcutInstallIfNeeded } from '../lib/appInstallTracking';
 import { useInstallGuideStore } from '../store/installGuideStore';
@@ -42,12 +43,18 @@ export function AppDownloadBanner() {
       useInstallGuideStore.getState().show();
       return;
     }
-    // navigateur de TikTok, Facebook, WhatsApp... : on ouvre la page dans Chrome, où l'installation marche. Si le navigateur bloque
-    // le lien (la page reste affichée), on explique comment l'ouvrir à la main : sans ça, le visiteur retouche « Installer » sans fin.
+    // navigateur de TikTok, Facebook, WhatsApp... : l'installation n'y marche pas, il faut passer par le vrai navigateur. TikTok refuse
+    // d'ouvrir Chrome tout seul (« L'action ne peut pas être réalisée ») : ses visiteurs voient tout de suite les étapes (page /installer).
+    // Ailleurs, on tente Chrome ; si le lien est bloqué, même page : une alerte n'apparaît pas dans tous ces navigateurs.
     if (isAndroidDevice() && isInAppBrowser()) {
+      if (inAppName() === 'tiktok') {
+        trackAppDownloadClick('banner', 'etapes');
+        navigationRef.navigate('Install');
+        return;
+      }
       const left = await openInChromeChecked();
       trackAppDownloadClick('banner', left ? 'chrome-intent' : 'chrome-bloque');
-      if (!left) window.alert(manualInstallInstructions());
+      if (!left) navigationRef.navigate('Install');
       return;
     }
     const outcome = await triggerPwaInstallPrompt();
