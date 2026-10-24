@@ -145,14 +145,13 @@ export function HomeScreen() {
         </View>
       </LinearGradient>
 
-      <View style={styles.categoriesSection}>
-        <Text style={[styles.sectionTitle, styles.categoriesTitle]}>Catégories</Text>
+      {/* une seule ligne qui défile, sans titre « Catégories » (demande du patron) */}
+      <View style={styles.categoriesSection} testID="home-categories">
         <FlatList
           data={categories}
           horizontal
           showsHorizontalScrollIndicator={false}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ paddingHorizontal: spacing.md }}
           renderItem={({ item }) => <CategoryTile category={item} />}
           initialNumToRender={50}
         />
@@ -367,7 +366,6 @@ const styles = StyleSheet.create({
   section: { marginTop: spacing.xl, paddingHorizontal: spacing.md },
   // les catégories remontent juste sous le bandeau ALBASSE SHOPPING
   categoriesSection: { marginTop: spacing.md, paddingHorizontal: spacing.md },
-  categoriesTitle: { marginBottom: spacing.sm },
   mobileAdsSection: { flexDirection: 'row', marginTop: spacing.lg, paddingHorizontal: spacing.md, gap: spacing.md },
   mobileAdsStacked: { flexDirection: 'column', gap: spacing.sm },
   sectionTitle: {
