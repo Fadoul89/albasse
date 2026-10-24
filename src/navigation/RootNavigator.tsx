@@ -23,7 +23,6 @@ import { TabNavigator } from './TabNavigator';
 import { CategoryScreen } from '../screens/CategoryScreen';
 import { ProductScreen } from '../screens/ProductScreen';
 import { CheckoutScreen } from '../screens/CheckoutScreen';
-import { OrdersScreen } from '../screens/OrdersScreen';
 import { TravelScreen } from '../screens/TravelScreen';
 import { LoginScreen } from '../screens/auth/LoginScreen';
 import { RegisterScreen } from '../screens/auth/RegisterScreen';
@@ -83,14 +82,14 @@ const linking: LinkingOptions<RootStackParamList> = {
         screens: {
           Home: '',
           Search: 'recherche',
-          Cart: 'panier',
+          // plus de panier : l'onglet « Commandes » le remplace (les anciens liens /panier y mènent)
+          Orders: { path: 'mes-commandes', alias: ['panier'] },
           Account: 'compte',
         },
       },
       Category: 'categorie/:slug',
       Product: 'produit/:slug',
       Checkout: 'commande',
-      Orders: 'mes-commandes',
       Travel: 'voyage',
       Login: 'connexion',
       Register: 'inscription',
@@ -230,7 +229,6 @@ export function RootNavigator() {
             <Stack.Screen name="Category" component={CategoryScreen} />
             <Stack.Screen name="Product" component={ProductScreen} />
             <Stack.Screen name="Checkout" component={CheckoutScreen} />
-            <Stack.Screen name="Orders" component={OrdersScreen} />
             <Stack.Screen name="Travel" component={TravelScreen} />
             <Stack.Screen name="Login" component={LoginScreen} options={{ presentation: 'modal' }} />
             <Stack.Screen name="Register" component={RegisterScreen} options={{ presentation: 'modal' }} />

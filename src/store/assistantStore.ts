@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { BULK_MIN_QTY, BULK_MIN_TOTAL, GIFT_WRAP_FEE, HOME_CITY, PAYMENT } from '../constants/shopRules';
+import { GIFT_WRAP_FEE, HOME_CITY, PAYMENT } from '../constants/shopRules';
 import {
   addressFrom,
   cityReply,
@@ -40,7 +40,7 @@ import {
   budgetOfRange,
   budgetOptions,
   candidatesFor,
-  cartReminder,
+  orderReminder,
   cheaperOptions,
   crossSellTarget,
   decodeRange,
@@ -72,7 +72,7 @@ import {
 } from '../lib/assistantMarketing';
 import { fetchCartStatus, fetchLoyaltyPoints, fetchPaymentNumbers, fetchProductForCart, getCatalog, getCategories, getCities, getProductSales, getStoreInfo, logAssistantEvent, requestCallback, startChatToday, toCard, type AssistantProduct, type CallbackSource } from '../lib/assistantData';
 import { compareFacts, declaredStyle, jobFrom, jobKindOfProfession, rankForStyle, styleOrder, threeRanges, toneOf, type JobKind, type StyleKey } from '../lib/assistantPersona';
-import { callbackDays, callbackNote, dayFromText, LOW_STOCK_MAX, pickComplement, provenSales, type CallbackDay } from '../lib/assistantSales';
+import { callbackDays, callbackNote, dayFromText, LOW_STOCK_MAX, provenSales, type CallbackDay } from '../lib/assistantSales';
 import { clearIntent, currentDevice, markIntent } from '../lib/assistantAttribution';
 import { pushReminderNow, recordPushReminder } from '../lib/pushReminder';
 import { getWebPushIssue, isWebPushBlocked, PUSH_PERMISSION_NOT_GRANTED, subscribeToWebPush } from '../lib/webPushSubscription';
@@ -167,7 +167,6 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   text: string;
   lang?: Lang; // langue du message de Zara (sens d'écriture) ; sans valeur : français
-  cart?: boolean; // affiche le panier (en direct, le même que celui du site) sous le message
   products?: AssistantProduct[];
   image?: ChatImage; // une photo sous le message (ex. comment installer sur iPhone)
   actions?: ChatAction[];
@@ -222,7 +221,7 @@ interface AssistantState {
   need: Need | null;
   order: OrderDraft | null;
   lang: Lang;
-  // Dernière ville dont le client a parlé : les frais de livraison ne sont affichés dans le panier que s'ils sont connus.
+  // Dernière ville dont le client a parlé : la commande dans le chat la reprend (frais de livraison connus).
   deliveryCity: { name: string; fee: number | null } | null;
   name: string | null;
   teaserDismissed: boolean;
@@ -234,10 +233,10 @@ interface AssistantState {
   send: (text: string) => Promise<void>;
   choose: (action: ChatAction) => Promise<void>;
   toggleLang: () => void;
-  // bouton « + » d'une fiche produit : ajoute au vrai panier du site sans fermer la conversation
-  addToCart: (slug: string) => void;
-  openCart: () => void;
-  // « Commander » : Zara vérifie le panier (prix, stock, compte) puis finalise la commande avec le client, dans la conversation
+  // (le bouton « Commander » des fiches produit du chat : voir orderProduct)
+  // « Commander » sous un article : Zara prend la commande de cet article (une commande = un article)
+  orderProduct: (slug: string) => void;
+  // « Terminer ma commande » : Zara vérifie l'article (prix, stock, compte) puis finalise la commande avec le client, dans la conversation
   startCheckout: () => Promise<void>;
   // les boutons d'un ancien message qui restent affichés (aucun pendant une commande ou une demande de rappel)
   oldChips: (actions: ChatAction[]) => ChatAction[];
@@ -393,7 +392,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // Très courte pause avant chaque message (les trois points s'affichent) : elle ne grandit pas avec la longueur du texte.
 const typingDelay = (text: string) => 250 + Math.min(text.length, 120) * 2;
 
-// Ajouts au panier : un double clic ne compte qu'une fois, et les ajouts se font l'un après l'autre.
+// « Commander » sous un article : un double clic ne compte qu'une fois, et les demandes se suivent l'une après l'autre.
 const DOUBLE_TAP_MS = 1200;
 const lastAddAt = new Map<string, number>();
 const pendingAdds = new Set<string>();
@@ -463,9 +462,9 @@ const COMPARE_SAY: Record<Lang, string> = { fr: 'comparer ces articles', ar: 'ق
 const RANGES_SAY: Record<Lang, string> = { fr: 'trois gammes de prix', ar: 'ثلاثة خيارات بأسعار مختلفة' };
 
 // Les boutons des anciens messages qui restent touchables : ceux qui mènent quelque part (promotions, catégories, un article précis,
-// panier, compte, WhatsApp, menu, installer). Les réponses à une question passée (taille, jour, budget, pour qui, confirmer...) partent.
+// la commande en cours, compte, WhatsApp, menu, installer). L'ancien « Voir mon panier » part : il n'y a plus de panier. Les réponses à une question passée (taille, jour, budget, pour qui, confirmer...) partent.
 const OLD_CHIP_KINDS = new Set<ChatAction['kind']>([
-  'say', 'whatsapp', 'register', 'login', 'orders', 'account', 'category', 'menu', 'cart', 'checkout', 'link', 'policy', 'pair', 'add',
+  'say', 'whatsapp', 'register', 'login', 'orders', 'account', 'category', 'menu', 'checkout', 'link', 'policy', 'pair', 'add',
   'install', 'installHelp', 'iosGuide', 'interest', 'style', 'orderPage', 'categoryPage', 'openChrome', 'pushOn',
 ]);
 // Ces phrases parlent de ce qui est affiché en ce moment (le budget de ces articles, les comparer) : pas sur un ancien message.
@@ -537,7 +536,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     }
   }
 
-  async function say(text: string, extra: { products?: AssistantProduct[]; image?: ChatImage; actions?: ChatAction[]; lang?: Lang; cart?: boolean; fast?: boolean } = {}) {
+  async function say(text: string, extra: { products?: AssistantProduct[]; image?: ChatImage; actions?: ChatAction[]; lang?: Lang; fast?: boolean } = {}) {
     const { lang, fast, ...rest } = extra;
     await sleep(fast ? 120 : typingDelay(text));
     push({ id: newId(), role: 'assistant', text, lang: lang ?? get().lang, ...rest });
@@ -586,7 +585,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     const actions: ChatAction[] = [];
     if (isGuest()) actions.push({ label: c.createAccount, kind: 'register', highlight: true }, { label: c.login, kind: 'login' });
     actions.push(sayBtn(c.promotions, 'promotions'), sayBtn(c.news, 'nouveautés'), sayBtn(c.advice, 'conseil'), sayBtn(c.categories, 'catégories'), sayBtn(c.delivery, 'livraison'));
-    if (useCartStore.getState().items.length > 0) actions.push({ label: c.cart, kind: 'cart' });
+    if (useCartStore.getState().items.length > 0) actions.push({ label: c.checkout, kind: 'checkout', highlight: true });
     if (!isGuest()) actions.push({ label: c.orders, kind: 'orders' }, sayBtn(c.points, T().loyalty.mineQuery));
     const install = installMenuChip();
     if (install) actions.push(install);
@@ -609,8 +608,8 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     await say(withName(T().accountInvite), { actions: menuActions() });
   }
 
-  // Si le visiteur regarde un produit, ou a un panier : Zara commence par là.
-  // Retourne true si Zara a parlé du produit regardé ou du panier (elle n'ajoute alors pas de suggestion par-dessus).
+  // Si le visiteur regarde un produit, ou a une commande commencée (article choisi, pas confirmée) : Zara commence par là.
+  // Retourne true si Zara a parlé du produit regardé ou de la commande (elle n'ajoute alors pas de suggestion par-dessus).
   async function contextMessages(): Promise<boolean> {
     try {
       const route = navigationRef.isReady() ? navigationRef.getCurrentRoute() : undefined;
@@ -624,11 +623,9 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
           }
         }
       }
-      const items = useCartStore.getState().items;
-      if (items.length > 0) {
-        const count = items.reduce((n, i) => n + i.quantity, 0);
-        const total = items.reduce((sum, i) => sum + i.product.price * i.quantity, 0);
-        await say(cartReminder(count, total, get().lang));
+      const item = useCartStore.getState().items[0];
+      if (item) {
+        await say(orderReminder(shortName(item.product.name), item.product.price * item.quantity, get().lang));
         return true;
       }
     } catch {
@@ -637,7 +634,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     return false;
   }
 
-  // Après la présentation : le contexte (produit regardé, panier), les informations importantes,
+  // Après la présentation : le contexte (produit regardé, commande commencée), les informations importantes,
   // puis l'invitation à créer un compte (visiteur) ou le menu (client connecté).
   async function onboarding() {
     const spoke = await contextMessages();
@@ -648,7 +645,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     if (isGuest()) await accountInvitation();
     else await showMenu(T().menuIntro);
     // installé sans notifications : le rappel d'abord ; sinon une suggestion discrète d'après les articles regardés, seulement si Zara
-    // n'a pas déjà parlé du produit ou du panier
+    // n'a pas déjà parlé du produit ou de la commande commencée
     if (await maybeRemindPush()) return;
     if (!spoke) await maybeSuggest();
   }
@@ -815,7 +812,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       if (toneLine) lines.push(toneLine);
       else if (!real) lines.push(freshLine(T().encouragements));
     }
-    // une seule fois : le bouton + des fiches produits
+    // une seule fois : le bouton « Commander » des fiches produits
     if (!get().messages.some((m) => m.role === 'assistant' && m.text.includes(T().cart.tapPlus))) lines.push(T().cart.tapPlus);
     if (install && !saidBefore(T().install.productNudge)) lines.push(T().install.productNudge);
     await say(lines.join('\n'), { actions });
@@ -854,7 +851,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     }
   }
 
-  // Une catégorie touchée dans le chat : ses articles s'affichent ici, avec le bouton « + » sur chaque carte ; le chat reste ouvert.
+  // Une catégorie touchée dans le chat : ses articles s'affichent ici, avec le bouton « Commander » sur chaque carte ; le chat reste ouvert.
   // « Voir plus » montre la suite ; « Page » ouvre la page de la catégorie pour ceux qui la préfèrent.
   const CATEGORY_PAGE_SIZE = 6;
   async function categoryReply(slug: string, offset = 0) {
@@ -1076,7 +1073,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
   // « C'est cher » : si on vient de montrer des produits, des alternatives moins chères quand il y en a.
   async function priceObjection() {
     const lastShown = [...get().messages].reverse().find((m) => m.role === 'assistant' && m.products && m.products.length > 0);
-    // le rappel n'est proposé qu'à celui qui hésite à commander : des articles viennent d'être montrés, ou il a un panier
+    // le rappel n'est proposé qu'à celui qui hésite à commander : des articles viennent d'être montrés, ou il a commencé une commande
     const hesitating = !!lastShown || useCartStore.getState().items.length > 0;
     const actions = () => [sayBtn(T().chip.promotions, 'promotions'), sayBtn(T().chip.budget, 'budget'), ...(hesitating ? [callbackChip('price')] : []), wa()];
     try {
@@ -1332,9 +1329,9 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
   }
 
   // -------------------------------------------------------------------------------------------
-  // Panier dans la conversation : ajouter (bouton +), choisir la taille / la couleur, voir, commander.
-  // C'est le panier du site (même magasin de données) : il reste identique partout. Le prix, le stock et les
-  // variantes sont relus dans la base au moment de l'ajout ; la commande passe par la page officielle.
+  // Commande dans la conversation : « Commander » sous un article, la taille / la couleur, puis la commande.
+  // L'article choisi est le même que sur le site (même magasin de données) : une commande = un article. Le prix, le stock et les
+  // variantes sont relus dans la base au moment du choix ; la commande est enregistrée avec le même code que la page de commande.
   // -------------------------------------------------------------------------------------------
 
   const shortName = (raw: string) => {
@@ -1349,10 +1346,15 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     const items = useCartStore.getState().items;
     return { count: items.reduce((n, i) => n + i.quantity, 0), total: items.reduce((sum, i) => sum + i.product.price * i.quantity, 0) };
   };
+  // « Terminer ma commande » : l'article choisi (avec « Commander ») attend encore la confirmation
   const checkoutChip = (): ChatAction => ({ label: T().chip.checkout, kind: 'checkout', highlight: true });
-  const cartActions = (): ChatAction[] => [{ label: T().chip.viewCart, kind: 'cart' }, checkoutChip(), sayBtn(T().chip.moreItems, 'conseil')];
+  // l'article de la commande, en une ligne (nom, taille / couleur, quantité, total)
+  const currentOrderLine = () => {
+    const i = useCartStore.getState().items[0];
+    return i ? T().cart.current(shortName(i.product.name), variantText(i.size, i.color), i.quantity, fcfa(i.product.price * i.quantity)) : '';
+  };
 
-  // Compare le panier à la base : prix mis à jour, produit épuisé ou retiré, quantité au-dessus du stock.
+  // Compare l'article de la commande à la base : prix mis à jour, produit épuisé ou retiré, quantité au-dessus du stock.
   async function verifyCart(): Promise<{ notes: string[]; blocked: boolean; checked: boolean }> {
     const items = useCartStore.getState().items;
     const ids = [...new Set(items.map((i) => i.product.id))];
@@ -1398,30 +1400,23 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     return { notes, blocked, checked: true };
   }
 
-  async function showCart() {
-    if (useCartStore.getState().items.length === 0) {
-      await say(T().cart.empty, { fast: true, actions: [sayBtn(T().chip.advice, 'conseil'), sayBtn(T().chip.promotions, 'promotions'), menuBtn()] });
-      return;
-    }
-    const check = await verifyCart();
-    const lines = [T().cart.show, ...check.notes];
-    if (check.checked) lines.push(T().cart.verified);
-    await say(lines.join('\n'), { fast: true, cart: true, actions: [checkoutChip(), sayBtn(T().chip.moreItems, 'conseil'), menuBtn()] });
-  }
-
   async function checkoutCheck(): Promise<'ok' | 'login' | 'empty' | 'issues'> {
     if (useCartStore.getState().items.length === 0) {
       await say(T().cart.empty, { fast: true, actions: [sayBtn(T().chip.advice, 'conseil'), sayBtn(T().chip.promotions, 'promotions'), menuBtn()] });
       return 'empty';
     }
-    // comme sur la page du panier : il faut un compte pour passer commande (le panier est gardé)
+    // comme sur la page de commande : il faut un compte pour commander (l'article reste choisi)
     if (!useAuthStore.getState().profile) {
       await say(T().cart.needLogin, { fast: true, actions: [{ label: T().chip.createAccount, kind: 'register', highlight: true }, { label: T().chip.login, kind: 'login' }, menuBtn()] });
       return 'login';
     }
     const check = await verifyCart();
     if (check.notes.length > 0 || check.blocked) {
-      await say([T().cart.show, ...check.notes].join('\n'), { fast: true, cart: true, actions: [checkoutChip(), menuBtn()] });
+      // épuisé : on propose d'autres articles ; prix changé : le client reprend la commande au nouveau prix
+      await say([currentOrderLine(), ...check.notes].join('\n'), {
+        fast: true,
+        actions: check.blocked ? [sayBtn(T().chip.advice, 'conseil'), menuBtn()] : [checkoutChip(), menuBtn()],
+      });
       return 'issues';
     }
     return 'ok';
@@ -1430,7 +1425,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
   // -------------------------------------------------------------------------------------------
   // Commande dans la conversation : Zara pose les questions de la page de commande (nom, téléphone, adresse, ville, paiement,
   // emballage cadeau), récapitule, puis enregistre la commande avec le MÊME code que la page de commande (createOrder) et les
-  // mêmes règles. Elle ne dit « enregistrée » qu'après la réponse de la base ; en cas d'échec le panier est gardé.
+  // mêmes règles. Elle ne dit « enregistrée » qu'après la réponse de la base ; en cas d'échec l'article reste choisi.
   // -------------------------------------------------------------------------------------------
 
   const cancelOrderChip = (): ChatAction => ({ label: T().chip.cancelOrder, kind: 'orderCancel' });
@@ -1442,7 +1437,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
   }
 
   async function startCheckoutFlow() {
-    const result = await checkoutCheck(); // panier vide, pas de compte, ou prix / stock à revoir : Zara l'explique et s'arrête
+    const result = await checkoutCheck(); // pas d'article choisi, pas de compte, ou prix / stock à revoir : Zara l'explique et s'arrête
     if (result !== 'ok') return;
     const profile = useAuthStore.getState().profile;
     let city: OrderDraft['city'] = null;
@@ -1579,7 +1574,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
   async function cancelOrder() {
     setOrder(null);
     setStep('menu');
-    await say(T().checkout.cancelled, { fast: true, actions: cartActions() });
+    await say(T().checkout.cancelled, { fast: true, actions: [checkoutChip(), sayBtn(T().chip.advice, 'conseil'), menuBtn()] });
   }
 
   async function placeOrder() {
@@ -1602,7 +1597,8 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     const check = await verifyCart();
     if (check.blocked) {
       setStep('menu');
-      await say([T().cart.show, ...check.notes].join('\n'), { fast: true, cart: true, actions: [checkoutChip(), menuBtn()] });
+      setOrder(null);
+      await say([currentOrderLine(), ...check.notes].join('\n'), { fast: true, actions: [sayBtn(T().chip.advice, 'conseil'), menuBtn()] });
       return;
     }
     if (check.notes.length > 0) {
@@ -1638,7 +1634,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     }
     if (created.error || !created.order) {
       console.error('Erreur création commande (Zara):', created.error);
-      // la commande n'est PAS enregistrée : le panier et les réponses sont gardés, et on peut réessayer (même numéro de commande)
+      // la commande n'est PAS enregistrée : l'article et les réponses sont gardés, et on peut réessayer (même numéro de commande)
       await say(c.failed, { actions: [{ label: T().chip.retry, kind: 'orderConfirm' }, { label: T().chip.orderPage, kind: 'orderPage' }, wa()] });
       return;
     }
@@ -1672,7 +1668,10 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     useCartStore.getState().clear();
     setOrder(null);
     setStep('menu');
-    await say(lines.join('\n'), { actions: [{ label: T().chip.orders, kind: 'orders' }, menuBtn()] });
+    const after: ChatAction[] = [{ label: T().chip.orders, kind: 'orders' }, menuBtn()];
+    await say(lines.join('\n'), { actions: after });
+    // le bon moment pour proposer l'application (une seule fois) : suivre sa commande en un toucher
+    await maybeOfferInstall(after);
   }
 
   // Ce que le client écrit pendant la commande. Vrai : Zara a traité le message ; faux : on laisse le routage normal répondre.
@@ -1790,57 +1789,20 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     if (alts.length > 0) await say(T().cart.unavailableAlt, { products: alts.map(toCard), actions: [menuBtn(), wa()] });
   }
 
+  // « Commander » sous un article : il devient l'article de la commande (une commande = un article), puis Zara prend la commande
+  // tout de suite (nom, téléphone, adresse, ville, paiement, emballage cadeau). Les preuves dites sont VRAIES : commandes réelles
+  // des 7 derniers jours (chiffre solide seulement) et stock vraiment bas.
   async function finishAdd(p: PendingAdd) {
     const { product, size, color } = p;
     const name = shortName(product.name);
-    const cart = useCartStore.getState();
-    const already = cart.items.filter((i) => i.product.id === product.id).reduce((n, i) => n + i.quantity, 0);
-    if (already + 1 > product.stock) {
-      await say(T().cart.noMoreStock(name, product.stock), { fast: true, actions: cartActions() });
-      return;
-    }
-    cart.addItem(product, 1, color, size);
+    useCartStore.getState().setOrderItem(product, 1, color, size);
     hesitating = false;
-    const { count, total } = cartTotals();
-    // après chaque article choisi : Zara rappelle toujours l'emballage cadeau (avec son bouton)
-    let actions = [...cartActions(), sayBtn(T().chip.wrap, 'emballage')];
-    let text = `${T().cart.added(name, variantText(size, color), count, total)}\n${T().cart.wrapNudge}`;
-    // preuves VRAIES : les commandes réelles des 7 derniers jours (chiffre solide seulement) et un stock vraiment bas
+    const lines = [T().cart.picked(name, variantText(size, color), fcfa(product.price))];
     const proven = provenSales(await getProductSales(), product.id);
-    if (proven > 0) text += `\n${T().closing.proof(proven)}`;
-    if (product.stock >= 1 && product.stock <= LOW_STOCK_MAX) text += `\n${T().lowStock(name, product.stock)}`;
-    // grosse commande (beaucoup de pièces ou gros total) : Zara propose l'équipe WhatsApp pour un prix de gros, une seule fois
-    const bulk = already + 1 >= BULK_MIN_QTY || total >= BULK_MIN_TOTAL;
-    if (bulk && !get().messages.some((m) => m.role === 'assistant' && m.text.includes(T().wholesale.nudge))) {
-      text += `\n${T().wholesale.nudge}`;
-      actions = [waChipPrefill(product.name), ...actions];
-    }
-    await say(text, { fast: true, actions });
-    await offerComplement(product, actions);
-    await maybeOfferInstall(actions);
-  }
-
-  // L'article qui complète le choix (une ou deux fois par conversation), avec le total des deux. Aucune remise n'est annoncée.
-  async function offerComplement(product: Product, actions: ChatAction[]) {
-    const intro = T().closing.packIntro;
-    if (get().messages.filter((m) => m.role === 'assistant' && m.text.startsWith(intro)).length >= 2) return;
-    try {
-      const catalog = await getCatalog();
-      const base = catalog.find((c) => c.id === product.id);
-      if (!base) return;
-      const inCartIds = useCartStore.getState().items.map((i) => i.product.id);
-      const complement = pickComplement(catalog, base, inCartIds, await getProductSales(), get().lang);
-      if (!complement) return;
-      // le panier a déjà un article de cette catégorie : le client a déjà complété son choix
-      if (catalog.some((c) => inCartIds.includes(c.id) && c.categorySlug === complement.categorySlug)) return;
-      await say(`${intro}\n${T().closing.pack(shortName(base.name), shortName(complement.name), product.price + complement.price)}`, {
-        fast: true,
-        products: [toCard(complement)],
-        actions,
-      });
-    } catch {
-      // pas de pack : on ne dit rien
-    }
+    if (proven > 0) lines.push(T().closing.proof(proven));
+    if (product.stock >= 1 && product.stock <= LOW_STOCK_MAX) lines.push(T().lowStock(name, product.stock));
+    await say(lines.join('\n'), { fast: true });
+    await startCheckoutFlow();
   }
 
   // Taille et couleur : demandées seulement s'il y a un vrai choix (une seule option = choisie d'office).
@@ -2026,7 +1988,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
   }
   const saidBefore = (text: string) => get().messages.some((m) => m.role === 'assistant' && m.text.includes(text));
 
-  // `extra` : les boutons déjà affichés (ex. ceux du panier) restent disponibles sous la proposition.
+  // `extra` : les boutons déjà affichés restent disponibles sous la proposition.
   async function maybeOfferInstall(extra: ChatAction[] = []) {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
     if (alreadyInstalled() || installPaused()) return;
@@ -2302,7 +2264,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
   const callbackChip = (source: CallbackSource): ChatAction => ({ label: T().chip.callback, kind: 'callback', payload: source });
   const spacedPhone = (digits: string) => digits.replace(/(\d{2})(?=\d)/g, '$1 ');
 
-  // Les articles dont on parle : le panier, sinon les derniers produits montrés.
+  // Les articles dont on parle : celui de la commande commencée, sinon les derniers produits montrés.
   function topicProducts(): { id: string | null; slug: string | null; name: string }[] {
     const cart = useCartStore.getState().items;
     if (cart.length > 0) return cart.map((i) => ({ id: i.product.id, slug: i.product.slug, name: i.product.name }));
@@ -2319,7 +2281,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     const topics = topicProducts();
     if (cart.length > 0) {
       lines.push(c.cartKept);
-      // stock réel du panier : seulement s'il est vraiment bas
+      // stock réel de l'article choisi : seulement s'il est vraiment bas
       try {
         const rows = await fetchCartStatus([...new Set(cart.map((i) => i.product.id))]);
         const low = rows.filter((r) => r.is_active && r.stock >= 1 && r.stock <= LOW_STOCK_MAX).sort((a, b) => a.stock - b.stock)[0];
@@ -2342,18 +2304,18 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       }
     }
     if (cart.length > 0) lines.push(c.validity);
-    // visiteur sans compte et sans panier : la porte reste ouverte (favoris avec un compte gratuit)
+    // visiteur sans compte et sans commande commencée : la porte reste ouverte (favoris avec un compte gratuit)
     else if (isGuest()) lines.push(c.favorites);
-    // le rappel WhatsApp n'est proposé qu'au client qui hésite à commander : un panier, ou un article dont on vient de parler
+    // le rappel WhatsApp n'est proposé qu'au client qui hésite à commander : une commande commencée, ou un article dont on vient de parler
     const undecided = cart.length > 0 || topics.length > 0;
-    // plusieurs articles montrés et rien dans le panier : Zara propose de les comparer
+    // plusieurs articles montrés et aucune commande commencée : Zara propose de les comparer
     const canCompare = cart.length === 0 && topics.length >= 2;
     if (canCompare) lines.push(T().persona.compareOffer);
     if (undecided) lines.push(c.callbackOffer);
     const compareChip = sayBtn(T().chip.compare, COMPARE_SAY[get().lang]);
     const actions: ChatAction[] =
       cart.length > 0
-        ? [checkoutChip(), callbackChip('cart'), { label: T().chip.viewCart, kind: 'cart' }]
+        ? [checkoutChip(), callbackChip('cart')]
         : undecided
         ? [...(canCompare ? [compareChip] : []), callbackChip('later'), sayBtn(T().chip.promotions, 'promotions'), menuBtn()]
         : [sayBtn(T().chip.promotions, 'promotions'), menuBtn()];
@@ -2667,7 +2629,8 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         await trackingReply();
         return;
       case 'cart':
-        await showCart();
+        // « mon panier » : il n'y a plus de panier ; la commande commencée reprend (sinon Zara aide à choisir un article)
+        await startCheckoutFlow();
         return;
       case 'add':
         await addByText(text);
@@ -2701,9 +2664,9 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         return;
       }
       case 'wrap':
-        // le client a déjà des articles : on le ramène vers sa commande, l'emballage se choisit à ce moment-là
+        // le client a déjà choisi un article : on le ramène vers sa commande, l'emballage se choisit à ce moment-là
         if (useCartStore.getState().items.length > 0) {
-          await say(giftWrapReply(get().lang), { actions: [checkoutChip(), { label: t.chip.viewCart, kind: 'cart' }, menuBtn()] });
+          await say(giftWrapReply(get().lang), { actions: [checkoutChip(), menuBtn()] });
           return;
         }
         await say(giftWrapReply(get().lang), {
@@ -2743,7 +2706,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         await laterClosing();
         return;
       case 'order': {
-        // « Je veux commander » avec un panier plein : Zara finalise la commande ici ; « comment commander ? » : l'explication
+        // « Je veux commander » avec un article choisi : Zara finalise la commande ici ; « comment commander ? » : l'explication
         if (!/comment|كيف/.test(normalize(text)) && useCartStore.getState().items.length > 0) {
           await startCheckoutFlow();
           return;
@@ -3144,10 +3107,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         await afterTurn();
       });
     },
-    addToCart: (slug) => enqueueAdd(slug),
-    openCart: () => {
-      void run(showCart);
-    },
+    orderProduct: (slug) => enqueueAdd(slug),
     startCheckout: async () => {
       if (get().loading) return;
       userSays(T().chip.checkout);

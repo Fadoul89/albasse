@@ -12,7 +12,6 @@ import { CategoryTile } from '../components/CategoryTile';
 import { ProductCard } from '../components/ProductCard';
 import { CountdownTimer } from '../components/CountdownTimer';
 import { StoreFooter } from '../components/StoreFooter';
-import { CartReminderBanner } from '../components/CartReminderBanner';
 import { CustomerNotificationBell } from '../components/CustomerNotificationBell';
 import { LanguageSwitcher } from '../components/LanguageSwitcher';
 import { SideAdBanner } from '../components/SideAdBanner';
@@ -173,8 +172,6 @@ export function HomeScreen() {
           )}
         </View>
       )}
-
-      <CartReminderBanner />
 
       {flashSale.length > 0 && flashEndsAt && (
         <View style={styles.flashSection}>

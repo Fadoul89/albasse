@@ -49,7 +49,7 @@ export function ProductScreen({ route }: Props) {
   const { product, redirectSlug, isLoading } = useProductBySlug(slug);
   const { products: allProducts } = useProducts();
   const { reviews } = useReviews(product?.id ?? '');
-  const addItem = useCartStore((s) => s.addItem);
+  const setOrderItem = useCartStore((s) => s.setOrderItem);
   const showToast = useToastStore((s) => s.show);
   const profile = useAuthStore((s) => s.profile);
   const { settings: storeSettings, isLoading: storeSettingsLoading } = useStoreSettings();
@@ -144,14 +144,20 @@ export function ProductScreen({ route }: Props) {
     })
     .slice(0, 8);
 
-  const handleAddToCart = () => {
-    addItem(product, quantity, color, size);
-    trackAddToCart(product.id);
-    showToast(`${product.name} (x${quantity})`, { title: 'Ajouté au panier ✓', type: 'success' });
-  };
-
-  const handleBuyNow = () => {
-    addItem(product, quantity, color, size);
+  // Plus de panier : « Commander » ouvre directement la page de commande avec cet article (une commande = un article).
+  const handleOrder = () => {
+    // une seule taille / couleur : choisie d'office ; plusieurs : le client choisit avant de commander (comme avec Zara)
+    const pickedSize = size ?? (product.sizes.length === 1 ? product.sizes[0] : null);
+    const pickedColor = color ?? (product.colors.length === 1 ? product.colors[0] : null);
+    if (product.sizes.length > 1 && !pickedSize) {
+      showToast('Choisissez votre taille avant de commander.', { title: 'Taille', type: 'info' });
+      return;
+    }
+    if (product.colors.length > 1 && !pickedColor) {
+      showToast('Choisissez votre couleur avant de commander.', { title: 'Couleur', type: 'info' });
+      return;
+    }
+    setOrderItem(product, quantity, pickedColor, pickedSize);
     trackAddToCart(product.id);
     if (!profile) {
       showToast('Créez un compte ou connectez-vous pour passer une commande.', {
@@ -393,8 +399,7 @@ export function ProductScreen({ route }: Props) {
       </ScrollView>
 
       <View style={styles.footer}>
-        <GoldButton label="Ajouter au panier" variant="outline" onPress={handleAddToCart} style={{ flex: 1 }} />
-        <GoldButton label="Acheter" variant="gold" onPress={handleBuyNow} style={{ flex: 1 }} />
+        <GoldButton label="Commander" variant="gold" onPress={handleOrder} style={{ flex: 1 }} />
       </View>
     </View>
   );

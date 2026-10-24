@@ -96,9 +96,9 @@ export function buildBrowsingOverview(raw: unknown): BrowsingOverview {
 }
 
 export const CART_LABELS: Record<CartStatus, string> = {
-  none: 'Pas au panier',
-  in_cart: 'Au panier',
-  removed: 'Retiré du panier',
+  none: 'Pas de commande',
+  in_cart: 'Commande commencée',
+  removed: 'Commande arrêtée',
   purchased: 'Acheté',
 };
 

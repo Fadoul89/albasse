@@ -361,14 +361,14 @@ export function estimateInterest(r: ProductRecord): InterestEstimate {
   const photos = r.imageClicks >= 2;
   const anyVariantClick = r.sizeClicks + r.colorClicks >= 1;
 
-  if (inCart) signals.push('panier');
+  if (inCart) signals.push('commande commencée');
   if (repeat) signals.push('plusieurs consultations');
   if (revisit) signals.push('retour après d’autres produits');
   if (variants) signals.push('plusieurs variantes');
   if (time) signals.push('temps passé');
   if (photos) signals.push('photos examinées');
 
-  // Élevé : l'article est au panier, ou deux signaux forts, ou un signal fort confirmé par du temps ou des photos.
+  // Élevé : la commande de l'article est commencée, ou deux signaux forts, ou un signal fort confirmé par du temps ou des photos.
   if (inCart || strong >= 2 || (strong >= 1 && (time || photos))) return { level: 'eleve', signals };
   // Moyen : un signal fort, un retour sur la fiche, ou du temps passé À EXAMINER (photos, tailles, couleurs) — le temps seul ne compte pas.
   if (strong >= 1 || r.views >= 2 || (time && (photos || anyVariantClick)) || (photos && anyVariantClick)) return { level: 'moyen', signals };

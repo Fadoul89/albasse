@@ -51,7 +51,7 @@ export function OrdersScreen() {
   if (!profile) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="Mes commandes" showBack />
+        <ScreenHeader title="Mes commandes" />
         <Text style={styles.empty}>Connectez-vous pour voir vos commandes.</Text>
       </View>
     );
@@ -112,7 +112,7 @@ export function OrdersScreen() {
 
   return (
     <View style={styles.screen}>
-      <ScreenHeader title="Mes commandes" showBack />
+      <ScreenHeader title="Mes commandes" />
       <FlatList
         data={orders}
         keyExtractor={(item) => item.id}

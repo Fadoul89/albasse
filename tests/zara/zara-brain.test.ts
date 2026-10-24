@@ -154,7 +154,7 @@ async function main() {
   ok('recapitulatif (ar) : articles, livraison, emballage, total, coordonnees, paiement', recapAr.includes('• ساعة × 2: 25 000 FCFA') && recapAr.includes('🚚 التوصيل إلى موندو: 2 500 FCFA') && recapAr.includes('🎁 تغليف الهدية') && recapAr.includes('💰 المجموع: 37 500 FCFA') && recapAr.includes('👤 علي · 📞 66123456') && recapAr.includes('📍 حي فرشا، موندو') && recapAr.includes('الدفع مسبقاً عبر Airtel Money'), recapAr);
   ok('paiement a la livraison seulement a N\'Djamena : la question change selon la ville (fr et ar)', /À la livraison \(N'Djamena\)/.test(fr2.askPay(true)) && !/À la livraison/.test(fr2.askPay(false)) && /عند الاستلام \(إنجامينا\)/.test(ar2.askPay(true)) && !/عند الاستلام/.test(ar2.askPay(false)) && /seulement à N'Djamena/.test(fr2.codOnlyHome) && /فقط في إنجامينا/.test(ar2.codOnlyHome));
   ok('confirmation : « enregistree » (jamais « payee » ni « confirmee »), numero, total ; instructions de paiement', fr2.placed('Ahmed', 'ABCD1234') === '🎉 Merci Ahmed ! Votre commande #ABCD1234 a bien été enregistrée.' && /تم تسجيل طلبك رقم #ABCD1234/.test(ar2.placed('علي', 'ABCD1234')) && fr2.payNumber(5000, '60 60 51 51', 'Airtel Money') === '📱 Envoyez 5 000 FCFA au 60 60 51 51 (Airtel Money).' && fr2.payUrl('https://pay.example.com') === '📱 Payez ici : https://pay.example.com' && fr2.payCash.includes('espèces') && ![fr2.placed('A', 'B'), fr2.failed, fr2.payCash, fr2.payNumber(1, '2', 'x')].some((t) => /payée|paiement reçu|confirmée/i.test(t)), [fr2.placed('Ahmed', 'ABCD1234'), fr2.payNumber(5000, '60 60 51 51', 'Airtel Money')]);
-  ok('echec : Zara dit que la commande n\'est PAS enregistree et que le panier est garde (fr et ar)', /pas pu enregistrer votre commande/.test(fr2.failed) && /panier est gardé/.test(fr2.failed) && /لم أستطع تسجيل طلبك/.test(ar2.failed) && /سلتك محفوظة/.test(ar2.failed));
+  ok('echec : Zara dit que la commande n\'est PAS enregistree (fr et ar), sans parler de panier', /pas pu enregistrer votre commande/.test(fr2.failed) && !/panier/.test(fr2.failed) && /لم أستطع تسجيل طلبك/.test(ar2.failed) && !/سلتك/.test(ar2.failed));
 
   console.log('\n== programme de fidelite : grade, points, comment gagner (fr et ar)');
   const loyIntents: [string, b.Intent][] = [
@@ -444,11 +444,11 @@ async function main() {
   const maxPct = m.maxDiscountPct(catalog);
   ok('plus forte remise du catalogue : un entier entre 5 et 90', maxPct !== null && Number.isInteger(maxPct) && maxPct >= 5 && maxPct <= 90, maxPct);
   const pitch = m.productPitch(fake({ stock: 3 }));
-  ok('fiche produit regardee (fr) : prix barre, -50 %, stock, « Acheter »', /12\s?500 FCFA au lieu de 25\s?000 FCFA \(-50 %\)/.test(pitch) && /Plus que 3 en stock/.test(pitch) && /« Acheter »/.test(pitch), pitch);
+  ok('fiche produit regardee (fr) : prix barre, -50 %, stock, « Commander »', /12\s?500 FCFA au lieu de 25\s?000 FCFA \(-50 %\)/.test(pitch) && /Plus que 3 en stock/.test(pitch) && /« Commander »/.test(pitch), pitch);
   const pitchAr = m.productPitch(fake({ stock: 3 }), 'ar');
-  ok('fiche produit regardee (ar) : prix barre, -50 %, stock, Acheter', /بدل 25\s?000 FCFA \(-50 %\)/.test(pitchAr) && /بقي 3 فقط/.test(pitchAr) && /Acheter/.test(pitchAr), pitchAr);
+  ok('fiche produit regardee (ar) : prix barre, -50 %, stock, Commander', /بدل 25\s?000 FCFA \(-50 %\)/.test(pitchAr) && /بقي 3 فقط/.test(pitchAr) && /Commander/.test(pitchAr), pitchAr);
   ok('fiche sans remise ni rarete : ni « au lieu de » ni « plus que »', !/au lieu de|Plus que|qu’un/.test(m.productPitch(fake({ compareAt: null, stock: 40 }))));
-  ok('panier : nombre d\'articles et total (fr et ar)', /2 articles pour 25\s?000 FCFA/.test(m.cartReminder(2, 25000)) && /1 article pour/.test(m.cartReminder(1, 5000)) && /25\s?000 FCFA/.test(m.cartReminder(2, 25000, 'ar')) && /سلتك/.test(m.cartReminder(2, 25000, 'ar')));
+  ok('commande commencee pas terminee : l\'article et le total, sans « panier » (fr et ar)', /« Montre » pour 25\s?000 FCFA/.test(m.orderReminder('Montre', 25000)) && /n’est pas terminée/.test(m.orderReminder('Montre', 25000)) && !/panier/.test(m.orderReminder('Montre', 25000)) && /25\s?000 FCFA/.test(m.orderReminder('ساعة', 25000, 'ar')) && /طلبك لم يكتمل/.test(m.orderReminder('ساعة', 25000, 'ar')));
   ok("objection de prix (fr) : promotions (jusqu'a -50 %), budget, livraison gratuite a N'Djamena", /jusqu’à -50 %/.test(m.priceReply(50)) && !/jusqu’à/.test(m.priceReply(null)) && /Djamena, la livraison est gratuite/.test(m.priceReply(50)));
   ok('objection de prix (ar)', /حتى -50 %/.test(m.priceReply(50, 'ar')) && /ميزانيتك/.test(m.priceReply(50, 'ar')) && /مجاني/.test(m.priceReply(50, 'ar')));
   const trust = m.trustReply({ address: 'Marché Central', city: "N'Djamena", phone: '+23560605151' });
@@ -516,22 +516,22 @@ async function main() {
   ok('les phrases d\'exemple du patron sont la (compliment, adresse, numero)', tx.texts('fr').talk.compliment[0] === 'Oh, merci beaucoup ! 🥰 Vous êtes adorable ! Je suis votre assistante virtuelle Zara, toujours là pour vous aider 😊❤️🛍️' && !/sourire/.test(tx.texts('fr').talk.compliment.join(' ')) && !/ابتسامة/.test(tx.texts('ar').talk.compliment.join(' ')) && tx.texts('fr').talk.afterCompliment[0].startsWith('Avec grand plaisir ! 😊❤️ Je suis toujours là pour vous aider.') && tx.texts('fr').talk.personal('address')[0].startsWith('😊 Je suis votre assistante virtuelle, disponible en ligne pour vous aider ! Vous pouvez me retrouver ici sur Albasse Shopping.') && tx.texts('fr').talk.personal('phone')[0].startsWith('😊 Je n’ai pas de numéro personnel. Je travaille en ligne comme assistante virtuelle de marketing digital chez Albasse Shopping. Je suis là pour vous aider directement ici !') && tx.texts('fr').talk.personal('whatsapp')[0].startsWith('Haha 😊 Je n’ai pas de WhatsApp personnel.') && tx.texts('fr').talk.personal('live')[0].startsWith('Haha 😊 Je n’ai pas de domicile comme une personne.'));
 
   console.log('\n== textes arabes : tout en arabe (sauf les noms propres et les boutons du site)');
-  const ALLOWED = /Albasse|Shopping|Airtel|Moov|Money|FCFA|Acheter|Ajouter|panier|Voir|produit|le\b|au|N'Djamena|Mongo|Rolex|dorée|Test|STTL|Sud|Voyage|Abou|Aziza|Liberté|Abéché|Français|Chrome|Safari|Samsung|Internet|albasseshopping\.com/g;
+  const ALLOWED = /Albasse|Shopping|Airtel|Moov|Money|FCFA|Commander|Voir|produit|le\b|au|N'Djamena|Mongo|Rolex|dorée|Test|STTL|Sud|Voyage|Abou|Aziza|Liberté|Abéché|Français|Chrome|Safari|Samsung|Internet|albasseshopping\.com/g;
   const sampleArgs: Record<string, unknown[]> = {
     welcome: ['علي', 3, false], teaser: ['علي'], hello: ['علي'], nice: ['علي'], 'card.only': [3], 'chip.withCategory': ['عطور'], promoIntro: [50], foundFor: ['عطر', 'بأقل من 10 000 FCFA'], fallbackFor: ['عطر', 'بأقل من 10 000 FCFA'],
     nothingFor: ['عطر'], askWho: [true], askType: ['lui', true], giftIntro: ['lui'], pairIntro: ['عطور'], rangeText: [{ min: 0, max: 10000 }], lowStock: ['ساعة', 3], pitch: ['ساعة', '10 000 FCFA', 3],
-    cartReminder: [2, 25000], priceReply: [50], trust: ['السوق المركزي', '+235 60 60 51 51'], whyAdvice: ['ساعة', ['سبب']], 'why.discount': [50, 12500, 25000], 'why.lowStock': [3],
+    orderReminder: ['ساعة', 25000], priceReply: [50], trust: ['السوق المركزي', '+235 60 60 51 51'], whyAdvice: ['ساعة', ['سبب']], 'why.discount': [50, 12500, 25000], 'why.lowStock': [3],
     'why.colors': ['أسود'], 'why.sizes': ['40'], cityNotFound: ['سار'], cityFee: ['موندو', '2 500 FCFA', null], cityNoFee: ['موندو', null], serviceNote: [true], 'contact.hours': ['8:00'],
     budgetBest: ['بأقل من 10 000 FCFA'], budgetFallback: ['بأقل من 10 000 FCFA'],
     'loyalty.mine': [{ points: 30, tier: 'argent', next: { key: 'or', missing: 20 } }], 'loyalty.orderPoints': [5],
     'checkout.askPay': [true], 'checkout.methodLabel': ['airtel_money'], 'checkout.recap': [{ lines: [{ name: 'ساعة', variant: '', qty: 2, subtotal: 25000 }], city: 'موندو', fee: 2500, gift: true, total: 37500, name: 'علي', phone: '66123456', address: 'حي فرشا', method: 'airtel_money' }],
     'checkout.placed': ['علي', '12345678'], 'checkout.totalToPay': [37500], 'checkout.payInitiated': ['Airtel Money', 'تم'], 'checkout.payUrl': ['https://pay.example.com'], 'checkout.payNumber': [37500, '60 60 51 51', 'Airtel Money'], 'checkout.payTeam': ['66123456', 'Airtel Money'], 'chip.useAddress': ['حي فرشا'],
-    'cart.added': ['ساعة', ' (المقاس 41)', 2, 25000], 'cart.priceChanged': ['ساعة', '10 000 FCFA', '12 000 FCFA'], 'install.iosSteps': [false],
+    'cart.picked': ['ساعة', ' (المقاس 41)', '25 000 FCFA'], 'cart.current': ['ساعة', ' (المقاس 41)', 2, '50 000 FCFA'], 'cart.priceChanged': ['ساعة', '10 000 FCFA', '12 000 FCFA'], 'install.iosSteps': [false],
     'interest.sizesReply': ['حذاء', ['40', '41']], 'interest.colorsReply': ['حذاء', ['أسود'], ['40']], 'wholesale.prefill': ['عطر'],
     'callback.confirm': ['علي', '66 12 34 56', 'ساعة', 'الخميس 22 أكتوبر'], 'callback.done': ['الخميس 22 أكتوبر'],
     'chip.take': ['ساعة'], 'persona.ranges.deal': ['ساعة', '12 500 FCFA'], 'persona.ranges.favorite': ['عطر', '18 000 FCFA'], 'persona.ranges.premium': ['حذاء', '45 000 FCFA'],
     'persona.compare.line': ['ساعة', '12 500 FCFA', ['لونان', 'المقاسات 40, 41']], 'persona.compare.cheaper': ['ساعة', '2 500 FCFA'], 'persona.compare.moreChoice': ['ساعة'],
-    'persona.compare.colors': [3], 'persona.compare.sizes': ['40, 41'], 'persona.loyal.points': [30, 'argent', 20, 'or'], 'closing.proof': [5], 'closing.pack': ['ساعة', 'عطر', 25000],
+    'persona.compare.colors': [3], 'persona.compare.sizes': ['40, 41'], 'persona.loyal.points': [30, 'argent', 20, 'or'], 'closing.proof': [5],
     categoryIntro: ['ساعات', 12], categoryMore: ['ساعات', 7, 12, 12], 'chip.categoryPage': ['ساعات'],
   };
   const leaks: string[] = [];
@@ -566,13 +566,14 @@ async function main() {
   const frSample: Record<string, unknown[]> = {
     welcome: ['Ali', 3, false], teaser: ['Ali'], hello: ['Ali'], nice: ['Ali'], 'card.only': [3], 'chip.withCategory': ['Parfum'], promoIntro: [50], foundFor: ['parfum', 'à moins de 10 000 FCFA'], fallbackFor: ['parfum', 'à moins de 10 000 FCFA'],
     nothingFor: ['parfum'], askWho: [true], askType: ['lui', true], giftIntro: ['lui'], pairIntro: ['Parfum'], rangeText: [{ min: 0, max: 10000 }], lowStock: ['Montre', 3], pitch: ['Montre', '10 000 FCFA', 3],
-    cartReminder: [2, 25000], priceReply: [50], trust: ['Marché Central', '+235 60 60 51 51'], whyAdvice: ['Montre', ['raison']], 'why.discount': [50, 12500, 25000], 'why.lowStock': [3],
+    orderReminder: ['Montre', 25000], priceReply: [50], trust: ['Marché Central', '+235 60 60 51 51'], whyAdvice: ['Montre', ['raison']], 'why.discount': [50, 12500, 25000], 'why.lowStock': [3],
     'why.colors': ['noir'], 'why.sizes': ['40'], cityNotFound: ['Sarh'], cityFee: ['Moundou', '2 500 FCFA', null], cityNoFee: ['Moundou', null], serviceNote: [true], 'contact.hours': ['8h'],
     budgetBest: ['à moins de 10 000 FCFA'], budgetFallback: ['à moins de 10 000 FCFA'],
     'loyalty.mine': [{ points: 30, tier: 'argent', next: { key: 'or', missing: 20 } }], 'loyalty.orderPoints': [5],
     'checkout.askPay': [true], 'checkout.methodLabel': ['airtel_money'], 'checkout.recap': [{ lines: [{ name: 'Montre', variant: '', qty: 2, subtotal: 25000 }], city: 'Moundou', fee: 2500, gift: true, total: 37500, name: 'Ali', phone: '66123456', address: 'Farcha', method: 'airtel_money' }],
     'checkout.placed': ['Ali', 'ABCD1234'], 'checkout.totalToPay': [37500], 'checkout.payInitiated': ['Airtel Money', 'ok'], 'checkout.payUrl': ['https://pay.example.com'], 'checkout.payNumber': [37500, '60 60 51 51', 'Airtel Money'], 'checkout.payTeam': ['66123456', 'Airtel Money'], 'chip.useAddress': ['Farcha'],
     'interest.sizesReply': ['Sandale', ['40', '41']], 'interest.colorsReply': ['Sandale', ['Noir'], ['40']], 'wholesale.prefill': ['Parfum'],
+    'cart.picked': ['Montre', ' (Taille 41)', '25 000 FCFA'], 'cart.current': ['Montre', ' (Taille 41)', 2, '50 000 FCFA'],
     categoryIntro: ['Montre', 12], categoryMore: ['Montre', 7, 12, 12], 'chip.categoryPage': ['Montre'],
   };
   for (const k of Object.keys(sampleArgs)) delete sampleArgs[k];
@@ -671,7 +672,7 @@ async function main() {
     ok('INTERET ELEVE : un signal fort confirme par du temps ou des photos (3 vues + 35 s ; retour + 2 photos)', lvl({ views: 3, activeSeconds: 35 }) === 'eleve' && lvl({ returnsAfterOthers: 1, imageClicks: 2 }) === 'eleve');
     ok('INTERET ELEVE : plusieurs variantes + plusieurs consultations (2 couleurs, 2 tailles, 3 vues)', lvl({ views: 3, colors: ['Noir', 'Marron'], colorClicks: 2 }) === 'eleve');
     ok('2 visites avec 2 vues chacune = « plusieurs consultations » (signal fort)', lvl({ views: 2, sessions: 2 }) === 'moyen' && bi.strongSignals(R({ views: 2, sessions: 2 })).repeat === true);
-    ok('les raisons sont donnees (tableau de suivi) : panier, plusieurs consultations, retour, variantes, temps, photos', bi.estimateInterest(R({ cartStatus: 'in_cart', views: 3, returnsAfterOthers: 1, sizes: ['a', 'b'], activeSeconds: 60, imageClicks: 3 })).signals.join('|') === 'panier|plusieurs consultations|retour après d’autres produits|plusieurs variantes|temps passé|photos examinées');
+    ok('les raisons sont donnees (tableau de suivi) : commande commencee, plusieurs consultations, retour, variantes, temps, photos', bi.estimateInterest(R({ cartStatus: 'in_cart', views: 3, returnsAfterOthers: 1, sizes: ['a', 'b'], activeSeconds: 60, imageClicks: 3 })).signals.join('|') === 'commande commencée|plusieurs consultations|retour après d’autres produits|plusieurs variantes|temps passé|photos examinées');
 
     // --- interet par categorie
     let cat = fresh();
@@ -1006,8 +1007,8 @@ async function main() {
     // --- les textes du suivi : verite, pas d'alarme
     const tf = tx.texts('fr'), ta = tx.texts('ar');
     ok('« ne me suis plus » : confirme l\'arret ET l\'effacement', /ne retiens plus/.test(tf.tracking.stopped) && /effacé/.test(tf.tracking.stopped));
-    ok('reponses sur les tailles et les couleurs : seulement ce que la fiche propose (jamais « stock par taille »)', tf.interest.sizesReply('Sandale', ['40', '41']) === 'Voici les tailles proposées pour « Sandale » : 40, 41 😊 Touchez le bouton + de la fiche pour l’ajouter à votre panier.' && !/stock/i.test(tf.interest.sizesReply('Sandale', ['40'])) && tf.interest.colorsReply('Sandale', ['Noir'], []) === 'Voici ce que propose « Sandale » 😊\n🎨 Couleurs : Noir');
-    ok('rappel de l\'emballage cadeau apres chaque article : meme montant que la boutique (2 000 FCFA) en francais et en arabe, propose au moment de commander', tf.cart.wrapNudge.replace(/\s/g, '').includes('2000FCFA') && ta.cart.wrapNudge.replace(/\s/g, '').includes('2000FCFA') && l.hasArabic(ta.cart.wrapNudge) && !l.hasArabic(tf.cart.wrapNudge) && /au moment de commander/.test(tf.cart.wrapNudge) && tf.cart.wrapNudge.includes('🎁') && ta.cart.wrapNudge.includes('🎁'));
+    ok('reponses sur les tailles et les couleurs : seulement ce que la fiche propose (jamais « stock par taille »)', tf.interest.sizesReply('Sandale', ['40', '41']) === 'Voici les tailles proposées pour « Sandale » : 40, 41 😊 Touchez « Commander » sous l’article pour le commander.' && !/stock/i.test(tf.interest.sizesReply('Sandale', ['40'])) && tf.interest.colorsReply('Sandale', ['Noir'], []) === 'Voici ce que propose « Sandale » 😊\n🎨 Couleurs : Noir');
+    ok('emballage cadeau : propose a chaque commande, meme montant que la boutique (2 000 FCFA) en francais et en arabe', tf.checkout.askGift.replace(/\s/g, '').includes('2000FCFA') && ta.checkout.askGift.replace(/\s/g, '').includes('2000FCFA') && l.hasArabic(ta.checkout.askGift) && !l.hasArabic(tf.checkout.askGift) && tf.checkout.askGift.includes('🎁') && ta.checkout.askGift.includes('🎁'));
     ok('famille introuvable : Zara dit qu\'elle prefere ne rien inventer', /ne rien inventer/.test(tf.interest.familyNone('fraîche')) && /ألا أخترع/.test(ta.interest.familyNone('منعشة')));
 
     // --- sur le VRAI catalogue
@@ -1050,7 +1051,7 @@ async function main() {
     const NOW = Date.UTC(2026, 9, 18, 12, 0, 0);
     const ago = (ms: number) => bo.formatAgo(new Date(NOW - ms).toISOString(), NOW);
     ok('« il y a ... » : a l\'instant, minutes, heures, jours, date au-dela de 30 jours, vide si inconnu', ago(20000) === 'à l’instant' && ago(5 * 60000) === 'il y a 5 min' && ago(3 * 3600000) === 'il y a 3 h' && ago(2 * 86400000) === 'il y a 2 j' && /2026|2025/.test(ago(60 * 86400000)) && bo.formatAgo(null, NOW) === '—' && bo.formatAgo('pas une date', NOW) === '—', [ago(20000), ago(5 * 60000), ago(3 * 3600000), ago(2 * 86400000), ago(60 * 86400000)]);
-    ok('libelles lisibles : panier, commande, suggestions, niveaux (sans jargon)', bo.CART_LABELS.in_cart === 'Au panier' && bo.CART_LABELS.purchased === 'Acheté' && bo.ORDER_STATUS_LABELS.delivered === 'Livrée' && bo.SUGGESTION_LABELS.perfume_browse === 'Familles de parfums' && bi.INTEREST_LABELS.eleve === 'Élevé' && bo.INTEREST_FILTERS.join() === 'all,eleve,moyen,leger');
+    ok('libelles lisibles : commande commencee, commande, suggestions, niveaux (sans jargon)', bo.CART_LABELS.in_cart === 'Commande commencée' && bo.CART_LABELS.purchased === 'Acheté' && bo.ORDER_STATUS_LABELS.delivered === 'Livrée' && bo.SUGGESTION_LABELS.perfume_browse === 'Familles de parfums' && bi.INTEREST_LABELS.eleve === 'Élevé' && bo.INTEREST_FILTERS.join() === 'all,eleve,moyen,leger');
   }
 
   // ---- Moments forts et achats en gros ----
@@ -1083,7 +1084,7 @@ async function main() {
     ok('aucune remise ni pourcentage annonces dans les messages des moments forts (seulement des idees, et « vraies promotions »)', keys.every((k) => !/%|\d+ ?FCFA de remise|-\s?\d+/.test(tf2.occasion[k].replace(/2\s000 FCFA/g, '')) && !/remise|solde|gratuit|offert/i.test(tf2.occasion[k])));
     ok('Black Friday : seulement les VRAIES promotions de la boutique', /vraies promotions/.test(tf2.occasion.blackFriday) && /العروض الحقيقية/.test(ta2.occasion.blackFriday));
     ok('l\'emballage cadeau cite dans les messages a le meme montant que la boutique (2 000 FCFA)', ['wedding', 'mothersDay', 'valentine'].every((k) => tf2.occasion[k as oc.OccasionKey].replace(/\s/g, '').includes('2000FCFA') && ta2.occasion[k as oc.OccasionKey].replace(/\s/g, '').includes('2000FCFA')));
-    ok('gros : Zara ne donne AUCUN prix de gros (pas de chiffre, pas de FCFA) et envoie vers l\'equipe sur WhatsApp', !/\d/.test(tf2.wholesale.ask + tf2.wholesale.nudge) && /WhatsApp/.test(tf2.wholesale.ask) && /واتساب/.test(ta2.wholesale.ask) && /équipe/.test(tf2.wholesale.ask));
+    ok('gros : Zara ne donne AUCUN prix de gros (pas de chiffre, pas de FCFA) et envoie vers l\'equipe sur WhatsApp', !/\d/.test(tf2.wholesale.ask) && /WhatsApp/.test(tf2.wholesale.ask) && /واتساب/.test(ta2.wholesale.ask) && /équipe/.test(tf2.wholesale.ask));
     ok('message WhatsApp deja ecrit pour l\'equipe : article, quantite (ou cartons), ville', tf2.wholesale.prefill('Parfum Oud').includes('« Parfum Oud »') && /Quantité/.test(tf2.wholesale.prefill(null)) && /Ville/.test(tf2.wholesale.prefill(null)) && !tf2.wholesale.prefill(null).includes('«') && l.hasArabic(ta2.wholesale.prefill('عطر')));
   }
 
@@ -1107,20 +1108,6 @@ async function main() {
     const fr = tx.texts('fr'), ar = tx.texts('ar');
     ok('phrase de preuve : le vrai nombre, « 7 derniers jours », ni pourcentage ni promesse', /\b12\b/.test(fr.closing.proof(12)) && /7 derniers jours/.test(fr.closing.proof(12)) && !/%|garanti|meilleur|numero 1|n°\s?1/i.test(fr.closing.proof(12)) && /12/.test(ar.closing.proof(12)) && l.hasArabic(ar.closing.proof(12)));
     ok('stock bas : seulement entre 1 et ' + sa.LOW_STOCK_MAX + ' (jamais de fausse rarete)', sa.LOW_STOCK_MAX === 5);
-
-    // packs : article qui complete, jamais celui deja au panier, jamais sans stock ni photo ; aucune remise
-    const mk = (id: string, slug: string, price: number, stock = 5, image: string | null = 'x.jpg'): P => ({ id, name: `Article ${id}`, slug: `a-${id}`, price, compareAt: null, stock, category: slug, categorySlug: slug, colors: [], sizes: [], image, createdAt: 1, nameTokens: [], catTokens: [], descTokens: [] } as unknown as P);
-    const cat = [mk('s1', 'chaussures', 30000), mk('p1', 'parfum', 12000), mk('p2', 'parfum', 18000), mk('m1', 'montre', 50000), mk('x1', 'parfum', 9000, 0), mk('x2', 'parfum', 8000, 4, null)];
-    const base = { id: 's1', categorySlug: 'chaussures', price: 30000 };
-    const c1 = sa.pickComplement(cat, base, ['s1'], null);
-    ok('pack : apres des chaussures, un article d\'une categorie qui va avec (montre : sacs-et-bagages absent), en stock et avec photo', c1?.id === 'm1', c1?.id);
-    const c2 = sa.pickComplement(cat.filter((p) => p.id !== 'm1'), { id: 's1', categorySlug: 'chaussures', price: 30000 }, ['s1'], null);
-    ok('pack : jamais d\'article epuise ou sans photo (x1 et x2 sont ecartes)', c2 === null || (c2.stock > 0 && !!c2.image), c2?.id);
-    const c3 = sa.pickComplement(cat, { id: 'm1', categorySlug: 'montre', price: 50000 }, ['m1'], new Map([['p2', 7], ['p1', 3]]));
-    ok('pack : parmi les complements, le plus commande (chiffres vrais) passe en premier', c3?.id === 'p2', c3?.id);
-    ok('pack : l\'article deja dans le panier n\'est jamais re-propose', sa.pickComplement(cat, { id: 'm1', categorySlug: 'montre', price: 50000 }, ['m1', 'p1', 'p2'], null) === null || sa.pickComplement(cat, { id: 'm1', categorySlug: 'montre', price: 50000 }, ['m1', 'p1', 'p2'], null)?.categorySlug !== 'parfum');
-    ok('pack : aucun complement pour une categorie inconnue', sa.pickComplement(cat, { id: 'z', categorySlug: 'inconnue', price: 1 }, [], null) === null);
-    ok('texte du pack : les deux articles et le total, sans remise ni pourcentage', /Article A/.test(fr.closing.pack('Article A', 'Article B', 42000)) && /42\s000 FCFA/.test(fr.closing.pack('Article A', 'Article B', 42000)) && !/remise|%|gratuit|offert|économ/i.test(fr.closing.pack('A', 'B', 42000) + fr.closing.packIntro) && l.hasArabic(ar.closing.pack('ساعة', 'عطر', 42000)));
 
     // rappel WhatsApp
     ok('note pour l\'equipe : articles sans doublon, court, avec « (+N) » si coupe', sa.callbackNote([]) === '' && sa.callbackNote(['Montre A', 'Montre A', ' Parfum B ']) === 'Montre A, Parfum B' && sa.callbackNote(['A'.repeat(100), 'B'.repeat(100), 'C'.repeat(100)], 150) === `${'A'.repeat(100)} (+2)` && sa.callbackNote(['A', 'B', 'C']).length < 281);

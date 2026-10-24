@@ -20,9 +20,9 @@ const TEASER_SEEN_KEY = 'albasse_assistant_teaser_seen';
 const MEMBER_TEASER_SEEN_KEY = 'albasse_assistant_teaser_member_seen';
 const SIZE = 62;
 const PRODUCT_BAR_LIFT = 62;
-// Sur les pages avec la barre du bas (Accueil, Recherche, Panier, Compte), le bouton est au milieu de la barre, dans l'espace ouvert
-// entre « Recherche » et « Panier », sur la meme ligne que les onglets (il ne depasse pas de la barre). Sur les autres pages, il reste dans le coin en bas a droite.
-const TAB_ROUTES = new Set(['Home', 'Search', 'Cart', 'Account']);
+// Sur les pages avec la barre du bas (Accueil, Recherche, Commandes, Compte), le bouton est au milieu de la barre, dans l'espace ouvert
+// entre « Recherche » et « Commandes », sur la meme ligne que les onglets (il ne depasse pas de la barre). Sur les autres pages, il reste dans le coin en bas a droite.
+const TAB_ROUTES = new Set(['Home', 'Search', 'Orders', 'Account']);
 const NAV_SLOT_BOTTOM = 8; // 62 px de haut : de 8 a 70 px du bas, dans la barre de 78 px
 const CORNER_EDGE = 14;
 const TEASER_GAP = 12;
@@ -428,7 +428,7 @@ export function Assistant() {
   if (routeName?.startsWith('Admin')) return null;
 
   const showTeaser = teaserVisible && !open && !teaserDismissed && !dragging;
-  // Sur la fiche produit, la barre « Commander / Ajouter au panier » est haute : le bouton passe au-dessus.
+  // Sur la fiche produit, la barre « Commander » est haute : le bouton passe au-dessus.
   const lift = routeName === 'Product' ? PRODUCT_BAR_LIFT : 0;
   // Place du bouton : sa place d'origine (dans l'espace du milieu de la barre du bas, ou dans le coin sans barre), ou celle choisie par le visiteur,
   // toujours dans l'ecran. Sur les pages avec la barre, il ne reste pas pose sur les onglets : lache dessus, il revient dans l'espace du milieu.

@@ -21,7 +21,7 @@ export interface Range {
   max: number; // Infinity : pas de plafond
 }
 
-// Ce que le récapitulatif de commande montre (tout vient du panier vérifié et des réponses du client)
+// Ce que le récapitulatif de commande montre (tout vient de l'article vérifié et des réponses du client)
 export interface RecapData {
   lines: { name: string; variant: string; qty: number; subtotal: number }[];
   city: string;
@@ -72,7 +72,7 @@ export interface Texts {
   chooseLang: string;
   fabLabel: string;
   openLabel: string;
-  card: { see: string; soldOut: string; last: string; only(n: number): string; addLabel(name: string): string };
+  card: { see: string; soldOut: string; last: string; only(n: number): string; addLabel(name: string): string; order: string };
   langSwitched: string;
   chip: {
     skip: string;
@@ -83,7 +83,6 @@ export interface Texts {
     advice: string;
     categories: string;
     delivery: string;
-    cart: string;
     orders: string;
     whatsapp: string;
     menu: string;
@@ -115,9 +114,7 @@ export interface Texts {
     wrap: string;
     policy: string;
     otherLang: string;
-    viewCart: string;
     checkout: string;
-    moreItems: string;
     seeMore: string;
     categoryPage(category: string): string;
     openChrome: string;
@@ -238,7 +235,8 @@ export interface Texts {
   rangeText(r: Range): string;
   lowStock(name: string, n: number): string;
   pitch(name: string, price: string, n: number | null): string;
-  cartReminder(count: number, total: number): string;
+  // commande commencée (article choisi) mais pas confirmée
+  orderReminder(name: string, total: number): string;
   priceReply(maxPct: number | null): string;
   cheaperIntro: string;
   noCheaper: string;
@@ -270,20 +268,18 @@ export interface Texts {
   rules: string;
   contact: { hours(h: string): string; delivery: string; ask: string };
   howToOrder: string;
-  // panier dans la conversation
+  // l'article commandé dans la conversation (plus de panier : une commande = un article)
   cart: {
-    added(name: string, variant: string, count: number, total: number): string;
+    picked(name: string, variant: string, price: string): string;
+    current(name: string, variant: string, qty: number, total: string): string;
     askSize(name: string): string;
     askColor(name: string): string;
     sizeLabel(size: string): string;
     cancelled: string;
     unavailable(name: string): string;
     unavailableAlt: string;
-    noMoreStock(name: string, stock: number): string;
     addError: string;
     empty: string;
-    show: string;
-    verified: string;
     needLogin: string;
     priceChanged(name: string, from: string, to: string): string;
     blocked(name: string, stock: number): string;
@@ -291,26 +287,6 @@ export interface Texts {
     addWhat: string;
     foundToAdd: string;
     tapPlus: string;
-    wrapNudge: string;
-    ui: {
-      view: string;
-      subtotal: string;
-      saved: string;
-      delivery: string;
-      deliveryLater: string;
-      deliveryTo(city: string): string;
-      free: string;
-      toConfirm: string;
-      total: string;
-      totalWithDelivery: string;
-      checkout: string;
-      openFull: string;
-      remove(name: string): string;
-      more(name: string): string;
-      less(name: string): string;
-      items(n: number): string;
-      unitPrice: string;
-    };
   };
   // installation de l'application (raccourci sur l'écran d'accueil)
   install: {
@@ -380,8 +356,6 @@ export interface Texts {
     callbackOffer: string;
     validity: string;
     proof(n: number): string;
-    packIntro: string;
-    pack(first: string, second: string, total: number): string;
   };
   // rappel WhatsApp : prénom, numéro, accord du client ; ensuite la demande part à l'équipe (liste dans l'admin)
   callback: {
@@ -429,7 +403,6 @@ export interface Texts {
   // achat en gros : Zara ne donne aucun prix de gros, elle passe la main à l'équipe sur WhatsApp
   wholesale: {
     ask: string;
-    nudge: string;
     chip: string;
     prefill(product: string | null): string;
   };
@@ -475,7 +448,7 @@ const FR: Texts = {
   chooseLang: 'Choisissez votre langue',
   fabLabel: `Discuter avec ${ASSISTANT_NAME}, l'${ASSISTANT_ROLE}`,
   openLabel: `Ouvrir la discussion avec ${ASSISTANT_NAME}`,
-  card: { see: 'Voir le produit ›', soldOut: 'Épuisé', last: 'Dernier en stock', only: (n) => `Plus que ${n} en stock`, addLabel: (name) => `Ajouter au panier : ${name}` },
+  card: { see: 'Voir le produit ›', soldOut: 'Épuisé', last: 'Dernier en stock', only: (n) => `Plus que ${n} en stock`, addLabel: (name) => `Commander : ${name}`, order: 'Commander' },
   langSwitched: 'Très bien, on continue en français 😊',
   chip: {
     skip: 'Passer',
@@ -486,7 +459,6 @@ const FR: Texts = {
     advice: '🎯 Conseil',
     categories: '🛍️ Catégories',
     delivery: '🚚 Livraison et paiement',
-    cart: '🛒 Mon panier',
     orders: '📦 Mes commandes',
     whatsapp: '💬 WhatsApp',
     menu: '🏠 Menu',
@@ -518,9 +490,7 @@ const FR: Texts = {
     wrap: '🎁 Emballage cadeau',
     policy: '📄 Conditions de retour',
     otherLang: '🌐 العربية',
-    viewCart: '🛒 Voir mon panier',
-    checkout: '✅ Commander',
-    moreItems: '🛍️ Autres articles',
+    checkout: '✅ Terminer ma commande',
     seeMore: '➕ Voir plus',
     openChrome: '🌐 Ouvrir dans Chrome',
     categoryPage: (category) => `📄 Page « ${category} »`,
@@ -696,8 +666,8 @@ const FR: Texts = {
       ].join('\n'),
     pickButton: 'Touchez un des boutons ci-dessous pour continuer 👇',
     editWhat: 'Que voulez-vous modifier ? ✏️',
-    cancelled: 'D’accord, j’ai arrêté la commande. Votre panier est gardé 🛒 Vous pouvez la reprendre quand vous voulez.',
-    resumeLost: 'Je ne retrouve plus les informations de cette commande. Touchez « Commander » pour la reprendre 🙂',
+    cancelled: 'D’accord, j’ai arrêté la commande. L’article reste choisi : touchez « Terminer ma commande » quand vous voulez 🙂',
+    resumeLost: 'Je ne retrouve plus les informations de cette commande. Touchez « Terminer ma commande » pour la reprendre 🙂',
     priceChanged: 'Les prix ou le stock ont changé : voici le nouveau récapitulatif. Vérifiez, puis confirmez à nouveau 👇',
     codOnlyHome: `Le paiement à la livraison est possible seulement à ${HOME_CITY}. Choisissez Airtel Money ou Moov Money 📱`,
     placed: (name, id) => `🎉 Merci ${name} ! Votre commande #${id} a bien été enregistrée.`,
@@ -708,7 +678,7 @@ const FR: Texts = {
     payUrl: (url) => `📱 Payez ici : ${url}`,
     payNumber: (amount, number, label) => `📱 Envoyez ${fcfa(amount)} au ${number} (${label}).`,
     payTeam: (phone, label) => `📞 Notre équipe vous contactera au ${phone} pour finaliser le paiement ${label}.`,
-    failed: '😕 Je n’ai pas pu enregistrer votre commande pour le moment. Votre panier est gardé. Vous pouvez réessayer, finaliser sur la page de commande, ou nous écrire sur WhatsApp.',
+    failed: '😕 Je n’ai pas pu enregistrer votre commande pour le moment. Vous pouvez réessayer, finaliser sur la page de commande, ou nous écrire sur WhatsApp.',
   },
   bot: 'Je suis l’assistante virtuelle d’Albasse Shopping : une assistante automatique, pas une personne. Pour parler à quelqu’un de l’équipe, écrivez-nous sur WhatsApp 👇',
   alreadyMember: 'Vous êtes déjà connecté(e){nom} ✅ Retrouvez vos commandes à tout moment.',
@@ -747,8 +717,8 @@ const FR: Texts = {
   },
   lowStock: (name, n) => (n === 1 ? `⚠️ « ${name} » : il n’en reste qu’un en stock !` : `⚠️ « ${name} » : plus que ${n} en stock !`),
   pitch: (name, price, n) =>
-    `Vous regardez « ${name} » ? Excellent choix ! ${price}.${n === null ? '' : `\n${n === 1 ? 'Il n’en reste qu’un en stock' : `Plus que ${n} en stock`} : ne tardez pas !`}\nPour le commander, touchez « Acheter » en bas de l’écran 👇`,
-  cartReminder: (count, total) => `🛒 Votre panier vous attend : ${count} article${count > 1 ? 's' : ''} pour ${fcfa(total)}. Terminez votre commande en quelques secondes !`,
+    `Vous regardez « ${name} » ? Excellent choix ! ${price}.${n === null ? '' : `\n${n === 1 ? 'Il n’en reste qu’un en stock' : `Plus que ${n} en stock`} : ne tardez pas !`}\nPour le commander, touchez « Commander » en bas de l’écran 👇`,
+  orderReminder: (name, total) => `🛍️ Votre commande n’est pas terminée : « ${name} » pour ${fcfa(total)}. Terminez-la en quelques secondes !`,
   priceReply: (pct) =>
     [
       'Je comprends 😊 Un bon achat, c’est la qualité au bon prix. Voici comment payer moins :',
@@ -778,7 +748,7 @@ const FR: Texts = {
   wrapReply: `🎁 Emballage cadeau : pour ${fcfa(GIFT_WRAP_FEE)} par commande, votre colis arrive joliment emballé. Touchez l’image cadeau au moment de commander, ou dans « Mes commandes » tant que votre commande est en attente.`,
   wrapPitch: `🎁 Offrez-le joliment emballé : emballage cadeau à ${fcfa(GIFT_WRAP_FEE)} par commande (touchez l’image cadeau en commandant).`,
   encouragements: [
-    'Touchez « Voir le produit » puis « Acheter » : c’est simple et rapide ! 🛍️',
+    'Touchez « Commander » sous l’article : c’est simple et rapide ! 🛍️',
     'À N’Djamena, la livraison est gratuite et vous payez à la livraison : commandez sans risque 😉',
     'Profitez-en tant qu’il y a du stock ! 🔥',
     'Une belle occasion de vous faire plaisir (ou d’offrir) ! 🎁',
@@ -807,48 +777,26 @@ const FR: Texts = {
     `🕗 Nos services de livraison sont ouverts de ${DELIVERY_HOURS}.\n⏳ Pour éviter les fausses commandes, chaque commande est valable ${ORDER_VALIDITY_HOURS} h${home ? '.' : ' : réglez dans ce délai.'}`,
   rules: `⏳ Pour éviter les fausses commandes, chaque commande est valable ${ORDER_VALIDITY_HOURS} h. Passé ce délai, une commande restée en attente (non réglée) est signalée comme fausse commande.\nHors ${HOME_CITY}, réglez à l'avance : Airtel Money ${PAYMENT.airtel} ou Moov Money ${PAYMENT.moov}.`,
   contact: { hours: (h) => `🕗 Boutique : ${h}`, delivery: `🚚 Livraison : de ${DELIVERY_HOURS}`, ask: 'Pour une question, écrivez-nous sur WhatsApp 👇' },
-  howToOrder: `Commander est simple 👇\n💬 Je peux finaliser votre commande avec vous, ici : ajoutez vos articles avec le bouton « + », puis touchez « Commander ».\nOu sur le site :\n1. Ouvrez le produit qui vous plaît\n2. Choisissez la couleur ou la taille\n3. Touchez « Ajouter au panier » ou « Acheter »\n4. Indiquez votre nom, téléphone, ville et adresse\n5. Payez : à la livraison à N’Djamena, à l’avance (Airtel Money ou Moov Money) dans les autres villes\n🎁 En option : emballage cadeau, ${fcfa(GIFT_WRAP_FEE)} (touchez l’image cadeau)\n⏳ Pour éviter les fausses commandes, chaque commande est valable ${ORDER_VALIDITY_HOURS} h.`,
+  howToOrder: `Commander est simple 👇\n💬 Je peux finaliser votre commande avec vous, ici : touchez « Commander » sous l’article qui vous plaît.\nOu sur le site :\n1. Ouvrez le produit qui vous plaît\n2. Choisissez la couleur, la taille et la quantité\n3. Touchez « Commander »\n4. Indiquez votre nom, téléphone, ville et adresse\n5. Payez : à la livraison à N’Djamena, à l’avance (Airtel Money ou Moov Money) dans les autres villes\n🎁 En option : emballage cadeau, ${fcfa(GIFT_WRAP_FEE)} (touchez l’image cadeau)\n⏳ Pour éviter les fausses commandes, chaque commande est valable ${ORDER_VALIDITY_HOURS} h.`,
 
   cart: {
-    added: (name, variant, count, total) => `✅ « ${name} »${variant} ajouté au panier.\nVotre panier : ${count} article${count > 1 ? 's' : ''} · ${fcfa(total)}`,
+    picked: (name, variant, price) => `✅ Très bon choix : « ${name} »${variant} · ${price}`,
+    current: (name, variant, qty, total) => `🛍️ Votre commande : « ${name} »${variant}${qty > 1 ? ` × ${qty}` : ''} · ${total}`,
     askSize: (name) => `Quelle taille pour « ${name} » ?`,
     askColor: (name) => `Quelle couleur pour « ${name} » ?`,
     sizeLabel: (size) => `Taille ${size}`,
-    cancelled: 'D’accord, je n’ajoute rien 😊',
+    cancelled: 'D’accord, on ne commande rien pour le moment 😊',
     unavailable: (name) => `Désolé, « ${name} » n’est plus disponible pour le moment.`,
     unavailableAlt: 'Voici des articles proches, disponibles :',
-    noMoreStock: (name, stock) => `Il ne reste que ${stock} « ${name} » en stock, et ${stock > 1 ? 'vous les avez' : 'vous l’avez'} déjà dans votre panier.`,
-    addError: 'Je n’arrive pas à ajouter cet article pour le moment. Réessayez dans un instant, ou touchez le produit pour l’ouvrir.',
-    empty: 'Votre panier est vide pour le moment 🛒 Dites-moi ce que vous cherchez, je vous aide à choisir.',
-    show: 'Voici votre panier 🛒',
-    verified: '✓ Prix et stock vérifiés à l’instant.',
-    needLogin: 'Pour valider votre commande, créez votre compte ou connectez-vous (c’est gratuit). Votre panier est gardé 🛒',
+    addError: 'Je n’arrive pas à préparer la commande de cet article pour le moment. Réessayez dans un instant, ou touchez le produit pour l’ouvrir.',
+    empty: 'Vous n’avez pas encore choisi d’article 🛍️ Dites-moi ce que vous cherchez : touchez « Commander » sous l’article voulu, je m’occupe du reste.',
+    needLogin: 'Pour valider votre commande, créez votre compte ou connectez-vous (c’est gratuit). L’article reste choisi 🛍️',
     priceChanged: (name, from, to) => `ℹ️ Le prix de « ${name} » a changé : ${from} → ${to}.`,
-    blocked: (name, stock) => (stock > 0 ? `⚠️ Il ne reste que ${stock} « ${name} » : baissez la quantité pour commander.` : `⚠️ « ${name} » n’est plus disponible : retirez-le de votre panier pour commander.`),
-    askWhich: 'Lequel voulez-vous ajouter ?',
-    addWhat: 'Bien sûr ! Dites-moi ce que vous cherchez : je vous montre les articles avec un bouton + pour les ajouter 👇',
-    foundToAdd: 'Voici ce que j’ai trouvé : touchez + sur l’article voulu pour l’ajouter au panier 👇',
-    tapPlus: 'Astuce : touchez + sur un article pour l’ajouter au panier 🛒',
-    wrapNudge: `🎁 Pour offrir : l’emballage cadeau est à ${fcfa(GIFT_WRAP_FEE)} par commande (je vous le proposerai au moment de commander).`,
-    ui: {
-      view: 'Voir',
-      subtotal: 'Sous-total',
-      saved: 'Vous économisez',
-      delivery: 'Livraison',
-      deliveryLater: 'calculée à la commande selon votre ville',
-      deliveryTo: (city) => `Livraison à ${city}`,
-      free: 'gratuite',
-      toConfirm: 'à confirmer',
-      total: 'Total',
-      totalWithDelivery: 'Total avec livraison',
-      checkout: '✅ Commander',
-      openFull: 'Ouvrir le panier complet ›',
-      remove: (name) => `Retirer du panier : ${name}`,
-      more: (name) => `Ajouter un exemplaire : ${name}`,
-      less: (name) => `Retirer un exemplaire : ${name}`,
-      items: (n) => `${n} article${n > 1 ? 's' : ''}`,
-      unitPrice: 'l’unité',
-    },
+    blocked: (name, stock) => (stock > 0 ? `⚠️ Il ne reste que ${stock} « ${name} » : choisissez une quantité plus petite pour commander.` : `⚠️ « ${name} » n’est plus disponible : choisissez un autre article.`),
+    askWhich: 'Lequel voulez-vous commander ?',
+    addWhat: 'Bien sûr ! Dites-moi ce que vous cherchez : je vous montre les articles avec un bouton « Commander » 👇',
+    foundToAdd: 'Voici ce que j’ai trouvé : touchez « Commander » sous l’article voulu 👇',
+    tapPlus: 'Astuce : touchez « Commander » sous un article, je prends votre commande ici même 🛍️',
   },
   install: {
     ask: 'Avez-vous déjà installé l’application Albasse Shopping sur votre téléphone ? 📲\nElle s’ajoute à votre écran d’accueil : commandez plus vite et suivez vos commandes en un toucher.',
@@ -895,7 +843,7 @@ const FR: Texts = {
       family: { fresh: '🌿 Fraîche', woody: '🌳 Boisée', sweet: '🍯 Sucrée', intense: '🔥 Intense' },
     },
     familyLabel: { fresh: 'fraîche', woody: 'boisée', sweet: 'sucrée', intense: 'intense' },
-    sizesReply: (name, sizes) => `Voici les tailles proposées pour « ${name} » : ${sizes.join(', ')} 😊 Touchez le bouton + de la fiche pour l’ajouter à votre panier.`,
+    sizesReply: (name, sizes) => `Voici les tailles proposées pour « ${name} » : ${sizes.join(', ')} 😊 Touchez « Commander » sous l’article pour le commander.`,
     noSizes: (name) => `« ${name} » n’a pas de taille à choisir 😊`,
     colorsReply: (name, colors, sizes) =>
       [`Voici ce que propose « ${name} » 😊`, colors.length ? `🎨 Couleurs : ${colors.join(', ')}` : '', sizes.length ? `📏 Tailles proposées : ${sizes.join(', ')}` : ''].filter(Boolean).join('\n'),
@@ -920,12 +868,10 @@ const FR: Texts = {
   closing: {
     later: 'Pas de souci{nom} 😊 Prenez votre temps.',
     favorites: '❤️ Touchez le cœur sur un produit pour le retrouver dans vos favoris (avec un compte gratuit).',
-    cartKept: '🛒 Votre panier reste enregistré sur cet appareil.',
+    cartKept: '🛍️ L’article choisi reste enregistré sur cet appareil.',
     callbackOffer: 'Si vous préférez, l’équipe peut vous écrire sur WhatsApp quand vous serez prêt(e) 📲',
     validity: `⏳ Si vous commandez, la commande reste valable ${ORDER_VALIDITY_HOURS} h.`,
     proof: (n) => `👍 Cet article a été commandé ${n} fois ces 7 derniers jours.`,
-    packIntro: '💡 Pour compléter votre choix :',
-    pack: (first, second, total) => `Ensemble : « ${first} » + « ${second} » = ${fcfa(total)}.`,
   },
   callback: {
     askName: 'Avec plaisir 😊 Quel est votre prénom ?',
@@ -1002,7 +948,6 @@ const FR: Texts = {
   },
   wholesale: {
     ask: '📦 Pour les achats en gros (cartons, grandes quantités), les prix sont donnés directement par notre équipe 😊 Écrivez-nous sur WhatsApp avec : l’article, la quantité (ou le nombre de cartons) et votre ville.',
-    nudge: '📦 Grosse commande ? Notre équipe peut vous faire un prix et organiser la livraison : écrivez-nous sur WhatsApp. Vous pouvez aussi continuer ici.',
     chip: '💬 Parler à l’équipe (gros)',
     prefill: (product) => `Bonjour, je souhaite un prix de gros${product ? ` pour « ${product} »` : ''}. Quantité (ou nombre de cartons) : … Ville : …`,
   },
@@ -1051,7 +996,7 @@ const AR: Texts = {
   chooseLang: 'اختر لغتك',
   fabLabel: 'التحدث مع زارا كينغز، مساعدة التسويق',
   openLabel: 'فتح المحادثة مع زارا كينغز',
-  card: { see: 'عرض المنتج ›', soldOut: 'نفد', last: 'آخر قطعة', only: (n) => `بقي ${n} فقط`, addLabel: (name) => `أضف إلى السلة: ${name}` },
+  card: { see: 'عرض المنتج ›', soldOut: 'نفد', last: 'آخر قطعة', only: (n) => `بقي ${n} فقط`, addLabel: (name) => `اطلب: ${name}`, order: 'اطلب' },
   langSwitched: 'حسنا، نكمل بالعربية 😊',
   chip: {
     skip: 'تخطي',
@@ -1062,7 +1007,6 @@ const AR: Texts = {
     advice: '🎯 نصيحة',
     categories: '🛍️ الفئات',
     delivery: '🚚 التوصيل والدفع',
-    cart: '🛒 سلتي',
     orders: '📦 طلباتي',
     whatsapp: '💬 واتساب',
     menu: '🏠 القائمة',
@@ -1094,9 +1038,7 @@ const AR: Texts = {
     wrap: '🎁 تغليف الهدايا',
     policy: '📄 شروط الإرجاع',
     otherLang: '🌐 Français',
-    viewCart: '🛒 عرض سلتي',
-    checkout: '✅ إتمام الطلب',
-    moreItems: '🛍️ منتجات أخرى',
+    checkout: '✅ أكمل طلبي',
     seeMore: '➕ عرض المزيد',
     openChrome: '🌐 افتح في Chrome',
     categoryPage: (category) => `📄 صفحة «${category}»`,
@@ -1274,8 +1216,8 @@ const AR: Texts = {
       ].join('\n'),
     pickButton: 'اضغط على أحد الأزرار أدناه للمتابعة 👇',
     editWhat: 'ماذا تريد أن تعدّل؟ ✏️',
-    cancelled: 'حسناً، أوقفت الطلب. سلتك محفوظة 🛒 يمكنك المتابعة متى شئت.',
-    resumeLost: 'لم أعد أجد معلومات هذا الطلب. اضغط «إتمام الطلب» للمتابعة 🙂',
+    cancelled: 'حسناً، أوقفت الطلب. المنتج الذي اخترته محفوظ: اضغط «أكمل طلبي» متى شئت 🙂',
+    resumeLost: 'لم أعد أجد معلومات هذا الطلب. اضغط «أكمل طلبي» للمتابعة 🙂',
     priceChanged: 'تغيّرت الأسعار أو المخزون: هذا هو الملخص الجديد. راجعه ثم أكّد من جديد 👇',
     codOnlyHome: 'الدفع عند الاستلام ممكن فقط في إنجامينا. اختر Airtel Money أو Moov Money 📱',
     placed: (name, id) => `🎉 شكراً ${name}! تم تسجيل طلبك رقم #${id} بنجاح.`,
@@ -1286,7 +1228,7 @@ const AR: Texts = {
     payUrl: (url) => `📱 ادفع من هنا: ${url}`,
     payNumber: (amount, number, label) => `📱 أرسل ${fcfa(amount)} إلى الرقم ${number} (${label}).`,
     payTeam: (phone, label) => `📞 سيتصل بك فريقنا على ${phone} لإتمام الدفع عبر ${label}.`,
-    failed: '😕 لم أستطع تسجيل طلبك الآن. سلتك محفوظة. يمكنك المحاولة من جديد، أو الإتمام من صفحة الطلب، أو مراسلتنا على واتساب.',
+    failed: '😕 لم أستطع تسجيل طلبك الآن. يمكنك المحاولة من جديد، أو الإتمام من صفحة الطلب، أو مراسلتنا على واتساب.',
   },
   bot: 'أنا المساعدة الافتراضية لـ Albasse Shopping: مساعدة آلية وليست شخصا. للتحدث مع أحد أفراد الفريق، راسلنا على واتساب 👇',
   alreadyMember: 'أنت مسجل بالفعل{nom} ✅ تجد طلباتك في أي وقت.',
@@ -1322,8 +1264,8 @@ const AR: Texts = {
   },
   lowStock: (name, n) => (n === 1 ? `⚠️ «${name}»: بقيت قطعة واحدة فقط في المخزون!` : `⚠️ «${name}»: بقي ${n} فقط في المخزون!`),
   pitch: (name, price, n) =>
-    `هل تنظر إلى «${name}»؟ اختيار ممتاز! ${price}.${n === null ? '' : `\n${n === 1 ? 'بقيت قطعة واحدة فقط' : `بقي ${n} فقط في المخزون`}: لا تتأخر!`}\nللطلب، اضغط على «Acheter» (اشترِ) أسفل الشاشة 👇`,
-  cartReminder: (count, total) => `🛒 سلتك تنتظرك (عدد المنتجات: ${count}) بقيمة ${fcfa(total)}. أنهِ طلبك في ثوانٍ!`,
+    `هل تنظر إلى «${name}»؟ اختيار ممتاز! ${price}.${n === null ? '' : `\n${n === 1 ? 'بقيت قطعة واحدة فقط' : `بقي ${n} فقط في المخزون`}: لا تتأخر!`}\nللطلب، اضغط على «Commander» (اطلب) أسفل الشاشة 👇`,
+  orderReminder: (name, total) => `🛍️ طلبك لم يكتمل بعد: «${name}» بقيمة ${fcfa(total)}. أكمله في ثوانٍ!`,
   priceReply: (pct) =>
     [
       'أفهمك 😊 الشراء الجيد هو الجودة بالسعر المناسب. إليك كيف تدفع أقل:',
@@ -1353,7 +1295,7 @@ const AR: Texts = {
   wrapReply: `🎁 تغليف الهدايا: مقابل ${fcfa(GIFT_WRAP_FEE)} لكل طلب، يصلك طردك مغلفا بأناقة. اضغط على صورة الهدية عند الطلب، أو في «طلباتي» ما دام طلبك قيد الانتظار.`,
   wrapPitch: `🎁 قدّمها مغلفة بأناقة: تغليف الهدايا بـ ${fcfa(GIFT_WRAP_FEE)} لكل طلب (اضغط على صورة الهدية عند الطلب).`,
   encouragements: [
-    'اضغط على «Voir le produit» (عرض المنتج) ثم «Acheter» (اشترِ): الأمر سهل وسريع! 🛍️',
+    'اضغط «اطلب» تحت المنتج: الأمر سهل وسريع! 🛍️',
     'في إنجامينا، التوصيل مجاني والدفع عند الاستلام: اطلب بدون أي مخاطرة 😉',
     'استفد ما دام المخزون متوفرا! 🔥',
     'فرصة جميلة لتدليل نفسك (أو لتقديم هدية)! 🎁',
@@ -1382,48 +1324,26 @@ const AR: Texts = {
     `🕗 خدمات التوصيل لدينا تعمل ${AR_HOURS}.\n⏳ لتجنب الطلبات الوهمية، كل طلب صالح لمدة ${ORDER_VALIDITY_HOURS} ساعة${home ? '.' : ': ادفع خلال هذه المدة.'}`,
   rules: `⏳ لتجنب الطلبات الوهمية، كل طلب صالح لمدة ${ORDER_VALIDITY_HOURS} ساعة. بعد هذه المدة، يُبلَّغ عن الطلب المتروك قيد الانتظار (غير المدفوع) على أنه طلب وهمي.\nخارج إنجامينا، ادفع مسبقا: Airtel Money ${PAYMENT.airtel} أو Moov Money ${PAYMENT.moov}.`,
   contact: { hours: (h) => `🕗 المتجر: ${h}`, delivery: `🚚 التوصيل: ${AR_HOURS}`, ask: 'لأي سؤال، راسلنا على واتساب 👇' },
-  howToOrder: `الطلب سهل 👇\n💬 يمكنني إتمام طلبك معك هنا: أضف منتجاتك بزر «+» ثم اضغط «إتمام الطلب».\nأو من الموقع:\n1. افتح المنتج الذي يعجبك\n2. اختر اللون أو المقاس\n3. اضغط على «Ajouter au panier» (أضف إلى السلة) أو «Acheter» (اشترِ)\n4. اكتب اسمك وهاتفك ومدينتك وعنوانك\n5. ادفع: عند الاستلام في إنجامينا، ومسبقا (Airtel Money أو Moov Money) في المدن الأخرى\n🎁 اختياري: تغليف الهدايا بـ ${fcfa(GIFT_WRAP_FEE)} (اضغط على صورة الهدية)\n⏳ لتجنب الطلبات الوهمية، كل طلب صالح لمدة ${ORDER_VALIDITY_HOURS} ساعة.`,
+  howToOrder: `الطلب سهل 👇\n💬 يمكنني إتمام طلبك معك هنا: اضغط «اطلب» تحت المنتج الذي يعجبك.\nأو من الموقع:\n1. افتح المنتج الذي يعجبك\n2. اختر اللون والمقاس والكمية\n3. اضغط على «Commander» (اطلب)\n4. اكتب اسمك وهاتفك ومدينتك وعنوانك\n5. ادفع: عند الاستلام في إنجامينا، ومسبقا (Airtel Money أو Moov Money) في المدن الأخرى\n🎁 اختياري: تغليف الهدايا بـ ${fcfa(GIFT_WRAP_FEE)} (اضغط على صورة الهدية)\n⏳ لتجنب الطلبات الوهمية، كل طلب صالح لمدة ${ORDER_VALIDITY_HOURS} ساعة.`,
 
   cart: {
-    added: (name, variant, count, total) => `✅ «${name}»${variant} أضيف إلى السلة.\nسلتك: ${count} ${count > 1 ? 'منتجات' : 'منتج'} · ${fcfa(total)}`,
+    picked: (name, variant, price) => `✅ اختيار ممتاز: «${name}»${variant} · ${price}`,
+    current: (name, variant, qty, total) => `🛍️ طلبك: «${name}»${variant}${qty > 1 ? ` × ${qty}` : ''} · ${total}`,
     askSize: (name) => `ما المقاس المناسب لـ «${name}»؟`,
     askColor: (name) => `ما اللون المناسب لـ «${name}»؟`,
     sizeLabel: (size) => `المقاس ${size}`,
-    cancelled: 'حسنا، لن أضيف شيئا 😊',
+    cancelled: 'حسنا، لن نطلب شيئا الآن 😊',
     unavailable: (name) => `عذرا، «${name}» غير متوفر حاليا.`,
     unavailableAlt: 'إليك منتجات قريبة منه ومتوفرة:',
-    noMoreStock: (name, stock) => `لم يبق سوى ${stock} من «${name}» في المخزون، وهي موجودة بالفعل في سلتك.`,
-    addError: 'لا أستطيع إضافة هذا المنتج الآن. حاول بعد قليل، أو افتح المنتج مباشرة.',
-    empty: 'سلتك فارغة حاليا 🛒 أخبرني بما تبحث عنه وأساعدك على الاختيار.',
-    show: 'إليك سلتك 🛒',
-    verified: '✓ تم التحقق من الأسعار والمخزون الآن.',
-    needLogin: 'لإتمام طلبك، أنشئ حسابك أو سجل الدخول (مجاني). سلتك محفوظة 🛒',
+    addError: 'لا أستطيع تجهيز طلب هذا المنتج الآن. حاول بعد قليل، أو افتح المنتج مباشرة.',
+    empty: 'لم تختر أي منتج بعد 🛍️ أخبرني بما تبحث عنه: اضغط «اطلب» تحت المنتج المطلوب وأتكفل بالباقي.',
+    needLogin: 'لإتمام طلبك، أنشئ حسابك أو سجل الدخول (مجاني). المنتج الذي اخترته محفوظ 🛍️',
     priceChanged: (name, from, to) => `ℹ️ تغير سعر «${name}»: ${from} ← ${to}.`,
-    blocked: (name, stock) => (stock > 0 ? `⚠️ لم يبق سوى ${stock} من «${name}»: قلل الكمية لإتمام الطلب.` : `⚠️ «${name}» لم يعد متوفرا: احذفه من سلتك لإتمام الطلب.`),
-    askWhich: 'أي منتج تريد إضافته؟',
-    addWhat: 'بالتأكيد! أخبرني بما تبحث عنه: أعرض عليك المنتجات مع زر + لإضافتها 👇',
-    foundToAdd: 'إليك ما وجدته: اضغط + على المنتج المطلوب لإضافته إلى السلة 👇',
-    tapPlus: 'نصيحة: اضغط + على أي منتج لإضافته إلى السلة 🛒',
-    wrapNudge: `🎁 للإهداء: تغليف الهدايا بـ ${fcfa(GIFT_WRAP_FEE)} لكل طلب (سأعرضه عليك عند إتمام الطلب).`,
-    ui: {
-      view: 'عرض',
-      subtotal: 'المجموع الفرعي',
-      saved: 'توفر',
-      delivery: 'التوصيل',
-      deliveryLater: 'يُحسب عند الطلب حسب مدينتك',
-      deliveryTo: (city) => `التوصيل إلى ${city}`,
-      free: 'مجاني',
-      toConfirm: 'يُؤكَّد لاحقا',
-      total: 'المجموع',
-      totalWithDelivery: 'المجموع مع التوصيل',
-      checkout: '✅ إتمام الطلب',
-      openFull: 'فتح السلة كاملة ›',
-      remove: (name) => `حذف من السلة: ${name}`,
-      more: (name) => `زيادة قطعة: ${name}`,
-      less: (name) => `إنقاص قطعة: ${name}`,
-      items: (n) => `${n} ${n > 1 ? 'منتجات' : 'منتج'}`,
-      unitPrice: 'للقطعة',
-    },
+    blocked: (name, stock) => (stock > 0 ? `⚠️ لم يبق سوى ${stock} من «${name}»: اختر كمية أقل لإتمام الطلب.` : `⚠️ «${name}» لم يعد متوفرا: اختر منتجا آخر.`),
+    askWhich: 'أي منتج تريد أن تطلب؟',
+    addWhat: 'بالتأكيد! أخبرني بما تبحث عنه: أعرض عليك المنتجات مع زر «اطلب» 👇',
+    foundToAdd: 'إليك ما وجدته: اضغط «اطلب» تحت المنتج المطلوب 👇',
+    tapPlus: 'نصيحة: اضغط «اطلب» تحت أي منتج، وأسجل طلبك هنا مباشرة 🛍️',
   },
   install: {
     ask: 'هل قمت بتثبيت تطبيق Albasse Shopping على هاتفك؟ 📲\nيُضاف إلى شاشتك الرئيسية: اطلب أسرع وتابع طلباتك بلمسة واحدة.',
@@ -1470,7 +1390,7 @@ const AR: Texts = {
       family: { fresh: '🌿 منعشة', woody: '🌳 خشبية', sweet: '🍯 حلوة', intense: '🔥 قوية' },
     },
     familyLabel: { fresh: 'منعشة', woody: 'خشبية', sweet: 'حلوة', intense: 'قوية' },
-    sizesReply: (name, sizes) => `هذه المقاسات المعروضة لـ «${name}»: ${sizes.join('، ')} 😊 المس زر + في البطاقة لإضافته إلى السلة.`,
+    sizesReply: (name, sizes) => `هذه المقاسات المعروضة لـ «${name}»: ${sizes.join('، ')} 😊 اضغط «اطلب» تحت المنتج لطلبه.`,
     noSizes: (name) => `«${name}» ليس له مقاسات للاختيار 😊`,
     colorsReply: (name, colors, sizes) =>
       [`هذا ما يعرضه «${name}» 😊`, colors.length ? `🎨 الألوان: ${colors.join('، ')}` : '', sizes.length ? `📏 المقاسات المعروضة: ${sizes.join('، ')}` : ''].filter(Boolean).join('\n'),
@@ -1495,12 +1415,10 @@ const AR: Texts = {
   closing: {
     later: 'لا مشكلة{nom} 😊 خذ وقتك.',
     favorites: '❤️ اضغط على القلب في أي منتج لتجده في مفضلتك (بحساب مجاني).',
-    cartKept: '🛒 سلتك محفوظة على هذا الجهاز.',
+    cartKept: '🛍️ المنتج الذي اخترته محفوظ على هذا الجهاز.',
     callbackOffer: 'إذا أحببت، يمكن للفريق أن يراسلك على واتساب عندما تكون جاهزا 📲',
     validity: `⏳ إذا طلبت، يبقى الطلب صالحا لمدة ${ORDER_VALIDITY_HOURS} ساعة.`,
     proof: (n) => `👍 تم طلب هذا المنتج ${n} مرات خلال الأيام السبعة الأخيرة.`,
-    packIntro: '💡 لتكمل اختيارك:',
-    pack: (first, second, total) => `معا: «${first}» + «${second}» = ${fcfa(total)}.`,
   },
   callback: {
     askName: 'بكل سرور 😊 ما اسمك الأول؟',
@@ -1577,7 +1495,6 @@ const AR: Texts = {
   },
   wholesale: {
     ask: '📦 لمشتريات الجملة (كراتين وكميات كبيرة) يقدم فريقنا الأسعار مباشرة 😊 راسلنا على واتساب مع: المنتج والكمية (أو عدد الكراتين) ومدينتك.',
-    nudge: '📦 طلب كبير؟ يستطيع فريقنا تقديم سعر وتنظيم التوصيل: راسلنا على واتساب. ويمكنك أيضا المتابعة هنا.',
     chip: '💬 التحدث مع الفريق (جملة)',
     prefill: (product) => `مرحبا، أريد سعر الجملة${product ? ` لـ «${product}»` : ''}. الكمية (أو عدد الكراتين): … المدينة: …`,
   },

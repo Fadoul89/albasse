@@ -379,7 +379,7 @@ export function productPitch(p: CatalogProduct, lang: Lang = 'fr'): string {
   return texts(lang).pitch(short(p.name, 48), price, p.stock >= 1 && p.stock <= 5 ? p.stock : null);
 }
 
-export const cartReminder = (count: number, total: number, lang: Lang = 'fr') => texts(lang).cartReminder(count, total);
+export const orderReminder = (name: string, total: number, lang: Lang = 'fr') => texts(lang).orderReminder(name, total);
 export const priceReply = (maxPct: number | null, lang: Lang = 'fr') => texts(lang).priceReply(maxPct);
 
 export interface TrustInfo {

@@ -46,7 +46,7 @@ export function OrderConfirmationScreen({ route }: Props) {
 
         <GoldButton
           label="Voir mes commandes"
-          onPress={() => navigation.reset({ index: 0, routes: [{ name: 'Orders' }] })}
+          onPress={() => navigation.reset({ index: 0, routes: [{ name: 'Tabs', params: { screen: 'Orders' } as never }] })}
           style={{ marginTop: spacing.xl, width: '100%' }}
         />
         <GoldButton

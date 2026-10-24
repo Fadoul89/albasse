@@ -43,22 +43,6 @@ export function bestSeller<T extends { id: string }>(products: T[], map: SalesMa
   return best;
 }
 
-// Ce qui complète l'article qu'on vient d'ajouter : un article en stock d'une catégorie qui va avec, jamais celui qui est déjà
-// dans le panier. Le plus commandé d'abord (chiffres vrais), sinon le premier en stock. Aucune remise n'est annoncée.
-export function pickComplement(
-  catalog: CatalogProduct[],
-  product: { id: string; categorySlug: string; price: number },
-  inCartIds: string[],
-  sales: SalesMap | null | undefined,
-  lang: 'fr' | 'ar' = 'fr'
-): CatalogProduct | null {
-  const target = crossSellTarget(catalog, product.categorySlug, lang);
-  if (!target) return null;
-  const pool = catalog.filter((p) => p.categorySlug === target.slug && p.stock > 0 && p.price > 0 && !!p.image && !inCartIds.includes(p.id));
-  if (pool.length === 0) return null;
-  return bestSeller(pool, sales) ?? pool[0];
-}
-
 // Ce que l'équipe voit dans l'admin : les articles que le client regardait (court, pour tenir dans la fiche).
 export function callbackNote(names: string[], max = 280): string {
   const clean = Array.from(new Set(names.map((n) => n.replace(/\s+/g, ' ').trim()).filter(Boolean)));
