@@ -761,6 +761,23 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await g.ctx.close();
     }
 
+    // --- L8b. telephone sans l'application (jamais repondu a l'installation) : la bulle invite a installer, en arabe avec le prenom ;
+    // en francais, toucher la bulle ouvre Zara directement sur l'installation
+    {
+      const r = await newVisitor(phone, { lang: 'ar', storage: { albasse_zara_name: 'علي' }, zaraInstall: null });
+      await r.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(7500);
+      const ar = await r.page.getByText(/📲 علي، ثبّت تطبيق Albasse: العروض أولاً ومتابعة طلباتك!/).count();
+      check('telephone sans l application : la bulle invite a installer, en arabe, avec le prenom', ar === 1, ar);
+      await r.ctx.close();
+      const f = await newVisitor(phone, { lang: 'fr', storage: { albasse_zara_name: 'Moussa' }, zaraInstall: null });
+      await f.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await f.page.getByText(/📲 Moussa, installez l'application Albasse/).waitFor({ timeout: 15000 });
+      await f.page.getByTestId('assistant-teaser').click();
+      await waitText(f.page, /✅ Oui, déjà installée/);
+      check('toucher la bulle d installation : Zara s ouvre directement sur l installation', true);
+      await f.ctx.close();
+    }
     // --- L9. visiteur arabe qui revient : prenom et langue retenus, bulle de bienvenue en arabe
     {
       const r = await newVisitor(phone, { lang: 'ar', storage: { albasse_zara_name: 'علي' } });

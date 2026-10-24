@@ -386,6 +386,9 @@ export function Assistant() {
   const [teaserVisible, setTeaserVisible] = useState(false);
   // installé sans notifications : la bulle rappelle de les activer (toucher la bulle ouvre Zara, qui propose le bouton)
   const [pushDue] = useState(() => pushReminderNow() === 'ask');
+  // téléphone sans l'application (et pas « Plus tard ») : la bulle invite à l'installer
+  const [installDue] = useState(() => !pushDue && useAssistantStore.getState().installInviteDue());
+  const openFor = useAssistantStore((s) => s.openFor);
   const { width: winW, height: winH } = useWindowDimensions();
   const [spot, setSpot] = useState<FabSpot | null>(loadFabSpot);
   const [dragging, setDragging] = useState(false);
@@ -465,8 +468,17 @@ export function Assistant() {
               style={[styles.teaserRow, bubbleBelow ? { top: fabTop + SIZE + TEASER_GAP } : { bottom: fabBottom + SIZE + TEASER_GAP }, { transform: [{ translateX: bubbleShift }] }]}
               pointerEvents="box-none"
             >
-              <Pressable ref={teaserRef} style={styles.teaser} onPress={openChat} accessibilityRole="button" accessibilityLabel={t.openLabel}>
-                <Text style={[styles.teaserText, rtl && styles.teaserTextRtl]}>{pushDue ? t.teaserPush(name) : memberName ? t.teaserMember(memberName) : t.teaser(name)}</Text>
+              <Pressable
+                ref={teaserRef}
+                style={styles.teaser}
+                onPress={pushDue ? () => openFor('push') : installDue ? () => openFor('install') : openChat}
+                accessibilityRole="button"
+                accessibilityLabel={t.openLabel}
+                testID="assistant-teaser"
+              >
+                <Text style={[styles.teaserText, rtl && styles.teaserTextRtl]}>
+                  {pushDue ? t.teaserPush(name) : installDue ? t.teaserInstall(name) : memberName ? t.teaserMember(memberName) : t.teaser(name)}
+                </Text>
                 <Pressable onPress={dismissTeaser} hitSlop={10} style={styles.teaserClose} accessibilityRole="button" accessibilityLabel={t.ui.closeTeaser}>
                   <Text style={styles.teaserCloseText}>✕</Text>
                 </Pressable>

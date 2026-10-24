@@ -63,6 +63,7 @@ export interface Texts {
   teaserMember(name: string): string;
   // bulle pour ceux qui ont installé Albasse Shopping sans activer les notifications
   teaserPush(name: string | null): string;
+  teaserInstall(name: string | null): string;
   askName: string;
   askNameGuest: string;
   askNameMember: string;
@@ -429,6 +430,7 @@ const FR: Texts = {
   memberBack: (name) => `Salut ${name} ! 😍👋 Vous êtes bien connecté(e), ça me fait plaisir de vous retrouver ! 🥰`,
   teaserMember: (name) => `Salut ${name} ! 😍👋 ${ASSISTANT_NAME} est à votre service 🛍️`,
   teaserPush: (name) => `🔔 ${name ? `${name}, activez` : 'Activez'} les notifications pour ne rater aucune promo !`,
+  teaserInstall: (name) => `📲 ${name ? `${name}, installez` : 'Installez'} l'application Albasse : promos en avant-première et suivi de vos commandes !`,
   askName: 'Comment puis-je vous appeler ?',
   askNameGuest: 'Comment puis-je vous appeler ? Si vous avez déjà un compte, connectez-vous : je vous reconnaîtrai 😊',
   askNameMember: 'Je vois que vous êtes connecté(e) 😊 Votre compte n’a pas encore de prénom : comment puis-je vous appeler ?',
@@ -978,6 +980,7 @@ const AR: Texts = {
   memberBack: (name) => `مرحباً ${name}! 😍👋 تم تسجيل دخولك، ويسعدني لقاؤك من جديد! 🥰`,
   teaserMember: (name) => `مرحباً ${name}! 😍👋 زارا كينغز في خدمتك 🛍️`,
   teaserPush: (name) => `🔔 ${name ? `${name}، ` : ''}فعّل الإشعارات حتى لا تفوتك أي عروض!`,
+  teaserInstall: (name) => `📲 ${name ? `${name}، ` : ''}ثبّت تطبيق Albasse: العروض أولاً ومتابعة طلباتك!`,
   askName: 'كيف يمكنني أن أناديك؟',
   askNameGuest: 'كيف يمكنني أن أناديك؟ إذا كان لديك حساب، سجّل الدخول وسأتعرف عليك 😊',
   askNameMember: 'أرى أنك مسجّل الدخول 😊 حسابك لا يحتوي على اسم بعد، فكيف يمكنني أن أناديك؟',

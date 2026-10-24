@@ -229,6 +229,10 @@ interface AssistantState {
   name: string | null;
   teaserDismissed: boolean;
   openChat: () => void;
+  // La bulle de Zara invite chaque visiteur en ligne : installer l'application (téléphone, pas encore installée) ou activer les
+  // notifications (installée sans notifications). Toucher la bulle ouvre Zara directement sur cette proposition.
+  installInviteDue: () => boolean;
+  openFor: (intent: 'install' | 'push') => void;
   // client qui vient de se connecter pendant la conversation : Zara le reconnaît à son prénom (une seule fois par visite)
   greetMember: () => void;
   closeChat: () => void;
@@ -3093,6 +3097,14 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       else if (shouldGreetMember()) get().greetMember();
       else if (pushReminderNow() !== 'none') void run(async () => void (await maybeRemindPush()));
       else if (suggestionPossible()) void run(async () => void (await maybeSuggest()));
+    },
+    installInviteDue: () =>
+      Platform.OS === 'web' && typeof window !== 'undefined' && (isIosDevice() || isAndroidDevice()) && !alreadyInstalled() && !installDeclined(),
+    openFor: (intent) => {
+      set({ open: true, teaserDismissed: true });
+      if (get().loading) return;
+      if (intent === 'install') void run(installReply);
+      else void run(async () => void (await maybeRemindPush()));
     },
     greetMember: () => {
       if (get().loading || !shouldGreetMember()) return;
