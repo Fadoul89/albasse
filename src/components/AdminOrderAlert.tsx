@@ -1,6 +1,6 @@
 // Administrateur seulement : à chaque nouvelle commande (notification « new_order » créée par la base, voir
 // add-admin-notifications.sql), le son d'alerte du patron et un message, sur toutes les pages tant que le site est ouvert.
-// Relu toutes les 15 s. Le téléphone peut bloquer le son tant que l'admin n'a rien touché sur la page : le message reste.
+// Relu toutes les 15 s. Le son est débloqué au premier toucher sur la page (règle des téléphones) ; le message s'affiche toujours.
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
@@ -19,6 +19,25 @@ export function AdminOrderAlert() {
     let alive = true;
     let since: string | null = null; // date (de la base) de la dernière commande déjà connue
     const audio = new Audio(ORDER_SOUND);
+    // le téléphone (surtout l'application Albasse) n'autorise le son qu'après un toucher : au 1er toucher, le son est
+    // « débloqué » en silence, pour pouvoir sonner ensuite sans que l'admin touche l'écran
+    const unlock = () => {
+      audio.muted = true;
+      audio
+        .play()
+        .then(() => {
+          audio.pause();
+          audio.currentTime = 0;
+        })
+        .catch(() => {})
+        .finally(() => {
+          audio.muted = false;
+        });
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('touchstart', unlock);
+    };
+    window.addEventListener('pointerdown', unlock);
+    window.addEventListener('touchstart', unlock);
     const latest = () =>
       supabase.from('admin_notifications').select('message,created_at').eq('type', 'new_order').order('created_at', { ascending: false }).limit(20);
 
@@ -42,6 +61,8 @@ export function AdminOrderAlert() {
     return () => {
       alive = false;
       clearInterval(timer);
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('touchstart', unlock);
     };
   }, [isAdmin]);
 
