@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { CATEGORIES as FALLBACK_CATEGORIES } from '../constants/categories';
+import { sortCategories } from '../lib/categoryOrder';
 import type { Category } from '../types';
 
 export function useCategories() {
@@ -16,13 +17,12 @@ export function useCategories() {
     supabase
       .from('categories')
       .select('*')
-      .order('name', { ascending: true })
       .then(({ data, error: err }) => {
         if (err) {
           setError(err.message);
           setCategories(FALLBACK_CATEGORIES);
         } else {
-          setCategories((data as Category[]) ?? []);
+          setCategories(sortCategories((data as Category[]) ?? []));
         }
         setIsLoading(false);
       });

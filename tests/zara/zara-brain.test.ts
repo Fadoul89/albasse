@@ -1356,6 +1356,21 @@ async function main() {
     ok('textes en francais et en arabe (rappel, bouton, bulle)', [fr.push.ask, fr.push.done, fr.push.later, fr.push.notGranted, fr.push.failed, fr.push.blockedAndroid, fr.push.blockedIos, ar.push.ask, ar.push.done, ar.push.later, ar.push.blockedAndroid].every((t) => t.length > 20) && fr.chip.enablePush === '🔔 Activer les notifications' && ar.chip.enablePush === '🔔 تفعيل الإشعارات' && fr.teaserPush('Ali') === '🔔 Ali, activez les notifications pour ne rater aucune promo !' && fr.teaserPush(null) === '🔔 Activez les notifications pour ne rater aucune promo !');
   }
 
+  {
+    console.log('\n== ordre des categories choisi par l\'admin');
+    const co = await import('../../src/lib/categoryOrder.ts');
+    const c = (id: string, name: string, sort_order?: number | null) => ({ id, name, sort_order });
+    const names = (l: { name: string }[]) => l.map((x) => x.name).join(',');
+    ok('avant le script SQL (pas de numero) : ordre alphabetique, accents compris', names(co.sortCategories([c('1', 'Vêtements'), c('2', 'Électrique'), c('3', 'Cosmétique')])) === 'Cosmétique,Électrique,Vêtements');
+    ok('numeros choisis d\'abord (1, 2, 3…), puis les nouvelles sans numero par ordre alphabetique', names(co.sortCategories([c('a', 'Bébé', null), c('b', 'Montre', 2), c('c', 'Parfum', 1), c('d', 'Agriculture')])) === 'Parfum,Montre,Agriculture,Bébé');
+    const start = co.sortCategories([c('a', 'Chaussures'), c('b', 'Montre'), c('d', 'Parfum')]);
+    const up = co.moveCategory(start, 2, -1);
+    ok('▲ sur Parfum (3e) : il passe 2e et tout le monde a son numero', names(up) === 'Chaussures,Parfum,Montre' && up.map((x) => x.sort_order).join() === '1,2,3');
+    ok('1er envoi : les 3 numeros ; ensuite seulement les 2 qui changent', co.orderUpdates(start, up).length === 3 && JSON.stringify(co.orderUpdates(up, co.moveCategory(up, 1, -1))) === JSON.stringify([{ id: 'd', sort_order: 1 }, { id: 'a', sort_order: 2 }]));
+    ok('▲ sur la 1re ou ▼ sur la derniere : rien ne bouge, rien a enregistrer', co.moveCategory(up, 0, -1) === up && co.moveCategory(up, 2, 1) === up);
+    ok('la liste de depart n\'est pas modifiee', names(start) === 'Chaussures,Montre,Parfum' && start.every((x) => x.sort_order === undefined));
+  }
+
   console.log('\n' + (failures === 0 ? 'TOUT EST BON' : `${failures} ECHEC(S)`));
   process.exit(failures === 0 ? 0 : 1);
 }

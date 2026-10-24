@@ -18,6 +18,9 @@ import { LanguageSwitcher } from '../components/LanguageSwitcher';
 import { SideAdBanner } from '../components/SideAdBanner';
 import { ChadFlag } from '../components/ChadFlag';
 import { WebPushBanner } from '../components/WebPushBanner';
+import { fetchOnlineCount, onlineLabel } from '../lib/onlineCount';
+
+const ONLINE_REFRESH_MS = 30000;
 
 const CHAD_YELLOW = '#FECB00';
 const CHAD_RED = '#D21034';
@@ -64,15 +67,17 @@ export function HomeScreen() {
   }, []);
   const blinkOpacity = blink.interpolate({ inputRange: [0, 1], outputRange: [0.35, 1] });
 
-  const [visitorCount, setVisitorCount] = useState(() => 38 + Math.floor(Math.random() * 40));
+  // vrai nombre de personnes en ligne (lib/onlineCount), relu toutes les 30 s ; caché tant que la base ne répond pas
+  const [onlineCount, setOnlineCount] = useState<number | null>(null);
   useEffect(() => {
-    const interval = setInterval(() => {
-      setVisitorCount((prev) => {
-        const delta = Math.floor(Math.random() * 5) - 2;
-        return Math.max(24, Math.min(140, prev + delta));
-      });
-    }, 4000);
-    return () => clearInterval(interval);
+    let alive = true;
+    const load = () => fetchOnlineCount().then((n) => alive && setOnlineCount(n));
+    load();
+    const interval = setInterval(load, ONLINE_REFRESH_MS);
+    return () => {
+      alive = false;
+      clearInterval(interval);
+    };
   }, []);
 
   return (
@@ -81,22 +86,18 @@ export function HomeScreen() {
       contentContainerStyle={{ paddingBottom: 40 }}
     >
       <WebPushBanner whenInstalled />
+      {/* langue à gauche, nombre en ligne au milieu, cloche à droite */}
       <View style={styles.topBar}>
-        <View style={styles.topBarLeftGroup}>
-          <View style={styles.topBarFrame}>
-            <Text style={styles.welcomeText}>👋 Bienvenue</Text>
-          </View>
-          <View style={styles.topBarFrame}>
-            <View style={styles.visitorsRow}>
-              <Animated.View style={[styles.liveDot, { opacity: blinkOpacity }]} />
-              <Animated.Text style={[styles.visitorsText, { opacity: blinkOpacity }]}>
-                {visitorCount} personnes en ligne
-              </Animated.Text>
-            </View>
-          </View>
-        </View>
-        <View style={styles.topBarRightGroup}>
+        <View style={styles.topBarSide}>
           <LanguageSwitcher />
+        </View>
+        {onlineCount !== null && (
+          <View style={styles.visitorsPill} testID="home-online">
+            <Animated.View style={[styles.liveDot, { opacity: blinkOpacity }]} />
+            <Text style={styles.visitorsText}>{onlineLabel(onlineCount)}</Text>
+          </View>
+        )}
+        <View style={[styles.topBarSide, styles.topBarSideRight]}>
           <CustomerNotificationBell />
         </View>
       </View>
@@ -246,7 +247,6 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   topBar: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: spacing.md,
@@ -256,36 +256,25 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
     gap: spacing.sm,
   },
-  topBarLeftGroup: {
+  topBarSide: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  topBarSideRight: { justifyContent: 'flex-end' },
+  visitorsPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
-    flexShrink: 1,
-    gap: spacing.sm,
-  },
-  topBarRightGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    justifyContent: 'flex-end',
-    gap: 8,
-  },
-  topBarFrame: {
+    gap: 5,
     borderWidth: 1,
-    borderColor: colors.gold,
-    borderRadius: radius.sm,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    borderColor: colors.border,
+    borderRadius: radius.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
-  welcomeText: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 12 },
-  visitorsRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   liveDot: {
     width: 7,
     height: 7,
     borderRadius: 4,
     backgroundColor: '#3ddc6f',
   },
-  visitorsText: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 11 },
+  visitorsText: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 10.5 },
   independenceBanner: {
     flexDirection: 'row',
     alignItems: 'center',

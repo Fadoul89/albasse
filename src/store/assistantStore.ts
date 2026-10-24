@@ -32,6 +32,7 @@ import {
 } from '../lib/assistantBrain';
 import { hasArabic, type Lang, type PayMethodKey, type Who } from '../lib/assistantLang';
 import { categoryLabel, fcfa, texts, withName as applyName, type Texts } from '../lib/assistantText';
+import { isArabicPage } from '../lib/googleTranslate';
 import {
   ANY_BUDGET,
   aboutReply,
@@ -300,7 +301,7 @@ function chosenLang(): Lang | null {
   try {
     const saved = window.localStorage.getItem(LANG_KEY);
     if (saved === 'ar' || saved === 'fr') return saved;
-    if (/(?:^|;\s*)googtrans=\/[a-z-]+\/ar/.test(document.cookie)) return 'ar';
+    if (isArabicPage()) return 'ar';
   } catch {
     // ignore : pas de langue retenue
   }

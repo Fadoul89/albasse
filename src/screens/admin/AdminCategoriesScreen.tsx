@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,8 @@ import { useCategories } from '../../hooks/useCategories';
 import { useToastStore } from '../../store/toastStore';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { uploadProductImage } from '../../lib/imageUpload';
+import { moveCategory, orderUpdates } from '../../lib/categoryOrder';
+import { isMissingColumn } from '../../lib/dbErrors';
 import { colors, fonts, radius, spacing } from '../../theme';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { GoldButton } from '../../components/GoldButton';
@@ -42,7 +44,13 @@ export function AdminCategoriesScreen() {
   const [saving, setSaving] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Category | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // ordre changé avec les flèches, affiché tout de suite (la liste relue de la base le remplace)
+  const [ordered, setOrdered] = useState<Category[] | null>(null);
+  const [savingOrder, setSavingOrder] = useState(false);
   const showToast = useToastStore((s) => s.show);
+  const list = ordered ?? categories;
+
+  useEffect(() => setOrdered(null), [categories]);
 
   if (!profile?.is_admin) {
     return (
@@ -125,6 +133,28 @@ export function AdminCategoriesScreen() {
     }
   };
 
+  const move = async (index: number, delta: -1 | 1) => {
+    const next = moveCategory(list, index, delta);
+    if (next === list || savingOrder) return;
+    setOrdered(next);
+    setSavingOrder(true);
+    const results = await Promise.all(
+      orderUpdates(list, next).map((u) => supabase.from('categories').update({ sort_order: u.sort_order }).eq('id', u.id))
+    );
+    setSavingOrder(false);
+    const failed = results.find((r) => r.error)?.error;
+    if (failed) {
+      console.error('Erreur ordre des catégories:', failed);
+      showToast(
+        isMissingColumn(failed, 'sort_order')
+          ? 'Lancez d’abord le script add-category-order.sql dans Supabase.'
+          : failed.message,
+        { title: 'Ordre non enregistré', type: 'error' }
+      );
+      refresh();
+    }
+  };
+
   const confirmDelete = async () => {
     if (!pendingDelete) return;
     setDeleting(true);
@@ -143,7 +173,7 @@ export function AdminCategoriesScreen() {
     <View style={styles.screen}>
       <ScreenHeader title="Gestion des catégories" showBack />
       <FlatList
-        data={categories}
+        data={list}
         keyExtractor={(item) => item.id}
         refreshing={isLoading}
         onRefresh={refresh}
@@ -190,22 +220,50 @@ export function AdminCategoriesScreen() {
               />
             </View>
             <Text style={styles.listTitle}>Catégories existantes</Text>
+            <Text style={styles.orderHint}>
+              Touchez ▲ ▼ pour choisir l’ordre sur le site : la n° 1 s’affiche en premier.
+            </Text>
           </View>
         }
-        renderItem={({ item }) => (
-          <View style={styles.row}>
+        renderItem={({ item, index }) => (
+          <View style={styles.row} testID={`category-row-${item.slug}`}>
+            <Text style={styles.rowRank}>{index + 1}</Text>
+            <View style={styles.moveCol}>
+              <Pressable
+                testID={`category-up-${item.slug}`}
+                accessibilityLabel={`Monter ${item.name}`}
+                onPress={() => move(index, -1)}
+                disabled={index === 0 || savingOrder}
+                style={[styles.moveBtn, index === 0 && styles.moveBtnOff]}
+              >
+                <Text style={styles.moveText}>▲</Text>
+              </Pressable>
+              <Pressable
+                testID={`category-down-${item.slug}`}
+                accessibilityLabel={`Descendre ${item.name}`}
+                onPress={() => move(index, 1)}
+                disabled={index === list.length - 1 || savingOrder}
+                style={[styles.moveBtn, index === list.length - 1 && styles.moveBtnOff]}
+              >
+                <Text style={styles.moveText}>▼</Text>
+              </Pressable>
+            </View>
             {item.image_url ? (
               <Image source={{ uri: item.image_url }} style={styles.rowImage} contentFit="cover" />
             ) : (
               <View style={styles.rowImagePlaceholder} />
             )}
-            <Text style={styles.rowName}>{item.name}</Text>
-            <Pressable onPress={() => startEdit(item)}>
-              <Text style={styles.editLink}>Modifier</Text>
-            </Pressable>
-            <Pressable onPress={() => setPendingDelete(item)}>
-              <Text style={styles.deleteLink}>Supprimer</Text>
-            </Pressable>
+            <View style={styles.rowBody}>
+              <Text style={styles.rowName}>{item.name}</Text>
+              <View style={styles.rowActions}>
+                <Pressable onPress={() => startEdit(item)}>
+                  <Text style={styles.editLink}>Modifier</Text>
+                </Pressable>
+                <Pressable onPress={() => setPendingDelete(item)}>
+                  <Text style={styles.deleteLink}>Supprimer</Text>
+                </Pressable>
+              </View>
+            </View>
           </View>
         )}
       />
@@ -255,7 +313,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   formActions: { flexDirection: 'row', gap: 10, marginBottom: spacing.lg },
-  listTitle: { color: colors.creamMuted, fontFamily: fonts.bodySemiBold, fontSize: 13, marginBottom: spacing.sm },
+  listTitle: { color: colors.creamMuted, fontFamily: fonts.bodySemiBold, fontSize: 13, marginBottom: 4 },
+  orderHint: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 12, marginBottom: spacing.sm },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -265,9 +324,24 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
     marginBottom: spacing.sm,
   },
+  rowRank: { width: 22, color: colors.gold, fontFamily: fonts.bodyBold, fontSize: 15, textAlign: 'center' },
+  moveCol: { gap: 4 },
+  moveBtn: {
+    width: 30,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: colors.gold,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  moveBtnOff: { opacity: 0.25 },
+  moveText: { color: colors.gold, fontSize: 11 },
   rowImage: { width: 40, height: 40, borderRadius: 20 },
   rowImagePlaceholder: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.panelAlt },
-  rowName: { flex: 1, color: colors.cream, fontFamily: fonts.bodySemiBold, fontSize: 14 },
-  editLink: { color: colors.gold, fontFamily: fonts.bodyMedium, fontSize: 12, marginRight: 12 },
+  rowBody: { flex: 1 },
+  rowName: { color: colors.cream, fontFamily: fonts.bodySemiBold, fontSize: 14 },
+  rowActions: { flexDirection: 'row', gap: 16, marginTop: 4 },
+  editLink: { color: colors.gold, fontFamily: fonts.bodyMedium, fontSize: 12 },
   deleteLink: { color: colors.red, fontFamily: fonts.bodyMedium, fontSize: 12 },
 });

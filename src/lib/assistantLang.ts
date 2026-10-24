@@ -168,6 +168,7 @@ export const CATEGORY_AR: Record<string, string> = {
   lunettes: 'نظارات',
   'maison-mobilier': 'المنزل والأثاث',
   montre: 'ساعات',
+  'ordinateur-portable': 'حواسيب محمولة',
   parfum: 'عطور',
   'produits-alimentaires': 'منتجات غذائية',
   'sacs-et-bagages': 'حقائب وأمتعة',
@@ -191,6 +192,7 @@ export const CATEGORY_EMOJI: Record<string, string> = {
   'maison-mobilier': '🛋️',
   'bebe-et-maternite': '🍼',
   'velos-pour-enfants-jouets-et-jeux': '🧸',
+  'ordinateur-portable': '💻',
 };
 
 // Mots français (normalisés, sans pluriel) qui désignent une catégorie.
@@ -211,6 +213,7 @@ export const CATEGORY_WORDS: { slug: string; words: string[] }[] = [
   { slug: 'agriculture-jardinage', words: ['agriculture', 'jardin', 'jardinage', 'semence'] },
   { slug: 'voiture', words: ['voiture', 'auto', 'vehicule'] },
   { slug: 'produits-alimentaires', words: ['aliment', 'alimentaire', 'riz', 'huile'] },
+  { slug: 'ordinateur-portable', words: ['ordinateur', 'laptop'] },
 ];
 
 // Catégories où l'on demande « pour qui ? » (homme, femme, enfant).
