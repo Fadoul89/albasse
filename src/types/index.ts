@@ -152,6 +152,8 @@ export interface Order {
   referrer_source: string | null;
   is_flagged_fake: boolean;
   gift_wrap?: boolean;
+  // remise fidélité (−10 % des articles) déjà déduite du total ; absente tant que add-loyalty-discount.sql n'est pas lancé
+  loyalty_discount?: number;
   created_at: string;
 }
 

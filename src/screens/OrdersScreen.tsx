@@ -11,6 +11,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { OrderStatusStepper } from '../components/OrderStatusStepper';
 import { GIFT_IMAGE } from '../components/GiftWrapOption';
 import { GIFT_WRAP_FEE } from '../constants/shopRules';
+import { LOYALTY_DISCOUNT_RATE } from '../lib/loyaltyDiscount';
 import { useToastStore } from '../store/toastStore';
 import { CountdownTimer } from '../components/CountdownTimer';
 import { formatOrderDate, getOrderDay } from '../lib/formatDuration';
@@ -74,11 +75,14 @@ export function OrdersScreen() {
     if (!pendingRemove) return;
     const { order, index } = pendingRemove;
     const newItems = order.items.filter((_, i) => i !== index);
-    const newTotal = newItems.reduce((sum, oi) => sum + oi.unit_price * oi.quantity, 0) + (order.gift_wrap ? GIFT_WRAP_FEE : 0);
+    const itemsTotal = newItems.reduce((sum, oi) => sum + oi.unit_price * oi.quantity, 0);
+    // la remise fidélité suit les articles qui restent
+    const newDiscount = order.loyalty_discount ? Math.round(itemsTotal * LOYALTY_DISCOUNT_RATE) : 0;
+    const newTotal = itemsTotal - newDiscount + (order.gift_wrap ? GIFT_WRAP_FEE : 0);
     setRemoving(true);
     const { error } = await supabase
       .from('orders')
-      .update({ items: newItems, total: newTotal })
+      .update({ items: newItems, total: newTotal, ...(order.loyalty_discount ? { loyalty_discount: newDiscount } : {}) })
       .eq('id', order.id);
     setRemoving(false);
     if (error) {
@@ -238,6 +242,10 @@ function OrderCard({
         <Text style={styles.editHint}>Touchez ✕ pour retirer un article tant que la commande est en attente.</Text>
       )}
 
+      {order.loyalty_discount ? (
+        <Text style={styles.loyaltyLine} testID="order-loyalty-discount">{`⭐ Remise fidélité −10 % : −${formatXAF(order.loyalty_discount)} (déjà déduite du total)`}</Text>
+      ) : null}
+
       {order.gift_wrap ? (
         <View style={[styles.giftRow, styles.giftRowOn]} testID="order-gift-on">
           <Image source={GIFT_IMAGE} style={styles.giftImage} contentFit="contain" />
@@ -374,6 +382,7 @@ const styles = StyleSheet.create({
   },
   removeItemText: { color: colors.cream, fontFamily: fonts.bodyBold, fontSize: 12 },
   editHint: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 10, marginTop: -4, marginBottom: spacing.sm },
+  loyaltyLine: { color: colors.success, fontFamily: fonts.bodySemiBold, fontSize: 12, marginTop: 8 },
   giftRow: {
     flexDirection: 'row',
     alignItems: 'center',

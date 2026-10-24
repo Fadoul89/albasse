@@ -27,6 +27,7 @@ export interface RecapData {
   city: string;
   fee: number | null; // null : frais à confirmer par l'équipe
   gift: boolean;
+  discount?: number; // remise fidélité (FCFA) déjà déduite du total
   total: number;
   name: string;
   phone: string;
@@ -658,6 +659,7 @@ const FR: Texts = {
         ...d.lines.map((l) => `• ${l.name}${l.variant} × ${l.qty} : ${fcfa(l.subtotal)}`),
         `🚚 Livraison à ${d.city} : ${d.fee === null ? 'à confirmer par l’équipe' : d.fee === 0 ? 'gratuite' : fcfa(d.fee)}`,
         ...(d.gift ? [`🎁 Emballage cadeau : ${fcfa(GIFT_WRAP_FEE)}`] : []),
+        ...(d.discount ? [`⭐ Remise fidélité −10 % (vous êtes un client fidèle, merci !) : −${fcfa(d.discount)}`] : []),
         `💰 Total : ${fcfa(d.total)}`,
         `👤 ${d.name} · 📞 ${d.phone}`,
         `📍 ${d.address}, ${d.city}`,
@@ -1208,6 +1210,7 @@ const AR: Texts = {
         ...d.lines.map((l) => `• ${l.name}${l.variant} × ${l.qty}: ${fcfa(l.subtotal)}`),
         `🚚 التوصيل إلى ${d.city}: ${d.fee === null ? 'سيؤكدها الفريق' : d.fee === 0 ? 'مجاني' : fcfa(d.fee)}`,
         ...(d.gift ? [`🎁 تغليف الهدية: ${fcfa(GIFT_WRAP_FEE)}`] : []),
+        ...(d.discount ? [`⭐ خصم الوفاء 10% (أنت زبون وفي، شكراً!): -${fcfa(d.discount)}`] : []),
         `💰 المجموع: ${fcfa(d.total)}`,
         `👤 ${d.name} · 📞 ${d.phone}`,
         `📍 ${d.address}، ${d.city}`,

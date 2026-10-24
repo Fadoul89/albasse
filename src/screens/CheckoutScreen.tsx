@@ -18,6 +18,7 @@ import { GiftWrapOption } from '../components/GiftWrapOption';
 import { trackTikTokEvent } from '../lib/tiktokPixel';
 import type { PaymentMethod, City } from '../types';
 import { isHomeCity } from '../lib/deliveryRules';
+import { fetchDeliveredOrderCount, loyaltyDiscount, ordersBeforeDiscount } from '../lib/loyaltyDiscount';
 import { DELIVERY_HOURS, GIFT_WRAP_FEE, HOME_CITY, ORDER_VALIDITY_HOURS } from '../constants/shopRules';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
@@ -65,8 +66,14 @@ export function CheckoutScreen() {
   const { settings: paymentSettings } = usePaymentSettings();
 
   const [giftWrap, setGiftWrap] = useState(false);
+  // remise fidélité : −10 % des articles dès 2 commandes livrées
+  const [delivered, setDelivered] = useState<number | null>(null);
+  useEffect(() => {
+    if (profile?.id) fetchDeliveredOrderCount(profile.id).then(setDelivered);
+  }, [profile?.id]);
+  const discount = loyaltyDiscount(total, delivered ?? 0);
   const deliveryFee = selectedCity?.delivery_fee ?? null;
-  const grandTotal = total + (deliveryFee ?? 0) + (giftWrap ? GIFT_WRAP_FEE : 0);
+  const grandTotal = total - discount + (deliveryFee ?? 0) + (giftWrap ? GIFT_WRAP_FEE : 0);
 
   // Paiement a la livraison : seulement pour les clients de N'Djamena. Ailleurs : a l'avance (Airtel Money, Moov Money).
   const cashOnDeliveryAllowed = isHomeCity(city);
@@ -117,6 +124,7 @@ export function CheckoutScreen() {
         shippingAddress: address,
         shippingCity: city,
         giftWrap,
+        loyaltyDiscount: discount,
       });
 
       if (error || !order) {
@@ -309,6 +317,12 @@ export function CheckoutScreen() {
                 : formatXAF(deliveryFee)}
             </Text>
           </View>
+          {discount > 0 ? (
+            <View style={styles.summaryRow} testID="checkout-loyalty-discount">
+              <Text style={styles.discountLabel}>⭐ Remise fidélité (−10 %)</Text>
+              <Text style={styles.discountValue}>−{formatXAF(discount)}</Text>
+            </View>
+          ) : null}
           {giftWrap ? (
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>🎁 Emballage cadeau</Text>
@@ -319,6 +333,11 @@ export function CheckoutScreen() {
             <Text style={styles.totalLabel}>Total</Text>
             <Text style={styles.totalValue}>{formatXAF(grandTotal)}</Text>
           </View>
+          {delivered !== null && discount === 0 ? (
+            <Text style={styles.discountHint} testID="checkout-loyalty-hint">
+              {`⭐ Encore ${ordersBeforeDiscount(delivered)} commande(s) livrée(s) et vous aurez −10 % sur vos articles !`}
+            </Text>
+          ) : null}
         </View>
 
         <Text style={styles.serviceNote}>
@@ -433,5 +452,8 @@ const styles = StyleSheet.create({
   summaryLabel: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 13 },
   summaryValue: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 13 },
   totalLabel: { color: colors.cream, fontFamily: fonts.bodySemiBold, fontSize: 15 },
+  discountLabel: { color: colors.success, fontFamily: fonts.bodySemiBold, fontSize: 13 },
+  discountValue: { color: colors.success, fontFamily: fonts.bodyBold, fontSize: 13 },
+  discountHint: { color: colors.goldLight, fontFamily: fonts.bodyMedium, fontSize: 12, marginTop: 8 },
   totalValue: { color: colors.goldLight, fontFamily: fonts.displayBold, fontSize: 18 },
 });

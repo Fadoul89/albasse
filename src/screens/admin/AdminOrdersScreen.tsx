@@ -150,6 +150,9 @@ export function AdminOrdersScreen() {
             <Text style={styles.customer}>{item.shipping_name} · {item.shipping_phone}</Text>
             <Text style={styles.address}>{item.shipping_address}, {item.shipping_city}</Text>
             {item.gift_wrap && <Text style={styles.giftBadge}>🎁 À emballer : emballage cadeau (2 000 FCFA inclus dans le total)</Text>}
+            {!!item.loyalty_discount && (
+              <Text style={styles.giftBadge}>{`⭐ Remise fidélité −10 % : −${item.loyalty_discount.toLocaleString('fr-FR')} FCFA (déjà déduite du total)`}</Text>
+            )}
             <View style={styles.dateRow}>
               <Text style={styles.date}>{formatOrderDate(item.created_at)}</Text>
               {getOrderDay(item.created_at) === 'today' && (
