@@ -31,7 +31,8 @@ export async function askZaraAi(message: string, history: ZaraAiTurn[], visitorI
       return null;
     }
     const ids = Array.isArray(d.productIds) ? d.productIds.filter((x): x is string => typeof x === 'string') : [];
-    return { text: d.text.trim(), productIds: ids };
+    // pas de mise en forme markdown dans la bulle de Zara : on retire les ** du gras
+    return { text: d.text.replace(/\*\*/g, '').trim(), productIds: ids };
   } catch {
     return null;
   }
