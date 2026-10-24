@@ -239,7 +239,7 @@ function RowCard({ row, index }: { row: OverviewRow; index: number }) {
         <Fact label="Temps actif" value={formatSeconds(row.activeSeconds)} />
         <Fact label="Dernière visite" value={`${formatSeconds(row.lastDurationSeconds)} · ${formatAgo(row.lastViewedAt)}`} />
         <Fact label="Clics (photos, tailles, couleurs)" value={String(row.variantClicks)} />
-        <Fact label="Panier" value={CART_LABELS[row.cartStatus]} />
+        <Fact label="Intention" value={CART_LABELS[row.cartStatus]} />
         <Fact label="Commande" value={row.orderStatus ? ORDER_STATUS_LABELS[row.orderStatus] ?? row.orderStatus : '—'} />
         <Fact label="Dernière suggestion de Zara" value={row.lastSuggestionKind ? `${SUGGESTION_LABELS[row.lastSuggestionKind]} · ${formatAgo(row.lastSuggestionAt)}` : '—'} />
       </View>
