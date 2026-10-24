@@ -7,6 +7,7 @@ import { useAssistantStore } from '../store/assistantStore';
 import { useAuthStore } from '../store/authStore';
 import { firstNameOfFullName } from '../lib/assistantBrain';
 import { texts } from '../lib/assistantText';
+import { pushReminderNow } from '../lib/pushReminder';
 import { AssistantPanel } from './AssistantPanel';
 import { TAB_BAR_HEIGHT } from '../navigation/tabLayout';
 
@@ -383,6 +384,8 @@ export function Assistant() {
   const name = memberName ?? savedName;
   const routeName = useCurrentRouteName();
   const [teaserVisible, setTeaserVisible] = useState(false);
+  // installé sans notifications : la bulle rappelle de les activer (toucher la bulle ouvre Zara, qui propose le bouton)
+  const [pushDue] = useState(() => pushReminderNow() === 'ask');
   const { width: winW, height: winH } = useWindowDimensions();
   const [spot, setSpot] = useState<FabSpot | null>(loadFabSpot);
   const [dragging, setDragging] = useState(false);
@@ -463,7 +466,7 @@ export function Assistant() {
               pointerEvents="box-none"
             >
               <Pressable ref={teaserRef} style={styles.teaser} onPress={openChat} accessibilityRole="button" accessibilityLabel={t.openLabel}>
-                <Text style={[styles.teaserText, rtl && styles.teaserTextRtl]}>{memberName ? t.teaserMember(memberName) : t.teaser(name)}</Text>
+                <Text style={[styles.teaserText, rtl && styles.teaserTextRtl]}>{pushDue ? t.teaserPush(name) : memberName ? t.teaserMember(memberName) : t.teaser(name)}</Text>
                 <Pressable onPress={dismissTeaser} hitSlop={10} style={styles.teaserClose} accessibilityRole="button" accessibilityLabel={t.ui.closeTeaser}>
                   <Text style={styles.teaserCloseText}>✕</Text>
                 </Pressable>

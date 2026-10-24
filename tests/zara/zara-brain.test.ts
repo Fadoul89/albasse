@@ -472,10 +472,11 @@ async function main() {
   console.log('\n== noms et ponctuation selon la langue');
   ok('{nom} -> « , Ali » en francais et « ، Ali » en arabe', tx.withName('fr', 'Bonjour{nom} !', 'Ali') === 'Bonjour, Ali !' && tx.withName('ar', 'مرحبا{nom}!', 'علي') === 'مرحبا، علي!' && tx.withName('fr', 'Bonjour{nom} !', null) === 'Bonjour !' && tx.withName('ar', 'مرحبا{nom}!', null) === 'مرحبا!');
   ok('nom de categorie selon la langue', tx.categoryLabel('ar', 'parfum', 'Parfum') === 'عطور' && tx.categoryLabel('fr', 'parfum', 'Parfum') === 'Parfum' && tx.categoryLabel('ar', 'inconnue', 'Divers') === 'Divers');
-  ok('accueil : meme texte que l\'exemple du patron (fr), avec le prenom, le rang du jour et l\'invitation', tx.texts('fr').welcome('Moussa', 3, false) === 'Salut Moussa ! 😍👋 Bienvenue chez Albasse Shopping ! Vous êtes mon 3ᵉ client aujourd’hui, ça me fait plaisir de vous accueillir ! 🥰🛍️\nDites-moi, qu’est-ce qui vous ferait plaisir aujourd’hui ? Je suis là pour vous aider à trouver les meilleurs articles ! ❤️', tx.texts('fr').welcome('Moussa', 3, false));
-  ok('accueil sans rang connu : aucune phrase sur le nombre de clients (jamais de nombre invente)', !/client aujourd/.test(tx.texts('fr').welcome('Moussa', null, false)) && /^Salut Moussa ! 😍👋 Bienvenue chez Albasse Shopping ! Ça me fait plaisir de vous accueillir ! 🥰🛍️/.test(tx.texts('fr').welcome('Moussa', null, false)) && !/\d/.test(tx.texts('ar').welcome('علي', null, false)) && !/\d/.test(tx.texts('fr').welcome(null, null, false)), [tx.texts('fr').welcome('Moussa', null, false), tx.texts('ar').welcome('علي', null, false)]);
+  ok('accueil : meme texte que l\'exemple du patron (fr), avec le prenom, le rang du jour et l\'invitation', tx.texts('fr').welcome('Moussa', 3, false) === 'Salut Moussa ! 😍👋 Bienvenue chez Albasse Shopping ! Vous êtes mon 3ᵉ client aujourd’hui, ça me fait plaisir de vous accueillir ! 🥰🛍️\n🇹🇩 Nous sommes une plateforme 100 % TCHADIENNE !\nDites-moi, qu’est-ce qui vous ferait plaisir aujourd’hui ? Je suis là pour vous aider à trouver les meilleurs articles ! ❤️', tx.texts('fr').welcome('Moussa', 3, false));
+  ok('accueil : Zara rappelle que la plateforme est 100 % tchadienne 🇹🇩 (fr et ar, avec ou sans rang)', [tx.texts('fr').welcome('Moussa', 3, false), tx.texts('fr').welcome(null, null, true)].every((t) => t.includes('\n🇹🇩 Nous sommes une plateforme 100 % TCHADIENNE !\n')) && [tx.texts('ar').welcome('علي', 3, false), tx.texts('ar').welcome(null, null, true)].every((t) => t.includes('\n🇹🇩 نحن منصة تشادية 100%!\n')));
+  ok('accueil sans rang connu : aucune phrase sur le nombre de clients (jamais de nombre invente)', !/client aujourd/.test(tx.texts('fr').welcome('Moussa', null, false)) && /^Salut Moussa ! 😍👋 Bienvenue chez Albasse Shopping ! Ça me fait plaisir de vous accueillir ! 🥰🛍️/.test(tx.texts('fr').welcome('Moussa', null, false)) && !/\d/.test(tx.texts('ar').welcome('علي', null, false).replace('100%', '')) && !/\d/.test(tx.texts('fr').welcome(null, null, false).replace('100 %', '')), [tx.texts('fr').welcome('Moussa', null, false), tx.texts('ar').welcome('علي', null, false)]);
   ok('accueil : 1ᵉʳ, 2ᵉ, 3ᵉ, 12ᵉ, 237ᵉ client ; sans prenom : « Salut ! »', tx.ordinalFr(1) === '1ᵉʳ' && tx.ordinalFr(2) === '2ᵉ' && tx.ordinalFr(12) === '12ᵉ' && tx.texts('fr').welcome(null, 1, false).includes('mon 1ᵉʳ client aujourd’hui') && tx.texts('fr').welcome(null, 237, false).includes('mon 237ᵉ client aujourd’hui') && tx.texts('fr').welcome(null, 3, false).startsWith('Salut ! 😍👋'));
-  ok('accueil (ar) : prenom, rang du jour, invitation', tx.texts('ar').welcome('علي', 3, false) === 'مرحباً علي! 😍👋 أهلاً بك في Albasse Shopping! أنت رقم 3 بين عملائي اليوم، ويسعدني استقبالك! 🥰🛍️\nما الذي يسعدك اليوم؟ أنا هنا لمساعدتك في إيجاد أفضل المنتجات! ❤️', tx.texts('ar').welcome('علي', 3, false));
+  ok('accueil (ar) : prenom, rang du jour, invitation', tx.texts('ar').welcome('علي', 3, false) === 'مرحباً علي! 😍👋 أهلاً بك في Albasse Shopping! أنت رقم 3 بين عملائي اليوم، ويسعدني استقبالك! 🥰🛍️\n🇹🇩 نحن منصة تشادية 100%!\nما الذي يسعدك اليوم؟ أنا هنا لمساعدتك في إيجاد أفضل المنتجات! ❤️', tx.texts('ar').welcome('علي', 3, false));
   ok('si le prenom a deja ete dit dans le 1er message : pas de second « Salut » ni de second prenom', !/Salut|Moussa/.test(tx.texts('fr').welcome('Moussa', 3, true)) && tx.texts('fr').welcome('Moussa', 3, true).startsWith('Bienvenue chez Albasse Shopping ! Vous êtes mon 3ᵉ client') && !/مرحباً|علي/.test(tx.texts('ar').welcome('علي', 3, true)) && tx.texts('ar').welcome('علي', 3, true).startsWith('أهلاً بك في Albasse Shopping!'));
   ok('chaque langue a son sens d\'ecriture', tx.texts('fr').dir === 'ltr' && tx.texts('ar').dir === 'rtl');
   ok('inconnue -> francais', tx.texts('xx' as l.Lang).dir === 'ltr');
@@ -1334,6 +1335,25 @@ async function main() {
     const people = ['Mozilla/5.0 (Linux; Android 10; CUBOT X30) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36', 'Mozilla/5.0 (Linux; Android 12; SM-A125F) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36 [FB_IAB/FB4A;FBAV/440.0]', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Instagram 300.0'];
     ok('vrais telephones (Cubot, navigateur de Facebook, Instagram) : le mur', people.every((ua) => aw.mustSignUp({ ...base, userAgent: ua })));
     ok('pages ouvertes sans compte : connexion, inscription, mot de passe, confidentialite, retours, contact ; le reste est couvert', ['Login', 'Register', 'ForgotPassword', 'ResetPassword', 'PrivacyPolicy', 'ReturnPolicy', 'Contact'].every((r) => !aw.wallCovers(r)) && ['Tabs', 'Product', 'Category', 'Checkout', undefined].every((r) => aw.wallCovers(r)));
+  }
+
+  {
+    console.log('\n== rappel des notifications (installe sans notifications)');
+    const pr = await import('../../src/lib/pushReminderRule.ts');
+    const now = Date.UTC(2026, 9, 20, 10);
+    const day = 24 * 3600 * 1000;
+    const base = { supported: true, permission: 'default' as const, installed: true, record: null, now };
+    ok('installe, jamais demande : Zara propose d\'activer', pr.pushReminder(base) === 'ask');
+    ok('pas installe, pas pris en charge (application Albasse, Safari hors ecran d\'accueil) ou deja active : rien', pr.pushReminder({ ...base, installed: false }) === 'none' && pr.pushReminder({ ...base, supported: false }) === 'none' && pr.pushReminder({ ...base, permission: 'granted' }) === 'none' && pr.pushReminder({ ...base, permission: null }) === 'none');
+    ok('bloquees : les etapes pour debloquer', pr.pushReminder({ ...base, permission: 'denied' }) === 'blocked');
+    const after = (outcome: string, ms: number) => pr.pushReminder({ ...base, record: { at: now - ms, outcome } });
+    ok('question ignoree : redit le lendemain, pas avant', after('asked', day - 60000) === 'none' && after('asked', day + 60000) === 'ask');
+    ok('« Plus tard » : 3 jours de pause', after('later', 3 * day - 60000) === 'none' && after('later', 3 * day + 60000) === 'ask');
+    ok('etapes donnees : 7 jours de pause', pr.pushReminder({ ...base, permission: 'denied', record: { at: now - 6 * day, outcome: 'steps' } }) === 'none' && pr.pushReminder({ ...base, permission: 'denied', record: { at: now - 8 * day, outcome: 'steps' } }) === 'blocked');
+    ok('le bouton du menu ignore la pause (tant que ce n\'est pas active)', pr.pushReminder({ ...base, record: { at: now, outcome: 'later' }, ignorePause: true }) === 'ask');
+    const fr = tx.texts('fr');
+    const ar = tx.texts('ar');
+    ok('textes en francais et en arabe (rappel, bouton, bulle)', [fr.push.ask, fr.push.done, fr.push.later, fr.push.notGranted, fr.push.failed, fr.push.blockedAndroid, fr.push.blockedIos, ar.push.ask, ar.push.done, ar.push.later, ar.push.blockedAndroid].every((t) => t.length > 20) && fr.chip.enablePush === '🔔 Activer les notifications' && ar.chip.enablePush === '🔔 تفعيل الإشعارات' && fr.teaserPush('Ali') === '🔔 Ali, activez les notifications pour ne rater aucune promo !' && fr.teaserPush(null) === '🔔 Activez les notifications pour ne rater aucune promo !');
   }
 
   console.log('\n' + (failures === 0 ? 'TOUT EST BON' : `${failures} ECHEC(S)`));

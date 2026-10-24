@@ -60,6 +60,8 @@ export interface Texts {
   // client qui vient de se connecter pendant la conversation
   memberBack(name: string): string;
   teaserMember(name: string): string;
+  // bulle pour ceux qui ont installé Albasse Shopping sans activer les notifications
+  teaserPush(name: string | null): string;
   askName: string;
   askNameGuest: string;
   askNameMember: string;
@@ -122,6 +124,7 @@ export interface Texts {
     cancel: string;
     installApp: string;
     installHelp: string;
+    enablePush: string;
     alreadyInstalled: string;
     tutorial: string;
     notNow: string;
@@ -327,6 +330,16 @@ export interface Texts {
     desktop: string;
     productNudge: string;
   };
+  // rappel d'activer les notifications (installé mais notifications pas encore autorisées)
+  push: {
+    ask: string;
+    done: string;
+    later: string;
+    notGranted: string;
+    failed: string;
+    blockedAndroid: string;
+    blockedIos: string;
+  };
   // suggestions discrètes d'après les articles regardés (jamais à chaque clic, jamais sans raison vraie)
   interest: {
     shoes: string;
@@ -436,11 +449,12 @@ const FR: Texts = {
   dir: 'ltr',
   roleTitle: 'Assistante marketing',
   welcome: (name, rank, greeted) =>
-    `${greeted ? '' : `Salut${name ? ` ${name}` : ''} ! 😍👋 `}Bienvenue chez Albasse Shopping ! ${rank ? `Vous êtes mon ${ordinalFr(rank)} client aujourd’hui, ça` : 'Ça'} me fait plaisir de vous accueillir ! 🥰🛍️\nDites-moi, qu’est-ce qui vous ferait plaisir aujourd’hui ? Je suis là pour vous aider à trouver les meilleurs articles ! ❤️`,
+    `${greeted ? '' : `Salut${name ? ` ${name}` : ''} ! 😍👋 `}Bienvenue chez Albasse Shopping ! ${rank ? `Vous êtes mon ${ordinalFr(rank)} client aujourd’hui, ça` : 'Ça'} me fait plaisir de vous accueillir ! 🥰🛍️\n🇹🇩 Nous sommes une plateforme 100 % TCHADIENNE !\nDites-moi, qu’est-ce qui vous ferait plaisir aujourd’hui ? Je suis là pour vous aider à trouver les meilleurs articles ! ❤️`,
   teaser: (name) => `Bonjour${name ? ` ${name}` : ''} ! Je suis ${ASSISTANT_NAME}, l'${ASSISTANT_ROLE} d'Albasse Shopping. 😊`,
   hello: (name) => `Salut ${name} ! 😍👋`,
   memberBack: (name) => `Salut ${name} ! 😍👋 Vous êtes bien connecté(e), ça me fait plaisir de vous retrouver ! 🥰`,
   teaserMember: (name) => `Salut ${name} ! 😍👋 ${ASSISTANT_NAME} est à votre service 🛍️`,
+  teaserPush: (name) => `🔔 ${name ? `${name}, activez` : 'Activez'} les notifications pour ne rater aucune promo !`,
   askName: 'Comment puis-je vous appeler ?',
   askNameGuest: 'Comment puis-je vous appeler ? Si vous avez déjà un compte, connectez-vous : je vous reconnaîtrai 😊',
   askNameMember: 'Je vois que vous êtes connecté(e) 😊 Votre compte n’a pas encore de prénom : comment puis-je vous appeler ?',
@@ -513,6 +527,7 @@ const FR: Texts = {
     cancel: 'Annuler',
     installApp: '📲 Installer Albasse Shopping',
     installHelp: '📲 Voir comment installer',
+    enablePush: '🔔 Activer les notifications',
     alreadyInstalled: '✅ Oui, déjà installée',
     tutorial: '🎬 Voir le tutoriel',
     notNow: 'Plus tard',
@@ -853,6 +868,16 @@ const FR: Texts = {
     desktop: 'Pour installer : cliquez sur l’icône d’installation ⊕ dans la barre d’adresse de Chrome, ou sur les trois points (⋮) puis « Installer Albasse Shopping ».',
     productNudge: '📲 Astuce : installez Albasse Shopping sur votre écran d’accueil pour retrouver nos articles en un toucher.',
   },
+  push: {
+    ask: '🔔 Vous avez installé Albasse Shopping, mais les notifications ne sont pas encore activées.\nActivez-les pour recevoir en premier nos promotions, nos ventes flash et nos nouveautés !',
+    done: '🎉 C’est activé ! Vous recevrez nos promotions et nos nouveautés directement sur votre téléphone.',
+    later: 'D’accord 😊 Je vous le rappellerai plus tard. Vous pouvez aussi les activer à tout moment depuis le menu.',
+    notGranted: 'Les notifications n’ont pas été autorisées 😊 Je vous le rappellerai plus tard.',
+    failed: 'Je n’ai pas pu activer les notifications cette fois 😕 Réessayez dans un instant.',
+    blockedAndroid:
+      '🔔 Les notifications d’Albasse Shopping sont bloquées sur ce téléphone. Pour les autoriser :\n1. Restez appuyé sur l’icône Albasse Shopping de votre écran d’accueil\n2. Touchez « Infos sur l’appli » (ⓘ), puis « Notifications »\n3. Activez « Autoriser les notifications »\nDans Chrome : touchez le cadenas à gauche de l’adresse, puis « Autorisations », « Notifications » et « Autoriser ».',
+    blockedIos: '🔔 Les notifications sont bloquées. Sur iPhone : ouvrez « Réglages », puis « Notifications », « Albasse Shopping », et activez « Autoriser les notifications ».',
+  },
   interest: {
     shoes: '😊 Cette paire semble vous intéresser ! Voulez-vous revoir les tailles disponibles ou découvrir des modèles similaires ?',
     clothing: 'Ce modèle vous plaît ? 👕 Je peux vous présenter les couleurs et les tailles disponibles.',
@@ -1000,11 +1025,12 @@ const AR: Texts = {
   dir: 'rtl',
   roleTitle: 'مساعدة التسويق',
   welcome: (name, rank, greeted) =>
-    `${greeted ? '' : `مرحباً${name ? ` ${name}` : ''}! 😍👋 `}أهلاً بك في Albasse Shopping! ${rank ? `أنت رقم ${rank} بين عملائي اليوم، ويسعدني` : 'يسعدني'} استقبالك! 🥰🛍️\nما الذي يسعدك اليوم؟ أنا هنا لمساعدتك في إيجاد أفضل المنتجات! ❤️`,
+    `${greeted ? '' : `مرحباً${name ? ` ${name}` : ''}! 😍👋 `}أهلاً بك في Albasse Shopping! ${rank ? `أنت رقم ${rank} بين عملائي اليوم، ويسعدني` : 'يسعدني'} استقبالك! 🥰🛍️\n🇹🇩 نحن منصة تشادية 100%!\nما الذي يسعدك اليوم؟ أنا هنا لمساعدتك في إيجاد أفضل المنتجات! ❤️`,
   teaser: (name) => `مرحبا${name ? ` ${name}` : ''}! أنا زارا كينغز، مساعدة التسويق في Albasse Shopping. 😊`,
   hello: (name) => `مرحباً ${name}! 😍👋`,
   memberBack: (name) => `مرحباً ${name}! 😍👋 تم تسجيل دخولك، ويسعدني لقاؤك من جديد! 🥰`,
   teaserMember: (name) => `مرحباً ${name}! 😍👋 زارا كينغز في خدمتك 🛍️`,
+  teaserPush: (name) => `🔔 ${name ? `${name}، ` : ''}فعّل الإشعارات حتى لا تفوتك أي عروض!`,
   askName: 'كيف يمكنني أن أناديك؟',
   askNameGuest: 'كيف يمكنني أن أناديك؟ إذا كان لديك حساب، سجّل الدخول وسأتعرف عليك 😊',
   askNameMember: 'أرى أنك مسجّل الدخول 😊 حسابك لا يحتوي على اسم بعد، فكيف يمكنني أن أناديك؟',
@@ -1077,6 +1103,7 @@ const AR: Texts = {
     cancel: 'إلغاء',
     installApp: '📲 تثبيت Albasse Shopping',
     installHelp: '📲 شاهد كيفية التثبيت',
+    enablePush: '🔔 تفعيل الإشعارات',
     alreadyInstalled: '✅ نعم، مثبّت بالفعل',
     tutorial: '🎬 عرض الشرح',
     notNow: 'لاحقا',
@@ -1415,6 +1442,16 @@ const AR: Texts = {
     androidSamsung: 'للتثبيت: اضغط على القائمة (☰) أسفل متصفح Samsung Internet، ثم «إضافة الصفحة إلى» ثم «الشاشة الرئيسية».',
     desktop: 'للتثبيت: اضغط على أيقونة التثبيت ⊕ في شريط عنوان Chrome، أو على النقاط الثلاث (⋮) ثم «تثبيت Albasse Shopping».',
     productNudge: '📲 نصيحة: ثبّت Albasse Shopping على شاشتك الرئيسية لتجد منتجاتنا بلمسة واحدة.',
+  },
+  push: {
+    ask: '🔔 لقد ثبّت Albasse Shopping، لكن الإشعارات غير مفعّلة بعد.\nفعّلها لتصلك عروضنا وتخفيضاتنا السريعة ومنتجاتنا الجديدة أولاً!',
+    done: '🎉 تم التفعيل! ستصلك عروضنا ومنتجاتنا الجديدة مباشرة على هاتفك.',
+    later: 'حسناً 😊 سأذكّرك لاحقاً. يمكنك أيضاً تفعيلها في أي وقت من القائمة.',
+    notGranted: 'لم يتم السماح بالإشعارات 😊 سأذكّرك لاحقاً.',
+    failed: 'لم أتمكن من تفعيل الإشعارات هذه المرة 😕 حاول مرة أخرى بعد لحظة.',
+    blockedAndroid:
+      '🔔 إشعارات Albasse Shopping محظورة على هذا الهاتف. للسماح بها:\n1. اضغط مطولاً على أيقونة Albasse Shopping في شاشتك الرئيسية\n2. اضغط «معلومات التطبيق» (ⓘ) ثم «الإشعارات»\n3. فعّل «السماح بالإشعارات»\nفي Chrome: اضغط على القفل بجانب العنوان، ثم «الأذونات» و«الإشعارات» و«سماح».',
+    blockedIos: '🔔 الإشعارات محظورة. على الآيفون: افتح «الإعدادات» ثم «الإشعارات» ثم «Albasse Shopping» وفعّل «السماح بالإشعارات».',
   },
   interest: {
     shoes: '😊 يبدو أن هذا الحذاء أعجبك! هل تريد مراجعة المقاسات المعروضة أو اكتشاف موديلات مشابهة؟',
