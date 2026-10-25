@@ -3781,7 +3781,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await waitWall(v.page);
       await sleep(1500);
       const txt = await wall(v.page).innerText();
-      check('compte obligatoire : l\'ecran d\'entree couvre l\'accueil (ALBASSE SHOPPING, Bienvenue)', /ALBASSE SHOPPING/.test(txt) && /Bienvenue sur Albasse Shopping/.test(txt) && /Livraison partout au Tchad/.test(txt) && /Créez votre compte dès maintenant/.test(txt), txt.slice(0, 200));
+      check('compte obligatoire : l\'ecran d\'entree couvre l\'accueil (ALBASSE SHOPPING, Bienvenue)', /ALBASSE SHOPPING/.test(txt) && /Bienvenue/.test(txt) && /Créez votre compte gratuit pour découvrir nos articles/.test(txt) && !/Pourquoi choisir Albasse Shopping/.test(txt), txt.slice(0, 200));
       const yOf = async (loc) => (await loc.boundingBox())?.y ?? -1;
       const yForm = await yOf(wall(v.page).getByTestId('register-name'));
       const ySwitch = await yOf(wall(v.page).getByText('J’ai déjà un compte', { exact: true }));
@@ -4282,6 +4282,26 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('achats recents : de vraies commandes, ville + article + il y a 2 h / 20 min (aucun nom de client)', /Un client de N'Djamena a commandé : Capuche noire · il y a 2 h/.test(txt) && /Un client a commandé : Slip-on · il y a 20 min/.test(txt), txt);
       check('achats recents : aucun des anciens faux textes (noms, temoignages)', !/Amina|Youssouf|Fatima Saleh|témoign|avis 5/i.test(txt));
       check('achats recents : la barre est tout en haut de la page', (await bar.boundingBox()).y < 120);
+      const first = bar.getByText(/Un client de N'Djamena/).first();
+      const x1 = (await first.boundingBox()).x;
+      await sleep(1500);
+      const x2 = (await first.boundingBox()).x;
+      check('achats recents : la barre defile (le texte bouge vers la gauche)', x2 < x1 - 20, { x1, x2 });
+      await v.ctx.close();
+    }
+    {
+      // une seule vraie commande (cas du debut) : la barre est remplie et defile quand meme
+      const fr = { rows: [{ city: 'Abéché', product: 'Capuche', created_at: new Date(Date.now() - 5 * 60_000).toISOString() }] };
+      const v = await newVisitor(phone, { fakeRecent: fr });
+      await openHome(v);
+      const bar = v.page.getByTestId('recent-purchases');
+      await bar.waitFor({ timeout: 15000 });
+      const copies = v.page.getByTestId('recent-purchases').getByText(/Un client de Abéché a commandé : Capuche · il y a 5 min/);
+      const n = await copies.count();
+      const x1 = (await copies.first().boundingBox()).x;
+      await sleep(1500);
+      const x2 = (await copies.first().boundingBox()).x;
+      check('achats recents : une seule commande, le texte est repete pour remplir la barre et il defile', n >= 2 && x2 < x1 - 20, { n, x1, x2 });
       await v.ctx.close();
     }
     {

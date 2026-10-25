@@ -15,8 +15,8 @@ export function RecentPurchasesTicker() {
   const noticeText = buildNoticeText(items);
   const [setWidth, setSetWidth] = useState(0);
   const [trackWidth, setTrackWidth] = useState(0);
-  // peu de commandes : le texte tient dans la barre, il reste fixe (pas de défilement ni de trou à droite)
-  const scrolls = trackWidth > 0 && setWidth > trackWidth;
+  // le texte est répété assez de fois pour remplir toute la barre (même avec une seule commande), puis défile sans fin
+  const copies = setWidth > 0 && trackWidth > 0 ? Math.ceil(trackWidth / setWidth) + 1 : 2;
   const translateX = useRef(new Animated.Value(0)).current;
   const measuredForWidth = useRef(0);
 
@@ -29,8 +29,7 @@ export function RecentPurchasesTicker() {
   }, []);
 
   useEffect(() => {
-    translateX.setValue(0);
-    if (!scrolls) return;
+    if (setWidth === 0) return;
     let stopped = false;
 
     const runLoop = () => {
@@ -49,31 +48,33 @@ export function RecentPurchasesTicker() {
     return () => {
       stopped = true;
     };
-  }, [setWidth, scrolls]);
+  }, [setWidth]);
 
   if (items.length === 0) return null;
   return (
     <View style={styles.wrapper} testID="recent-purchases">
       <View style={styles.track} onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}>
         <Animated.View style={[styles.row, { transform: [{ translateX }] }]}>
-          <Text
-            style={styles.text}
-            numberOfLines={1}
-            onLayout={(e) => {
-              const w = e.nativeEvent.layout.width;
-              if (w > 0 && Math.abs(w - measuredForWidth.current) > 1) {
-                measuredForWidth.current = w;
-                setSetWidth(w);
+          {Array.from({ length: copies }, (_, i) => (
+            <Text
+              key={i}
+              style={styles.text}
+              numberOfLines={1}
+              onLayout={
+                i === 0
+                  ? (e) => {
+                      const w = e.nativeEvent.layout.width;
+                      if (w > 0 && Math.abs(w - measuredForWidth.current) > 1) {
+                        measuredForWidth.current = w;
+                        setSetWidth(w);
+                      }
+                    }
+                  : undefined
               }
-            }}
-          >
-            {scrolls ? noticeText : noticeText.replace(/[\s•]+$/, '')}
-          </Text>
-          {scrolls ? (
-            <Text style={styles.text} numberOfLines={1}>
+            >
               {noticeText}
             </Text>
-          ) : null}
+          ))}
         </Animated.View>
       </View>
     </View>

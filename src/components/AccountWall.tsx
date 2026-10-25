@@ -12,13 +12,6 @@ import { RegisterForm } from './RegisterForm';
 
 const LOGO = require('../../assets/logo.jpg');
 
-const WHY = [
-  'Des articles pour tous les goûts et tous les budgets',
-  'Une expérience d’achat simple et pratique',
-  'Livraison partout au Tchad 🇹🇩',
-  'Un service client à votre écoute',
-];
-
 export function AccountWall() {
   const [mode, setMode] = useState<'register' | 'login'>('register');
   const go = (route: 'ForgotPassword' | 'PrivacyPolicy') => {
@@ -32,31 +25,12 @@ export function AccountWall() {
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Image source={LOGO} style={styles.logo} contentFit="cover" />
         <Text style={styles.brand}>ALBASSE SHOPPING</Text>
-        {register ? (
-          <View style={styles.welcome} testID="wall-welcome">
-            <Text style={styles.title}>🎉 Bienvenue sur Albasse Shopping ! 🛍️</Text>
-            <Text style={styles.text}>Bonjour et bienvenue à tous nos nouveaux clients ! ❤️</Text>
-            <Text style={styles.text}>
-              Nous sommes ravis de vous accueillir sur 🌐 www.albasseshopping.com, votre plateforme de vente en ligne 100 % tchadienne 🇹🇩.
-            </Text>
-            <Text style={styles.text}>
-              Découvrez une large sélection de vêtements, chaussures, parfums, montres et accessoires pour tous les styles et tous les budgets.
-            </Text>
-            <Text style={styles.why}>✨ Pourquoi choisir Albasse Shopping ?</Text>
-            <View style={styles.list}>
-              {WHY.map((line) => (
-                <Text key={line} style={styles.item}>✅ {line}</Text>
-              ))}
-            </View>
-            <Text style={styles.text}>🤝 Merci de nous faire confiance et de rejoindre notre grande famille !</Text>
-            <Text style={styles.cta}>🛒 Créez votre compte dès maintenant et profitez pleinement de votre expérience shopping.</Text>
-          </View>
-        ) : (
-          <>
-            <Text style={styles.title}>Bienvenue 👋</Text>
-            <Text style={styles.text}>Connectez-vous pour découvrir nos articles et commander.</Text>
-          </>
-        )}
+        <Text style={styles.title}>Bienvenue 👋</Text>
+        <Text style={styles.text}>
+          {register
+            ? 'Créez votre compte gratuit pour découvrir nos articles et commander.'
+            : 'Connectez-vous pour découvrir nos articles et commander.'}
+        </Text>
         <View style={styles.block} testID={register ? 'wall-register' : 'wall-login'}>
           {register ? (
             <RegisterForm onSuccess={done} onPrivacy={() => go('PrivacyPolicy')} />
@@ -86,13 +60,8 @@ const styles = StyleSheet.create({
   content: { flexGrow: 1, alignItems: 'center', padding: spacing.lg, paddingBottom: spacing.xl * 2 },
   logo: { width: 76, height: 76, borderRadius: 38, marginBottom: spacing.sm, borderWidth: 2, borderColor: colors.gold },
   brand: { fontFamily: fonts.display, fontSize: 22, color: colors.goldLight, letterSpacing: 1, marginBottom: spacing.md },
-  title: { fontFamily: fonts.bodyBold, fontSize: 22, color: colors.cream, marginBottom: 4, textAlign: 'center' },
+  title: { fontFamily: fonts.bodyBold, fontSize: 22, color: colors.cream, marginBottom: 4 },
   text: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: colors.creamMuted, textAlign: 'center', maxWidth: 360 },
-  welcome: { alignItems: 'center', gap: spacing.sm },
-  why: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.goldLight, textAlign: 'center', marginTop: 4 },
-  list: { gap: 4, alignSelf: 'center', maxWidth: 360 },
-  item: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: colors.creamMuted },
-  cta: { fontFamily: fonts.bodySemiBold, fontSize: 14, lineHeight: 20, color: colors.goldLight, textAlign: 'center', maxWidth: 360 },
   block: { width: '100%', maxWidth: 420, marginTop: spacing.lg },
   dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, width: '100%', maxWidth: 420, marginTop: spacing.xl },
   dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
