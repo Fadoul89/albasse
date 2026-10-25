@@ -45,7 +45,7 @@ export type RootStackParamList = {
   AdminAffiliates: undefined;
   AdminAffiliateSettings: undefined;
   AdminAffiliateCommissions: undefined;
-  OrderConfirmation: { orderId: string; total: number; instructions: string | null; giftWrap?: boolean };
+  OrderConfirmation: { orderId: string; total: number; instructions: string | null; giftWrap?: boolean; scheduledFor?: string };
   AdminBestLeads: undefined;
   Wheel: undefined;
   AdminWheel: undefined;

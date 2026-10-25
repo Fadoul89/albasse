@@ -1,3 +1,6 @@
+-- ATTENTION : si add-scheduled-delivery.sql a été lancé, c'est SA version de auto_flag_stale_orders qui doit rester en place
+-- (elle attend le rendez-vous des livraisons programmées payées à la livraison). Ne relancez pas ce fichier après lui.
+--
 -- Signale automatiquement comme "fausse commande" toute commande encore
 -- "en attente" (non payee, non en preparation) plus de 48h apres sa creation.
 -- Reutilise le meme mecanisme que le signalement manuel (flag_fake_order) :

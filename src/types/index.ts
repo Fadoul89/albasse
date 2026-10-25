@@ -158,8 +158,13 @@ export interface Order {
   gift_wrap?: boolean;
   // remise fidélité (−10 % des articles) déjà déduite du total ; absente tant que add-loyalty-discount.sql n'est pas lancé
   loyalty_discount?: number;
+  // livraison programmée (N'Djamena) : rendez-vous choisi par le client ; absentes tant que add-scheduled-delivery.sql n'est pas lancé
+  delivery_type?: DeliveryType;
+  scheduled_for?: string | null;
   created_at: string;
 }
+
+export type DeliveryType = 'standard' | 'scheduled';
 
 export type FlightRequestStatus = 'pending' | 'contacted' | 'booked' | 'cancelled';
 

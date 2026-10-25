@@ -16,15 +16,13 @@ import { useToastStore } from '../store/toastStore';
 import { CountdownTimer } from '../components/CountdownTimer';
 import { formatOrderDate, getOrderDay } from '../lib/formatDuration';
 import { orderNumberLabel } from '../lib/invoice';
+import { flagDeadlineIso, formatSlot, waitsForAppointment } from '../lib/scheduledDelivery';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import type { Order, OrderStatus } from '../types';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
-const FLAG_DEADLINE_MS = 48 * 60 * 60 * 1000;
-const getFlagDeadline = (createdAt: string) =>
-  new Date(new Date(createdAt).getTime() + FLAG_DEADLINE_MS).toISOString();
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
   pending: 'En attente',
@@ -251,6 +249,10 @@ function OrderCard({
         <Text style={styles.loyaltyLine} testID="order-loyalty-discount">{`⭐ Remise fidélité −10 % : −${formatXAF(order.loyalty_discount)} (déjà déduite du total)`}</Text>
       ) : null}
 
+      {order.delivery_type === 'scheduled' && order.scheduled_for ? (
+        <Text style={styles.scheduledLine} testID="order-scheduled">{`📅 Livraison programmée : ${formatSlot(order.scheduled_for)}`}</Text>
+      ) : null}
+
       {order.gift_wrap ? (
         <View style={[styles.giftRow, styles.giftRowOn]} testID="order-gift-on">
           <Image source={GIFT_IMAGE} style={styles.giftImage} contentFit="contain" />
@@ -306,8 +308,12 @@ function OrderCard({
 
       {order.status === 'pending' && !order.is_flagged_fake && (
         <View style={styles.deadlineBox}>
-          <Text style={styles.deadlineLabel}>Merci de confirmer sous 48h, sinon la commande sera signalée :</Text>
-          <CountdownTimer endsAt={getFlagDeadline(order.created_at)} />
+          <Text style={styles.deadlineLabel}>
+            {waitsForAppointment(order)
+              ? 'Votre commande attend votre rendez-vous. Elle sera signalée si elle reste en attente 48h après :'
+              : 'Merci de confirmer sous 48h, sinon la commande sera signalée :'}
+          </Text>
+          <CountdownTimer endsAt={flagDeadlineIso(order)} />
         </View>
       )}
 
@@ -397,6 +403,7 @@ const styles = StyleSheet.create({
   removeItemText: { color: colors.cream, fontFamily: fonts.bodyBold, fontSize: 12 },
   editHint: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 10, marginTop: -4, marginBottom: spacing.sm },
   loyaltyLine: { color: colors.success, fontFamily: fonts.bodySemiBold, fontSize: 12, marginTop: 8 },
+  scheduledLine: { color: colors.goldLight, fontFamily: fonts.bodyBold, fontSize: 13, marginTop: 8 },
   giftRow: {
     flexDirection: 'row',
     alignItems: 'center',

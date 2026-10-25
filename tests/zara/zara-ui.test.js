@@ -5869,6 +5869,182 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await c.ctx.close();
     }
 
+    // --- livraison programmee (clients de N'Djamena) : choix du jour et de l'heure, enregistrement, affichage
+    {
+      const cityPick = async (page, name) => {
+        const input = page.getByPlaceholder('📍 Rechercher une ville...');
+        await input.click();
+        await input.fill(name);
+        await sleep(300);
+        await page.getByText(name, { exact: true }).first().click();
+        await sleep(500);
+      };
+      const open = async (fakeOrders) => {
+        const c = await newVisitor(phone, { storage, fakeUser: fu, fakeOrders });
+        await c.page.goto(`http://localhost:${port}/commande`, { waitUntil: 'load' });
+        await sleep(3500);
+        return c;
+      };
+      const confirmBtn = (page) => page.getByText('Confirmer la commande', { exact: true });
+
+      // le choix n'existe que pour N'Djamena
+      {
+        const c = await open({ list: [], patches: [] });
+        const { page } = c;
+        check('livraison programmee : pas de choix tant que la ville n\'est pas choisie', (await page.getByTestId('delivery-picker').count()) === 0);
+        await cityPick(page, 'Moundou');
+        check('livraison programmee : pas de choix pour Moundou', (await page.getByTestId('delivery-picker').count()) === 0);
+        await cityPick(page, "N'Djamena");
+        check("livraison programmee : N'Djamena propose « Livraison normale » (choisie) et « Livraison programmee »", (await page.getByTestId('delivery-picker').count()) === 1 && (await page.getByTestId('delivery-standard').getAttribute('aria-checked')) === 'true' && (await page.getByTestId('delivery-scheduled').getAttribute('aria-checked')) === 'false');
+        check('livraison normale choisie : ni jours ni heures affiches', (await page.getByTestId('delivery-schedule-box').count()) === 0);
+        await page.getByTestId('delivery-scheduled').click();
+        await sleep(300);
+        const dayIds = await page.locator('[data-testid^="sched-day-"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')));
+        check('programmee : 7 ou 8 jours proposes, a partir d\'aujourd\'hui ou de demain', dayIds.length >= 7 && dayIds.length <= 8, dayIds);
+        const firstLabel = (await page.locator('[data-testid^="sched-day-"]').first().innerText()).trim();
+        check('programmee : le premier jour est « Aujourd\'hui » ou « Demain »', /^(Aujourd'hui|Demain)$/.test(firstLabel), firstLabel);
+        check('programmee : tant que le jour n\'est pas choisi, « Choisissez d\'abord le jour »', (await page.getByText('Choisissez d’abord le jour.').count()) === 1 && (await page.locator('[data-testid^="sched-time-"]').count()) === 0);
+        await page.locator('[data-testid^="sched-day-"]').nth(1).click();
+        await sleep(300);
+        check('programmee : 15 heures proposees (8h30 a 15h30)', (await page.locator('[data-testid^="sched-time-"]').count()) === 15 && (await page.getByTestId('sched-time-08:30').count()) === 1 && (await page.getByTestId('sched-time-15:30').count()) === 1 && (await page.getByTestId('sched-time-16:00').count()) === 0);
+        check('programmee : pas encore de rendez-vous annonce', (await page.getByTestId('sched-summary').count()) === 0);
+        await page.screenshot({ path: path.join(OUT, 'C7-livraison-programmee.png'), fullPage: true });
+        // changer de ville : le choix disparait et la livraison redevient normale
+        await cityPick(page, 'Sarh');
+        check('programmee : changer pour Sarh retire le choix', (await page.getByTestId('delivery-picker').count()) === 0);
+        await cityPick(page, "N'Djamena");
+        check('programmee : retour a N\'Djamena = livraison normale par defaut (le choix precedent est oublie)', (await page.getByTestId('delivery-standard').getAttribute('aria-checked')) === 'true');
+        check('aucune erreur (choix de livraison)', c.errs.length === 0, c.errs);
+        await c.ctx.close();
+      }
+
+      // commande avec rendez-vous
+      {
+        const db = { list: [], patches: [] };
+        const c = await open(db);
+        const { page } = c;
+        await page.getByPlaceholder('Adresse (quartier, rue)').fill('Farcha, rue 12');
+        await cityPick(page, "N'Djamena");
+        await page.getByRole('radio', { name: /Paiement à la livraison/ }).click();
+        await page.getByTestId('delivery-scheduled').click();
+        await confirmBtn(page).click();
+        await page.getByText(/Choisissez le jour et l.heure du rendez-vous/).first().waitFor({ timeout: 5000 });
+        check('programmee sans jour ni heure : message et RIEN n\'est enregistre', (db.attempts ?? []).length === 0);
+        const dayEl = page.locator('[data-testid^="sched-day-"]').nth(1);
+        const dayKey = (await dayEl.getAttribute('data-testid')).replace('sched-day-', '');
+        await dayEl.click();
+        await confirmBtn(page).click();
+        await sleep(600);
+        check('programmee avec le jour mais sans l\'heure : rien n\'est enregistre', (db.attempts ?? []).length === 0);
+        await page.getByTestId('sched-time-10:00').click();
+        await sleep(300);
+        const summary = await page.getByTestId('sched-summary').innerText();
+        check('rendez-vous annonce : « Rendez-vous : … a 10h00 »', /Rendez-vous : .* à 10h00/.test(summary), summary);
+        await page.screenshot({ path: path.join(OUT, 'C8-rendez-vous-choisi.png'), fullPage: true });
+        await confirmBtn(page).click();
+        await page.getByTestId('confirm-scheduled').waitFor({ timeout: 15000 });
+        const sent = (db.created ?? [])[0];
+        check('la commande envoyee a la base porte le type « scheduled » et l\'heure exacte (10h00 a N\'Djamena = 09:00 UTC)', sent && sent.delivery_type === 'scheduled' && sent.scheduled_for === `${dayKey}T09:00:00.000Z`, sent);
+        check('la commande garde sa ville, son paiement et son total (livraison de N\'Djamena gratuite)', sent && sent.shipping_city === "N'Djamena" && sent.payment_method === 'cash_on_delivery' && Number(sent.total) === Number(realProduct.price), { sent, price: realProduct.price });
+        check('une seule commande enregistree', (db.created ?? []).length === 1);
+        const conf = await page.getByTestId('confirm-scheduled').innerText();
+        check('confirmation : « Livraison programmee : … a 10h00 »', /Livraison programmée : .* à 10h00/.test(conf), conf);
+        await page.screenshot({ path: path.join(OUT, 'C9-confirmation-programmee.png') });
+        check('aucune erreur (commande programmee)', c.errs.length === 0, c.errs);
+        await c.ctx.close();
+      }
+
+      // commande normale a N'Djamena : exactement comme avant (aucun champ de livraison programmee)
+      {
+        const db = { list: [], patches: [] };
+        const c = await open(db);
+        const { page } = c;
+        await page.getByPlaceholder('Adresse (quartier, rue)').fill('Farcha, rue 12');
+        await cityPick(page, "N'Djamena");
+        await page.getByRole('radio', { name: /Paiement à la livraison/ }).click();
+        await confirmBtn(page).click();
+        await page.getByText('Merci d\'avoir acheté avec ALBASSE SHOPPING !').waitFor({ timeout: 15000 });
+        const sent = (db.created ?? [])[0];
+        check('commande normale : ni delivery_type ni scheduled_for envoyes', sent && !('delivery_type' in sent) && !('scheduled_for' in sent), sent);
+        check('confirmation d\'une commande normale : pas de ligne « Livraison programmee »', (await page.getByTestId('confirm-scheduled').count()) === 0);
+        await c.ctx.close();
+      }
+
+      // choisir « programmee » puis changer de ville avant de confirmer : la commande part en livraison normale
+      {
+        const db = { list: [], patches: [] };
+        const c = await open(db);
+        const { page } = c;
+        await page.getByPlaceholder('Adresse (quartier, rue)').fill('Quartier Nord');
+        await cityPick(page, "N'Djamena");
+        await page.getByTestId('delivery-scheduled').click();
+        await page.locator('[data-testid^="sched-day-"]').nth(1).click();
+        await page.getByTestId('sched-time-11:30').click();
+        await cityPick(page, 'Sarh');
+        await confirmBtn(page).click();
+        await page.getByText('Merci d\'avoir acheté avec ALBASSE SHOPPING !').waitFor({ timeout: 15000 });
+        const sent = (db.created ?? [])[0];
+        check('programmee puis autre ville : la commande part sans rendez-vous', sent && sent.shipping_city === 'Sarh' && !('delivery_type' in sent) && !('scheduled_for' in sent), sent);
+        await c.ctx.close();
+      }
+
+      // la base ne connait pas encore la livraison programmee (script SQL pas lance) : le rendez-vous n'est JAMAIS perdu en silence
+      {
+        const db = { list: [], patches: [], rejectColumn: 'delivery_type' };
+        const c = await open(db);
+        const { page } = c;
+        await page.getByPlaceholder('Adresse (quartier, rue)').fill('Farcha, rue 12');
+        await cityPick(page, "N'Djamena");
+        await page.getByRole('radio', { name: /Paiement à la livraison/ }).click();
+        await page.getByTestId('delivery-scheduled').click();
+        await page.locator('[data-testid^="sched-day-"]').nth(1).click();
+        await page.getByTestId('sched-time-14:00').click();
+        await confirmBtn(page).click();
+        await page.getByText(/La livraison programmée n.est pas encore disponible/).first().waitFor({ timeout: 8000 });
+        check('script SQL pas lance : message clair, aucune commande enregistree sans son rendez-vous', (db.created ?? []).length === 0 && (db.attempts ?? []).length === 1);
+        // le client choisit alors la livraison normale : la commande passe
+        await page.getByTestId('delivery-standard').click();
+        await confirmBtn(page).click();
+        await page.getByText('Merci d\'avoir acheté avec ALBASSE SHOPPING !').waitFor({ timeout: 15000 });
+        check('puis livraison normale : la commande est enregistree', (db.created ?? []).length === 1 && !('delivery_type' in db.created[0]));
+        await c.ctx.close();
+      }
+
+      // Mes commandes (client) et page d'administration
+      {
+        const when = new Date(Date.now() + 2 * 86_400_000).toISOString();
+        const S = { ...mkOrder('abababab-0000-4000-8000-0000000000a1', 'pending', false, 5000, [oi('Montre', 5000, 1)]), payment_method: 'cash_on_delivery', shipping_city: "N'Djamena", delivery_type: 'scheduled', scheduled_for: when };
+        const N = { ...mkOrder('cdcdcdcd-0000-4000-8000-0000000000a2', 'pending', false, 9000, [oi('Lunettes', 9000, 1)]), payment_method: 'cash_on_delivery', shipping_city: "N'Djamena" };
+        {
+          const c = await newVisitor(phone, { storage, fakeUser: fu, fakeOrders: { list: [S, N], patches: [] } });
+          const { page } = c;
+          await page.goto(`http://localhost:${port}/mes-commandes`, { waitUntil: 'load' });
+          await page.getByText('Commande #abababab').waitFor({ timeout: 15000 });
+          await sleep(500);
+          check('Mes commandes : la livraison programmee est ecrite sur la commande concernee seulement', (await page.getByTestId('order-scheduled').count()) === 1 && /📅 Livraison programmée : .* à \d+h\d{2}/.test(await page.getByTestId('order-scheduled').innerText()));
+          check('Mes commandes : la commande programmee attend son rendez-vous (pas de signalement apres 48 h de commande)', (await page.getByText(/attend votre rendez-vous/).count()) === 1 && (await page.getByText(/Merci de confirmer sous 48h/).count()) === 1);
+          await page.getByTestId('order-scheduled').scrollIntoViewIfNeeded();
+          await page.screenshot({ path: path.join(OUT, 'C10-mes-commandes-programmee.png') });
+          check('aucune erreur (Mes commandes programmee)', c.errs.length === 0, c.errs);
+          await c.ctx.close();
+        }
+        {
+          const fa = mk(true);
+          const c = await newVisitor(phone, { storage: { 'sb-xtitsmmccpkelxfjyqyh-auth-token': sessionFor(fa) }, fakeUser: fa, fakeOrders: { list: [S, N], patches: [] } });
+          const { page } = c;
+          await page.goto(`http://localhost:${port}/admin/commandes`, { waitUntil: 'load' });
+          await page.getByText('#abababab').waitFor({ timeout: 15000 });
+          await sleep(500);
+          const badge = await page.getByTestId('admin-order-scheduled').innerText();
+          check('admin : badge « Livraison programmee » avec l\'heure et le rappel Telegram de 10 minutes, sur une seule commande', (await page.getByTestId('admin-order-scheduled').count()) === 1 && /📅 Livraison programmée : .* à \d+h\d{2}/.test(badge) && /Telegram 10 min avant/.test(badge), badge);
+          check('admin : le signalement automatique de la commande programmee part du rendez-vous', (await page.getByText(/48 h après le rendez-vous/).count()) === 1);
+          await page.screenshot({ path: path.join(OUT, 'C11-admin-programmee.png') });
+          check('aucune erreur (admin programmee)', c.errs.length === 0, c.errs);
+          await c.ctx.close();
+        }
+      }
+    }
+
     // --- Mes commandes : image cadeau a cote de chaque commande en attente
     {
       const A = mkOrder('aaaaaaaa-0000-4000-8000-000000000001', 'pending', false, 27500, [oi('Rolex', 12500, 1), oi('Parfum Khamrah', 15000, 1)]);
