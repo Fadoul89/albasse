@@ -41,7 +41,7 @@ export const mask = (e: string) => e.replace(/^(.{2}).*(@.*)$/, "$1***$2");
 export const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
 // 22 500 FCFA (espaces insécables : le montant ne se coupe pas en fin de ligne)
-export const fmt = (n: number) => `${String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, " ")} FCFA`;
+export const fmt = (n: number) => `${String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, "\u00a0")}\u00a0FCFA`;
 export const orderRef = (id: string) => id.replace(/-/g, "").slice(0, 8).toUpperCase();
 // « 12 » (numéro de commande) ; l'ancien repère de 8 caractères tant que la commande n'a pas de numéro
 export const orderLabel = (o: { id: string; order_number?: number | null }) => (o.order_number ? String(o.order_number) : orderRef(o.id));
