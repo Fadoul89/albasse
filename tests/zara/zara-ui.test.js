@@ -890,6 +890,41 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await s2.ctx.close();
     }
 
+    // --- L9c. un mot mal ecrit : « Vouliez-vous dire… ? » dans la barre de recherche et dans le chat de Zara
+    {
+      const v = await newVisitor(phone, { lang: 'fr', storage: { albasse_zara_name: 'Ali' } });
+      await v.page.goto(`http://localhost:${port}/recherche`, { waitUntil: 'load' });
+      const box = v.page.getByPlaceholder('Rechercher un produit…');
+      await box.waitFor({ timeout: 25000 });
+      await box.fill('sandalles');
+      await v.page.getByTestId('search-suggestion').waitFor({ timeout: 15000 });
+      const sug = (await v.page.getByTestId('search-suggestion').innerText()).replace(/\s+/g, ' ');
+      check('recherche « sandalles » : « Vouliez-vous dire « sandale » ? »', /Vouliez-vous dire « sandale » \?/.test(sug), sug);
+      check('« Aucun résultat pour « sandalles » » est dit, et les articles du bon mot sont déjà montrés', /Aucun résultat pour « sandalles »/.test(await v.page.getByTestId('search-no-result').innerText()) && (await v.page.getByText(/Sandales/i).count()) > 0);
+      await v.page.getByTestId('search-suggestion').click();
+      await sleep(400);
+      check('toucher la proposition met le bon mot dans la barre ; la proposition disparait, les articles restent', (await box.inputValue()) === 'sandale' && (await v.page.getByTestId('search-suggestion').count()) === 0 && (await v.page.getByText(/Sandales/i).count()) > 0, await box.inputValue());
+      await box.fill('SANDALES');
+      await sleep(400);
+      check('mot bien ecrit (meme en majuscules) : les articles, pas de proposition', (await v.page.getByTestId('search-suggestion').count()) === 0 && (await v.page.getByText(/Sandales/i).count()) > 0);
+      await box.fill('asdfghj');
+      await sleep(400);
+      check('mot qui ne ressemble a rien : « Aucun résultat. », pas de proposition', (await v.page.getByText('Aucun résultat.').count()) === 1 && (await v.page.getByTestId('search-suggestion').count()) === 0);
+      await box.fill('sandalles homme');
+      await sleep(400);
+      check('deux mots dont un faux : le mot faux est propose avec l\'autre (« sandale homme »)', /Vouliez-vous dire « sandale homme » \?/.test((await v.page.getByTestId('search-suggestion').innerText().catch(() => '')).replace(/\s+/g, ' ')) || (await v.page.getByText('Aucun résultat.').count()) === 1);
+      await v.page.getByRole('button', { name: FAB_NAME }).click();
+      await waitText(v.page, /Bienvenue chez Albasse Shopping/);
+      const before = await cardsOf(v.page).count();
+      await ask(v.page, 'chausure', /Vouliez-vous dire « chaussure »/);
+      await sleep(600);
+      check('Zara : « chausure » -> « Vouliez-vous dire « chaussure » ? Voici ce que j\'ai trouvé » avec des articles', (await cardsOf(v.page).count()) > before, [before, await cardsOf(v.page).count()]);
+      await ask(v.page, 'xqzwvbn', /Je n’ai rien trouvé pour « xqzwvbn »/);
+      check('Zara : un mot qui ne ressemble a rien garde la reponse d\'avant, sans « Vouliez-vous dire »', (await panelOf(v.page).getByText(/Vouliez-vous dire « xqzwvbn/).count()) === 0);
+      check('aucune erreur (mot mal ecrit)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+
     // --- L10. en-tete : tout tient a l'ecran en 390 et 360 de large, en francais et en arabe ; ordinateur
     for (const [w, lg] of [[390, 'fr'], [390, 'ar'], [360, 'fr'], [360, 'ar']]) {
       const h = await newVisitor({ ...devices['Pixel 7'], viewport: { width: w, height: 780 } }, { lang: lg, storage: { albasse_zara_name: 'Ali' } });

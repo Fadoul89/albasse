@@ -220,6 +220,8 @@ export interface Texts {
   foundFor(q: string, range: string | null): string;
   fallbackFor(q: string, range: string): string;
   nothingFor(text: string): string;
+  // un mot mal écrit (« parfun ») : Zara propose le mot de la boutique le plus proche et montre déjà ses articles
+  didYouMean(q: string, fixed: string): string;
   // conseil
   askNeed: string;
   askBudget: string;
@@ -699,6 +701,7 @@ const FR: Texts = {
   foundFor: (q, range) => `Voici ce que j’ai trouvé pour « ${q} »${range ? ` ${range}` : ''}{nom} :`,
   fallbackFor: (q, range) => `Je n’ai rien ${range} pour « ${q} ». Voici ce qui s’en approche le plus :`,
   nothingFor: (text) => `Je n’ai rien trouvé pour « ${text} » 😕 Dites-moi ce que vous aimez, je vous conseille, ou parcourez nos catégories.`,
+  didYouMean: (q, fixed) => `Je n’ai rien trouvé pour « ${q} » 😕 Vouliez-vous dire « ${fixed} » ? Voici ce que j’ai trouvé{nom} :`,
   askNeed: 'Avec plaisir{nom} ! Je suis là pour vous conseiller. Que cherchez-vous ?',
   askBudget: 'Quel est votre budget{nom} ? Touchez une option ou écrivez un montant (ex. 20 000) 💰',
   bestPicks: 'Voici mes meilleurs choix{nom} :',
@@ -1251,6 +1254,7 @@ const AR: Texts = {
   foundFor: (q, range) => `إليك ما وجدته من أجل «${q}»${range ? ` ${range}` : ''}{nom}:`,
   fallbackFor: (q, range) => `لم أجد شيئا ${range} من أجل «${q}». إليك الأقرب إلى طلبك:`,
   nothingFor: (text) => `لم أجد شيئا من أجل «${text}» 😕 أخبرني بما تحب فأنصحك، أو تصفح فئاتنا.`,
+  didYouMean: (q, fixed) => `لم أجد شيئا من أجل «${q}» 😕 هل تقصد «${fixed}»؟ إليك ما وجدته{nom}:`,
   askNeed: 'بكل سرور{nom}! أنا هنا لأنصحك. ماذا تبحث عنه؟',
   askBudget: 'ما هي ميزانيتك{nom}؟ اختر خيارا أو اكتب مبلغا (مثال 20 000) 💰',
   bestPicks: 'إليك أفضل اختياراتي{nom}:',
