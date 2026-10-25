@@ -78,6 +78,7 @@ import { pushReminderNow, recordPushReminder } from '../lib/pushReminder';
 import { getWebPushIssue, isWebPushBlocked, PUSH_PERMISSION_NOT_GRANTED, subscribeToWebPush } from '../lib/webPushSubscription';
 import { trackShortcutInstallIfNeeded } from '../lib/appInstallTracking';
 import { occasionOf, stripOccasion, upcomingOccasion, type OccasionKey } from '../lib/assistantOccasions';
+import { buildVocabulary, suggestWords } from '../lib/spellSuggest';
 import { availability, familyPicks, isFamily, moreInCategory, perfumesInStock, planSuggestion, similarProducts, type PlannedChip } from '../lib/assistantInterest';
 import * as bi from '../lib/browsingInsights';
 import { getBrowsingProfile, getVisitorId, recordSuggestion, setTrackingChoice, trackingState } from '../lib/browsingTracker';
@@ -942,6 +943,17 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         const results = searchCatalog(catalog, ctx.query, 4);
         if (results.length > 0) {
           await showProducts(withName(T().foundFor(shown, null)), results, ctx, catalog);
+          return;
+        }
+      }
+      // rien trouvé : un mot mal écrit (« parfun ») ? Zara propose le mot de la boutique le plus proche et montre déjà ses articles
+      const fixed = suggestWords(tokenize(ctx.query), buildVocabulary(catalog.flatMap((p) => [...p.nameTokens, ...p.catTokens, ...p.colorTokens])));
+      if (fixed) {
+        const fixedQuery = fixed.join(' ');
+        const fixedCtx: Context = { kind: 'query', query: fixedQuery };
+        const alt = range ? pickInBudget(catalog, fixedCtx, range, 4, clientStyle).items : searchCatalog(catalog, fixedQuery, 4);
+        if (alt.length > 0) {
+          await showProducts(withName(T().didYouMean(shown, fixedQuery)), alt, fixedCtx, catalog, range ? { range } : undefined);
           return;
         }
       }
