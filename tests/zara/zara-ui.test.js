@@ -43,7 +43,9 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   // rank : rang du jour renvoye par la fonction de la base (null : fonction pas installee). fakeUser : compte simule (token : reponse a une connexion par mot de passe ; delay : lenteur du profil en ms). fakeOrders : { list: [...], patches: [] } = fausse table des commandes.
   // zaraInstall : par defaut, le visiteur a deja repondu « Plus tard » a l'installation (Zara ne la propose pas) ; null = vrai nouveau
   // visiteur, pour les parties qui testent l'installation
-  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, fakeSales = null, fakeCallbacks = null, fakePushes = null, fakeStore = null, fakeCats = null, fakeOnline = null, fakeRecent = null, fakeUnsub = null, initScripts = [], zaraInstall = 'dismissed', zaraPush = 'later', installAfterSignUp = '1', pushPerm = null, pushAnswer = 'granted', fakeAi = null } = {}) {
+  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, fakeSales = null, fakeCallbacks = null, fakePushes = null, fakeStore = null, fakeCats = null, fakeOnline = null, fakeRecent = null, fakeUnsub = null, initScripts = [], zaraInstall = 'dismissed', zaraPush = 'later', installAfterSignUp = '1', pushPerm = null, pushAnswer = 'granted', fakeAi = null, autoOpen = false } = {}) {
+    // Zara s'ouvre seule sur l'Accueil apres 8 s : par defaut c'est deja « fait » pour ce visiteur (les autres tests gardent leur deroulement) ; autoOpen: true = vrai nouveau visiteur
+    if (!autoOpen) session = { albasse_assistant_autoopen_seen: '1', ...session };
     const ctx = await b.newContext(opts);
     if (cookies) await ctx.addCookies(cookies);
     if (lang) storage = { albasse_zara_lang: lang, ...storage };
@@ -827,6 +829,43 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('visiteur arabe qui revient : pas de question de langue ni de prenom, directement les infos et le menu', (await r.page.getByText(/كيف يمكنني أن أناديك/).count()) === 0 && (await chipLabels(r.page))[0] === '👤 إنشاء حسابي');
       check('aucune erreur (visiteur arabe)', r.errs.length === 0, r.errs);
       await r.ctx.close();
+    }
+
+    // --- L9b. Zara prend la parole la premiere : sur l'Accueil, 8 secondes apres l'arrivee, elle ouvre toute seule la conversation (une fois par visite)
+    {
+      const v = await newVisitor(phone, { lang: 'fr', autoOpen: true, rank: 5 });
+      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(6500);
+      check('avant 8 secondes : rien ne s\'ouvre, et la petite bulle ne passe pas juste avant', (await panelOf(v.page).count()) === 0 && (await v.page.getByTestId('assistant-teaser').count()) === 0);
+      await waitText(v.page, /Bienvenue chez Albasse Shopping/, 12000);
+      check('Accueil : Zara ouvre toute seule la conversation et se presente', (await panelOf(v.page).count()) === 1);
+      check('une seule conversation comptee pour l\'ouverture automatique', v.chatStarts.length === 1, v.chatStarts);
+      await panelOf(v.page).getByRole('button', { name: 'Fermer', exact: true }).click();
+      await sleep(2000);
+      check('le visiteur ferme Zara : elle ne se rouvre pas, le bouton rond revient', (await panelOf(v.page).count()) === 0 && (await v.page.getByRole('button', { name: FAB_NAME }).count()) === 1);
+      await v.page.reload({ waitUntil: 'load' });
+      await sleep(9500);
+      check('meme visite, page rechargee : Zara ne se rouvre pas seule et la bulle ne revient pas', (await panelOf(v.page).count()) === 0 && (await v.page.getByTestId('assistant-teaser').count()) === 0);
+      check('aucune erreur (ouverture automatique)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+
+      // hors Accueil : pas d'ouverture automatique, la petite bulle reste comme avant
+      const o = await newVisitor(phone, { lang: 'fr', autoOpen: true });
+      await o.page.goto(`http://localhost:${port}/contact`, { waitUntil: 'load' });
+      await sleep(9500);
+      check('page Contact : Zara ne s\'ouvre pas seule', (await panelOf(o.page).count()) === 0);
+      check('page Contact : la petite bulle apparait comme avant', (await o.page.getByTestId('assistant-teaser').count()) === 1);
+      await o.ctx.close();
+
+      // le visiteur qui touche le bouton avant les 8 secondes : une seule ouverture, une seule conversation comptee
+      const t = await newVisitor(phone, { lang: 'fr', autoOpen: true, rank: 7 });
+      await t.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await t.page.getByRole('button', { name: FAB_NAME }).click();
+      await waitText(t.page, /Bienvenue chez Albasse Shopping/);
+      await sleep(8000);
+      check('Zara deja ouverte par le visiteur : pas de deuxieme ouverture ni de deuxieme conversation', (await panelOf(t.page).count()) === 1 && t.chatStarts.length === 1, t.chatStarts);
+      await t.ctx.close();
     }
 
     // --- L10. en-tete : tout tient a l'ecran en 390 et 360 de large, en francais et en arabe ; ordinateur
