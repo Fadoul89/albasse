@@ -62,6 +62,7 @@ import { PrivacyPolicyScreen } from '../screens/PrivacyPolicyScreen';
 import { ReturnPolicyScreen } from '../screens/ReturnPolicyScreen';
 import { InstallScreen } from '../screens/InstallScreen';
 import { UnsubscribeScreen } from '../screens/UnsubscribeScreen';
+import { InvoiceScreen } from '../screens/InvoiceScreen';
 import { MessagesScreen } from '../screens/MessagesScreen';
 import { AdminMessagesScreen } from '../screens/admin/AdminMessagesScreen';
 import { AffiliateApplyScreen } from '../screens/AffiliateApplyScreen';
@@ -99,6 +100,8 @@ const linking: LinkingOptions<RootStackParamList> = {
       Install: { path: 'installer', alias: ['app'] },
       // lien « Me désinscrire » des e-mails publicitaires
       Unsubscribe: 'desinscription',
+      // facture électronique d'une commande (le client voit les siennes, l'administrateur toutes)
+      Invoice: 'facture/:orderId',
       Login: 'connexion',
       Register: 'inscription',
       ForgotPassword: 'mot-de-passe-oublie',
@@ -241,6 +244,7 @@ export function RootNavigator() {
             <Stack.Screen name="Travel" component={TravelScreen} />
             <Stack.Screen name="Install" component={InstallScreen} />
             <Stack.Screen name="Unsubscribe" component={UnsubscribeScreen} />
+            <Stack.Screen name="Invoice" component={InvoiceScreen} />
             <Stack.Screen name="Login" component={LoginScreen} options={{ presentation: 'modal' }} />
             <Stack.Screen name="Register" component={RegisterScreen} options={{ presentation: 'modal' }} />
             <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ presentation: 'modal' }} />

@@ -168,7 +168,7 @@ export async function drain(deps: Deps) {
 
     const { data: order } = await service
       .from("orders")
-      .select("id,user_id,items,total,status,payment_method,shipping_city,gift_wrap,loyalty_discount,is_flagged_fake")
+      .select("id,order_number,user_id,items,total,status,payment_method,shipping_city,gift_wrap,loyalty_discount,is_flagged_fake")
       .eq("id", row.order_id)
       .maybeSingle();
     if (!order || order.is_flagged_fake || order.status === "cancelled") {

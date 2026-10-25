@@ -140,6 +140,8 @@ export interface OrderItem {
 
 export interface Order {
   id: string;
+  // numéro de commande donné par la base (1, 2, 3…) ; absent tant que add-order-numbers-invoices.sql n'est pas lancé
+  order_number?: number;
   user_id: string | null;
   items: OrderItem[];
   total: number;
@@ -333,6 +335,8 @@ export interface StoreSettings {
   // e-mails publicitaires aux clients absents depuis 7 jours (absent tant que add-inactive-promo-emails.sql n'est pas lancé : éteints)
   inactive_emails_enabled?: boolean;
   inactive_emails_daily_limit?: number;
+  // ligne facultative en bas des factures (NIF, RCCM…) ; absente tant que add-order-numbers-invoices.sql n'est pas lancé
+  invoice_legal_line?: string | null;
   left_ad_items: AdItem[];
   right_ad_items: AdItem[];
   updated_at: string;

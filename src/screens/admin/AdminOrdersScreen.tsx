@@ -1,5 +1,8 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, FlatList, Pressable, TextInput, ScrollView, Platform } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../../navigation/types';
 import { Image } from 'expo-image';
 import { colors, fonts, radius, spacing } from '../../theme';
 import { useAuthStore } from '../../store/authStore';
@@ -9,6 +12,7 @@ import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { CountdownTimer } from '../../components/CountdownTimer';
 import { formatOrderDate, getOrderDay } from '../../lib/formatDuration';
 import { useToastStore } from '../../store/toastStore';
+import { filterOrders, orderNumberLabel, ordersToCsv, type PeriodFilter } from '../../lib/invoice';
 import type { Order, OrderStatus } from '../../types';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
@@ -24,6 +28,13 @@ const STATUS_LABELS: Record<OrderStatus, string> = {
   delivered: 'Livrée',
   cancelled: 'Annulée',
 };
+
+const PERIODS: { key: PeriodFilter; label: string }[] = [
+  { key: 'all', label: 'Toutes les dates' },
+  { key: 'today', label: "Aujourd'hui" },
+  { key: '7d', label: '7 jours' },
+  { key: '30d', label: '30 jours' },
+];
 
 const STATUS_FLOW: OrderStatus[] = ['pending', 'paid', 'processing', 'shipped', 'delivered'];
 // Paiement a la livraison : "Payee" n'a pas de sens comme etape avant la
@@ -50,6 +61,12 @@ export function AdminOrdersScreen() {
   const [pendingFlag, setPendingFlag] = useState<Order | null>(null);
   const [flagging, setFlagging] = useState(false);
   const showToast = useToastStore((s) => s.show);
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<OrderStatus | 'all'>('all');
+  const [period, setPeriod] = useState<PeriodFilter>('all');
+  const filtered = useMemo(() => filterOrders(orders, { query, status: statusFilter, period }), [orders, query, statusFilter, period]);
+  const filteredTotal = useMemo(() => filtered.filter((o) => o.status !== 'cancelled').reduce((sum, o) => sum + (Number(o.total) || 0), 0), [filtered]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !profile?.is_admin) {
@@ -125,6 +142,60 @@ export function AdminOrdersScreen() {
     setPendingFlag(null);
   };
 
+  // Export pour le comptable : un fichier CSV (ouvert directement par Excel) avec les commandes affichées
+  const exportCsv = () => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const blob = new Blob([ordersToCsv(filtered)], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `commandes-albasse-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    showToast(`${filtered.length} commande${filtered.length > 1 ? 's' : ''} exportée${filtered.length > 1 ? 's' : ''}.`, { title: 'Export prêt', type: 'success' });
+  };
+
+  const header = (
+    <View style={styles.filters} testID="orders-filters">
+      <TextInput
+        value={query}
+        onChangeText={setQuery}
+        placeholder="🔎 Numéro, nom, téléphone, ville…"
+        placeholderTextColor={colors.creamFaint}
+        style={styles.search}
+        testID="orders-search"
+        autoCapitalize="none"
+        autoCorrect={false}
+      />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
+        {(['all', 'pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled'] as const).map((st) => (
+          <Pressable key={st} onPress={() => setStatusFilter(st)} style={[styles.chip, statusFilter === st && styles.chipOn]} testID={`orders-status-${st}`} accessibilityRole="button">
+            <Text style={[styles.chipText, statusFilter === st && styles.chipTextOn]}>{st === 'all' ? 'Tous les statuts' : STATUS_LABELS[st]}</Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
+        {PERIODS.map((pr) => (
+          <Pressable key={pr.key} onPress={() => setPeriod(pr.key)} style={[styles.chip, period === pr.key && styles.chipOn]} testID={`orders-period-${pr.key}`} accessibilityRole="button">
+            <Text style={[styles.chipText, period === pr.key && styles.chipTextOn]}>{pr.label}</Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+      <View style={styles.summaryRow}>
+        <Text style={styles.summary} testID="orders-summary">
+          {`${filtered.length} commande${filtered.length > 1 ? 's' : ''} · ${formatXAF(filteredTotal)} (hors annulées)`}
+        </Text>
+        {Platform.OS === 'web' ? (
+          <Pressable onPress={exportCsv} accessibilityRole="button" style={styles.exportBtn} testID="orders-export">
+            <Text style={styles.exportText}>⬇️ Exporter (CSV)</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
+  );
+
   return (
     <View style={styles.screen}>
       <ScreenHeader title="Gestion des commandes" showBack />
@@ -132,7 +203,8 @@ export function AdminOrdersScreen() {
         <Text style={styles.denied}>Connectez Supabase pour voir les commandes réelles.</Text>
       )}
       <FlatList
-        data={orders}
+        data={filtered}
+        ListHeaderComponent={header}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ padding: spacing.md }}
         refreshing={loading}
@@ -141,7 +213,7 @@ export function AdminOrdersScreen() {
           return (
           <View style={styles.card}>
             <View style={styles.cardHeader}>
-              <Text style={styles.orderId}>#{item.id.slice(0, 8)}</Text>
+              <Text style={styles.orderId} testID="admin-order-number">{orderNumberLabel(item)}</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 {item.is_flagged_fake && <Text style={styles.flaggedBadge}>🚩 Signalée</Text>}
                 <Text style={styles.status}>{STATUS_LABELS[item.status]}</Text>
@@ -208,6 +280,9 @@ export function AdminOrdersScreen() {
                   <Text style={styles.flagText}>🚩 Signaler fausse commande</Text>
                 </Pressable>
               )}
+              <Pressable style={styles.invoiceBtn} onPress={() => navigation.navigate('Invoice', { orderId: item.id })} accessibilityRole="button" testID="admin-order-invoice">
+                <Text style={styles.invoiceText}>🧾 Facture</Text>
+              </Pressable>
               <Pressable style={styles.deleteBtn} onPress={() => setPendingDelete(item)}>
                 <Text style={styles.deleteText}>Supprimer</Text>
               </Pressable>
@@ -233,12 +308,12 @@ export function AdminOrdersScreen() {
           </View>
           );
         }}
-        ListEmptyComponent={!loading ? <Text style={styles.denied}>Aucune commande pour le moment.</Text> : null}
+        ListEmptyComponent={!loading ? <Text style={styles.denied}>{orders.length > 0 ? 'Aucune commande ne correspond à votre recherche.' : 'Aucune commande pour le moment.'}</Text> : null}
       />
       <ConfirmDialog
         visible={!!pendingDelete}
         title="Supprimer cette commande ?"
-        message={`La commande #${pendingDelete?.id.slice(0, 8)} sera supprimée définitivement.`}
+        message={`La commande ${pendingDelete ? orderNumberLabel(pendingDelete) : ''} sera supprimée définitivement.`}
         confirmLabel="Supprimer"
         destructive
         loading={deleting}
@@ -307,6 +382,19 @@ const styles = StyleSheet.create({
   deleteBtn: { marginLeft: 'auto' },
   deleteText: { color: colors.red, fontFamily: fonts.bodyMedium, fontSize: 12 },
   flagBtn: {},
+  invoiceBtn: { marginLeft: 12, marginRight: 4 },
+  invoiceText: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 12 },
+  filters: { gap: spacing.sm, marginBottom: spacing.md },
+  search: { backgroundColor: colors.panel, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, color: colors.cream, fontFamily: fonts.body, fontSize: 14, paddingHorizontal: 14, paddingVertical: 11 },
+  chipsRow: { gap: 8, paddingRight: 8 },
+  chip: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: colors.panel },
+  chipOn: { backgroundColor: colors.gold, borderColor: colors.gold },
+  chipText: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 12 },
+  chipTextOn: { color: colors.background, fontFamily: fonts.bodyBold },
+  summaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' },
+  summary: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 13, flexShrink: 1 },
+  exportBtn: { borderWidth: 1, borderColor: colors.gold, borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 7 },
+  exportText: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 12 },
   flagText: { color: '#f5c542', fontFamily: fonts.bodyMedium, fontSize: 12 },
   affiliateBanner: {
     backgroundColor: 'rgba(199,154,62,0.15)',

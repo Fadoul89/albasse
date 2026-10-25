@@ -8,6 +8,7 @@ import { useDashboardStats } from '../../hooks/useDashboardStats';
 import { colors, fonts, radius, spacing } from '../../theme';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { NotificationBell } from '../../components/NotificationBell';
+import { AdminMenuGroups } from '../../components/AdminMenuGroups';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
 
@@ -32,6 +33,8 @@ export function AdminDashboardScreen() {
         contentContainerStyle={{ padding: spacing.md, paddingBottom: 60 }}
         refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refresh} tintColor={colors.gold} />}
       >
+        <AdminMenuGroups />
+
         {isLoading && !stats ? (
           <Text style={styles.loading}>Chargement…</Text>
         ) : stats ? (

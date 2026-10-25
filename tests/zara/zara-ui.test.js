@@ -283,6 +283,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
               // la vraie ligne a maintenant ces colonnes (allumees en vrai par le patron) : les tests partent toujours de « eteint »
               if (wants('order_emails_enabled')) r.order_emails_enabled = fakeStore.orderEmails === true;
               if (wants('inactive_emails_enabled')) r.inactive_emails_enabled = fakeStore.inactiveEmails === true;
+              if (fakeStore.legalLine !== undefined && wants('invoice_legal_line')) r.invoice_legal_line = fakeStore.legalLine;
             }
             if (fs.accountRequired === 'missing') delete r.account_required;
             else if (wants('account_required')) r.account_required = fs.accountRequired === true;
@@ -402,7 +403,12 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
             fakeOrders.created.push(body);
             return route.fulfill({ status: 201, headers: { 'access-control-allow-origin': '*' }, body: '' });
           }
-          if (m === 'GET') return json(route, fakeOrders.list);
+          if (m === 'GET') {
+            // une commande precise (page « Facture ») : seulement celle demandee
+            const idq = u.searchParams.get('id');
+            if (idq && idq.startsWith('eq.')) return json(route, fakeOrders.list.filter((o) => o.id === idq.slice(3)));
+            return json(route, fakeOrders.list);
+          }
           if (m === 'PATCH') {
             const id = (u.searchParams.get('id') || '').replace('eq.', '');
             const body = JSON.parse(req.postData() || '{}');
@@ -5829,6 +5835,156 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await c.page.screenshot({ path: path.join(OUT, 'C6-admin.png') });
       check('aucune erreur (admin)', c.errs.length === 0, c.errs);
       await c.ctx.close();
+    }
+
+    // --- numero de commande, facture electronique, tri et export des commandes
+    {
+      const day = 86_400_000;
+      const mkN = (id, n, status, total, items, extra = {}) => ({ ...mkOrder(id, status, false, total, items), order_number: n, ...extra });
+      const E1 = mkN('11111111-aaaa-4000-8000-000000000012', 12, 'delivered', 92500, [{ ...oi('Soulier noir', 20000, 1), color: 'Noir', size: '42' }, oi('Montre', 35000, 2)]);
+      const E2 = mkN('22222222-aaaa-4000-8000-000000000013', 13, 'cancelled', 9000, [oi('Lunettes', 9000, 1)], { created_at: new Date(Date.now() - 20 * day).toISOString() });
+      // --- client : « Commande N° 12 », bouton « Voir la facture », la facture
+      {
+        const fakeOrders = { list: [E1, E2], patches: [] };
+        const c = await newVisitor(phone, { storage, fakeUser: fu, fakeOrders, fakeStore: { legalLine: 'NIF : 123456 · RCCM : TD-NDJ-2026' } });
+        const { page } = c;
+        await page.goto(`http://localhost:${port}/mes-commandes`, { waitUntil: 'load' });
+        await page.getByText('Commande N° 12').waitFor({ timeout: 15000 });
+        check('Mes commandes : le numero de commande remplace les lettres au hasard (N° 12 et N° 13)', (await page.getByText('Commande N° 13').count()) === 1 && (await page.getByText(/Commande #/).count()) === 0);
+        check('Mes commandes : un bouton « Voir la facture » par commande', (await page.getByTestId('order-invoice').count()) === 2);
+        await page.getByTestId('order-invoice').first().click();
+        await page.getByTestId('invoice-paper').waitFor({ timeout: 15000 });
+        check('facture : l\'adresse est /facture/<commande>', new URL(page.url()).pathname === '/facture/' + E1.id, page.url());
+        const paper = (await page.getByTestId('invoice-paper').innerText()).replace(/\s+/g, ' ');
+        check('facture : « FACTURE », numero FA-AAAA-000012 et commande N° 12', /FACTURE/.test(paper) && /FA-\d{4}-000012/.test(paper) && /Commande N° 12/.test(paper), paper.slice(0, 200));
+        const logoOk = await page.getByTestId('invoice-logo').locator('img').first().evaluate((el) => el.complete && el.naturalWidth > 0).catch(() => false);
+        check('facture : le logo de la boutique est en haut a gauche, a cote du nom', logoOk && (await page.getByTestId('invoice-logo').boundingBox()).x < 120);
+        check('facture : le client, son telephone, son adresse', /Aminata Hassan/.test(paper) && /66123456/.test(paper) && /Quartier Farcha, Moundou/.test(paper));
+        check('facture : 2 lignes avec variante, quantite et prix (Soulier noir Taille 42 · Noir ; Montre x2 70 000)', (await page.getByTestId('invoice-row').count()) === 2 && /Soulier noir/.test(paper) && /Taille 42 · Noir/.test(paper) && /70\s000 FCFA/.test(paper), paper);
+        check('facture : livraison 2 500 FCFA (le reste du total) et total 92 500 FCFA', /2\s500 FCFA/.test(await page.getByTestId('invoice-delivery').innerText()) && /92\s500 FCFA/.test(await page.getByTestId('invoice-total').innerText()));
+        check('facture : mode de paiement, statut, informations legales de la boutique, mot de remerciement', /Airtel Money/.test(paper) && /Statut de la commande : Livrée/.test(paper) && /NIF : 123456 · RCCM : TD-NDJ-2026/.test(paper) && /Merci pour votre confiance/.test(paper));
+        check('facture : pas de bandeau « annulee » sur une commande livree', (await page.getByTestId('invoice-cancelled').count()) === 0);
+        await page.evaluate(() => { window.__printed = 0; window.print = () => { window.__printed++; }; });
+        await page.getByText('🖨️ Imprimer / Enregistrer en PDF').click();
+        check('facture : « Imprimer / Enregistrer en PDF » ouvre l\'impression', (await page.evaluate(() => window.__printed)) === 1);
+        check('facture : seule la facture sort a l\'impression (regle d\'impression presente)', await page.evaluate(() => !!document.querySelector('style[data-invoice-print]')));
+        await page.evaluate(() => document.querySelectorAll('div').forEach((d) => { if (d.scrollTop) d.scrollTop = 0; }));
+        await page.screenshot({ path: path.join(OUT, 'C7-facture.png'), fullPage: true });
+        // impression : seule la facture sort (PDF fabrique par le navigateur avec les regles d'impression)
+        await page.pdf({ path: path.join(OUT, 'C7-facture.pdf'), format: 'A4' });
+        check('facture : le PDF imprime est fabrique (fichier non vide)', fs.statSync(path.join(OUT, 'C7-facture.pdf')).size > 5000);
+        // commande annulee, commande inconnue, adresse abimee
+        await page.goto(`http://localhost:${port}/facture/${E2.id}`, { waitUntil: 'load' });
+        await page.getByTestId('invoice-paper').waitFor({ timeout: 15000 });
+        check('facture d\'une commande annulee : bandeau « COMMANDE ANNULEE »', (await page.getByTestId('invoice-cancelled').count()) === 1);
+        await page.goto(`http://localhost:${port}/facture/99999999-aaaa-4000-8000-000000000099`, { waitUntil: 'load' });
+        await page.getByTestId('invoice-missing').waitFor({ timeout: 15000 });
+        check('facture d\'une commande inconnue (ou d\'un autre client) : « Facture introuvable »', /Facture introuvable/.test(await page.getByTestId('invoice-screen').innerText()));
+        await page.goto(`http://localhost:${port}/facture/pas-une-commande`, { waitUntil: 'load' });
+        await page.getByTestId('invoice-missing').waitFor({ timeout: 15000 });
+        check('facture : adresse abimee : « Facture introuvable »', true);
+        check('aucune ecriture reelle (numero et facture)', c.writes.every((w) => !/\/orders/.test(w)), c.writes);
+        check('aucune erreur (facture du client)', c.errs.length === 0, c.errs);
+        await c.ctx.close();
+      }
+      // --- administrateur : numeros, recherche, filtres, export, facture
+      {
+        const fa = mk(true);
+        const mkA = (id, n, name, phone, city, status, ageDays, total) => mkN(id, n, status, total, [oi('Article ' + n, total, 1)], { shipping_name: name, shipping_phone: phone, shipping_city: city, created_at: new Date(Date.now() - ageDays * day).toISOString() });
+        const list = [
+          mkA('aaaaaaaa-1111-4000-8000-000000000001', 4, 'Awa Moussa', '66 11 22 33', 'Abéché', 'pending', 0.02, 10000),
+          mkA('bbbbbbbb-1111-4000-8000-000000000002', 3, 'Idriss Deby', '99 44 55 66', 'Sarh', 'delivered', 3, 20000),
+          mkA('cccccccc-1111-4000-8000-000000000003', 2, 'Hawa Ali', '66 77 88 99', 'Moundou', 'cancelled', 20, 30000),
+          mkA('dddddddd-1111-4000-8000-000000000004', 1, 'Ali; "Le Grand"', '99 00 11 22', "N'Djamena", 'delivered', 60, 40000),
+        ];
+        const c = await newVisitor(phone, { storage: { 'sb-xtitsmmccpkelxfjyqyh-auth-token': sessionFor(fa) }, fakeUser: fa, fakeOrders: { list, patches: [] } });
+        const { page } = c;
+        const shown = async () => (await page.getByTestId('admin-order-number').allInnerTexts()).map((s) => s.trim()).join('|');
+        await page.goto(`http://localhost:${port}/admin/commandes`, { waitUntil: 'load' });
+        await page.getByTestId('orders-search').waitFor({ timeout: 25000 });
+        await page.getByText('N° 4', { exact: true }).waitFor({ timeout: 15000 });
+        check('admin : chaque commande a son numero (N° 4, 3, 2, 1) au lieu des lettres au hasard', (await shown()) === 'N° 4|N° 3|N° 2|N° 1', await shown());
+        const summary = async () => (await page.getByTestId('orders-summary').innerText()).replace(/\s+/g, ' ');
+        check('admin : resume « 4 commandes · 70 000 FCFA (hors annulees) »', /^4 commandes · 70\s000 FCFA/.test(await summary()), await summary());
+        await page.getByTestId('orders-search').fill('3');
+        await sleep(300);
+        check('admin : recherche « 3 » : seulement la commande N° 3', (await shown()) === 'N° 3', await shown());
+        await page.getByTestId('orders-search').fill('hawa');
+        await sleep(300);
+        check('admin : recherche par nom « hawa » : la commande N° 2', (await shown()) === 'N° 2', await shown());
+        await page.getByTestId('orders-search').fill('99 44');
+        await sleep(300);
+        check('admin : recherche par telephone « 99 44 » : la commande N° 3', (await shown()) === 'N° 3', await shown());
+        await page.getByTestId('orders-search').fill('zzz');
+        await sleep(300);
+        check('admin : aucune reponse : message clair', (await page.getByText('Aucune commande ne correspond à votre recherche.').count()) === 1);
+        await page.getByTestId('orders-search').fill('');
+        await page.getByTestId('orders-status-delivered').click();
+        await sleep(300);
+        check('admin : filtre « Livrée » : N° 3 et N° 1', (await shown()) === 'N° 3|N° 1', await shown());
+        await page.getByTestId('orders-period-7d').click();
+        await sleep(300);
+        check('admin : « Livrée » + « 7 jours » : seulement N° 3', (await shown()) === 'N° 3' && /^1 commande · 20\s000 FCFA/.test(await summary()), await summary());
+        await page.getByTestId('orders-status-all').click();
+        await page.getByTestId('orders-period-today').click();
+        await sleep(300);
+        check('admin : « Aujourd\'hui » : seulement N° 4', (await shown()) === 'N° 4', await shown());
+        await page.getByTestId('orders-period-all').click();
+        await sleep(300);
+        // export CSV
+        const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 10000 }), page.getByTestId('orders-export').click()]);
+        const csv = fs.readFileSync(await dl.path(), 'utf8');
+        check('export : fichier « commandes-albasse-AAAA-MM-JJ.csv »', /^commandes-albasse-\d{4}-\d{2}-\d{2}\.csv$/.test(dl.suggestedFilename()), dl.suggestedFilename());
+        const rows = csv.trim().split('\r\n');
+        check('export : 1 titre + 4 commandes, numeros de commande et de facture, nom avec « ; » protege', rows.length === 5 && /^4;FA-\d{4}-000004;/.test(rows[1]) && csv.includes('"Ali; ""Le Grand"""') && csv.charCodeAt(0) === 0xfeff, rows);
+        // la facture depuis la liste
+        await page.getByTestId('admin-order-invoice').first().click();
+        await page.getByTestId('invoice-paper').waitFor({ timeout: 15000 });
+        check('admin : « Facture » ouvre la facture de la commande N° 4', /FA-\d{4}-000004/.test(await page.getByTestId('invoice-number').innerText()) && /Awa Moussa/.test(await page.getByTestId('invoice-paper').innerText()));
+        check('aucune ecriture reelle (admin : numeros, tri, export, facture)', c.writes.every((w) => !/\/orders/.test(w)), c.writes);
+        check('aucune erreur (admin : numeros et factures)', c.errs.length === 0, c.errs);
+        await c.ctx.close();
+      }
+      // --- administrateur : le tableau de bord range toutes les pages par theme (rapports, clients, marketing, boutique, parametres)
+      {
+        const fa = mk(true);
+        const c = await newVisitor(phone, { storage: { 'sb-xtitsmmccpkelxfjyqyh-auth-token': sessionFor(fa) }, fakeUser: fa, fakeStore: { waOrder: true } });
+        const { page } = c;
+        await page.goto(`http://localhost:${port}/admin/tableau-de-bord`, { waitUntil: 'load' });
+        await page.getByTestId('admin-menu').waitFor({ timeout: 25000 });
+        const groupOf = async (key) => (await page.getByTestId(`admin-menu-group-${key}`).innerText()).replace(/\s+/g, ' ');
+        const g = { reports: await groupOf('reports'), customers: await groupOf('customers'), marketing: await groupOf('marketing'), shop: await groupOf('shop'), settings: await groupOf('settings') };
+        check('tableau de bord : 5 themes (Rapports, Clients, Marketing, Boutique, Parametres)', /^📈 Rapports/.test(g.reports) && /^👥 Clients/.test(g.customers) && /^📣 Marketing/.test(g.marketing) && /^🛍️ Boutique/.test(g.shop) && /^⚙️ Paramètres/.test(g.settings), g);
+        check('Rapports ensemble : performance par source, Zara, suivi de navigation, notifications', ['Performance par source', 'Statistiques de Zara', 'Suivi de navigation', 'Notifications'].every((l) => g.reports.includes(l)), g.reports);
+        check('Clients ensemble : clients, meilleurs clients potentiels, rappels WhatsApp', ['Clients', 'Meilleurs clients potentiels', 'Rappels WhatsApp'].every((l) => g.customers.includes(l)), g.customers);
+        check('Marketing ensemble : assistant marketing, promotions, roue de la chance, affilies', ['Assistant marketing', 'Promotions intelligentes', 'Roue de la chance', 'Affiliés'].every((l) => g.marketing.includes(l)), g.marketing);
+        check('Boutique : commandes et factures, produits, categories, voyage ; Parametres : contact, paiement, livraison', ['Commandes et factures', 'Produits', 'Catégories', 'Voyage'].every((l) => g.shop.includes(l)) && ['Informations de contact', 'Paiement', 'Livraison (Villes)'].every((l) => g.settings.includes(l)), { shop: g.shop, settings: g.settings });
+        await page.screenshot({ path: path.join(OUT, 'C8-tableau-de-bord.png') });
+        check('18 pages accessibles depuis le tableau de bord', (await page.locator('[data-testid^="admin-menu-Admin"]').count()) === 18);
+        await page.getByTestId('admin-menu-AdminStoreSettings').click();
+        await page.getByTestId('settings-legal-line').waitFor({ timeout: 15000 });
+        check('un theme mene a la bonne page (Parametres › Informations de contact)', new URL(page.url()).pathname === '/admin/parametres/contact', page.url());
+        check('aucune erreur (tableau de bord)', c.errs.length === 0, c.errs);
+        await c.ctx.close();
+      }
+      // --- administrateur : la ligne « informations legales » des factures (NIF, RCCM)
+      {
+        const fa = mk(true);
+        const fs2 = { waOrder: true };
+        const c = await newVisitor(phone, { storage: { 'sb-xtitsmmccpkelxfjyqyh-auth-token': sessionFor(fa) }, fakeUser: fa, fakeStore: fs2 });
+        const { page } = c;
+        await page.goto(`http://localhost:${port}/admin/parametres/contact`, { waitUntil: 'load' });
+        await page.getByTestId('settings-legal-line').waitFor({ timeout: 25000 });
+        await page.getByText('Enregistrer', { exact: true }).click();
+        await page.getByText('Enregistré ✓').waitFor({ timeout: 8000 });
+        check('infos legales : sans changement, la base ne recoit pas cette ligne (le reste s\'enregistre meme si le script n\'est pas lance)', (fs2.patches || []).length === 1 && !('invoice_legal_line' in fs2.patches[0]), fs2.patches);
+        await sleep(2500); // la page relit les reglages apres le 1er enregistrement
+        await page.getByTestId('settings-legal-line').fill('NIF : 99887 · RCCM : TD-NDJ-2026-B-1');
+        await page.getByText('Enregistrer', { exact: true }).click({ force: true });
+        await sleep(1500);
+        check('infos legales : modifiee, la base recoit invoice_legal_line', (fs2.patches || []).some((b) => b.invoice_legal_line === 'NIF : 99887 · RCCM : TD-NDJ-2026-B-1'), fs2.patches);
+        await c.ctx.close();
+      }
     }
   }
 

@@ -23,6 +23,7 @@ export function AdminStoreSettingsScreen() {
   const [email, setEmail] = useState('');
   const [hours, setHours] = useState('');
   const [googleMapsUrl, setGoogleMapsUrl] = useState('');
+  const [legalLine, setLegalLine] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -36,6 +37,7 @@ export function AdminStoreSettingsScreen() {
     setEmail(settings.email ?? '');
     setHours(settings.hours ?? '');
     setGoogleMapsUrl(settings.google_maps_url ?? '');
+    setLegalLine(settings.invoice_legal_line ?? '');
   }, [settings]);
 
   if (!profile?.is_admin) {
@@ -66,6 +68,8 @@ export function AdminStoreSettingsScreen() {
         email: email.trim() || null,
         hours: hours.trim() || null,
         google_maps_url: googleMapsUrl.trim() || null,
+        // envoyée seulement si elle a changé : tant que add-order-numbers-invoices.sql n'est pas lancé, le reste s'enregistre quand même
+        ...(legalLine.trim() !== (settings.invoice_legal_line ?? '') ? { invoice_legal_line: legalLine.trim() || null } : {}),
         updated_at: new Date().toISOString(),
       })
       .eq('id', 1);
@@ -73,7 +77,8 @@ export function AdminStoreSettingsScreen() {
 
     if (error) {
       console.error('Erreur enregistrement infos boutique:', error);
-      showToast(error.message, { title: 'Erreur', type: 'error' });
+      const missing = error.code === '42703' || error.code === 'PGRST204' || (error.message ?? '').includes('invoice_legal_line');
+      showToast(missing ? 'Lancez d’abord le script add-order-numbers-invoices.sql dans Supabase.' : error.message, { title: 'Erreur', type: 'error' });
       return;
     }
 
@@ -104,6 +109,13 @@ export function AdminStoreSettingsScreen() {
           onChangeText={setGoogleMapsUrl}
           autoCapitalize="none"
           placeholder="https://maps.app.goo.gl/..."
+        />
+        <Field
+          label="Informations légales sur les factures (optionnel)"
+          value={legalLine}
+          onChangeText={setLegalLine}
+          placeholder="NIF : … · RCCM : …"
+          testID="settings-legal-line"
         />
 
         <GoldButton label="Enregistrer" onPress={handleSave} loading={saving || isLoading} style={{ marginTop: spacing.lg }} />
