@@ -83,7 +83,8 @@ check('5 livrées : encore 1 commande (singulier)', E.loyaltyLine({ delivered: 5
   const used = E.orderDeliveredEmail(order(), 'Ali', { delivered: 9, used: true });
   check('commande livrée, remise déjà utilisée : pas de phrase de fidélité', !/Encore|Bonne nouvelle/.test(used.html));
 }
-check('mise en page : bandeau de la boutique et pied de page', /Albasse Shopping<\/td>/.test(E.layout('Titre', '<p>x</p>')) && /Cet e-mail concerne votre commande/.test(E.layout('Titre', '<p>x</p>')));
+check('mise en page : bandeau de la boutique avec le logo, et pied de page', />Albasse Shopping<\/td>/.test(E.layout('Titre', '<p>x</p>')) && /Cet e-mail concerne votre commande/.test(E.layout('Titre', '<p>x</p>')));
+check('mise en page : le logo vient d’une adresse publique du site (https://www.albasseshopping.com/icon-192.png), sans texte de remplacement en double', /<img src="https:\/\/www\.albasseshopping\.com\/icon-192\.png"[^>]*alt=""/.test(E.layout('Titre', '<p>x</p>')));
 
 // bienvenue
 {

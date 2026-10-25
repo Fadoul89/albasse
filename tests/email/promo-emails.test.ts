@@ -47,7 +47,7 @@ const p = (id: string, extra: Partial<PromoProduct> = {}): PromoProduct => ({ id
   check('bonjour + prénom, sélection, livraison partout au Tchad', /Bonjour Fatimé, vous nous manquez/.test(m.html) && /sélection d'articles du moment/.test(m.html) && /Livraison partout au Tchad/.test(m.html));
   check('articles : nom nettoyé, vrai prix, lien vers la fiche', /Slip-on noir/.test(m.html) && /22\s500\sFCFA/.test(m.html) && /albasseshopping\.com\/produit\/article-1/.test(m.html), m.html.slice(0, 200));
   check('prix barré et pourcentage seulement s’il y a un vrai ancien prix (20 000 → 15 000 = −25 %)', /line-through[^>]*>20\s000\sFCFA/.test(m.html) && /−25 %/.test(m.html) && (m.html.match(/line-through/g) ?? []).length === 1);
-  check('sans fiche (slug absent) : lien vers le site ; sans photo : pas d’image cassée', /href="https:\/\/www\.albasseshopping\.com"/.test(m.html) && (m.html.match(/<img /g) ?? []).length === 2);
+  check('sans fiche (slug absent) : lien vers le site ; sans photo : pas d’image cassée (2 photos d’articles + le logo)', /href="https:\/\/www\.albasseshopping\.com"/.test(m.html) && (m.html.match(/<img src="https:\/\/img\.example/g) ?? []).length === 2 && (m.html.match(/<img /g) ?? []).length === 3);
   check('lien « Me désinscrire » et raison de l’envoi', /Me désinscrire des e-mails publicitaires/.test(m.html) && /href="https:\/\/www\.albasseshopping\.com\/desinscription\?t=abc"/.test(m.html) && /avez accepté de recevoir nos promotions/.test(m.html));
   check('pied de page : ne parle pas de commande', !/concerne votre commande/.test(m.html));
 }

@@ -49,7 +49,7 @@ export function layout(title: string, bodyHtml: string, footerNote = "Cet e-mail
   return `<!doctype html><html lang="fr"><body style="margin:0;background:#f4f4f7;font-family:Arial,Helvetica,sans-serif;color:#1d2433">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:14px;overflow:hidden">
-<tr><td style="background:#062266;padding:18px 24px;color:#e8c46c;font-size:20px;font-weight:bold">Albasse Shopping</td></tr>
+<tr><td style="background:#062266;padding:14px 24px"><table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="padding-right:12px"><img src="${SITE}/icon-192.png" width="44" height="44" alt="" style="display:block;width:44px;height:44px;border-radius:22px"></td><td style="color:#e8c46c;font-size:20px;font-weight:bold;font-family:Arial,Helvetica,sans-serif">Albasse Shopping</td></tr></table></td></tr>
 <tr><td style="padding:24px"><h1 style="margin:0 0 12px;font-size:20px;color:#062266">${escapeHtml(title)}</h1>${bodyHtml}</td></tr>
 <tr><td style="padding:16px 24px;background:#f4f4f7;font-size:12px;color:#6b7280">Albasse Shopping, N'Djamena, Tchad · albasseshopping.com<br>${escapeHtml(footerNote)}${footerHtml}</td></tr>
 </table></td></tr></table></body></html>`;
