@@ -14,6 +14,7 @@ export type AdminRoute = Extract<
   | 'AdminSourcePerformance'
   | 'AdminZaraStats'
   | 'AdminMarketing'
+  | 'AdminMarketingAI'
   | 'AdminBrowsing'
   | 'AdminCallbacks'
   | 'AdminStoreSettings'
@@ -63,6 +64,7 @@ export const ADMIN_MENU_GROUPS: AdminMenuGroup[] = [
     title: 'Marketing',
     items: [
       { icon: '✍️', label: 'Assistant marketing', route: 'AdminMarketing' },
+      { icon: '🤖', label: 'Zara Marketing (e-mails)', route: 'AdminMarketingAI' },
       { icon: '🎁', label: 'Promotions intelligentes', route: 'AdminPromotions' },
       { icon: '🎡', label: 'Roue de la chance', route: 'AdminWheel' },
       { icon: '🤝', label: 'Affiliés', route: 'AdminAffiliates' },
