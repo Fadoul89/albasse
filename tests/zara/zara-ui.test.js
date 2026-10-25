@@ -5950,6 +5950,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         check('Mes commandes : un bouton « Voir la facture » par commande', (await page.getByTestId('order-invoice').count()) === 2);
         await page.getByTestId('order-invoice').first().click();
         await page.getByTestId('invoice-paper').waitFor({ timeout: 15000 });
+        // les informations de la boutique (NIF, RCCM) arrivent un peu après la facture : on les attend avant de lire la feuille
+        await page.getByText(/NIF : 123456/).first().waitFor({ timeout: 8000 }).catch(() => {});
         check('facture : l\'adresse est /facture/<commande>', new URL(page.url()).pathname === '/facture/' + E1.id, page.url());
         const paper = (await page.getByTestId('invoice-paper').innerText()).replace(/\s+/g, ' ');
         check('facture : « FACTURE », numero FA-AAAA-000012 et commande N° 12', /FACTURE/.test(paper) && /FA-\d{4}-000012/.test(paper) && /Commande N° 12/.test(paper), paper.slice(0, 200));
@@ -6054,14 +6056,185 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         check('tableau de bord : 5 themes (Rapports, Clients, Marketing, Boutique, Parametres)', /^📈 Rapports/.test(g.reports) && /^👥 Clients/.test(g.customers) && /^📣 Marketing/.test(g.marketing) && /^🛍️ Boutique/.test(g.shop) && /^⚙️ Paramètres/.test(g.settings), g);
         check('Rapports ensemble : performance par source, Zara, suivi de navigation, notifications', ['Performance par source', 'Statistiques de Zara', 'Suivi de navigation', 'Notifications'].every((l) => g.reports.includes(l)), g.reports);
         check('Clients ensemble : clients, meilleurs clients potentiels, rappels WhatsApp', ['Clients', 'Meilleurs clients potentiels', 'Rappels WhatsApp'].every((l) => g.customers.includes(l)), g.customers);
-        check('Marketing ensemble : assistant marketing, promotions, roue de la chance, affilies', ['Assistant marketing', 'Promotions intelligentes', 'Roue de la chance', 'Affiliés'].every((l) => g.marketing.includes(l)), g.marketing);
+        check('Marketing ensemble : assistant marketing, Zara Marketing (e-mails), promotions, roue de la chance, affilies', ['Assistant marketing', 'Zara Marketing (e-mails)', 'Promotions intelligentes', 'Roue de la chance', 'Affiliés'].every((l) => g.marketing.includes(l)), g.marketing);
         check('Boutique : commandes et factures, produits, categories, voyage ; Parametres : contact, paiement, livraison', ['Commandes et factures', 'Produits', 'Catégories', 'Voyage'].every((l) => g.shop.includes(l)) && ['Informations de contact', 'Paiement', 'Livraison (Villes)'].every((l) => g.settings.includes(l)), { shop: g.shop, settings: g.settings });
         await page.screenshot({ path: path.join(OUT, 'C8-tableau-de-bord.png') });
-        check('18 pages accessibles depuis le tableau de bord', (await page.locator('[data-testid^="admin-menu-Admin"]').count()) === 18);
+        check('19 pages accessibles depuis le tableau de bord', (await page.locator('[data-testid^="admin-menu-Admin"]').count()) === 19);
         await page.getByTestId('admin-menu-AdminStoreSettings').click();
         await page.getByTestId('settings-legal-line').waitFor({ timeout: 15000 });
         check('un theme mene a la bonne page (Parametres › Informations de contact)', new URL(page.url()).pathname === '/admin/parametres/contact', page.url());
         check('aucune erreur (tableau de bord)', c.errs.length === 0, c.errs);
+        await c.ctx.close();
+      }
+      // --- administrateur : l'ecran « Zara Marketing » (3 controles, verrou, simulation, approbation, rapport) avec une fausse base et une fausse fonction
+      {
+        const fa = mk(true);
+        const c = await newVisitor(phone, { storage: { 'sb-xtitsmmccpkelxfjyqyh-auth-token': sessionFor(fa) }, fakeUser: fa, fakeStore: { waOrder: true } });
+        const { page } = c;
+        const today = new Date(Date.now() + 3600_000).toISOString().slice(0, 10);
+        const st = {
+          settings: { id: 1, mode: 'off', run_hour: 9, daily_limit: 50, min_days_between: 7, max_per_30_days: 3, require_approval: true, brevo_ok: null, brevo_checked_at: null, brevo_detail: null, last_simulation_at: null, last_simulation_blocking: null, test_email_at: null, test_email_message_id: null, validated_at: null, last_run_date: null },
+          runs: [],
+          summaries: {},
+          calls: [],
+          patches: [],
+          report: { days: 30, totals: { queued: 0, skipped: 0, failed: 0, pending: 0, sent: 0, confirmed: 0, measured: 0, delivered: 0, clicked: 0, clicks: 0, bounced: 0, hardBounced: 0, complaints: 0, unsubscribed: 0, orders: 0, revenue: 0 }, bySegment: {}, byVariant: {}, errors: [], eventsAwaiting: 0, attribution: { orders: 0, revenue: 0, note: 'Commandes passées pendant la visite ouverte par un clic dans l’e-mail ; revenu = commandes livrées seulement. Un client qui commande plus tard, depuis une autre visite, n’est pas compté.' } },
+          testConfirmed: false,
+        };
+        const hdr = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+        const reply = (route, body, status = 200) => route.fulfill({ status, headers: { ...hdr, 'content-type': 'application/json' }, body: JSON.stringify(body) });
+        const plan = { runDate: today, recipientCount: 5, blocking: 0, deferred: 0, catalog: { total: 402, verified: 380, rejected: { stock: 12 }, warnings: { remise_suspecte: 3 } }, clients: { total: 513, eligible: 5, excluded: { desinscrit: 2, autorisation_manquante: 17, frequence_minimale: 40 } }, segments: [{ key: 'flash', label: 'Vente flash', eligible: 0, planned: 0 }, { key: 'inactive', label: 'Clients absents', eligible: 5, planned: 5 }, { key: 'perfume_lovers', label: 'Amateurs de parfums', eligible: 0, planned: 0, paused: '2 plainte(s) sur 40 e-mails livrés' }], issues: [{ level: 'warning', code: 'remises_suspectes', message: '3 article(s) ont un ancien prix douteux : la remise n’est pas annoncée.' }, { level: 'info', code: 'langue_deduite', message: 'La langue des clients n’est pas enregistrée.' }], previews: [{ segment: 'inactive', label: 'Clients absents', lang: 'fr', variant: 'A', subject: 'Prénom, les articles du moment vous attendent 🛍️', html: '<html><body><p>Bonjour Prénom,</p><a href="https://www.albasseshopping.com/desinscription?t=exemple">Me désinscrire</a></body></html>' }], sample: [], learning: { notes: ['Segment « Amateurs de parfums » mis en pause : 2 plainte(s) sur 40 e-mails livrés.', '« Clients absents » : 12,5 % de clics, 3 commande(s) attribuée(s), 0,5 % de désinscriptions sur 120 e-mails livrés.'], pausedSegments: { perfume_lovers: '2 plainte(s) sur 40 e-mails livrés' }, bestVariant: {}, segmentOrder: null, stats: { inactive: { sent: 130, measured: 125, delivered: 120, clicked: 15, unsubscribed: 1, complaints: 0, hardBounced: 1, orders: 3, revenue: 90000 }, perfume_lovers: { sent: 40, measured: 0, delivered: 0, clicked: 0, unsubscribed: 0, complaints: 0, hardBounced: 0, orders: 0, revenue: 0 } } } };
+        await page.route('**/rest/v1/marketing_ai_settings*', async (route) => {
+          const m = route.request().method();
+          if (m === 'OPTIONS') return route.fulfill({ status: 204, headers: hdr });
+          if (m === 'PATCH') {
+            const body = JSON.parse(route.request().postData() || '{}');
+            st.patches.push(body);
+            Object.assign(st.settings, body);
+            return route.fulfill({ status: 204, headers: hdr });
+          }
+          return reply(route, st.settings);
+        });
+        await page.route('**/rest/v1/marketing_runs*', async (route) => {
+          if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: hdr });
+          const u = new URL(route.request().url());
+          if (u.searchParams.get('select') === 'summary') {
+            const id = (u.searchParams.get('id') || '').replace('eq.', '');
+            return reply(route, { summary: st.summaries[id] });
+          }
+          return reply(route, st.runs);
+        });
+        await page.route('**/functions/v1/brevo-email', async (route) => {
+          if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: hdr });
+          const body = JSON.parse(route.request().postData() || '{}');
+          st.calls.push(body);
+          const now = new Date().toISOString();
+          if (body.action === 'marketing_report') return reply(route, { ok: true, report: st.report });
+          if (body.action === 'check') {
+            Object.assign(st.settings, { brevo_ok: true, brevo_checked_at: now, brevo_detail: { ok: true, limited_key: true, events_api: { accessible: true } } });
+            return reply(route, { ok: true, limited_key: true, events_api: { accessible: true } });
+          }
+          if (body.action === 'marketing_simulate') {
+            Object.assign(st.settings, { last_simulation_at: now, last_simulation_blocking: 0 });
+            const id = `00000000-0000-4000-8000-00000000000${st.runs.length + 1}`;
+            st.summaries[id] = plan;
+            st.runs.unshift({ id, created_at: now, run_date: today, mode: 'simulation', status: 'simulated', error: null, approved_at: null, planned: '5', blocking: '0' });
+            return reply(route, { ok: true, run_id: id, plan, blocking: 0 });
+          }
+          if (body.action === 'marketing_test_email') {
+            if (st.testConfirmed) Object.assign(st.settings, { test_email_at: now, test_email_message_id: '<abc@smtp-relay.mailin.fr>' });
+            return reply(route, { ok: true, to: 'ad***@example.com', confirmed: st.testConfirmed });
+          }
+          if (body.action === 'marketing_set_mode') {
+            if (body.mode === 'live' && body.confirm !== 'ACTIVER') return reply(route, { ok: false, reason: 'confirmation' });
+            st.settings.mode = body.mode;
+            if (body.mode === 'live') st.settings.validated_at = now;
+            return reply(route, { ok: true, mode: body.mode });
+          }
+          if (body.action === 'marketing_approve') {
+            st.runs[0].status = 'queued';
+            return reply(route, { ok: true, queued: 5 });
+          }
+          if (body.action === 'marketing_sync') {
+            st.report.totals = { ...st.report.totals, queued: 5, sent: 5, confirmed: 5, measured: 4, delivered: 4, clicked: 1, clicks: 2, unsubscribed: 0 };
+            return reply(route, { ok: true, synced: 4, suppressed: 0, stopped: null });
+          }
+          return reply(route, { ok: false, reason: 'bad_request' }, 400);
+        });
+        await page.goto(`http://localhost:${port}/admin/zara-marketing`, { waitUntil: 'load' });
+        await page.getByTestId('mkai-mode').waitFor({ timeout: 25000 });
+        const txt = async (id) => (await page.getByTestId(id).innerText()).replace(/\s+/g, ' ');
+        check('Zara Marketing : au départ « Éteint », les 3 contrôles « pas fait »', /Éteint/.test(await txt('mkai-mode')) && (await Promise.all(['brevo', 'simulation', 'test'].map((k) => txt(`mkai-gate-${k}-status`)))).every((t) => /pas fait/.test(t)));
+        const liveLocked = async () => (await page.getByTestId('mkai-mode-live').getAttribute('aria-disabled')) === 'true';
+        check('verrou : « Activer les envois » est verrouillé (🔒) tant que les 3 contrôles ne sont pas faits', (await liveLocked()) && /🔒/.test(await txt('mkai-mode-live')));
+        await page.getByTestId('mkai-mode-live').click({ force: true }).catch(() => {});
+        check('verrou : toucher le bouton verrouillé n’ouvre aucune confirmation et n’appelle rien', (await page.getByTestId('mkai-confirm').count()) === 0 && !st.calls.some((x) => x.action === 'marketing_set_mode'));
+
+        await page.getByTestId('mkai-check-brevo').click();
+        await page.getByTestId('mkai-message').waitFor({ timeout: 10000 });
+        check('contrôle Brevo : la fonction reçoit seulement « check », le message dit que Brevo reconnaît la clé (clé limitée normale)', st.calls.filter((x) => x.action === 'check').length === 1 && /Brevo reconnaît la clé/.test(await txt('mkai-message')) && /clé limitée/.test(await txt('mkai-message')), await txt('mkai-message'));
+        await page.getByTestId('mkai-gate-brevo-status').filter({ hasText: /fait/ }).waitFor({ timeout: 8000 });
+        check('contrôle Brevo : coché (✅), les deux autres restent à faire, toujours verrouillé', /fait/.test(await txt('mkai-gate-brevo-status')) && /pas fait/.test(await txt('mkai-gate-simulation-status')) && (await liveLocked()));
+
+        await page.getByTestId('mkai-run-simulation').click();
+        await page.getByTestId('mkai-plan').waitFor({ timeout: 10000 });
+        check('simulation : le plan s’affiche (5 clients retenus, segments, exclus avec leur raison en français)', (await txt('mkai-plan-count')) === '5' && /Clients absents/.test(await txt('mkai-plan')) && /Désinscrits/.test(await txt('mkai-plan')) && /Sans autorisation marketing/.test(await txt('mkai-plan')) && /Déjà sollicités récemment/.test(await txt('mkai-plan')), await txt('mkai-plan'));
+        check('simulation : le message répète qu’aucun e-mail n’a été envoyé', /Aucun e-mail n’a été envoyé ni mis en file/.test(await txt('mkai-message')));
+        check('simulation : l’alerte « remises suspectes » est affichée', (await page.getByTestId('mkai-issue-remises_suspectes').count()) === 1);
+        const learn = await txt('mkai-learning');
+        check('apprentissage : « Ce que Zara a appris » affiche les notes en français et le segment en pause (⏸️), sans rien d’autre à faire', /Ce que Zara a appris/.test(learn) && /12,5 % de clics, 3 commande\(s\) attribuée\(s\)/.test(learn) && (await page.getByTestId('mkai-paused-perfume_lovers').count()) === 1 && /Amateurs de parfums.*en pause/.test(await txt('mkai-paused-perfume_lovers')) && /Amateurs de parfums ⏸️ en pause/.test(await txt('mkai-plan')), learn);
+        check('apprentissage : le tableau des 30 jours montre « — » (jamais 0) pour un segment dont Brevo n’a pas donné les résultats, et les chiffres pour l’autre', /Absents\s*120\s*15\s*1\s*0\s*3/.test(learn) && /Amateurs de parfums\s*—\s*—\s*0\s*—\s*0/.test(learn), learn);
+        check('apprentissage : la note d’honnêteté (assez de résultats mesurés) est visible', /sans assez de résultats mesurés/.test(learn));
+        await page.getByTestId('mkai-preview-inactive-fr').click();
+        const frame = page.locator('[data-testid="mkai-preview-frame-inactive-fr"]');
+        await frame.waitFor({ timeout: 8000 });
+        check('aperçu : le vrai e-mail s’affiche dans un cadre, avec le lien de désinscription', /desinscription\?t=exemple/.test((await frame.getAttribute('srcdoc')) || ''));
+        check('seule la simulation est partie : toujours verrouillé (il manque l’e-mail de test)', st.calls.filter((x) => x.action === 'marketing_simulate').length === 1 && (await liveLocked()) && (await txt('mkai-gate-test-status')).includes('pas fait'));
+
+        await page.getByTestId('mkai-send-test').click();
+        await page.getByText(/sans identifiant : ce n’est pas une confirmation/).waitFor({ timeout: 10000 });
+        check('e-mail de test accepté SANS identifiant Brevo : « pas une confirmation », le contrôle reste à faire, toujours verrouillé', (await txt('mkai-gate-test-status')).includes('pas fait') && (await liveLocked()));
+        st.testConfirmed = true;
+        await page.getByTestId('mkai-send-test').click();
+        await page.getByText(/Brevo a confirmé \(identifiant du message reçu\)/).waitFor({ timeout: 10000 });
+        await page.getByTestId('mkai-gate-test-status').filter({ hasText: /fait/ }).waitFor({ timeout: 8000 });
+        check('e-mail de test confirmé par Brevo : 3 contrôles faits, le bouton se déverrouille', !(await liveLocked()) && !/🔒/.test(await txt('mkai-mode-live')));
+
+        await page.getByTestId('mkai-mode-live').click();
+        await page.getByTestId('mkai-confirm-input').waitFor({ timeout: 5000 });
+        check('activation : une confirmation à taper est demandée, le bouton « Valider » est bloqué', (await page.getByTestId('mkai-confirm-live').getAttribute('aria-disabled')) === 'true');
+        await page.getByTestId('mkai-confirm-input').fill('ACTIV');
+        check('activation : « ACTIV » ne suffit pas', (await page.getByTestId('mkai-confirm-live').getAttribute('aria-disabled')) === 'true');
+        await page.getByTestId('mkai-confirm-input').fill('ACTIVER');
+        await page.getByTestId('mkai-confirm-live').click();
+        await page.getByText('Actif : envois réels').first().waitFor({ timeout: 10000 });
+        const setCall = st.calls.find((x) => x.action === 'marketing_set_mode');
+        check('activation : la fonction reçoit « live » avec la confirmation tapée, le mode passe à « Actif »', setCall && setCall.mode === 'live' && setCall.confirm === 'ACTIVER' && /Actif/.test(await txt('mkai-mode')), setCall);
+
+        // réglages : les valeurs sont ramenées dans les limites avant d'être envoyées
+        await page.getByTestId('mkai-daily-limit').fill('500');
+        await page.getByTestId('mkai-run-hour').fill('30');
+        await page.getByTestId('mkai-min-days').fill('0');
+        await page.getByTestId('mkai-require-approval').click();
+        await page.getByTestId('mkai-save-settings').click();
+        await page.getByText('Réglages enregistrés.').waitFor({ timeout: 8000 });
+        const patch = st.patches.find((p) => 'daily_limit' in p);
+        check('réglages : 500 -> 200, 30 h -> 23 h, 0 jour -> 1 jour, approbation décochée ; le mode et le verrou ne sont jamais envoyés par l’application', patch && patch.daily_limit === 200 && patch.run_hour === 23 && patch.min_days_between === 1 && patch.max_per_30_days === 3 && patch.require_approval === false && !('mode' in patch) && !('validated_at' in patch) && !('brevo_ok' in patch), patch);
+
+        // campagne du jour en attente d'approbation
+        st.runs.unshift({ id: '00000000-0000-4000-8000-0000000000aa', created_at: new Date().toISOString(), run_date: today, mode: 'live', status: 'pending_approval', error: null, approved_at: null, planned: '5', blocking: '0' });
+        st.summaries['00000000-0000-4000-8000-0000000000aa'] = plan;
+        await page.reload({ waitUntil: 'load' });
+        await page.getByTestId('mkai-pending').waitFor({ timeout: 20000 });
+        check('campagne du jour en attente : la carte d’approbation s’affiche avec le nombre de clients', /5 client\(s\) retenu\(s\)/.test(await txt('mkai-pending')));
+        await page.getByTestId('mkai-approve').click();
+        await page.getByText(/5 e-mail\(s\) mis en file/).waitFor({ timeout: 10000 });
+        const ap = st.calls.find((x) => x.action === 'marketing_approve');
+        check('approbation : la fonction reçoit l’identifiant du passage, le message annonce 5 e-mails mis en file (goutte-à-goutte)', ap && ap.run_id === '00000000-0000-4000-8000-0000000000aa' && /goutte-à-goutte/.test(await txt('mkai-message')), ap);
+
+        // rapport : « non mesuré » tant que Brevo n'a rien confirmé, puis les vrais taux
+        check('rapport : sans résultats lus chez Brevo, livraison et clics sont « non mesuré » (jamais 0 %)', /non mesuré/.test(await txt('mkai-report')) && !/0 %/.test(await txt('mkai-report')), await txt('mkai-report'));
+        await page.getByTestId('mkai-sync').click();
+        await page.getByText(/Résultats lus chez Brevo : 4 e-mail\(s\) mis à jour/).waitFor({ timeout: 10000 });
+        await page.getByText('100 %').first().waitFor({ timeout: 8000 });
+        check('rapport après lecture chez Brevo : taux de livraison 100 % (4 sur 4 mesurés), taux de clic 25 % (1 sur 4)', /100 %/.test(await txt('mkai-report')) && /25 %/.test(await txt('mkai-report')), await txt('mkai-report'));
+        check('rapport : la note d’honnêteté sur l’attribution des commandes est visible', /autre visite/.test(await txt('mkai-report')));
+        check('journal : les passages sont listés (date, mode, état)', /Actif · En attente|Actif · Mise en file/.test(await txt('mkai-runs')) && /Simulation · Simulation/.test(await txt('mkai-runs')), await txt('mkai-runs'));
+        check('aucune clé, aucun secret dans la page', !/xkeysib|api-key|BREVO_API_KEY=/.test(await page.content()));
+        check('aucune erreur (Zara Marketing)', c.errs.length === 0, c.errs);
+        await c.ctx.close();
+      }
+      // --- administrateur : Zara Marketing, script SQL pas encore lancé
+      {
+        const fa = mk(true);
+        const c = await newVisitor(phone, { storage: { 'sb-xtitsmmccpkelxfjyqyh-auth-token': sessionFor(fa) }, fakeUser: fa, fakeStore: { waOrder: true } });
+        const { page } = c;
+        const hdr = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+        await page.route('**/rest/v1/marketing_*', (route) => (route.request().method() === 'OPTIONS' ? route.fulfill({ status: 204, headers: hdr }) : route.fulfill({ status: 404, headers: { ...hdr, 'content-type': 'application/json' }, body: JSON.stringify({ code: 'PGRST205', message: "Could not find the table 'public.marketing_ai_settings' in the schema cache" }) })));
+        await page.route('**/functions/v1/brevo-email', (route) => (route.request().method() === 'OPTIONS' ? route.fulfill({ status: 204, headers: hdr }) : route.fulfill({ status: 200, headers: { ...hdr, 'content-type': 'application/json' }, body: JSON.stringify({ ok: false, reason: 'sql_missing' }) })));
+        await page.goto(`http://localhost:${port}/admin/zara-marketing`, { waitUntil: 'load' });
+        await page.getByTestId('mkai-sql-missing').waitFor({ timeout: 25000 });
+        check('script SQL pas lancé : message clair, aucun bouton d’envoi ni d’activation', /add-marketing-intelligence\.sql/.test(await page.getByTestId('mkai-sql-missing').innerText()) && (await page.getByTestId('mkai-mode-live').count()) === 0 && (await page.getByTestId('mkai-approve').count()) === 0);
         await c.ctx.close();
       }
       // --- administrateur : la ligne « informations legales » des factures (NIF, RCCM)

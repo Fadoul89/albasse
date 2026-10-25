@@ -8,6 +8,8 @@
 // La fonction se contrôle elle-même (jeton d'administrateur ou secret partagé) : le contrôle de la passerelle est donc coupé.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { drain, loadPromoProducts, sendBrevo, unsubscribeLinks } from "./drain.ts";
+import { loadReport } from "./marketingReport.ts";
+import { approveRun, runCheck, sendTestEmail, setMode, simulate, syncEvents, tick } from "./marketingRun.ts";
 import { escapeHtml, layout, mask, realEmail } from "./orderEmails.ts";
 import { inactiveClientEmail, pickProducts } from "./promoEmails.ts";
 
@@ -39,6 +41,23 @@ Deno.serve(async (req) => {
   if (cron) {
     const { data: secret } = await service.rpc("email_cron_secret");
     if (!secret || cron !== secret) return json({ ok: false, reason: "auth" }, 401);
+    let action: unknown = "drain";
+    try {
+      action = (await req.json())?.action ?? "drain";
+    } catch {
+      // pas de corps : c'est l'envoi de la file, comme avant
+    }
+    // contrôle de la connexion à Brevo (lecture seule, aucun envoi) ; la réponse ne contient jamais la clé
+    if (action === "check") return json(await runCheck(deps(service)));
+    // Zara Marketing : passage horaire (chaque heure à :05, la base l'appelle ; il ne fait rien tant que le mode est « off »)
+    if (action === "marketing_tick") {
+      try {
+        return json(await tick(deps(service)));
+      } catch (e) {
+        console.error("brevo-email: erreur du passage Zara Marketing", e instanceof Error ? e.message : e);
+        return json({ ok: false, reason: "error" });
+      }
+    }
     try {
       return json(await drain(deps(service)));
     } catch (e) {
@@ -54,13 +73,31 @@ Deno.serve(async (req) => {
   const { data: me } = await service.from("profiles").select("is_admin,email,full_name").eq("id", userData.user.id).maybeSingle();
   if (!me?.is_admin) return json({ ok: false, reason: "forbidden" }, 403);
 
-  let body: { action?: unknown };
+  let body: { action?: unknown; run_id?: unknown; mode?: unknown; confirm?: unknown };
   try {
     body = await req.json();
   } catch {
     return json({ ok: false, reason: "bad_request" }, 400);
   }
-  if (body.action !== "test" && body.action !== "test_promo") return json({ ok: false, reason: "bad_request" }, 400);
+  const ADMIN_ACTIONS = ["test", "test_promo", "check", "marketing_simulate", "marketing_approve", "marketing_set_mode", "marketing_test_email", "marketing_sync", "marketing_report"];
+  if (typeof body.action !== "string" || !ADMIN_ACTIONS.includes(body.action)) return json({ ok: false, reason: "bad_request" }, 400);
+  if (body.action === "check") return json(await runCheck(deps(service)));
+
+  // Zara Marketing Intelligence (administrateur seulement). Rien ici n'envoie à un client : la simulation n'écrit rien dans la file,
+  // l'approbation et le mode « live » passent par le verrou de marketingRun.ts, et l'e-mail de test part vers l'administrateur lui-même.
+  if (body.action.startsWith("marketing_")) {
+    try {
+      if (body.action === "marketing_simulate") return json(await simulate(deps(service)));
+      if (body.action === "marketing_approve") return json(await approveRun(deps(service), body.run_id, userData.user.id));
+      if (body.action === "marketing_set_mode") return json(await setMode(deps(service), body.mode, body.confirm, userData.user.id));
+      if (body.action === "marketing_sync") return json(await syncEvents(deps(service), 40));
+      if (body.action === "marketing_report") return json({ ok: true, report: await loadReport(deps(service), 30) });
+      return json(await sendTestEmail(deps(service), { email: me.email ?? userData.user.email, fullName: me.full_name }));
+    } catch (e) {
+      console.error("brevo-email: erreur Zara Marketing", body.action, e instanceof Error ? e.message : e);
+      return json({ ok: false, reason: "error" });
+    }
+  }
 
   const key = Deno.env.get("BREVO_API_KEY");
   if (!key) return json({ ok: false, reason: "no_key" });
