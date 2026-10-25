@@ -43,7 +43,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   // rank : rang du jour renvoye par la fonction de la base (null : fonction pas installee). fakeUser : compte simule (token : reponse a une connexion par mot de passe ; delay : lenteur du profil en ms). fakeOrders : { list: [...], patches: [] } = fausse table des commandes.
   // zaraInstall : par defaut, le visiteur a deja repondu « Plus tard » a l'installation (Zara ne la propose pas) ; null = vrai nouveau
   // visiteur, pour les parties qui testent l'installation
-  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, fakeSales = null, fakeCallbacks = null, fakePushes = null, fakeStore = null, fakeCats = null, fakeOnline = null, initScripts = [], zaraInstall = 'dismissed', zaraPush = 'later', installAfterSignUp = '1', pushPerm = null, pushAnswer = 'granted', fakeAi = null } = {}) {
+  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, fakeSales = null, fakeCallbacks = null, fakePushes = null, fakeStore = null, fakeCats = null, fakeOnline = null, fakeRecent = null, initScripts = [], zaraInstall = 'dismissed', zaraPush = 'later', installAfterSignUp = '1', pushPerm = null, pushAnswer = 'granted', fakeAi = null } = {}) {
     const ctx = await b.newContext(opts);
     if (cookies) await ctx.addCookies(cookies);
     if (lang) storage = { albasse_zara_lang: lang, ...storage };
@@ -223,6 +223,13 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
           if (!fakeOnline) return json(route, { code: 'PGRST202', message: 'Could not find the function public.online_visitors_count without parameters in the schema cache' }, 404);
           fakeOnline.calls = (fakeOnline.calls || 0) + 1;
           return json(route, fakeOnline.n);
+        }
+        // barre « achats recents » (add-recent-purchases.sql) : fakeRecent.rows = les vraies commandes recentes renvoyees (fakeRecent.calls = appels) ;
+        // sans fakeRecent : fonction absente (script pas lance), la barre est cachee
+        if (u.pathname === '/rest/v1/rpc/recent_purchases' && m === 'POST') {
+          if (!fakeRecent) return json(route, { code: 'PGRST202', message: 'Could not find the function public.recent_purchases(p_limit) in the schema cache' }, 404);
+          fakeRecent.calls = (fakeRecent.calls || 0) + 1;
+          return json(route, fakeRecent.rows);
         }
         // ordre des categories (add-category-order.sql) : les vraies categories avec un faux sort_order. fakeCats.order = { slug: numero } ;
         // missing = colonne absente (script pas lance) ; patches = numeros recus de la page admin ({ id, sort_order })
@@ -4249,6 +4256,32 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await openHome(v);
       check('script SQL pas encore lance : compteur cache (aucun nombre invente)', (await v.page.getByTestId('home-online').count()) === 0 && (await v.page.getByText(/\d+ (?:personnes )?en ligne/).count()) === 0);
       check('aucune ecriture reelle', v.writes.every((w) => /visitor_sessions/.test(w)), v.writes);
+      await v.ctx.close();
+    }
+    // barre bleue « achats recents » : seulement de vraies commandes, cachee sinon
+    {
+      const v = await newVisitor(phone);
+      await openHome(v);
+      check('achats recents : script SQL pas lance ou aucune commande, la barre est cachee (rien d\'invente)', (await v.page.getByTestId('recent-purchases').count()) === 0 && (await v.page.getByText(/a commandé/).count()) === 0);
+      await v.ctx.close();
+    }
+    {
+      const fr = { rows: [] };
+      const v = await newVisitor(phone, { fakeRecent: fr });
+      await openHome(v);
+      check('achats recents : la base repond « aucune commande recente », la barre est cachee', fr.calls >= 1 && (await v.page.getByTestId('recent-purchases').count()) === 0);
+      await v.ctx.close();
+    }
+    {
+      const fr = { rows: [{ city: "N'Djamena", product: 'Capuche   noire', created_at: new Date(Date.now() - 2 * 3600_000).toISOString() }, { city: null, product: 'Slip-on', created_at: new Date(Date.now() - 20 * 60_000).toISOString() }] };
+      const v = await newVisitor(phone, { fakeRecent: fr });
+      await openHome(v);
+      const bar = v.page.getByTestId('recent-purchases');
+      await bar.waitFor({ timeout: 15000 });
+      const txt = (await bar.innerText()).replace(/\s+/g, ' ');
+      check('achats recents : de vraies commandes, ville + article + il y a 2 h / 20 min (aucun nom de client)', /Un client de N'Djamena a commandé : Capuche noire · il y a 2 h/.test(txt) && /Un client a commandé : Slip-on · il y a 20 min/.test(txt), txt);
+      check('achats recents : aucun des anciens faux textes (noms, temoignages)', !/Amina|Youssouf|Fatima Saleh|témoign|avis 5/i.test(txt));
+      check('achats recents : la barre est tout en haut de la page', (await bar.boundingBox()).y < 120);
       await v.ctx.close();
     }
     {
