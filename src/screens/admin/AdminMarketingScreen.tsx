@@ -25,6 +25,8 @@ export function AdminMarketingScreen() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [mailBusy, setMailBusy] = useState(false);
+  const [mailResult, setMailResult] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
     if (!profile?.is_admin) return;
@@ -67,6 +69,28 @@ export function AdminMarketingScreen() {
     }
     // pas de mise en forme markdown dans l'écran : on retire les étoiles du gras et de l'italique
     setResult(d.text.replace(/\*+/g, ''));
+  };
+
+  // E-mail de test (Brevo) vers l'adresse de l'administrateur : vérifie la clé, le domaine et l'expéditeur avant tout envoi aux clients
+  const sendTestEmail = async () => {
+    setMailBusy(true);
+    setMailResult(null);
+    const { data } = await supabase.functions.invoke('brevo-email', { body: { action: 'test' } });
+    setMailBusy(false);
+    const d = data as { ok?: boolean; to?: string; reason?: string; detail?: string } | null;
+    if (d?.ok) {
+      setMailResult({ ok: true, text: `✅ E-mail de test envoyé à ${d.to ?? 'votre adresse'}. Regardez votre boîte, et les spams.` });
+    } else if (d?.reason === 'no_key') {
+      setMailResult({ ok: false, text: "La clé Brevo n'est pas encore dans les Secrets de Supabase (nom : BREVO_API_KEY)." });
+    } else if (d?.reason === 'no_email') {
+      setMailResult({ ok: false, text: "Votre compte n'a pas d'adresse e-mail : ajoutez-en une dans Compte, puis réessayez." });
+    } else if (d?.reason === 'brevo') {
+      setMailResult({ ok: false, text: `Brevo a refusé l'envoi : ${d.detail ?? 'raison inconnue'}` });
+    } else if (d?.reason === 'auth' || d?.reason === 'forbidden') {
+      setMailResult({ ok: false, text: 'Réservé aux administrateurs.' });
+    } else {
+      setMailResult({ ok: false, text: "Envoi impossible pour le moment. Réessayez dans un instant." });
+    }
   };
 
   return (
@@ -120,6 +144,21 @@ export function AdminMarketingScreen() {
             </Text>
           </View>
         ) : null}
+
+        <View style={styles.mailCard} testID="marketing-email-card">
+          <Text style={styles.mailTitle}>📧 E-mails aux clients (Brevo)</Text>
+          <Text style={styles.mailText}>
+            Avant d'envoyer quoi que ce soit aux clients, vérifiez que l'envoi marche : vous recevez un e-mail de test sur votre propre adresse.
+          </Text>
+          <Pressable style={[styles.mailButton, mailBusy && { opacity: 0.6 }]} onPress={sendTestEmail} disabled={mailBusy} testID="marketing-email-test">
+            {mailBusy ? <ActivityIndicator color={colors.gold} /> : <Text style={styles.mailButtonText}>Envoyer un e-mail de test</Text>}
+          </Pressable>
+          {mailResult ? (
+            <Text style={[styles.mailMsg, mailResult.ok ? styles.mailOk : styles.error]} testID="marketing-email-result">
+              {mailResult.text}
+            </Text>
+          ) : null}
+        </View>
       </ScrollView>
     </View>
   );
@@ -156,4 +195,11 @@ const styles = StyleSheet.create({
   result: { backgroundColor: colors.panel, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, marginTop: spacing.lg },
   resultHint: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11, marginBottom: 8 },
   resultText: { color: colors.cream, fontFamily: fonts.body, fontSize: 14, lineHeight: 21 },
+  mailCard: { backgroundColor: colors.panel, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, marginTop: spacing.xl, gap: spacing.sm },
+  mailTitle: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 14 },
+  mailText: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 13, lineHeight: 19 },
+  mailButton: { borderWidth: 1, borderColor: colors.gold, borderRadius: radius.pill, alignItems: 'center', paddingVertical: 12 },
+  mailButtonText: { color: colors.gold, fontFamily: fonts.bodySemiBold, fontSize: 14 },
+  mailMsg: { fontFamily: fonts.body, fontSize: 13, lineHeight: 19 },
+  mailOk: { color: colors.success },
 });
