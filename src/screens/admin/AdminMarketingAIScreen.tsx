@@ -175,7 +175,7 @@ export function AdminMarketingAIScreen() {
       })
       .eq('id', 1);
     setBusy(null);
-    setMessage(error ? { ok: false, text: 'Réglages non enregistrés.' } : { ok: true, text: 'Réglages enregistrés.' });
+    setMessage(error ? { ok: false, text: settings?.mode === 'live' ? 'Réglages non enregistrés : tant que le mode est actif, les 3 contrôles doivent être à jour. Refaites-les, puis réessayez.' : 'Réglages non enregistrés.' } : { ok: true, text: 'Réglages enregistrés.' });
     await load();
   };
 

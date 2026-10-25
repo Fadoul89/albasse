@@ -130,7 +130,8 @@ export async function loadSnapshot(service: Deps["service"], now: number): Promi
     fetchAll<any>((a, b) => service.from("products").select("id,name,slug,price,compare_at_price,images,is_flash_sale,flash_sale_ends_at,created_at,category_id,stock,is_active").eq("is_active", true).order("id").range(a, b)),
     fetchAll<any>((a, b) => service.from("profiles").select("id,email,full_name,created_at,last_login_at,banned,is_admin,notify_promotions,notify_new_products,notify_flash_sale").order("id").range(a, b)),
     fetchAll<any>((a, b) => service.from("email_prefs").select("user_id,token,unsubscribed_at,suppressed_at,lang").order("user_id").range(a, b)),
-    fetchAll<any>((a, b) => service.from("visitor_sessions").select("id,user_id,last_seen_at").not("user_id", "is", null).gte("last_seen_at", iso(now - 90 * DAY_MS)).order("id").range(a, b)),
+    // seules les visites des 14 derniers jours servent (le seuil d'absence est de 7 jours) : la lecture reste petite et ne risque pas d'être coupée
+    fetchAll<any>((a, b) => service.from("visitor_sessions").select("id,user_id,last_seen_at").not("user_id", "is", null).gte("last_seen_at", iso(now - 14 * DAY_MS)).order("id").range(a, b), 1000, 50000),
     fetchAll<any>((a, b) => service.from("orders").select("id,user_id,status,created_at,is_flagged_fake,loyalty_discount,items").not("user_id", "is", null).order("id").range(a, b)),
     fetchAll<any>((a, b) => service.from("favorites").select("id,user_id,product_id").order("id").range(a, b)),
     fetchAll<any>((a, b) => service.from("email_outbox").select("id,user_id,kind,status,created_at,segment,variant,product_ids").in("kind", ["marketing", "promo_inactive"]).gte("created_at", iso(now - 60 * DAY_MS)).order("id").range(a, b)),
