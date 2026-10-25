@@ -8,6 +8,7 @@ import { useAuthStore } from '../store/authStore';
 import { firstNameOfFullName } from '../lib/assistantBrain';
 import { texts } from '../lib/assistantText';
 import { pushReminderNow } from '../lib/pushReminder';
+import { playZaraDing } from '../lib/zaraSound';
 import { AssistantPanel } from './AssistantPanel';
 import { TAB_BAR_HEIGHT } from '../navigation/tabLayout';
 
@@ -427,6 +428,8 @@ export function Assistant() {
           // ignore : elle pourra se rouvrir seule après un rechargement
         }
       }
+      // un petit « ding » si le téléphone l'autorise (il faut que le visiteur ait déjà touché l'écran), sinon Zara s'ouvre en silence
+      playZaraDing();
       // même ouverture que le toucher sur la bulle : rappel des notifications ou invitation à installer s'ils sont dus, sinon l'accueil de Zara
       if (pushDue) openFor('push');
       else if (installDue) openFor('install');

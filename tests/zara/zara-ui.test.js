@@ -866,6 +866,28 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await sleep(8000);
       check('Zara deja ouverte par le visiteur : pas de deuxieme ouverture ni de deuxieme conversation', (await panelOf(t.page).count()) === 1 && t.chatStarts.length === 1, t.chatStarts);
       await t.ctx.close();
+
+      // le son : un faux « audio » compte ce que Zara joue (le vrai son ne peut pas etre entendu ici)
+      const fakeAudio = (state) => `window.__ding = { created: 0, started: 0, closed: 0 };
+        window.AudioContext = class { constructor() { window.__ding.created++; this.state = '${state}'; this.currentTime = 0; this.destination = {}; }
+          createGain() { return { gain: { setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() {} }; }
+          createOscillator() { return { frequency: { setValueAtTime() {} }, connect() {}, start() { window.__ding.started++; }, stop() {} }; }
+          close() { window.__ding.closed++; return Promise.resolve(); } };`;
+      const s1 = await newVisitor(phone, { lang: 'fr', autoOpen: true, initScripts: [fakeAudio('running')] });
+      await s1.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await sleep(6500);
+      const before = await s1.page.evaluate(() => window.__ding);
+      check('avant l\'ouverture automatique : aucun son', before.created === 0 && before.started === 0, before);
+      await waitText(s1.page, /Bienvenue chez Albasse Shopping/, 12000);
+      const played = await s1.page.evaluate(() => window.__ding);
+      check('telephone qui autorise le son : un petit « ding » de deux notes quand Zara s\'ouvre', played.created === 1 && played.started === 2, played);
+      await s1.ctx.close();
+      const s2 = await newVisitor(phone, { lang: 'fr', autoOpen: true, initScripts: [fakeAudio('suspended')] });
+      await s2.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await waitText(s2.page, /Bienvenue chez Albasse Shopping/, 20000);
+      const muted = await s2.page.evaluate(() => window.__ding);
+      check('telephone qui refuse le son (visiteur n\'a rien touche) : Zara s\'ouvre en silence, sans erreur', (await panelOf(s2.page).count()) === 1 && muted.started === 0 && muted.closed === 1 && s2.errs.length === 0, { muted, errs: s2.errs });
+      await s2.ctx.close();
     }
 
     // --- L10. en-tete : tout tient a l'ecran en 390 et 360 de large, en francais et en arabe ; ordinateur
