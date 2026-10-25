@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { TRAFFIC_SOURCES, type TrafficSource } from '../lib/analytics';
 import type { Order } from '../types';
+import { countsAsSale, salesTotal } from '../lib/salesRules';
 
 export type Period = 'today' | 'yesterday' | '7d' | '30d' | 'month' | 'lastMonth' | 'custom';
 
@@ -177,7 +178,7 @@ export function useSourcePerformance() {
       supabase.from('cart_events').select('session_id').in('session_id', sessionIds),
       supabase
         .from('orders')
-        .select('id,total,status,created_at,session_id,referrer_source,items')
+        .select('id,total,status,is_flagged_fake,created_at,session_id,referrer_source,items')
         .gte('created_at', startIso)
         .lte('created_at', endIso),
     ]);
@@ -212,11 +213,9 @@ export function useSourcePerformance() {
       const sourceViews = views.filter((v) => v.session_id && sessionIds.has(v.session_id)).length;
       const sourceCartAdds = cartAdds.filter((c) => c.session_id && sessionIds.has(c.session_id)).length;
       const sourceOrders = orders.filter(
-        (o) => o.session_id && sessionIds.has(o.session_id) && o.created_at >= startIso && o.created_at <= endIso
+        (o) => o.session_id && sessionIds.has(o.session_id) && o.created_at >= startIso && o.created_at <= endIso && countsAsSale(o)
       );
-      const revenue = sourceOrders
-        .filter((o) => o.status !== 'cancelled')
-        .reduce((sum, o) => sum + Number(o.total), 0);
+      const revenue = salesTotal(sourceOrders);
 
       const totalDuration = sourceSessions.reduce((sum, s) => sum + (s.duration_seconds ?? 0), 0);
       const totalPages = sourceSessions.reduce((sum, s) => sum + (s.page_views ?? 1), 0);
@@ -242,10 +241,8 @@ export function useSourcePerformance() {
       const campaignSessions = inPeriod.filter((s) => s.utm_campaign === campaign);
       const sessionIds = new Set(campaignSessions.map((s) => s.id));
       const visitorKeys = new Set(campaignSessions.map(visitorKey));
-      const campaignOrders = orders.filter((o) => o.session_id && sessionIds.has(o.session_id));
-      const revenue = campaignOrders
-        .filter((o) => o.status !== 'cancelled')
-        .reduce((sum, o) => sum + Number(o.total), 0);
+      const campaignOrders = orders.filter((o) => o.session_id && sessionIds.has(o.session_id) && countsAsSale(o));
+      const revenue = salesTotal(campaignOrders);
 
       return {
         campaign,

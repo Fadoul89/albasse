@@ -40,12 +40,15 @@ export function AdminDashboardScreen() {
         ) : stats ? (
           <>
             <View style={styles.statsGrid}>
-              <StatCard icon="💰" label="CA aujourd'hui" value={formatXAF(stats.revenueToday)} />
-              <StatCard icon="🛒" label="Commandes aujourd'hui" value={String(stats.ordersToday)} />
+              <StatCard icon="💰" label="CA livré aujourd'hui" value={formatXAF(stats.revenueToday)} />
+              <StatCard icon="🛒" label="Commandes livrées aujourd'hui" value={String(stats.ordersToday)} />
               <StatCard icon="👥" label="Nouveaux clients" value={String(stats.newCustomersToday)} />
               <StatCard icon="👀" label="Visiteurs aujourd'hui" value={String(stats.visitorsToday)} />
               <StatCard icon="📱" label="Raccourcis installés (total)" value={String(stats.appInstallsTotal)} />
             </View>
+            <Text style={styles.downloadsToday} testID="dashboard-received">
+              {`📥 ${stats.ordersReceivedToday} commande(s) reçue(s) aujourd'hui : comptées une fois livrées (les fausses commandes ne comptent jamais)`}
+            </Text>
             <Text style={styles.downloadsToday}>
               dont {stats.appInstallsToday} aujourd'hui · {stats.appDownloadClicksTotal} clic(s) sur "Installer"
             </Text>

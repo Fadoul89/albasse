@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import type { Order, Product } from '../types';
+import { countsAsSale, salesTotal } from '../lib/salesRules';
 
 export interface TopProduct {
   product_id: string;
@@ -25,7 +26,8 @@ export interface BrowserStat {
 
 export interface DashboardStats {
   revenueToday: number;
-  ordersToday: number;
+  ordersToday: number; // commandes livrées (et non fausses) créées aujourd'hui
+  ordersReceivedToday: number; // commandes reçues aujourd'hui, livrées ou pas encore
   newCustomersToday: number;
   visitorsToday: number;
   mostViewedProducts: TopProduct[];
@@ -89,10 +91,10 @@ export function useDashboardStats() {
       installsTodayRes,
       shortcutsBrowserRes,
     ] = await Promise.all([
-      supabase.from('orders').select('id,total,status,created_at,session_id,referrer_source,items').gte('created_at', todayIso),
+      supabase.from('orders').select('id,total,status,is_flagged_fake,created_at,session_id,referrer_source,items').gte('created_at', todayIso),
       supabase
         .from('orders')
-        .select('id,total,status,created_at,session_id,referrer_source,items')
+        .select('id,total,status,is_flagged_fake,created_at,session_id,referrer_source,items')
         .gte('created_at', windowStartIso),
       supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('is_admin', false).gte('created_at', todayIso),
       supabase
@@ -123,9 +125,11 @@ export function useDashboardStats() {
     const cartAdds = (cartWindowRes.data as { session_id: string | null }[]) ?? [];
     const products = (productsRes.data as Product[]) ?? [];
 
-    const revenueToday = ordersToday
-      .filter((o) => o.status !== 'cancelled')
-      .reduce((sum, o) => sum + Number(o.total), 0);
+    // seules les commandes livrées et non signalées fausses comptent (voir lib/salesRules.ts)
+    const revenueToday = salesTotal(ordersToday);
+    const ordersDeliveredToday = ordersToday.filter(countsAsSale).length;
+    // commandes reçues aujourd'hui (ni annulées ni fausses) : pas encore comptées tant qu'elles ne sont pas livrées
+    const ordersReceivedToday = ordersToday.filter((o) => o.status !== 'cancelled' && !o.is_flagged_fake).length;
     const newCustomersToday = profilesTodayRes.count ?? 0;
     const visitorsToday = new Set(sessionsToday.map((s) => s.visitor_id ?? s.id)).size;
 
@@ -143,10 +147,10 @@ export function useDashboardStats() {
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
 
-    // Produits les plus vendus (depuis les items des commandes non annulees, 30 derniers jours)
+    // Produits les plus vendus (depuis les items des commandes livrees, 30 derniers jours)
     const salesCounts: Record<string, { name: string; count: number }> = {};
     ordersWindow
-      .filter((o) => o.status !== 'cancelled')
+      .filter(countsAsSale)
       .forEach((o) => {
         (o.items ?? []).forEach((it) => {
           if (!salesCounts[it.product_id]) salesCounts[it.product_id] = { name: it.product_name, count: 0 };
@@ -170,10 +174,8 @@ export function useDashboardStats() {
 
       const sourceViews = views.filter((v) => v.session_id && sessionIds.has(v.session_id)).length;
       const sourceCartAdds = cartAdds.filter((c) => c.session_id && sessionIds.has(c.session_id)).length;
-      const sourceOrders = ordersWindow.filter((o) => o.session_id && sessionIds.has(o.session_id));
-      const sourceRevenue = sourceOrders
-        .filter((o) => o.status !== 'cancelled')
-        .reduce((sum, o) => sum + Number(o.total), 0);
+      const sourceOrders = ordersWindow.filter((o) => o.session_id && sessionIds.has(o.session_id) && countsAsSale(o));
+      const sourceRevenue = salesTotal(sourceOrders);
 
       return {
         source,
@@ -206,7 +208,8 @@ export function useDashboardStats() {
 
     setStats({
       revenueToday,
-      ordersToday: ordersToday.length,
+      ordersToday: ordersDeliveredToday,
+      ordersReceivedToday,
       newCustomersToday,
       visitorsToday,
       mostViewedProducts,

@@ -13,6 +13,7 @@ import { CountdownTimer } from '../../components/CountdownTimer';
 import { formatOrderDate, getOrderDay } from '../../lib/formatDuration';
 import { useToastStore } from '../../store/toastStore';
 import { filterOrders, orderNumberLabel, ordersToCsv, type PeriodFilter } from '../../lib/invoice';
+import { countsAsSale, salesTotal } from '../../lib/salesRules';
 import type { Order, OrderStatus } from '../../types';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
@@ -66,7 +67,9 @@ export function AdminOrdersScreen() {
   const [statusFilter, setStatusFilter] = useState<OrderStatus | 'all'>('all');
   const [period, setPeriod] = useState<PeriodFilter>('all');
   const filtered = useMemo(() => filterOrders(orders, { query, status: statusFilter, period }), [orders, query, statusFilter, period]);
-  const filteredTotal = useMemo(() => filtered.filter((o) => o.status !== 'cancelled').reduce((sum, o) => sum + (Number(o.total) || 0), 0), [filtered]);
+  // seules les commandes livrées (et non signalées fausses) comptent dans le total
+  const soldCount = useMemo(() => filtered.filter(countsAsSale).length, [filtered]);
+  const soldTotal = useMemo(() => salesTotal(filtered), [filtered]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !profile?.is_admin) {
@@ -183,9 +186,10 @@ export function AdminOrdersScreen() {
           </Pressable>
         ))}
       </ScrollView>
+      <Text style={styles.rule} testID="orders-rule">Seules les commandes livrées comptent dans les ventes. Les commandes signalées comme fausses ne comptent jamais.</Text>
       <View style={styles.summaryRow}>
         <Text style={styles.summary} testID="orders-summary">
-          {`${filtered.length} commande${filtered.length > 1 ? 's' : ''} · ${formatXAF(filteredTotal)} (hors annulées)`}
+          {`${filtered.length} commande${filtered.length > 1 ? 's' : ''} · ${soldCount} livrée${soldCount > 1 ? 's' : ''} comptée${soldCount > 1 ? 's' : ''} : ${formatXAF(soldTotal)}`}
         </Text>
         {Platform.OS === 'web' ? (
           <Pressable onPress={exportCsv} accessibilityRole="button" style={styles.exportBtn} testID="orders-export">
@@ -391,6 +395,7 @@ const styles = StyleSheet.create({
   chipOn: { backgroundColor: colors.gold, borderColor: colors.gold },
   chipText: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 12 },
   chipTextOn: { color: colors.background, fontFamily: fonts.bodyBold },
+  rule: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11.5, lineHeight: 16 },
   summaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' },
   summary: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 13, flexShrink: 1 },
   exportBtn: { borderWidth: 1, borderColor: colors.gold, borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 7 },

@@ -91,6 +91,7 @@ check('numéro de facture sans numéro de commande : repère de 8 caractères', 
   const lines = csv.trim().split('\r\n');
   check('CSV : commence par la marque UTF-8 (accents corrects dans Excel) et a un titre + une ligne', csv.charCodeAt(0) === 0xfeff && lines.length === 2, lines.length);
   check('CSV : numéro de commande, numéro de facture, statut, total', /^12;FA-2026-000012;/.test(lines[1]) && /;Livrée;/.test(lines[1]) && /;85500$/.test(lines[1]), lines[1]);
+  check('CSV : « Compte dans les ventes » : Oui pour une livrée, Non pour le reste, Non (fausse commande) pour une livrée signalée', /;Livrée;Oui;/.test(lines[1]) && /;En attente;Non;/.test(ordersToCsv([mk()]).split('\r\n')[1]) && /;Livrée;Non \(fausse commande\);/.test(ordersToCsv([mk({ status: 'delivered', is_flagged_fake: true })]).split('\r\n')[1]));
   check('CSV : un « ; » ou un guillemet dans un nom ne casse pas les colonnes', lines[1].includes('"Ali; ""le grand"""') && lines[1].split(';').length > 14, lines[1]);
   check('CSV : articles lisibles et paiement en français', /1 x Soulier noir \(Taille 42 · Noir\) \+ 2 x Montre/.test(lines[1]) && /;Airtel Money;/.test(lines[1]), lines[1]);
 }

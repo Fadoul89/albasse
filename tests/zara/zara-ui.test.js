@@ -5905,7 +5905,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         await page.getByText('N° 4', { exact: true }).waitFor({ timeout: 15000 });
         check('admin : chaque commande a son numero (N° 4, 3, 2, 1) au lieu des lettres au hasard', (await shown()) === 'N° 4|N° 3|N° 2|N° 1', await shown());
         const summary = async () => (await page.getByTestId('orders-summary').innerText()).replace(/\s+/g, ' ');
-        check('admin : resume « 4 commandes · 70 000 FCFA (hors annulees) »', /^4 commandes · 70\s000 FCFA/.test(await summary()), await summary());
+        check('admin : resume « 4 commandes · 2 livrees comptees : 60 000 FCFA » (seules les livrees comptent)', /^4 commandes · 2 livrées comptées : 60\s000 FCFA/.test(await summary()), await summary());
+        check('admin : la regle est ecrite (livrees seulement, fausses commandes jamais)', /Seules les commandes livrées comptent/.test(await page.getByTestId('orders-rule').innerText()) && /fausses/.test(await page.getByTestId('orders-rule').innerText()));
         await page.getByTestId('orders-search').fill('3');
         await sleep(300);
         check('admin : recherche « 3 » : seulement la commande N° 3', (await shown()) === 'N° 3', await shown());
@@ -5924,7 +5925,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         check('admin : filtre « Livrée » : N° 3 et N° 1', (await shown()) === 'N° 3|N° 1', await shown());
         await page.getByTestId('orders-period-7d').click();
         await sleep(300);
-        check('admin : « Livrée » + « 7 jours » : seulement N° 3', (await shown()) === 'N° 3' && /^1 commande · 20\s000 FCFA/.test(await summary()), await summary());
+        check('admin : « Livrée » + « 7 jours » : seulement N° 3', (await shown()) === 'N° 3' && /^1 commande · 1 livrée comptée : 20\s000 FCFA/.test(await summary()), await summary());
         await page.getByTestId('orders-status-all').click();
         await page.getByTestId('orders-period-today').click();
         await sleep(300);
