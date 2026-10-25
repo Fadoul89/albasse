@@ -7,8 +7,9 @@
 // contact@albasseshopping.com), EMAIL_SENDER_NAME (« Albasse Shopping ») et EMAIL_DAILY_CAP. La clé n'est jamais renvoyée à l'application.
 // La fonction se contrôle elle-même (jeton d'administrateur ou secret partagé) : le contrôle de la passerelle est donc coupé.
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { drain, sendBrevo } from "./drain.ts";
+import { drain, loadPromoProducts, sendBrevo, unsubscribeLinks } from "./drain.ts";
 import { escapeHtml, layout, mask, realEmail } from "./orderEmails.ts";
+import { inactiveClientEmail, pickProducts } from "./promoEmails.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -24,6 +25,14 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ ok: false, reason: "method" }, 405);
 
   const service = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
+
+  // 1 bis) désinscription en un geste : seul le code secret du client (illisible depuis le site) fait foi
+  const unsub = new URL(req.url).searchParams.get("unsub");
+  if (unsub) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(unsub)) return json({ ok: false, reason: "bad_request" }, 400);
+    await service.rpc("email_unsubscribe", { p_token: unsub });
+    return json({ ok: true });
+  }
 
   // 1) appel de la base (chaque minute) : secret partagé, lu dans le coffre-fort par une fonction réservée au service
   const cron = req.headers.get("x-cron-secret");
@@ -51,7 +60,7 @@ Deno.serve(async (req) => {
   } catch {
     return json({ ok: false, reason: "bad_request" }, 400);
   }
-  if (body.action !== "test") return json({ ok: false, reason: "bad_request" }, 400);
+  if (body.action !== "test" && body.action !== "test_promo") return json({ ok: false, reason: "bad_request" }, 400);
 
   const key = Deno.env.get("BREVO_API_KEY");
   if (!key) return json({ ok: false, reason: "no_key" });
@@ -61,6 +70,18 @@ Deno.serve(async (req) => {
   if (!to) return json({ ok: false, reason: "no_email" });
 
   const name = String(me.full_name ?? "").trim() || "Administrateur";
+
+  // exemple de l'e-mail publicitaire avec les vrais articles du site, envoyé seulement à l'administrateur (le lien de désinscription est un exemple)
+  if (body.action === "test_promo") {
+    const pick = pickProducts(await loadPromoProducts(service), Date.now());
+    if (pick.products.length === 0) return json({ ok: false, reason: "no_products" });
+    const links = unsubscribeLinks(Deno.env.get("SUPABASE_URL"), "00000000-0000-4000-8000-000000000000");
+    const ad = inactiveClientEmail({ fullName: me.full_name, products: pick.products, flashEndsAt: pick.flashEndsAt, unsubscribeUrl: links.page });
+    const sentAd = await sendBrevo(deps(service), key, { to, name, subject: `[Exemple] ${ad.subject}`, html: ad.html, headers: links.headers });
+    if (!sentAd.ok) return json({ ok: false, reason: sentAd.status ? "brevo" : "error", status: sentAd.status, detail: sentAd.detail });
+    return json({ ok: true, to: mask(to) });
+  }
+
   const html = layout(
     "Test des e-mails Albasse Shopping ✅",
     `<p style="font-size:15px;line-height:22px">Bonjour ${escapeHtml(name)},</p>
