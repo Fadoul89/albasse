@@ -2,6 +2,7 @@ import { isHomeCity } from './deliveryRules';
 import { arabicCityToLatin, arabicDigits, foldArabic, hasArabic, type GoodbyeKind, type GreetingKind, type Lang, type PayMethodKey, type PersonalKind } from './assistantLang';
 import { fcfa, texts } from './assistantText';
 import { BULK_MIN_QTY } from '../constants/shopRules';
+import { isColdSeasonName, wantsColdSeason } from './coldSeason';
 
 export { isHomeCity, fcfa };
 
@@ -126,8 +127,11 @@ export function searchCatalog(products: CatalogProduct[], query: string, limit =
   const queryTokens = tokenize(query);
   if (queryTokens.length === 0) return [];
   const scored: { p: CatalogProduct; score: number }[] = [];
+  // le client cherche un manteau ou un blouson : jamais un « porte-manteau » (le meuble) ni un article qui n'est pas un vêtement chaud
+  const coatsOnly = wantsColdSeason(query);
   for (const p of products) {
     if (!(p.price > 0) || p.stock <= 0) continue;
+    if (coatsOnly && !isColdSeasonName(p.name)) continue;
     let score = 0;
     let matched = 0;
     queryTokens.forEach((q, position) => {

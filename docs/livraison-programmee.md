@@ -38,7 +38,7 @@ Une commande « en attente » depuis plus de 48 h est signalée comme fausse com
 1. Lancer `add-scheduled-delivery.sql` dans Supabase › SQL Editor (une fois, sans danger à relancer). Un message d'essai part sur Telegram.
 2. Ensuite seulement, publier le site.
 
-Si le site est publié avant le script, un client qui choisit la livraison programmée voit « La livraison programmée n'est pas encore disponible. Choisissez la livraison normale. » : sa commande n'est **jamais** enregistrée sans son rendez-vous.
+Si le site est publié avant le script, un client qui choisit la livraison programmée voit « La livraison programmée n'est pas encore disponible. Retirez le rendez-vous (touchez une 2ᵉ fois le jour choisi) pour commander. » : sa commande n'est **jamais** enregistrée sans son rendez-vous.
 
 ## Ce qui n'est pas inclus
 

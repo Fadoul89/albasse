@@ -82,6 +82,7 @@ export interface Texts {
     createAccount: string;
     login: string;
     promotions: string;
+    coldSeason: string;
     news: string;
     advice: string;
     categories: string;
@@ -360,6 +361,12 @@ export interface Texts {
     valentine: string;
     blackFriday: string;
   };
+  // saison fraîche : blousons et manteaux mis en avant jusqu'à fin décembre (seulement les vrais articles ; la remise annoncée est la vraie, aucune date limite d'offre)
+  season: {
+    cold: string;
+    coldIntro(count: number, minPrice: string, maxPct: number | null): string;
+    coldNone: string;
+  };
   // conclure la vente : le client hésite (« je réfléchis »), Zara répond avec des faits vrais puis propose de l'aide
   closing: {
     later: string;
@@ -468,6 +475,7 @@ const FR: Texts = {
     createAccount: '👤 Créer mon compte',
     login: 'Me connecter',
     promotions: '🔥 Promotions',
+    coldSeason: '🧥 Blousons & manteaux',
     news: '🆕 Nouveautés',
     advice: '🎯 Conseil',
     categories: '🛍️ Catégories',
@@ -888,6 +896,11 @@ const FR: Texts = {
     valentine: '❤️ Saint-Valentin : une belle idée pour la personne qui compte ! Parfums, montres, bijoux… je vous conseille. L’emballage cadeau est possible (2 000 FCFA par commande).',
     blackFriday: '🖤 Black Friday : je vous montre les vraies promotions en cours dans la boutique, avec les prix et les stocks réels.',
   },
+  season: {
+    cold: '🧥 La saison fraîche arrive : nos blousons et manteaux sont là ! Touchez « Blousons & manteaux » (ou écrivez « manteau ») et je vous montre les vrais modèles, avec les vrais prix et les vrais stocks.',
+    coldIntro: (n, min, pct) => `🧥 Nos blousons et manteaux{nom} : ${n} modèle${n > 1 ? 's' : ''} disponible${n > 1 ? 's' : ''}, à partir de ${min}${pct ? ` (jusqu’à -${pct} % sur l’ancien prix)` : ''} 👇`,
+    coldNone: 'Je n’ai pas de blouson ni de manteau en stock pour le moment 😕 Découvrez nos autres vêtements ou nos promotions.',
+  },
   closing: {
     later: 'Pas de souci{nom} 😊 Prenez votre temps.',
     favorites: '❤️ Touchez le cœur sur un produit pour le retrouver dans vos favoris (avec un compte gratuit).',
@@ -1027,6 +1040,7 @@ const AR: Texts = {
     createAccount: '👤 إنشاء حسابي',
     login: 'تسجيل الدخول',
     promotions: '🔥 العروض',
+    coldSeason: '🧥 جاكيتات ومعاطف',
     news: '🆕 الجديد',
     advice: '🎯 نصيحة',
     categories: '🛍️ الفئات',
@@ -1445,6 +1459,11 @@ const AR: Texts = {
     mothersDay: '💐 عيد الأم: لفتة جميلة لها! عطور ومجوهرات وملابس… أقترح عليك أفكارا. تغليف الهدايا متاح (2 000 FCFA لكل طلب).',
     valentine: '❤️ عيد الحب: فكرة جميلة لمن يهمك أمره! عطور وساعات ومجوهرات… أنصحك. تغليف الهدايا متاح (2 000 FCFA لكل طلب).',
     blackFriday: '🖤 الجمعة السوداء: أعرض لك العروض الحقيقية الجارية في المتجر، بالأسعار والمخزون الحقيقيين.',
+  },
+  season: {
+    cold: '🧥 موسم البرد يقترب: جاكيتاتنا ومعاطفنا وصلت! اضغط «جاكيتات ومعاطف» (أو اكتب «معطف») وأعرض عليك الموديلات الحقيقية بأسعارها ومخزونها الحقيقيين.',
+    coldIntro: (n, min, pct) => `🧥 جاكيتاتنا ومعاطفنا{nom}: ${n === 1 ? 'موديل واحد متوفر' : n === 2 ? 'موديلان متوفران' : `${n} موديلات متوفرة`}، ابتداء من ${min}${pct ? ` (حتى -${pct} % عن السعر القديم)` : ''} 👇`,
+    coldNone: 'لا يوجد جاكيت أو معطف في المخزون الآن 😕 اكتشف ملابسنا الأخرى أو عروضنا.',
   },
   closing: {
     later: 'لا مشكلة{nom} 😊 خذ وقتك.',

@@ -79,6 +79,7 @@ import { pushReminderNow, recordPushReminder } from '../lib/pushReminder';
 import { getWebPushIssue, isWebPushBlocked, PUSH_PERMISSION_NOT_GRANTED, subscribeToWebPush } from '../lib/webPushSubscription';
 import { trackShortcutInstallIfNeeded } from '../lib/appInstallTracking';
 import { occasionOf, stripOccasion, upcomingOccasion, type OccasionKey } from '../lib/assistantOccasions';
+import { coldSeasonActive, coldSeasonFacts, coldSeasonPicks, wantsColdSeason, type ColdView } from '../lib/coldSeason';
 import { buildVocabulary, suggestWords } from '../lib/spellSuggest';
 import { availability, familyPicks, isFamily, moreInCategory, perfumesInStock, planSuggestion, similarProducts, type PlannedChip } from '../lib/assistantInterest';
 import * as bi from '../lib/browsingInsights';
@@ -479,6 +480,9 @@ const ORDINALS: [RegExp, number][] = [
 // Ce que disent les boutons « Comparer » et « 3 gammes de prix » : ils parlent des articles affichés à ce moment-là.
 const COMPARE_SAY: Record<Lang, string> = { fr: 'comparer ces articles', ar: 'قارن بين هذه المنتجات' };
 const RANGES_SAY: Record<Lang, string> = { fr: 'trois gammes de prix', ar: 'ثلاثة خيارات بأسعار مختلفة' };
+// le bouton « Blousons & manteaux » du menu envoie ces mots (reconnus par coldSeason.ts)
+const COLD_SAY: Record<Lang, string> = { fr: 'blousons et manteaux', ar: 'جاكيتات ومعاطف' };
+const COLD_QUERY: Record<Lang, string> = { fr: 'blouson manteau', ar: 'جاكيت معطف' };
 
 // Les boutons des anciens messages qui restent touchables : ceux qui mènent quelque part (promotions, catégories, un article précis,
 // la commande en cours, compte, WhatsApp, menu, installer). L'ancien « Voir mon panier » part : il n'y a plus de panier. Les réponses à une question passée (taille, jour, budget, pour qui, confirmer...) partent.
@@ -603,7 +607,10 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     const c = T().chip;
     const actions: ChatAction[] = [];
     if (isGuest()) actions.push({ label: c.createAccount, kind: 'register', highlight: true }, { label: c.login, kind: 'login' });
-    actions.push(sayBtn(c.promotions, 'promotions'), sayBtn(c.news, 'nouveautés'), sayBtn(c.advice, 'conseil'), sayBtn(c.categories, 'catégories'), sayBtn(c.delivery, 'livraison'));
+    actions.push(sayBtn(c.promotions, 'promotions'), sayBtn(c.news, 'nouveautés'));
+    // saison fraîche (jusqu'à fin décembre) : blousons et manteaux à un toucher
+    if (coldSeasonActive(Date.now())) actions.push(sayBtn(c.coldSeason, COLD_SAY[get().lang]));
+    actions.push(sayBtn(c.advice, 'conseil'), sayBtn(c.categories, 'catégories'), sayBtn(c.delivery, 'livraison'));
     if (useCartStore.getState().items.length > 0) actions.push({ label: c.checkout, kind: 'checkout', highlight: true });
     if (!isGuest()) actions.push({ label: c.orders, kind: 'orders' }, sayBtn(c.points, T().loyalty.mineQuery));
     const install = installMenuChip();
@@ -660,6 +667,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     // un moment fort approche (Tabaski, Ramadan, Black Friday...) : un seul mot, une fois par conversation
     const occasion = upcomingOccasion(Date.now());
     if (occasion) await say(T().occasion[occasion]);
+    else if (coldSeasonActive(Date.now())) await say(T().season.cold); // saison fraîche : blousons et manteaux (jusqu'à fin décembre)
     await say(T().info);
     if (isGuest()) await accountInvitation();
     else await showMenu(T().menuIntro);
@@ -846,6 +854,25 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       } else {
         await say(T().noPromo, { actions: [sayBtn(T().chip.news, 'nouveautés'), menuBtn()] });
       }
+    } catch {
+      await dataError();
+    }
+  }
+
+  // Saison fraîche : les vrais blousons et manteaux de la boutique (jamais un porte-manteau), la plus grande remise réelle d'abord.
+  // Les chiffres dits (nombre de modèles, prix de départ, remise) sont calculés sur les articles montrés.
+  const coldView = (p: CatalogProduct): ColdView => ({ name: p.name, price: p.price, compareAt: p.compareAt ?? null, stock: p.stock, hasImage: !!p.image });
+  async function coldSeasonReply() {
+    try {
+      const catalog = await getCatalog();
+      const picks = coldSeasonPicks(catalog, coldView, 4);
+      if (picks.length === 0) {
+        await say(T().season.coldNone, { actions: [sayBtn(T().chip.promotions, 'promotions'), sayBtn(T().chip.categories, 'catégories'), menuBtn(), wa()] });
+        return;
+      }
+      const facts = coldSeasonFacts(picks, coldView);
+      // le contexte « blousons manteaux » : « Mon budget », les gammes de prix et la comparaison restent sur les blousons et manteaux (searchCatalog écarte les porte-manteaux)
+      await showProducts(withName(T().season.coldIntro(facts.count, fcfa(facts.minPrice), facts.maxPct)), picks, { kind: 'query', query: COLD_QUERY[get().lang] }, catalog);
     } catch {
       await dataError();
     }
@@ -2659,6 +2686,11 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     const occasion = occasionOf(text);
     if (occasion && (intent === 'gift' || intent === 'search' || intent === 'advice')) {
       await occasionReply(occasion, text);
+      return;
+    }
+    // saison fraîche (jusqu'à fin décembre) : « manteau », « blouson », « il fait froid »… -> les vrais modèles ; avec un budget écrit, la recherche normale s'en charge
+    if (intent === 'search' && coldSeasonActive(Date.now()) && wantsColdSeason(text) && parseBudget(text) === null) {
+      await coldSeasonReply();
       return;
     }
     // psychologie commerciale : le client parle de son métier (valorisé, jamais déduit en budget) ou de ce qu'il aime

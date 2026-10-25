@@ -14,6 +14,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const dist = process.argv[2] || '../../dist';
 const port = process.argv[3] || '4333';
 const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI12345TOFBCDE').toUpperCase();
+// saison fraiche (blousons et manteaux) : le bouton du menu de Zara n'existe que jusqu'au 31 decembre 2026 a 23h59 (N'Djamena)
+const COLD_ON = Date.now() < Date.parse('2027-01-01T00:00:00+01:00');
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
 fs.mkdirSync(OUT, { recursive: true });
 const KEY = process.env.SUPABASE_ANON_KEY;
@@ -515,7 +517,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     await waitText(page, /À savoir avant de commander/);
     await waitText(page, /Créez votre compte gratuit(?:, Fatimé)?/);
     const menu = await chipLabels(page);
-    check('menu du visiteur : compte, connexion, promotions, nouveautes, conseil, categories, livraison, WhatsApp, langue', menu.join('|') === '👤 Créer mon compte|Me connecter|🔥 Promotions|🆕 Nouveautés|🎯 Conseil|🛍️ Catégories|🚚 Livraison et paiement|💬 WhatsApp|🌐 العربية', menu);
+    check('menu du visiteur : compte, connexion, promotions, nouveautes, conseil, categories, livraison, WhatsApp, langue', menu.join('|') === `👤 Créer mon compte|Me connecter|🔥 Promotions|🆕 Nouveautés|${COLD_ON ? '🧥 Blousons & manteaux|' : ''}🎯 Conseil|🛍️ Catégories|🚚 Livraison et paiement|💬 WhatsApp|🌐 العربية`, menu);
     await page.screenshot({ path: path.join(OUT, 'A1-accueil.png') });
 
     // 1. la phrase du test du patron : un cadeau pour son mari -> des questions AVANT de montrer des articles
@@ -687,7 +689,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check("informations importantes en arabe : livraison 8:30-16:00, paiement a la livraison seulement a N'Djamena, 48 heures", /8:30/.test(infoAr) && /16:00/.test(infoAr) && /فقط في إنجامينا/.test(infoAr) && /48 ساعة/.test(infoAr), infoAr);
       await waitText(page, /أنشئ حسابك المجاني(?:، فاطمة)?/);
       const menuAr = await chipLabels(page);
-      check('menu en arabe : compte, connexion, offres, nouveautes, conseil, categories, livraison, WhatsApp, Francais', menuAr.join('|') === '👤 إنشاء حسابي|تسجيل الدخول|🔥 العروض|🆕 الجديد|🎯 نصيحة|🛍️ الفئات|🚚 التوصيل والدفع|💬 واتساب|🌐 Français', menuAr);
+      check('menu en arabe : compte, connexion, offres, nouveautes, conseil, categories, livraison, WhatsApp, Francais', menuAr.join('|') === `👤 إنشاء حسابي|تسجيل الدخول|🔥 العروض|🆕 الجديد|${COLD_ON ? '🧥 جاكيتات ومعاطف|' : ''}🎯 نصيحة|🛍️ الفئات|🚚 التوصيل والدفع|💬 واتساب|🌐 Français`, menuAr);
       await page.screenshot({ path: path.join(OUT, 'L2-menu-arabe.png') });
 
       // --- L2. cadeau en arabe : questions une par une
@@ -3076,6 +3078,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?|أنشئ حسابك|حسابك/, 25000);
     };
     const sayAskX = (pg, text, re) => ask(pg, text, re, 20000);
+    const numReSimple = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '[\\s\u00a0\u202f]?');
     const prodsAll = await get('products?select=id,name,price,compare_at_price,stock&limit=1000');
 
     // --- X1. moments forts en francais : un mot adapte, puis Zara continue (un visiteur neuf pour chaque sujet)
@@ -3190,6 +3193,128 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await sleep(1500);
       check('le 15 decembre 2026 (aucun moment fort proche) : Zara n\'en parle pas', (await panelOf(w.page).getByText(/Black Friday|Saint-Valentin|Tabaski|Ramadan/).count()) === 0);
       await w.ctx.close();
+    }
+
+    // --- X8. saison fraiche : blousons et manteaux mis en avant jusqu'a fin decembre (accueil, menu et reponses de Zara), seulement les VRAIS articles
+    {
+      const COAT = /\b(blousons?|manteaux?|vestes?|doudounes?|parkas?|perfectos?|coupe[- ]?vents?|pardessus|trenchs?)\b/i;
+      const RACK = /porte[- ]?manteaux?/i;
+      const live = await get('products?select=name,price,compare_at_price,stock,images&is_active=eq.true&limit=1000');
+      const coats = live.filter((p) => COAT.test(p.name) && !RACK.test(p.name) && Number(p.stock) > 0 && Number(p.price) > 0 && (p.images || []).length > 0);
+      const pct = (p) => (Number(p.compare_at_price) > Number(p.price) ? Math.round((1 - Number(p.price) / Number(p.compare_at_price)) * 100) : 0);
+      const shown = [...coats].sort((a, b) => pct(b) - pct(a) || Number(b.stock) - Number(a.stock) || a.name.localeCompare(b.name)).slice(0, 4);
+      const minPrice = Math.min(...shown.map((p) => Number(p.price)));
+      const maxPct = Math.max(0, ...shown.map(pct));
+      console.log('info  saison fraiche : articles reels', shown.map((p) => `${p.name.trim()} (${p.price}${pct(p) ? `, -${pct(p)} %` : ''})`).join(' | '), '| porte-manteaux ecartes :', live.filter((p) => RACK.test(p.name)).length);
+      check('la boutique a de vrais blousons ou manteaux a montrer (sinon ce test ne prouve rien)', shown.length >= 1, shown.length);
+      const nameOf = async (c) => ((await c.getAttribute('aria-label')) || '').replace(/^Voir le produit ›\s*/, '').trim();
+
+      // l'accueil : la bande « Saison fraiche »
+      {
+        const v = await visitor();
+        await v.page.goto(`${base}/`, { waitUntil: 'load' });
+        const strip = v.page.getByTestId('home-cold-season');
+        await strip.waitFor({ timeout: 25000 });
+        await sleep(800);
+        const txt = await strip.innerText();
+        check('accueil : bande « SAISON FRAICHE — Blousons et manteaux »', /SAISON FRAÎCHE/.test(txt) && /Blousons et manteaux/.test(txt), txt.slice(0, 80));
+        check('accueil : les vrais blousons et manteaux y sont, et AUCUN porte-manteau', shown.every((p) => txt.toLowerCase().includes(p.name.trim().toLowerCase().slice(0, 14))) && !RACK.test(txt), txt);
+        check('accueil : aucune vente flash ni urgence annoncee dans cette bande', !/flash|dernier|limité|jusqu.au/i.test(txt), txt);
+        await strip.scrollIntoViewIfNeeded();
+        await v.page.screenshot({ path: path.join(OUT, 'X8-accueil-saison-fraiche.png') });
+        check('aucune erreur (accueil saison fraiche)', v.errs.length === 0, v.errs);
+        await v.ctx.close();
+      }
+
+      // Zara : une ligne a l'ouverture, un bouton dans le menu, les vrais modeles
+      {
+        const v = await visitor();
+        await openZara(v);
+        const all = await panelOf(v.page).innerText();
+        check('Zara a l\'ouverture : « La saison fraiche arrive », une seule fois, avant les infos importantes', (all.match(/La saison fraîche arrive/g) || []).length === 1 && all.indexOf('La saison fraîche arrive') < all.indexOf('À savoir avant de commander'), all.slice(0, 300));
+        check('le menu a le bouton « 🧥 Blousons & manteaux »', (await chipLabels(v.page)).includes('🧥 Blousons & manteaux'), await chipLabels(v.page));
+        const before = await cardsOf(v.page).count();
+        await tap(v.page, '🧥 Blousons & manteaux', /Nos blousons et manteaux/);
+        await sleep(2500);
+        const added = await newCards(v.page, before);
+        const names = await Promise.all(added.map(nameOf));
+        const intro = await panelOf(v.page).getByText(/Nos blousons et manteaux/).last().innerText();
+        check('le bouton montre les vrais modeles (les memes que l\'accueil), jamais un porte-manteau', names.length === shown.length && names.every((n) => COAT.test(n) && !RACK.test(n)) && shown.every((p) => names.some((n) => n.trim().toLowerCase() === p.name.trim().toLowerCase())), { names, expected: shown.map((p) => p.name) });
+        check('premiere carte = la plus grande remise reelle', names[0] && names[0].trim().toLowerCase() === shown[0].name.trim().toLowerCase(), names);
+        check(`les chiffres dits sont ceux des articles montres : ${shown.length} modele(s), a partir de ${minPrice} FCFA${maxPct >= 5 ? `, jusqu'a -${maxPct} %` : ', pas de remise annoncee'}`, new RegExp(`${shown.length} modèle`).test(intro) && new RegExp(`à partir de ${numReSimple(minPrice)} FCFA`).test(intro) && (maxPct >= 5 ? new RegExp(`jusqu’à -${maxPct} % sur l’ancien prix`).test(intro) : !/%/.test(intro)), intro);
+        check('aucune fausse urgence : ni « vente flash » ni « dernier » ni date limite', !/flash|dernier|plus que|limité|jusqu.au/i.test(intro), intro);
+        await v.page.screenshot({ path: path.join(OUT, 'X8-zara-blousons-manteaux.png') });
+        // « Mon budget » juste apres : la question du budget, puis des blousons et manteaux (jamais un porte-manteau ni un autre article)
+        await tap(v.page, '💰 Mon budget', /Quel est votre budget/);
+        const budgetChips = await chipLabels(v.page);
+        check('« Mon budget » apres les blousons et manteaux : Zara pose la question du budget (elle ne recommence pas une conversation)', budgetChips.length >= 3, budgetChips);
+        const nBefore = await cardsOf(v.page).count();
+        const anyBudget = budgetChips.find((l) => /pas de budget|peu importe|tout/i.test(l)) || budgetChips[budgetChips.length - 1];
+        await chip(v.page, anyBudget).first().click();
+        await sleep(3000);
+        const budgetNames = await Promise.all((await newCards(v.page, nBefore)).map(nameOf));
+        check('le budget choisi : seulement des blousons et manteaux (jamais de porte-manteau)', budgetNames.length >= 1 && budgetNames.every((n) => COAT.test(n) && !RACK.test(n)) && v.errs.length === 0, { budgetNames, errs: v.errs });
+        // le client ecrit
+        const b2 = await cardsOf(v.page).count();
+        await sayAskX(v.page, 'je cherche un manteau', /Nos blousons et manteaux/);
+        await sleep(2000);
+        check('« je cherche un manteau » : les memes vrais modeles', (await newCards(v.page, b2)).length === shown.length);
+        const b3 = await cardsOf(v.page).count();
+        await sayAskX(v.page, 'il fait froid', /Nos blousons et manteaux/);
+        await sleep(1500);
+        check('« il fait froid » : Zara montre aussi les blousons et manteaux', (await newCards(v.page, b3)).length === shown.length);
+        // un porte-manteau n'est pas un manteau : recherche normale, jamais la saison fraiche
+        const nIntro = await panelOf(v.page).getByText(/Nos blousons et manteaux/).count();
+        await sayAskX(v.page, 'porte-manteau', /./);
+        await sleep(2500);
+        check('« porte-manteau » : recherche normale (pas de reponse « Nos blousons et manteaux »)', (await panelOf(v.page).getByText(/Nos blousons et manteaux/).count()) === nIntro);
+        // avec un budget ecrit : la recherche normale (qui sait filtrer par budget) s'en charge
+        await sayAskX(v.page, 'manteau 30000', /./);
+        await sleep(2500);
+        check('« manteau 30000 » (un budget) : recherche normale avec le budget, pas la reponse de la saison fraiche', (await panelOf(v.page).getByText(/Nos blousons et manteaux/).count()) === nIntro);
+        check('aucune erreur (Zara saison fraiche)', v.errs.length === 0, v.errs);
+        await v.ctx.close();
+      }
+
+      // en arabe
+      {
+        const v = await newVisitor(phone, { lang: 'ar', storage: { albasse_zara_name: 'Ali' } });
+        await v.page.goto(`${base}/`, { waitUntil: 'load' });
+        await sleep(2500);
+        await v.page.getByTestId('assistant-fab').click();
+        await waitText(v.page, /موسم البرد يقترب/, 25000);
+        await waitText(v.page, /أنشئ حسابك|حسابك/, 25000);
+        check('arabe : la ligne d\'ouverture et le bouton « 🧥 جاكيتات ومعاطف »', (await chipLabels(v.page)).includes('🧥 جاكيتات ومعاطف'), await chipLabels(v.page));
+        const before = await cardsOf(v.page).count();
+        await tap(v.page, '🧥 جاكيتات ومعاطف', /جاكيتاتنا ومعاطفنا/);
+        await sleep(2500);
+        check('arabe : les vrais modeles s\'affichent', (await newCards(v.page, before)).length === shown.length);
+        const intro = await panelOf(v.page).getByText(/جاكيتاتنا ومعاطفنا/).last().innerText();
+        check('arabe : les chiffres sont ceux des articles montres', new RegExp(`ابتداء من ${numReSimple(minPrice)} FCFA`).test(intro) && (maxPct >= 5 ? new RegExp(`حتى -${maxPct} % عن السعر القديم`).test(intro) : !/%/.test(intro)), intro);
+        check('aucune erreur (saison fraiche en arabe)', v.errs.length === 0, v.errs);
+        await v.ctx.close();
+      }
+
+      // apres le 31 decembre 2026 : plus rien (ni bande, ni ligne, ni bouton) ; « manteau » = recherche normale
+      {
+        const v = await visitor();
+        await v.ctx.clock.install({ time: new Date('2027-01-05T09:00:00Z') }); // l'heure avance normalement a partir de cette date (Zara a besoin que le temps passe pour repondre)
+        await openZara(v);
+        await sleep(3000); // les articles de l'accueil sont charges : la bande aurait deja du apparaitre
+        check('apres le 31 decembre : plus de bande « Saison fraiche » sur l\'accueil', (await v.page.getByTestId('home-cold-season').count()) === 0 && (await v.page.getByText('Toute la collection').count()) === 1);
+        check('apres le 31 decembre : ni ligne d\'ouverture ni bouton dans le menu', (await panelOf(v.page).getByText(/La saison fraîche arrive/).count()) === 0 && !(await chipLabels(v.page)).includes('🧥 Blousons & manteaux'), await chipLabels(v.page));
+        // (ecrire « manteau » apres cette date n'est pas testable ici : avec une fausse horloge Zara ne repond plus ; la regle « coldSeasonActive = faux apres le 31 decembre » est testee dans tests/email/cold-season.test.ts)
+        await v.ctx.close();
+      }
+      // le 31 decembre 2026 a 23h59 a N'Djamena : encore en cours
+      {
+        const v = await visitor();
+        await v.ctx.clock.setFixedTime(new Date('2026-12-31T22:59:00Z'));
+        await v.page.goto(`${base}/`, { waitUntil: 'load' });
+        await v.page.getByTestId('home-cold-season').waitFor({ timeout: 25000 });
+        check('le 31 decembre a 23h59 (N\'Djamena) : la bande est encore la', true);
+        await v.ctx.close();
+      }
     }
   }
 

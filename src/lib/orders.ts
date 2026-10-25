@@ -113,9 +113,9 @@ export async function createOrder(input: CreateOrderInput): Promise<{ order: Ord
   }
 
   // Le rendez-vous ne doit JAMAIS être perdu en silence : si la base ne connaît pas encore la livraison programmée, la commande est refusée
-  // avec une explication claire (le client peut choisir la livraison normale), au lieu d'être enregistrée sans son rendez-vous.
+  // avec une explication claire (le client retire le rendez-vous et commande), au lieu d'être enregistrée sans son rendez-vous.
   if (error && scheduled && (isMissingColumn(error, 'delivery_type') || isMissingColumn(error, 'scheduled_for'))) {
-    return { order: null, error: "La livraison programmée n'est pas encore disponible. Choisissez la livraison normale." };
+    return { order: null, error: "La livraison programmée n'est pas encore disponible. Retirez le rendez-vous (touchez une 2e fois le jour choisi) pour commander." };
   }
 
   // Numéro déjà enregistré par un essai précédent (réponse perdue) : la commande existe bien, on ne la refait pas.
