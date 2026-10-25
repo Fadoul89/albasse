@@ -3781,7 +3781,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await waitWall(v.page);
       await sleep(1500);
       const txt = await wall(v.page).innerText();
-      check('compte obligatoire : l\'ecran d\'entree couvre l\'accueil (ALBASSE SHOPPING, Bienvenue)', /ALBASSE SHOPPING/.test(txt) && /Bienvenue sur Albasse Shopping/.test(txt) && /Livraison partout au Tchad/.test(txt) && /Créez votre compte dès maintenant/.test(txt), txt.slice(0, 200));
+      check('compte obligatoire : l\'ecran d\'entree couvre l\'accueil (ALBASSE SHOPPING, Bienvenue)', /ALBASSE SHOPPING/.test(txt) && /Bienvenue/.test(txt) && /Créez votre compte gratuit pour découvrir nos articles/.test(txt) && !/Pourquoi choisir Albasse Shopping/.test(txt), txt.slice(0, 200));
       const yOf = async (loc) => (await loc.boundingBox())?.y ?? -1;
       const yForm = await yOf(wall(v.page).getByTestId('register-name'));
       const ySwitch = await yOf(wall(v.page).getByText('J’ai déjà un compte', { exact: true }));
