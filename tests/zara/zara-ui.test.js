@@ -5945,6 +5945,28 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         check('aucune erreur (admin : numeros et factures)', c.errs.length === 0, c.errs);
         await c.ctx.close();
       }
+      // --- administrateur : le tableau de bord range toutes les pages par theme (rapports, clients, marketing, boutique, parametres)
+      {
+        const fa = mk(true);
+        const c = await newVisitor(phone, { storage: { 'sb-xtitsmmccpkelxfjyqyh-auth-token': sessionFor(fa) }, fakeUser: fa, fakeStore: { waOrder: true } });
+        const { page } = c;
+        await page.goto(`http://localhost:${port}/admin/tableau-de-bord`, { waitUntil: 'load' });
+        await page.getByTestId('admin-menu').waitFor({ timeout: 25000 });
+        const groupOf = async (key) => (await page.getByTestId(`admin-menu-group-${key}`).innerText()).replace(/\s+/g, ' ');
+        const g = { reports: await groupOf('reports'), customers: await groupOf('customers'), marketing: await groupOf('marketing'), shop: await groupOf('shop'), settings: await groupOf('settings') };
+        check('tableau de bord : 5 themes (Rapports, Clients, Marketing, Boutique, Parametres)', /^📈 Rapports/.test(g.reports) && /^👥 Clients/.test(g.customers) && /^📣 Marketing/.test(g.marketing) && /^🛍️ Boutique/.test(g.shop) && /^⚙️ Paramètres/.test(g.settings), g);
+        check('Rapports ensemble : performance par source, Zara, suivi de navigation, notifications', ['Performance par source', 'Statistiques de Zara', 'Suivi de navigation', 'Notifications'].every((l) => g.reports.includes(l)), g.reports);
+        check('Clients ensemble : clients, meilleurs clients potentiels, rappels WhatsApp', ['Clients', 'Meilleurs clients potentiels', 'Rappels WhatsApp'].every((l) => g.customers.includes(l)), g.customers);
+        check('Marketing ensemble : assistant marketing, promotions, roue de la chance, affilies', ['Assistant marketing', 'Promotions intelligentes', 'Roue de la chance', 'Affiliés'].every((l) => g.marketing.includes(l)), g.marketing);
+        check('Boutique : commandes et factures, produits, categories, voyage ; Parametres : contact, paiement, livraison', ['Commandes et factures', 'Produits', 'Catégories', 'Voyage'].every((l) => g.shop.includes(l)) && ['Informations de contact', 'Paiement', 'Livraison (Villes)'].every((l) => g.settings.includes(l)), { shop: g.shop, settings: g.settings });
+        await page.screenshot({ path: path.join(OUT, 'C8-tableau-de-bord.png') });
+        check('18 pages accessibles depuis le tableau de bord', (await page.locator('[data-testid^="admin-menu-Admin"]').count()) === 18);
+        await page.getByTestId('admin-menu-AdminStoreSettings').click();
+        await page.getByTestId('settings-legal-line').waitFor({ timeout: 15000 });
+        check('un theme mene a la bonne page (Parametres › Informations de contact)', new URL(page.url()).pathname === '/admin/parametres/contact', page.url());
+        check('aucune erreur (tableau de bord)', c.errs.length === 0, c.errs);
+        await c.ctx.close();
+      }
       // --- administrateur : la ligne « informations legales » des factures (NIF, RCCM)
       {
         const fa = mk(true);
