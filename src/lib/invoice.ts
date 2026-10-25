@@ -1,6 +1,7 @@
 // Numéro de commande, facture électronique et tri des commandes (admin). Fonctions pures, testées dans tests/email/invoice.test.ts.
 // Rien n'est stocké en plus : la facture se calcule à partir de la commande (articles, prix payés, remise, emballage, total).
 import { GIFT_WRAP_FEE } from '../constants/shopRules';
+import { countsAsSale } from './salesRules';
 import type { Order, OrderItem, OrderStatus } from '../types';
 
 export const STATUS_LABELS: Record<OrderStatus, string> = {
@@ -110,7 +111,7 @@ const csvCell = (v: unknown) => {
   return /[;"]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 export function ordersToCsv(orders: Order[]): string {
-  const head = ['N° commande', 'N° facture', 'Date', 'Client', 'Téléphone', 'Ville', 'Adresse', 'Articles', 'Paiement', 'Statut', 'Remise fidélité', 'Emballage cadeau', 'Livraison', 'Total (FCFA)'];
+  const head = ['N° commande', 'N° facture', 'Date', 'Client', 'Téléphone', 'Ville', 'Adresse', 'Articles', 'Paiement', 'Statut', 'Compte dans les ventes', 'Remise fidélité', 'Emballage cadeau', 'Livraison', 'Total (FCFA)'];
   const lines = orders.map((o) => {
     const b = invoiceBreakdown(o);
     const date = new Date(Date.parse(o.created_at) + 3600_000).toISOString().replace('T', ' ').slice(0, 16);
@@ -125,6 +126,7 @@ export function ordersToCsv(orders: Order[]): string {
       b.rows.map((r) => `${r.quantity} x ${r.name}${r.variant ? ` (${r.variant})` : ''}`).join(' + '),
       PAYMENT_LABELS[o.payment_method] ?? o.payment_method,
       STATUS_LABELS[o.status] ?? o.status,
+      countsAsSale(o) ? 'Oui' : o.is_flagged_fake ? 'Non (fausse commande)' : 'Non',
       b.loyaltyDiscount,
       b.giftWrap,
       b.delivery,

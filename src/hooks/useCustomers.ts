@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import type { CustomerSummary, Profile, Order, VisitorSession } from '../types';
+import { countsAsSale, salesTotal } from '../lib/salesRules';
 
 export function useCustomers() {
   const [customers, setCustomers] = useState<CustomerSummary[]>([]);
@@ -15,21 +16,22 @@ export function useCustomers() {
 
     const [profilesRes, ordersRes, sessionsRes, viewsRes, cartRes] = await Promise.all([
       supabase.from('profiles').select('*').eq('is_admin', false).order('created_at', { ascending: false }),
-      supabase.from('orders').select('id,user_id,total,status,created_at'),
+      supabase.from('orders').select('id,user_id,total,status,is_flagged_fake,created_at'),
       supabase.from('visitor_sessions').select('id,user_id,duration_seconds,last_seen_at,referrer_source'),
       supabase.from('product_views').select('user_id'),
       supabase.from('cart_events').select('user_id'),
     ]);
 
     const profiles = (profilesRes.data as Profile[]) ?? [];
-    const orders = (ordersRes.data as Pick<Order, 'id' | 'user_id' | 'total' | 'status' | 'created_at'>[]) ?? [];
+    const orders = (ordersRes.data as Pick<Order, 'id' | 'user_id' | 'total' | 'status' | 'is_flagged_fake' | 'created_at'>[]) ?? [];
     const sessions =
       (sessionsRes.data as Pick<VisitorSession, 'id' | 'user_id' | 'duration_seconds' | 'last_seen_at' | 'referrer_source'>[]) ?? [];
     const views = (viewsRes.data as { user_id: string | null }[]) ?? [];
     const cartAdds = (cartRes.data as { user_id: string | null }[]) ?? [];
 
     const summaries: CustomerSummary[] = profiles.map((profile) => {
-      const userOrders = orders.filter((o) => o.user_id === profile.id);
+      // les fausses commandes ne comptent pas ; le montant total ne compte que les commandes livrées
+      const userOrders = orders.filter((o) => o.user_id === profile.id && !o.is_flagged_fake);
       const userSessions = sessions.filter((s) => s.user_id === profile.id);
       const userViews = views.filter((v) => v.user_id === profile.id);
       const userCartAdds = cartAdds.filter((c) => c.user_id === profile.id);
@@ -47,9 +49,9 @@ export function useCustomers() {
       return {
         profile,
         orderCount: userOrders.length,
-        totalSpent: userOrders.reduce((sum, o) => sum + Number(o.total), 0),
+        totalSpent: salesTotal(userOrders),
         lastOrderAt: lastOrder?.created_at ?? null,
-        completedOrders: userOrders.filter((o) => o.status === 'delivered').length,
+        completedOrders: userOrders.filter(countsAsSale).length,
         cancelledOrders: userOrders.filter((o) => o.status === 'cancelled').length,
         sessionCount: userSessions.length,
         totalDurationSeconds: userSessions.reduce((sum, s) => sum + (s.duration_seconds ?? 0), 0),

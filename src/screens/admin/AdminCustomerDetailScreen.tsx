@@ -187,7 +187,7 @@ export function AdminCustomerDetailScreen({ route }: Props) {
 
         <Section title="🛒 Activité commerciale">
           <Row label="Nombre de commandes" value={String(customer.orderCount)} />
-          <Row label="Montant total" value={formatXAF(customer.totalSpent)} />
+          <Row label="Montant des commandes livrées" value={formatXAF(customer.totalSpent)} />
           <Row label="Dernière commande" value={formatDate(customer.lastOrderAt)} />
           <Row label="Commandes livrées" value={String(customer.completedOrders)} />
           <Row label="Commandes annulées" value={String(customer.cancelledOrders)} />
