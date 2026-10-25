@@ -1,7 +1,7 @@
 // Zara Marketing Intelligence : le déroulement (supabase/functions/brevo-email/marketingRun.ts) et l'envoi des campagnes (drain.ts),
 // avec une fausse base en mémoire (qui imite aussi le verrou « live » de la vraie base) et un faux Brevo.
 // Lancer : node --import ./tests/zara/register.mjs tests/email/marketing-run.test.ts
-import { approveRun, getSettings, runCheck, sendTestEmail, setMode, simulate, summarizeEvents, syncEvents, tick } from '../../supabase/functions/brevo-email/marketingRun.ts';
+import { approveRun, getSettings, productSlugOfLink, runCheck, sendTestEmail, setMode, simulate, summarizeEvents, syncEvents, tick } from '../../supabase/functions/brevo-email/marketingRun.ts';
 import { PROMO_BATCH, drain, type Deps } from '../../supabase/functions/brevo-email/drain.ts';
 import { fakeDb, liveGuard, type Row } from './fakeSupabase.ts';
 
@@ -47,6 +47,7 @@ function world(o: { missing?: string[]; mode?: string; requireApproval?: boolean
       { user_id: 'unsub', token: '11111111-1111-4111-8111-111111111111', unsubscribed_at: ago(1), suppressed_at: null, lang: null },
       { user_id: 'suppressed', token: '22222222-2222-4222-8222-222222222222', unsubscribed_at: null, suppressed_at: ago(1), lang: null },
     ],
+    categories: [{ id: 'montres', name: 'Montre' }, { id: 'chaussures', name: 'Chaussures' }, { id: 'parfums', name: 'Parfum' }],
     visitor_sessions: [],
     orders: [],
     favorites: [],
@@ -258,13 +259,20 @@ async function goLive(w: ReturnType<typeof world>) {
 
 // ---------- 5. résultats confirmés par Brevo ----------
 {
-  check('événements Brevo : livré + 2 clics', JSON.stringify(summarizeEvents([{ event: 'requests' }, { event: 'delivered', date: '2026-10-25T12:00:05Z' }, { event: 'clicks' }, { event: 'clicks' }])) === JSON.stringify({ delivered_at: '2026-10-25T12:00:05Z', click_count: 2, bounce_type: null, complaint: false }));
+  check('événements Brevo : livré + 2 clics', JSON.stringify(summarizeEvents([{ event: 'requests' }, { event: 'delivered', date: '2026-10-25T12:00:05Z' }, { event: 'clicks' }, { event: 'clicks' }])) === JSON.stringify({ delivered_at: '2026-10-25T12:00:05Z', click_count: 2, clicked_slugs: [], bounce_type: null, complaint: false }));
+  // les articles cliqués : seulement les liens vers une fiche article de NOTRE site ; tout le reste est ignoré
+  const sl = (link: unknown) => productSlugOfLink(link);
+  check('lien cliqué : fiche article du site (avec ou sans www, suivi UTM, accents encodés) -> son identifiant de lien', sl('https://albasseshopping.com/produit/parfum-oud-royal?utm_source=zara&utm_medium=email') === 'parfum-oud-royal' && sl('https://www.albasseshopping.com/produit/robe-%C3%A9l%C3%A9gante/') === 'robe-élégante');
+  check('lien cliqué : autre site, autre page, lien vide ou cassé -> ignoré', sl('https://exemple.com/produit/abc') === null && sl('https://albasseshopping.com/desinscription?t=x') === null && sl('https://albasseshopping.com/produit/a/b') === null && sl(undefined) === null && sl('pas un lien') === null && sl('https://albasseshopping.com/produit/%E0%A4%A') === null);
+  const ev = summarizeEvents([{ event: 'clicks', link: 'https://albasseshopping.com/produit/a-1?utm_source=zara' }, { event: 'clicks', link: 'https://albasseshopping.com/produit/a-1' }, { event: 'clicks', link: 'https://albasseshopping.com/produit/b-2' }, { event: 'clicks', link: 'https://autre.com/produit/c-3' }, { event: 'clicks' }]);
+  check('événements Brevo : 5 clics, 2 articles différents du site retenus (sans doublon)', ev.click_count === 5 && ev.clicked_slugs.join() === 'a-1,b-2', ev);
+  check('événements Brevo : au plus 10 articles retenus', summarizeEvents(Array.from({ length: 15 }, (_, i) => ({ event: 'clicks', link: `https://albasseshopping.com/produit/p-${i}` }))).clicked_slugs.length === 10);
   check('événements Brevo : rebond dur, rebond mou, bloqué, plainte', summarizeEvents([{ event: 'hardBounces' }]).bounce_type === 'hard' && summarizeEvents([{ event: 'softBounces' }]).bounce_type === 'soft' && summarizeEvents([{ event: 'blocked' }]).bounce_type === 'blocked' && summarizeEvents([{ event: 'spam' }]).complaint === true && summarizeEvents(null).click_count === 0);
 
   const w = world({
     brevo: {
       events: {
-        '<ok@x>': [{ event: 'delivered', date: '2026-10-25T10:00:00Z' }, { event: 'clicks' }, { event: 'clicks' }],
+        '<ok@x>': [{ event: 'delivered', date: '2026-10-25T10:00:00Z' }, { event: 'clicks' }, { event: 'clicks', link: 'https://albasseshopping.com/produit/article-c1?utm_source=zara' }],
         '<hard@x>': [{ event: 'hardBounces' }],
         '<spam@x>': [{ event: 'delivered', date: '2026-10-25T10:00:00Z' }, { event: 'spam' }],
         '<soft@x>': [{ event: 'softBounces' }],
@@ -278,6 +286,7 @@ async function goLive(w: ReturnType<typeof world>) {
   const get = (id: string) => w.tables.email_outbox.find((x) => x.id === id)!;
   check('résultats : 4 messages relus (le message sans identifiant et celui relu il y a 10 minutes sont laissés)', r.ok && r.synced === 4 && w.calls.length === 4, r);
   check('résultats : livraison et 2 clics confirmés par Brevo', get('r1').delivered_at === '2026-10-25T10:00:00Z' && get('r1').click_count === 2 && get('r1').events_synced_at === iso(NOW));
+  check('résultats : l’article du site cliqué est gardé (clicked_slugs), un message sans clic d’article garde une liste vide', JSON.stringify(get('r1').clicked_slugs) === '["article-c1"]' && JSON.stringify(get('r2').clicked_slugs) === '[]', [get('r1').clicked_slugs, get('r2').clicked_slugs]);
   check('résultats : rebond dur -> adresse mise en SUPPRESSION (rebond_dur) ; plainte -> suppression (plainte) ; rebond mou -> pas de suppression', get('r2').bounce_type === 'hard' && w.tables.email_prefs.find((p) => p.user_id === 'c2')!.suppressed_reason === 'rebond_dur' && get('r3').complaint_at === iso(NOW) && w.tables.email_prefs.find((p) => p.user_id === 'c3')!.suppressed_reason === 'plainte' && get('r4').bounce_type === 'soft' && !w.tables.email_prefs.find((p) => p.user_id === 'c4')!.suppressed_at && r.suppressed === 2);
   check('résultats : un message sans identifiant Brevo n’est jamais présenté comme confirmé (rien lu, rien changé)', get('r5').events_synced_at === null && get('r5').delivered_at === null);
   check('résultats : seulement des lectures (GET), l’identifiant du message encodé dans l’adresse', w.calls.every((c) => c.method === 'GET' && /messageId=%3C/.test(c.url)));
@@ -380,6 +389,51 @@ function sendWorld(o: Parameters<typeof world>[0] = {}) {
   fail.tables.email_outbox.push(mkRow('m1', 'c1'));
   await drain(fail.deps);
   check('Brevo refuse l’envoi (400) : « failed », jamais « sent », aucun identifiant', fail.tables.email_outbox[0].status === 'failed' && !fail.tables.email_outbox[0].provider_message_id);
+}
+
+// ---------- 7. centres d'intérêt et apprentissage, de bout en bout ----------
+{
+  // c1 : deux parfums en favoris -> amateur de parfums ; c2 : a cliqué un article chaussures dans un e-mail reçu il y a 10 jours
+  // Brevo redonne les mêmes événements à chaque lecture (le passage horaire relit les résultats avant de planifier)
+  const w = world({ runHour: 13, requireApproval: false, brevo: { events: { '<old1@x>': [{ event: 'delivered', date: ago(10) }, { event: 'clicks', link: 'https://albasseshopping.com/produit/article-b1?utm_source=zara&utm_medium=email' }] } } });
+  w.tables.favorites.push({ id: 'f1', user_id: 'c1', product_id: 'c1' }, { id: 'f2', user_id: 'c1', product_id: 'c2' });
+  w.tables.email_outbox.push({ id: 'old1', kind: 'marketing', user_id: 'c2', status: 'sent', created_at: ago(10), sent_at: ago(10), segment: 'inactive', variant: 'A', product_ids: ['a1', 'a2'], provider_message_id: '<old1@x>', events_synced_at: ago(9), delivered_at: ago(10), click_count: 1, bounce_type: null, complaint_at: null, clicked_slugs: ['article-b1'] });
+  const sim: any = await simulate(w.deps);
+  const seg = (k: string) => sim.plan.segments.find((s: any) => s.key === k);
+  check('de bout en bout : les catégories sont lues, c1 (2 favoris parfums) -> amateurs de parfums, c2 (clic chaussures lu chez Brevo) -> catégorie', sim.ok && seg('perfume_lovers').planned === 1 && seg('category_interest').planned === 1 && seg('inactive').planned === 3, sim.plan.segments.map((s: any) => [s.key, s.planned]));
+  const sample = (email: string) => sim.plan.sample.find((s: any) => s.emailMasked.startsWith(email));
+  check('de bout en bout : la rubrique est dans le plan (parfums / chaussures), les articles viennent de cette rubrique, sans adresse complète', sample('c1')?.topic === 'parfums' && sample('c1').productNames.every((n: string) => /Article c[12]/.test(n)) && sample('c2')?.topic === 'chaussures' && sample('c2').productNames.every((n: string) => /Article b[1-4]/.test(n)), sim.plan.sample);
+  check('de bout en bout : l’apprentissage figure dans le plan (peu de données : « pas encore assez de résultats »), sans pause', /Pas encore assez/.test(sim.plan.learning.notes.join(' ')) && Object.keys(sim.plan.learning.pausedSegments).length === 0 && sim.plan.learning.segmentOrder === null);
+  check('de bout en bout : la simulation n’a rien écrit dans la file (seulement la ligne de départ), aucun appel Brevo', w.tables.email_outbox.length === 1 && w.calls.length === 0);
+
+  // mise en file puis envoi : la rubrique est gardée, l'e-mail contient la sélection et le conseil de style
+  await goLive(w);
+  const t: any = await tick(w.deps);
+  const queued = w.tables.email_outbox.filter((r) => r.kind === 'marketing' && r.status === 'pending');
+  const r1 = queued.find((r) => r.user_id === 'c1')!;
+  check('mise en file : la rubrique est gardée dans la file d’envoi (c1 : parfums, c2 : chaussures)', t.queued === 5 && r1.segment === 'perfume_lovers' && r1.topic === 'parfums' && queued.find((r) => r.user_id === 'c2')!.topic === 'chaussures' && queued.find((r) => r.user_id === 'c3')!.topic === null, queued.map((r) => [r.user_id, r.segment, r.topic]));
+  const g: any = await drain(w.deps);
+  const mailC1 = w.sends().find((s) => s.body.to[0].email === 'c1@gmail.com')!;
+  const mailC2 = w.sends().find((s) => s.body.to[0].email === 'c2@gmail.com')!;
+  check('envoi : l’e-mail de c1 parle de parfums, avec un conseil de style et la désinscription ; confirmé par Brevo', g.sent >= 2 && /parfums/i.test(mailC1.body.subject) && /💡 Conseil/.test(mailC1.body.htmlContent) && /Me désinscrire/.test(mailC1.body.htmlContent) && /utm_campaign=zmi-20261025-perfume_lovers/.test(mailC1.body.htmlContent) && /^<msg-/.test(w.tables.email_outbox.find((r) => r.id === r1.id)!.provider_message_id), mailC1?.body?.subject);
+  check('envoi : l’e-mail de c2 parle de chaussures et du conseil chaussures', /chaussures/i.test(mailC2.body.subject) && /💡 Conseil/.test(mailC2.body.htmlContent));
+  check('envoi : un seul envoi par client, une seule sélection (aucun article d’une autre rubrique dans l’e-mail de c1)', w.sends().filter((s) => s.body.to[0].email === 'c1@gmail.com').length === 1 && !/Article (a|b)\d/.test(mailC1.body.htmlContent));
+}
+{
+  // une pause automatique : 2 plaintes sur 40 e-mails « absents » livrés -> ce segment est en pause, ses clients sont écartés avec la raison
+  const w = world();
+  const sentRow = (i: number, over: Row = {}): Row => ({ id: `h${i}`, kind: 'marketing', user_id: `gone${i}`, status: 'sent', created_at: ago(5), sent_at: ago(5), segment: 'inactive', variant: 'A', product_ids: ['a1', 'a2'], provider_message_id: `<h${i}@x>`, events_synced_at: ago(4), delivered_at: ago(5), click_count: 0, bounce_type: null, complaint_at: null, ...over });
+  for (let i = 0; i < 40; i++) w.tables.email_outbox.push(sentRow(i, i < 2 ? { complaint_at: ago(4) } : {}));
+  const sim: any = await simulate(w.deps);
+  const inactive = sim.plan.segments.find((s: any) => s.key === 'inactive');
+  check('pause automatique de bout en bout : « clients absents » en pause (2 plaintes sur 40), plus aucun destinataire, motif « segment_en_pause »', /2 plainte\(s\) sur 40/.test(inactive.paused ?? '') && sim.plan.recipientCount === 0 && sim.plan.clients.excluded.segment_en_pause === 5, [inactive, sim.plan.clients.excluded]);
+  check('pause automatique : signalée à l’administrateur (avertissement), la simulation reste valable (0 blocage)', sim.plan.issues.some((i: any) => i.code === 'segment_en_pause_inactive' && i.level === 'warning') && sim.blocking === 0);
+
+  // trop de plaintes : tout est suspendu et la simulation montre un BLOCAGE
+  const g = world();
+  for (let i = 0; i < 40; i++) g.tables.email_outbox.push(sentRow(i, { complaint_at: i < 3 ? ago(4) : null, segment: i < 2 ? 'nurture' : 'inactive' }));
+  const gs: any = await simulate(g.deps);
+  check('alerte générale de bout en bout : 3 plaintes sur 40 e-mails livrés -> aucun destinataire, 1 blocage (le verrou ne peut plus s’ouvrir)', gs.plan.recipientCount === 0 && gs.blocking === 1 && gs.plan.issues.some((i: any) => i.code === 'plaintes_elevees') && g.settings().last_simulation_blocking === 1, gs.plan.issues);
 }
 
 console.error = quiet;

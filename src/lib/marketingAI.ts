@@ -50,10 +50,30 @@ export interface PlanSummary {
   deferred: number;
   catalog: { total: number; verified: number; rejected: Record<string, number>; warnings: Record<string, number> };
   clients: { total: number; eligible: number; excluded: Record<string, number> };
-  segments: { key: string; label: string; eligible: number; planned: number }[];
+  segments: { key: string; label: string; eligible: number; planned: number; paused?: string | null }[];
   issues: { level: 'blocking' | 'warning' | 'info'; code: string; message: string }[];
   previews: { segment: string; label: string; lang: 'fr' | 'ar'; variant: string; subject: string; html: string }[];
-  sample: { emailMasked: string; segment: string; lang: string; variant: string; subject: string; productNames: string[] }[];
+  sample: { emailMasked: string; segment: string; topic?: string | null; lang: string; variant: string; subject: string; productNames: string[] }[];
+  learning?: LearningSummary; // absent des anciens passages
+}
+// ce que Zara a appris des campagnes passées (voir marketingLearning.ts) : notes en français simple, pauses automatiques, résultats par segment
+export interface LearningStats {
+  sent: number;
+  measured: number;
+  delivered: number;
+  clicked: number;
+  unsubscribed: number;
+  complaints: number;
+  hardBounced: number;
+  orders: number;
+  revenue: number;
+}
+export interface LearningSummary {
+  notes: string[];
+  pausedSegments: Record<string, string>;
+  bestVariant: Record<string, string>;
+  segmentOrder: string[] | null;
+  stats: Record<string, LearningStats>;
 }
 
 export const MODE_LABELS: Record<MarketingMode, string> = { off: 'Éteint', simulation: 'Simulation : aucun envoi', live: 'Actif : envois réels' };
@@ -77,6 +97,8 @@ export const EXCLUSION_LABELS: Record<string, string> = {
   plafond_30_jours: 'Plafond sur 30 jours atteint',
   commande_recente: 'Ont commandé depuis moins de 3 jours',
   pas_assez_de_nouveaux_articles: 'Pas assez de nouveaux articles à leur montrer',
+  segment_en_pause: 'Leur segment est en pause automatique',
+  envois_suspendus_plaintes: 'Envois suspendus (trop de plaintes)',
 };
 export const GATE_LABELS: Record<string, string> = {
   controle_brevo: 'Contrôle de la connexion à Brevo',

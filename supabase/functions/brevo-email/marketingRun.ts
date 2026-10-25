@@ -31,7 +31,9 @@ import {
   type SentRecord,
   type Snapshot,
 } from "./marketing.ts";
-import { mask, realEmail } from "./orderEmails.ts";
+import { computeLearning } from "./marketingLearning.ts";
+import { loadReport } from "./marketingReport.ts";
+import { SITE, mask, realEmail } from "./orderEmails.ts";
 
 export type Mode = "off" | "simulation" | "live";
 export interface StoredSettings {
@@ -126,15 +128,25 @@ async function fetchAll<T>(page: (from: number, to: number) => PromiseLike<{ dat
 }
 
 export async function loadSnapshot(service: Deps["service"], now: number): Promise<Snapshot> {
-  const [products, profiles, prefs, sessions, orders, favs, outbox] = await Promise.all([
+  const [products, categories, profiles, prefs, sessions, orders, favs, outbox] = await Promise.all([
     fetchAll<any>((a, b) => service.from("products").select("id,name,slug,price,compare_at_price,images,is_flash_sale,flash_sale_ends_at,created_at,category_id,stock,is_active").eq("is_active", true).order("id").range(a, b)),
+    // les catégories : sans elles, seuls les segments par centre d'intérêt s'éteignent (le plan le signale)
+    fetchAll<any>((a, b) => service.from("categories").select("id,name").order("id").range(a, b)).catch(() => [] as any[]),
     fetchAll<any>((a, b) => service.from("profiles").select("id,email,full_name,created_at,last_login_at,banned,is_admin,notify_promotions,notify_new_products,notify_flash_sale").order("id").range(a, b)),
     fetchAll<any>((a, b) => service.from("email_prefs").select("user_id,token,unsubscribed_at,suppressed_at,lang").order("user_id").range(a, b)),
     // seules les visites des 14 derniers jours servent (le seuil d'absence est de 7 jours) : la lecture reste petite et ne risque pas d'être coupée
     fetchAll<any>((a, b) => service.from("visitor_sessions").select("id,user_id,last_seen_at").not("user_id", "is", null).gte("last_seen_at", iso(now - 14 * DAY_MS)).order("id").range(a, b), 1000, 50000),
     fetchAll<any>((a, b) => service.from("orders").select("id,user_id,status,created_at,is_flagged_fake,loyalty_discount,items").not("user_id", "is", null).order("id").range(a, b)),
     fetchAll<any>((a, b) => service.from("favorites").select("id,user_id,product_id").order("id").range(a, b)),
-    fetchAll<any>((a, b) => service.from("email_outbox").select("id,user_id,kind,status,created_at,segment,variant,product_ids").in("kind", ["marketing", "promo_inactive"]).gte("created_at", iso(now - 60 * DAY_MS)).order("id").range(a, b)),
+    fetchAll<any>((a, b) =>
+      service
+        .from("email_outbox")
+        .select("id,user_id,kind,status,created_at,segment,variant,product_ids,sent_at,provider_message_id,events_synced_at,delivered_at,click_count,bounce_type,complaint_at,clicked_slugs")
+        .in("kind", ["marketing", "promo_inactive"])
+        .gte("created_at", iso(now - 60 * DAY_MS))
+        .order("id")
+        .range(a, b)
+    ),
   ]);
   const prefBy = new Map<string, any>(prefs.map((p) => [p.user_id, p]));
   const lastSeen = new Map<string, number>();
@@ -170,8 +182,32 @@ export async function loadSnapshot(service: Deps["service"], now: number): Promi
     loyaltyDiscount: Number(o.loyalty_discount) || 0,
     productIds: (Array.isArray(o.items) ? o.items : []).map((i: any) => i?.product_id).filter((id: unknown): id is string => typeof id === "string"),
   }));
-  const sent: SentRecord[] = outbox.map((r) => ({ userId: r.user_id, kind: r.kind, status: r.status, createdAt: ms(r.created_at) ?? 0, segment: r.segment ?? null, variant: r.variant ?? null, productIds: Array.isArray(r.product_ids) ? r.product_ids : null }));
-  return { now, products: products as CatalogProduct[], clients, orders: clientOrders, favorites: favs.map((f) => ({ userId: f.user_id, productId: f.product_id })), sent };
+  const sent: SentRecord[] = outbox.map((r) => ({
+    userId: r.user_id,
+    kind: r.kind,
+    status: r.status,
+    createdAt: ms(r.created_at) ?? 0,
+    segment: r.segment ?? null,
+    variant: r.variant ?? null,
+    productIds: Array.isArray(r.product_ids) ? r.product_ids : null,
+    // ce que Brevo a confirmé : « mesuré » seulement quand l'identifiant du message est connu ET que les événements ont été lus
+    sentAt: ms(r.sent_at),
+    measured: !!r.provider_message_id && !!r.events_synced_at,
+    delivered: !!r.delivered_at,
+    clicked: (Number(r.click_count) || 0) > 0,
+    hardBounced: r.bounce_type === "hard" || r.bounce_type === "invalid",
+    complaint: !!r.complaint_at,
+    clickedSlugs: Array.isArray(r.clicked_slugs) ? r.clicked_slugs.filter((s: unknown): s is string => typeof s === "string") : null,
+  }));
+  return {
+    now,
+    products: products as CatalogProduct[],
+    categories: categories.filter((c: any) => c?.id && typeof c.name === "string").map((c: any) => ({ id: c.id, name: c.name })),
+    clients,
+    orders: clientOrders,
+    favorites: favs.map((f) => ({ userId: f.user_id, productId: f.product_id })),
+    sent,
+  };
 }
 
 async function queuedToday(service: Deps["service"], now: number): Promise<number> {
@@ -204,7 +240,15 @@ async function saveRun(service: Deps["service"], row: { run_date: string; mode: 
 async function buildPlan(deps: Deps, st: StoredSettings): Promise<Plan> {
   const now = deps.now();
   const snap = await loadSnapshot(deps.service, now);
-  return planDay(snap, st.settings, { alreadyQueuedToday: await queuedToday(deps.service, now) });
+  // l'apprentissage : les commandes attribuées viennent du rapport ; si le rapport ne peut pas être lu, Zara apprend quand même des clics et des plaintes
+  let orderStats: Record<string, { orders: number; revenue: number }> | undefined;
+  try {
+    const report = await loadReport(deps, 30);
+    orderStats = Object.fromEntries(Object.entries(report.bySegment).map(([seg, b]) => [seg, { orders: b.orders, revenue: b.revenue }]));
+  } catch {
+    orderStats = undefined;
+  }
+  return planDay(snap, st.settings, { alreadyQueuedToday: await queuedToday(deps.service, now), learning: computeLearning(snap, orderStats) });
 }
 
 // SIMULATION : le plan, les aperçus et le rapport ; AUCUNE ligne dans la file d'envoi, AUCUN e-mail, aucun code de désinscription créé
@@ -243,7 +287,7 @@ async function queueRecipients(deps: Deps, runId: string, runDate: string, recip
     if (group.length === 0) continue;
     const { data: campaign, error } = await service.from("marketing_campaigns").insert({ run_id: runId, segment, planned: group.length, tag: `zmi-${runDate.replace(/-/g, "")}-${segment}` }).select("id").maybeSingle();
     if (error || !campaign) throw new Error("campagne : création refusée");
-    const rows = group.map((r) => ({ kind: "marketing", user_id: r.userId, campaign_id: campaign.id, segment: r.segment, variant: r.variant, lang: r.lang, product_ids: r.productIds }));
+    const rows = group.map((r) => ({ kind: "marketing", user_id: r.userId, campaign_id: campaign.id, segment: r.segment, topic: r.topic, variant: r.variant, lang: r.lang, product_ids: r.productIds }));
     for (let i = 0; i < rows.length; i += 100) {
       const { error: e } = await service.from("email_outbox").insert(rows.slice(i, i + 100));
       if (e) throw new Error(`file d'envoi : ${String(e.message ?? "erreur").slice(0, 120)}`);
@@ -322,15 +366,40 @@ export async function sendTestEmail(deps: Deps, admin: { email: unknown; fullNam
 export interface EventSummary {
   delivered_at: string | null;
   click_count: number;
+  clicked_slugs: string[]; // les articles du site cliqués dans l'e-mail (si Brevo donne le lien cliqué)
   bounce_type: "hard" | "soft" | "blocked" | "invalid" | null;
   complaint: boolean;
 }
+// « https://albasseshopping.com/produit/mon-article?utm_… » -> « mon-article » ; tout autre lien (ou autre site) -> null
+export function productSlugOfLink(link: unknown): string | null {
+  if (typeof link !== "string") return null;
+  let u: URL;
+  try {
+    u = new URL(link);
+  } catch {
+    return null;
+  }
+  const site = new URL(SITE).hostname.replace(/^www\./, "");
+  if (u.hostname.replace(/^www\./, "") !== site) return null;
+  const m = /^\/produit\/([^/]+)\/?$/.exec(u.pathname);
+  if (!m) return null;
+  try {
+    const slug = decodeURIComponent(m[1]);
+    return slug && slug.length <= 200 ? slug : null;
+  } catch {
+    return null;
+  }
+}
 export function summarizeEvents(events: unknown): EventSummary {
-  const out: EventSummary = { delivered_at: null, click_count: 0, bounce_type: null, complaint: false };
+  const out: EventSummary = { delivered_at: null, click_count: 0, clicked_slugs: [], bounce_type: null, complaint: false };
   for (const e of Array.isArray(events) ? (events as any[]) : []) {
     const kind = String(e?.event ?? "").toLowerCase().replace(/s$/, "");
     if (kind === "delivered") out.delivered_at = out.delivered_at ?? (typeof e.date === "string" ? e.date : null);
-    else if (kind === "click") out.click_count++;
+    else if (kind === "click") {
+      out.click_count++;
+      const slug = productSlugOfLink(e?.link);
+      if (slug && !out.clicked_slugs.includes(slug) && out.clicked_slugs.length < 10) out.clicked_slugs.push(slug);
+    }
     else if (kind === "hardbounce" || kind === "bounce") out.bounce_type = "hard";
     else if (kind === "softbounce") out.bounce_type = out.bounce_type ?? "soft";
     else if (kind === "blocked") out.bounce_type = out.bounce_type === "hard" ? "hard" : "blocked";
@@ -373,7 +442,7 @@ export async function syncEvents(deps: Deps, limit = 30) {
     const sum = summarizeEvents(body?.events);
     await deps.service
       .from("email_outbox")
-      .update({ delivered_at: sum.delivered_at, click_count: sum.click_count, bounce_type: sum.bounce_type, complaint_at: sum.complaint ? iso(now) : null, events_synced_at: iso(now) })
+      .update({ delivered_at: sum.delivered_at, click_count: sum.click_count, clicked_slugs: sum.clicked_slugs, bounce_type: sum.bounce_type, complaint_at: sum.complaint ? iso(now) : null, events_synced_at: iso(now) })
       .eq("id", r.id);
     synced++;
     // rebond dur, adresse bloquée ou invalide, plainte : l'adresse est mise en suppression tout de suite (plus aucun e-mail publicitaire)

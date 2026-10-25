@@ -108,12 +108,14 @@ create policy marketing_campaigns_admin_read on public.marketing_campaigns for s
 -- 4) la file d'envoi accepte les e-mails de campagne et garde ce que Brevo confirme (identifiant du message, livraison, clics, rebonds, plaintes)
 alter table public.email_outbox add column if not exists campaign_id uuid references public.marketing_campaigns(id) on delete set null;
 alter table public.email_outbox add column if not exists segment text;
+alter table public.email_outbox add column if not exists topic text; -- segments par centre d'intérêt : la rubrique (parfums, vetements, cat:Nom de la catégorie…)
 alter table public.email_outbox add column if not exists variant text;
 alter table public.email_outbox add column if not exists lang text;
 alter table public.email_outbox add column if not exists product_ids uuid[];
 alter table public.email_outbox add column if not exists provider_message_id text;
 alter table public.email_outbox add column if not exists delivered_at timestamptz;
 alter table public.email_outbox add column if not exists click_count integer not null default 0;
+alter table public.email_outbox add column if not exists clicked_slugs text[]; -- articles du site cliqués dans l'e-mail (lus chez Brevo) : nourrissent les centres d'intérêt
 alter table public.email_outbox add column if not exists bounce_type text;
 alter table public.email_outbox add column if not exists complaint_at timestamptz;
 alter table public.email_outbox add column if not exists events_synced_at timestamptz;

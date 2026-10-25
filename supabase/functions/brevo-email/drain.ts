@@ -178,7 +178,7 @@ export async function drain(deps: Deps) {
 
     // campagne de Zara Marketing : TOUT est relu au moment de l'envoi (accord, désinscription, suppression, articles, prix, remise, vente flash)
     if (row.kind === "marketing") {
-      const { data: m } = await service.from("email_outbox").select("segment,variant,product_ids,created_at").eq("id", row.id).maybeSingle();
+      const { data: m } = await service.from("email_outbox").select("segment,topic,variant,product_ids,created_at").eq("id", row.id).maybeSingle();
       const { data: p } = await service.from("profiles").select("id,email,full_name,created_at,banned,is_admin,notify_promotions,notify_new_products,notify_flash_sale").eq("id", row.user_id).maybeSingle();
       const { data: prefs } = await service.from("email_prefs").select("token,unsubscribed_at").eq("user_id", row.user_id).maybeSingle();
       const { data: more } = await service.from("email_prefs").select("suppressed_at,lang").eq("user_id", row.user_id).maybeSingle();
@@ -228,6 +228,7 @@ export async function drain(deps: Deps) {
         unsubscribeUrl: links.page,
         loyaltyDelivered: delivered,
         loyaltyUsed,
+        topic: typeof m.topic === "string" && m.topic ? m.topic : null,
       });
       if (!prepared.ok) {
         await skip(prepared.reason);

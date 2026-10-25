@@ -15,6 +15,7 @@ import {
   pct,
   since,
   type BrevoDetail,
+  type LearningSummary,
   type MarketingMode,
   type MarketingReport,
   type MarketingRunRow,
@@ -334,12 +335,13 @@ function PlanCard({ run, summary, preview, setPreview }: { run: MarketingRunRow;
       <Text style={styles.subTitle}>Par segment</Text>
       {summary.segments.map((s) => (
         <View key={s.key} style={styles.segRow}>
-          <Text style={[styles.text, { flex: 1 }]}>{s.label}</Text>
+          <Text style={[styles.text, { flex: 1 }]}>{s.label}{s.paused ? ' ⏸️ en pause' : ''}</Text>
           <Text style={styles.segNum}>{s.planned}</Text>
           <Text style={styles.small}> / {s.eligible}</Text>
         </View>
       ))}
       <Text style={styles.small}>retenus aujourd’hui / qui conviennent</Text>
+      {summary.learning ? <LearningBlock learning={summary.learning} /> : null}
       {excluded.length ? <Text style={styles.subTitle}>Écartés</Text> : null}
       {excluded.map(([k, n]) => (
         <View key={k} style={styles.segRow}>
@@ -362,6 +364,41 @@ function PlanCard({ run, summary, preview, setPreview }: { run: MarketingRunRow;
           </View>
         );
       })}
+    </View>
+  );
+}
+
+// « Ce que Zara a appris » : les clics, les commandes attribuées, les désinscriptions et les plaintes des 30 derniers jours règlent les campagnes suivantes
+function LearningBlock({ learning }: { learning: LearningSummary }) {
+  const rows = Object.entries(learning.stats).filter(([, s]) => s.sent > 0).sort((a, b) => b[1].sent - a[1].sent);
+  const paused = Object.entries(learning.pausedSegments);
+  return (
+    <View testID="mkai-learning">
+      <Text style={styles.subTitle}>Ce que Zara a appris</Text>
+      {learning.notes.map((n, i) => (
+        <Text key={i} style={styles.text} testID={`mkai-learning-note-${i}`}>• {n}</Text>
+      ))}
+      {paused.map(([k, why]) => (
+        <Text key={k} style={[styles.issue, styles.issueWarn]} testID={`mkai-paused-${k}`}>⏸️ « {SEGMENT_NAMES[k] ?? k} » en pause : {why}. Les clients de ce segment ne reçoivent plus de campagne tant que cela ne s’améliore pas.</Text>
+      ))}
+      {rows.length ? (
+        <>
+          <View style={styles.tableHeader}>
+            <Text style={[styles.th, { flex: 2, textAlign: 'left' }]}>Segment (30 j)</Text><Text style={styles.th}>Livrés</Text><Text style={styles.th}>Clics</Text><Text style={styles.th}>Désins.</Text><Text style={styles.th}>Plaintes</Text><Text style={styles.th}>Cmd</Text>
+          </View>
+          {rows.map(([k, s]) => (
+            <View key={k} style={styles.tr}>
+              <Text style={[styles.td, { flex: 2, textAlign: 'left' }]}>{SEGMENT_NAMES[k] ?? k}</Text>
+              <Text style={styles.td}>{s.measured ? s.delivered : '—'}</Text>
+              <Text style={styles.td}>{s.measured ? s.clicked : '—'}</Text>
+              <Text style={styles.td}>{s.unsubscribed}</Text>
+              <Text style={styles.td}>{s.measured ? s.complaints : '—'}</Text>
+              <Text style={styles.td}>{s.orders}</Text>
+            </View>
+          ))}
+        </>
+      ) : null}
+      <Text style={styles.footnote}>Zara ne tire aucune conclusion sans assez de résultats mesurés (30 e-mails par objet, 100 e-mails livrés par segment). « — » = Brevo n’a pas encore donné les résultats.</Text>
     </View>
   );
 }
@@ -425,7 +462,7 @@ function ReportCard({ report, busy, onSync }: { report: MarketingReport | null; 
   );
 }
 
-const SEGMENT_NAMES: Record<string, string> = { flash: 'Vente flash', wishlist: 'Favoris', loyalty: 'Fidélité', winback: 'À reconquérir', new_arrivals: 'Nouveautés', inactive: 'Absents', nurture: 'Nouveaux comptes' };
+const SEGMENT_NAMES: Record<string, string> = { flash: 'Vente flash', wishlist: 'Favoris', loyalty: 'Fidélité', winback: 'À reconquérir', perfume_lovers: 'Amateurs de parfums', clothing_buyers: 'Acheteurs de vêtements', category_interest: 'Intérêt par catégorie', new_arrivals: 'Nouveautés', inactive: 'Absents', nurture: 'Nouveaux comptes' };
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
