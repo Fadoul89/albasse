@@ -1,6 +1,6 @@
 // Admin : un réglage du site en un toucher (colonne booléenne de store_settings), enregistré tout de suite.
 // Le bouton « Commander sur WhatsApp » des fiches produit (page Produits), le compte obligatoire à l'entrée (page Clients) et les e-mails
-// automatiques de commande (page Assistant marketing).
+// automatiques aux clients et la publicité aux clients absents (page Assistant marketing).
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Switch } from 'react-native';
 import { useStoreSettings } from '../hooks/useStoreSettings';
@@ -10,7 +10,7 @@ import { colors, fonts, radius, spacing } from '../theme';
 import type { StoreSettings } from '../types';
 
 interface Setting {
-  column: 'whatsapp_order_enabled' | 'account_required' | 'order_emails_enabled';
+  column: 'whatsapp_order_enabled' | 'account_required' | 'order_emails_enabled' | 'inactive_emails_enabled';
   // valeur quand la colonne n'existe pas encore (script SQL pas lancé)
   missingValue: boolean;
   script: string;
@@ -22,7 +22,7 @@ interface Setting {
   offToast: { title: string; message: string };
 }
 
-const SETTINGS: Record<'whatsappOrder' | 'accountRequired' | 'orderEmails', Setting> = {
+const SETTINGS: Record<'whatsappOrder' | 'accountRequired' | 'orderEmails' | 'inactiveEmails', Setting> = {
   whatsappOrder: {
     column: 'whatsapp_order_enabled',
     missingValue: true,
@@ -55,6 +55,17 @@ const SETTINGS: Record<'whatsappOrder' | 'accountRequired' | 'orderEmails', Sett
     offText: '⚪ Désactivé : aucun e-mail n’est envoyé aux clients',
     onToast: { title: '📧 E-mails activés', message: 'Les clients qui ont une vraie adresse e-mail reçoivent le mot de bienvenue, la confirmation et l’avis de livraison.' },
     offToast: { title: '📪 E-mails coupés', message: 'Plus aucun e-mail n’est envoyé aux clients.' },
+  },
+  inactiveEmails: {
+    column: 'inactive_emails_enabled',
+    missingValue: false,
+    script: 'add-inactive-promo-emails.sql',
+    testID: 'inactive-emails',
+    title: '📣 E-mails publicitaires (clients absents depuis 7 jours)',
+    onText: '🟢 Activé : Zara écrit chaque matin aux clients absents depuis 7 jours',
+    offText: '⚪ Désactivé : aucun e-mail publicitaire n’est envoyé',
+    onToast: { title: '📣 Publicité par e-mail activée', message: 'Chaque matin, un petit nombre de clients absents depuis 7 jours reçoivent vos articles du moment.' },
+    offToast: { title: '📪 Publicité par e-mail coupée', message: 'Plus aucun e-mail publicitaire n’est envoyé.' },
   },
 };
 

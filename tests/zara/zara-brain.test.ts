@@ -1321,7 +1321,7 @@ async function main() {
     ok('robots de Google, Facebook, WhatsApp, Bing : pas de mur (articles sur Google, apercus des liens)', bots.every((ua) => !aw.mustSignUp({ ...base, userAgent: ua })));
     const people = ['Mozilla/5.0 (Linux; Android 10; CUBOT X30) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36', 'Mozilla/5.0 (Linux; Android 12; SM-A125F) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36 [FB_IAB/FB4A;FBAV/440.0]', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Instagram 300.0'];
     ok('vrais telephones (Cubot, navigateur de Facebook, Instagram) : le mur', people.every((ua) => aw.mustSignUp({ ...base, userAgent: ua })));
-    ok('pages ouvertes sans compte : connexion, inscription, mot de passe, confidentialite, retours, contact, installation ; le reste est couvert', ['Login', 'Register', 'ForgotPassword', 'ResetPassword', 'PrivacyPolicy', 'ReturnPolicy', 'Contact', 'Install'].every((r) => !aw.wallCovers(r)) && ['Tabs', 'Product', 'Category', 'Checkout', undefined].every((r) => aw.wallCovers(r)));
+    ok('pages ouvertes sans compte : connexion, inscription, mot de passe, confidentialite, retours, contact, installation, desinscription ; le reste est couvert', ['Login', 'Register', 'ForgotPassword', 'ResetPassword', 'PrivacyPolicy', 'ReturnPolicy', 'Contact', 'Install', 'Unsubscribe'].every((r) => !aw.wallCovers(r)) && ['Tabs', 'Product', 'Category', 'Checkout', undefined].every((r) => aw.wallCovers(r)));
   }
 
   {

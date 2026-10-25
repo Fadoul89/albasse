@@ -43,7 +43,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   // rank : rang du jour renvoye par la fonction de la base (null : fonction pas installee). fakeUser : compte simule (token : reponse a une connexion par mot de passe ; delay : lenteur du profil en ms). fakeOrders : { list: [...], patches: [] } = fausse table des commandes.
   // zaraInstall : par defaut, le visiteur a deja repondu « Plus tard » a l'installation (Zara ne la propose pas) ; null = vrai nouveau
   // visiteur, pour les parties qui testent l'installation
-  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, fakeSales = null, fakeCallbacks = null, fakePushes = null, fakeStore = null, fakeCats = null, fakeOnline = null, fakeRecent = null, initScripts = [], zaraInstall = 'dismissed', zaraPush = 'later', installAfterSignUp = '1', pushPerm = null, pushAnswer = 'granted', fakeAi = null } = {}) {
+  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, fakeSales = null, fakeCallbacks = null, fakePushes = null, fakeStore = null, fakeCats = null, fakeOnline = null, fakeRecent = null, fakeUnsub = null, initScripts = [], zaraInstall = 'dismissed', zaraPush = 'later', installAfterSignUp = '1', pushPerm = null, pushAnswer = 'granted', fakeAi = null } = {}) {
     const ctx = await b.newContext(opts);
     if (cookies) await ctx.addCookies(cookies);
     if (lang) storage = { albasse_zara_lang: lang, ...storage };
@@ -231,6 +231,14 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
           fakeRecent.calls = (fakeRecent.calls || 0) + 1;
           return json(route, fakeRecent.rows);
         }
+        // desinscription des e-mails publicitaires (add-inactive-promo-emails.sql) : fakeUnsub.result = vrai si le code est reconnu, faux sinon ;
+        // fakeUnsub.error = la base repond une erreur ; fakeUnsub.calls = les codes recus ; sans fakeUnsub : fonction absente (script pas lance)
+        if (u.pathname === '/rest/v1/rpc/email_unsubscribe' && m === 'POST') {
+          if (!fakeUnsub) return json(route, { code: 'PGRST202', message: 'Could not find the function public.email_unsubscribe(p_token) in the schema cache' }, 404);
+          (fakeUnsub.calls = fakeUnsub.calls || []).push(JSON.parse(req.postData() || '{}'));
+          if (fakeUnsub.error) return json(route, { message: 'erreur de test' }, 500);
+          return json(route, fakeUnsub.result === true);
+        }
         // ordre des categories (add-category-order.sql) : les vraies categories avec un faux sort_order. fakeCats.order = { slug: numero } ;
         // missing = colonne absente (script pas lance) ; patches = numeros recus de la page admin ({ id, sort_order })
         if (fakeCats && u.pathname === '/rest/v1/categories') {
@@ -272,7 +280,9 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
             if (fakeStore) {
               if (fakeStore.waOrder === undefined) delete r.whatsapp_order_enabled;
               else if (wants('whatsapp_order_enabled')) r.whatsapp_order_enabled = fakeStore.waOrder;
-              if (fakeStore.orderEmails !== undefined && wants('order_emails_enabled')) r.order_emails_enabled = fakeStore.orderEmails;
+              // la vraie ligne a maintenant ces colonnes (allumees en vrai par le patron) : les tests partent toujours de « eteint »
+              if (wants('order_emails_enabled')) r.order_emails_enabled = fakeStore.orderEmails === true;
+              if (wants('inactive_emails_enabled')) r.inactive_emails_enabled = fakeStore.inactiveEmails === true;
             }
             if (fs.accountRequired === 'missing') delete r.account_required;
             else if (wants('account_required')) r.account_required = fs.accountRequired === true;
@@ -299,6 +309,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
           if ('whatsapp_order_enabled' in body) fakeStore.waOrder = body.whatsapp_order_enabled;
           if ('account_required' in body) fakeStore.accountRequired = body.account_required;
           if ('order_emails_enabled' in body) fakeStore.orderEmails = body.order_emails_enabled;
+          if ('inactive_emails_enabled' in body) fakeStore.inactiveEmails = body.inactive_emails_enabled;
           return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } });
         }
         // les promotions publiees en vrai sur le site (fenetre « offre du jour ») ne doivent pas couvrir les pages pendant les tests
@@ -3715,7 +3726,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     // e-mail de test (Brevo) : la carte de la page « Assistant marketing » (fausse fonction)
     {
       const fu = accountOf();
-      const answers = [{ ok: false, reason: 'no_key' }, { ok: false, reason: 'brevo', status: 400, detail: 'Sender not valid' }, { ok: true, to: 'ad***@example.com' }];
+      const answers = [{ ok: false, reason: 'no_key' }, { ok: false, reason: 'brevo', status: 400, detail: 'Sender not valid' }, { ok: true, to: 'ad***@example.com' }, { ok: false, reason: 'no_products' }, { ok: true, to: 'ad***@example.com' }];
       const fs = { waOrder: true };
       const v = await newVisitor(phone, { storage: { [SK]: fu.session }, fakeUser: fu, fakeStore: fs });
       const calls = [];
@@ -3748,6 +3759,26 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.page.getByTestId('order-emails-switch').click();
       await v.page.getByText('E-mails coupés').waitFor({ timeout: 8000 });
       check('e-mails de commande : on les éteint, la base reçoit order_emails_enabled = false', (fs.patches || []).some((b) => b.order_emails_enabled === false), fs.patches);
+      // publicite aux clients absents depuis 7 jours : interrupteur separe (eteint au depart) et exemple envoye a l'administrateur
+      await v.page.getByTestId('inactive-emails-toggle').waitFor({ timeout: 15000 });
+      check('publicite aux clients absents : éteinte au départ (« Désactivé »)', /Désactivé/.test(await v.page.getByTestId('inactive-emails-status').innerText()));
+      await v.page.getByTestId('inactive-emails-switch').click();
+      await v.page.getByText('Publicité par e-mail activée').waitFor({ timeout: 8000 });
+      check('publicite : on l\'allume, la base reçoit inactive_emails_enabled = true', (fs.patches || []).some((b) => b.inactive_emails_enabled === true), fs.patches);
+      await v.page.waitForFunction(() => /Activé/.test(document.querySelector('[data-testid="inactive-emails-status"]')?.textContent || ''), null, { timeout: 8000 });
+      check('publicite : « Activé » affiché après relecture', true);
+      await v.page.getByTestId('inactive-emails-switch').click();
+      await v.page.getByText('Publicité par e-mail coupée').waitFor({ timeout: 8000 });
+      check('publicite : on l\'éteint, la base reçoit inactive_emails_enabled = false', (fs.patches || []).some((b) => b.inactive_emails_enabled === false), fs.patches);
+      const txt0 = await v.page.getByTestId('admin-marketing').innerText();
+      check('publicite : le texte dit 9 h, 50 clients, 7 jours, promotions acceptées, « Me désinscrire », 14 jours', /9 h/.test(txt0) && /50 clients/.test(txt0) && /7 jours/.test(txt0) && /accepté les promotions/.test(txt0) && /Me désinscrire/.test(txt0) && /14 jours/.test(txt0));
+      await v.page.getByTestId('marketing-promo-test').click();
+      await v.page.getByText(/Aucun article en vente et en stock/).waitFor({ timeout: 8000 });
+      check('exemple de publicité, aucun article en stock : le message le dit', true);
+      await v.page.getByTestId('marketing-promo-test').click();
+      await v.page.getByText(/Exemple de publicité envoyé à ad\*\*\*@example\.com/).waitFor({ timeout: 8000 });
+      check('exemple de publicité envoyé : succès avec l\'adresse masquée', true);
+      check('la fonction reçoit seulement l\'action « test_promo » (aucune adresse, aucun contenu envoyé par l\'application)', calls.slice(3).length === 2 && calls.slice(3).every((c) => JSON.stringify(c) === '{"action":"test_promo"}'), calls);
       check('aucune erreur (e-mail de test)', v.errs.length === 0, v.errs);
       await v.ctx.close();
     }
@@ -3774,6 +3805,45 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const fabCount = (pg) => pg.getByRole('button', { name: FAB_NAME }).count();
     // le mur s'affiche (attente du reglage et de la session)
     const waitWall = (pg) => wall(pg).waitFor({ timeout: 25000 });
+    // 0) « Me désinscrire » des e-mails publicitaires : page ouverte sans compte, même quand le compte est obligatoire
+    {
+      const TOK = '11111111-1111-4111-8111-111111111111';
+      const open = async (url, fu) => {
+        const v = await newVisitor(phone, { fakeStore: { waOrder: true, accountRequired: true }, fakeUnsub: fu });
+        await v.page.goto(`http://localhost:${port}${url}`, { waitUntil: 'load' });
+        await v.page.getByTestId('unsubscribe-screen').waitFor({ timeout: 30000 });
+        return v;
+      };
+      const ok1 = { result: true };
+      const v = await open(`/desinscription?t=${TOK}`, ok1);
+      await v.page.getByTestId('unsubscribe-done').waitFor({ timeout: 10000 });
+      check('desinscription : le lien de l\'e-mail coupe la publicité, sans compte et sans mur', (await wall(v.page).count()) === 0 && /Vous êtes désinscrit/.test(await v.page.getByTestId('unsubscribe-screen').innerText()));
+      check('desinscription : la base reçoit seulement le code du lien', JSON.stringify(ok1.calls) === JSON.stringify([{ p_token: TOK }]), ok1.calls);
+      check('desinscription : le texte dit que les e-mails de commande continuent', /e-mails de vos commandes/.test(await v.page.getByTestId('unsubscribe-screen').innerText()));
+      await v.ctx.close();
+
+      const bad = { result: false };
+      const v2 = await open(`/desinscription?t=${TOK}`, bad);
+      await v2.page.getByTestId('unsubscribe-invalid').waitFor({ timeout: 10000 });
+      check('desinscription : code inconnu de la base : « Lien non reconnu »', /Lien non reconnu/.test(await v2.page.getByTestId('unsubscribe-screen').innerText()));
+      await v2.ctx.close();
+
+      const none = { result: true };
+      const v3 = await open('/desinscription?t=pas-un-code', none);
+      await v3.page.getByTestId('unsubscribe-invalid').waitFor({ timeout: 10000 });
+      check('desinscription : lien abîmé : « Lien non reconnu », aucun appel à la base', (none.calls || []).length === 0);
+      await v3.ctx.close();
+
+      const v4 = await open('/desinscription', { result: true });
+      await v4.page.getByTestId('unsubscribe-invalid').waitFor({ timeout: 10000 });
+      check('desinscription : sans code : « Lien non reconnu »', true);
+      await v4.ctx.close();
+
+      const v5 = await open(`/desinscription?t=${TOK}`, { error: true });
+      await v5.page.getByTestId('unsubscribe-error').waitFor({ timeout: 10000 });
+      check('desinscription : panne de la base : « Réessayez dans un instant » (jamais un faux « désinscrit »)', /Réessayez/.test(await v5.page.getByTestId('unsubscribe-screen').innerText()) && !/Vous êtes désinscrit/.test(await v5.page.getByTestId('unsubscribe-screen').innerText()));
+      await v5.ctx.close();
+    }
     // 1) compte obligatoire : le visiteur voit le mur, sans Zara ni bandeaux
     {
       const v = await newVisitor(phone, { fakeStore: { waOrder: true, accountRequired: true } });

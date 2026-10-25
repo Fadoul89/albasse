@@ -330,6 +330,9 @@ export interface StoreSettings {
   account_required?: boolean;
   // e-mails automatiques de commande par Brevo (absent tant que add-order-emails.sql n'est pas lancé : éteints)
   order_emails_enabled?: boolean;
+  // e-mails publicitaires aux clients absents depuis 7 jours (absent tant que add-inactive-promo-emails.sql n'est pas lancé : éteints)
+  inactive_emails_enabled?: boolean;
+  inactive_emails_daily_limit?: number;
   left_ad_items: AdItem[];
   right_ad_items: AdItem[];
   updated_at: string;

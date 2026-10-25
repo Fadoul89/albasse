@@ -28,6 +28,8 @@ export function AdminMarketingScreen() {
   const [error, setError] = useState<string | null>(null);
   const [mailBusy, setMailBusy] = useState(false);
   const [mailResult, setMailResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const [promoBusy, setPromoBusy] = useState(false);
+  const [promoResult, setPromoResult] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
     if (!profile?.is_admin) return;
@@ -72,26 +74,31 @@ export function AdminMarketingScreen() {
     setResult(d.text.replace(/\*+/g, ''));
   };
 
-  // E-mail de test (Brevo) vers l'adresse de l'administrateur : vérifie la clé, le domaine et l'expéditeur avant tout envoi aux clients
+  // E-mail de test (Brevo) vers l'adresse de l'administrateur : vérifie la clé, le domaine et l'expéditeur avant tout envoi aux clients.
+  // « test_promo » envoie un exemple de l'e-mail publicitaire, avec les vrais articles du site.
+  const runMailTest = async (action: 'test' | 'test_promo', done: string): Promise<{ ok: boolean; text: string }> => {
+    const { data } = await supabase.functions.invoke('brevo-email', { body: { action } });
+    const d = data as { ok?: boolean; to?: string; reason?: string; detail?: string } | null;
+    if (d?.ok) return { ok: true, text: `✅ ${done} envoyé à ${d.to ?? 'votre adresse'}. Regardez votre boîte, et les spams.` };
+    if (d?.reason === 'no_key') return { ok: false, text: "La clé Brevo n'est pas encore dans les Secrets de Supabase (nom : BREVO_API_KEY)." };
+    if (d?.reason === 'no_email') return { ok: false, text: "Votre compte n'a pas d'adresse e-mail : ajoutez-en une dans Compte, puis réessayez." };
+    if (d?.reason === 'no_products') return { ok: false, text: "Aucun article en vente et en stock à montrer dans l'e-mail." };
+    if (d?.reason === 'brevo') return { ok: false, text: `Brevo a refusé l'envoi : ${d.detail ?? 'raison inconnue'}` };
+    if (d?.reason === 'auth' || d?.reason === 'forbidden') return { ok: false, text: 'Réservé aux administrateurs.' };
+    if (d?.reason === 'bad_request') return { ok: false, text: 'La fonction des e-mails doit être mise à jour (brevo-email).' };
+    return { ok: false, text: 'Envoi impossible pour le moment. Réessayez dans un instant.' };
+  };
   const sendTestEmail = async () => {
     setMailBusy(true);
     setMailResult(null);
-    const { data } = await supabase.functions.invoke('brevo-email', { body: { action: 'test' } });
+    setMailResult(await runMailTest('test', 'E-mail de test'));
     setMailBusy(false);
-    const d = data as { ok?: boolean; to?: string; reason?: string; detail?: string } | null;
-    if (d?.ok) {
-      setMailResult({ ok: true, text: `✅ E-mail de test envoyé à ${d.to ?? 'votre adresse'}. Regardez votre boîte, et les spams.` });
-    } else if (d?.reason === 'no_key') {
-      setMailResult({ ok: false, text: "La clé Brevo n'est pas encore dans les Secrets de Supabase (nom : BREVO_API_KEY)." });
-    } else if (d?.reason === 'no_email') {
-      setMailResult({ ok: false, text: "Votre compte n'a pas d'adresse e-mail : ajoutez-en une dans Compte, puis réessayez." });
-    } else if (d?.reason === 'brevo') {
-      setMailResult({ ok: false, text: `Brevo a refusé l'envoi : ${d.detail ?? 'raison inconnue'}` });
-    } else if (d?.reason === 'auth' || d?.reason === 'forbidden') {
-      setMailResult({ ok: false, text: 'Réservé aux administrateurs.' });
-    } else {
-      setMailResult({ ok: false, text: "Envoi impossible pour le moment. Réessayez dans un instant." });
-    }
+  };
+  const sendTestPromo = async () => {
+    setPromoBusy(true);
+    setPromoResult(null);
+    setPromoResult(await runMailTest('test_promo', 'Exemple de publicité'));
+    setPromoBusy(false);
   };
 
   return (
@@ -167,6 +174,23 @@ export function AdminMarketingScreen() {
             « Bienvenue » part quand un client crée son compte, « commande reçue » à la commande, « commande livrée » quand vous passez la commande à
             « livrée ». Seuls les clients qui ont une vraie adresse e-mail en reçoivent, 150 e-mails par jour au plus.
           </Text>
+        </View>
+
+        <View style={{ marginTop: spacing.md }}>
+          <StoreSettingToggle setting="inactiveEmails" />
+          <Text style={styles.mailText}>
+            Chaque matin à 9 h, Zara écrit à 50 clients au plus : ceux qui n'ont ni commandé ni visité le site depuis 7 jours, qui ont accepté les promotions
+            et qui ont une vraie adresse e-mail. L'e-mail montre de vrais articles (la vente flash en cours d'abord) et un lien « Me désinscrire ». Un client
+            reçoit au plus un e-mail publicitaire tous les 14 jours. Il faut aussi que l'interrupteur « E-mails automatiques aux clients » soit allumé.
+          </Text>
+          <Pressable style={[styles.mailButton, promoBusy && { opacity: 0.6 }, { marginTop: spacing.sm }]} onPress={sendTestPromo} disabled={promoBusy} testID="marketing-promo-test">
+            {promoBusy ? <ActivityIndicator color={colors.gold} /> : <Text style={styles.mailButtonText}>M'envoyer un exemple de l'e-mail publicitaire</Text>}
+          </Pressable>
+          {promoResult ? (
+            <Text style={[styles.mailMsg, promoResult.ok ? styles.mailOk : styles.error]} testID="marketing-promo-result">
+              {promoResult.text}
+            </Text>
+          ) : null}
         </View>
       </ScrollView>
     </View>

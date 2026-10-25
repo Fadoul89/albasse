@@ -5,6 +5,7 @@ export type RootStackParamList = {
   Checkout: undefined;
   Travel: undefined;
   Install: undefined;
+  Unsubscribe: { t?: string } | undefined;
   Login: undefined;
   Register: undefined;
   ForgotPassword: undefined;

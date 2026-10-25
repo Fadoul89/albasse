@@ -1,6 +1,6 @@
 // Envoi automatique des e-mails de commande (supabase/functions/brevo-email/drain.ts), avec une fausse base en mémoire et un faux Brevo.
 // Lancer : node --import ./tests/zara/register.mjs tests/email/drain.test.ts
-import { drain, BATCH, MAX_ATTEMPTS, type Deps } from '../../supabase/functions/brevo-email/drain.ts';
+import { drain, BATCH, MAX_ATTEMPTS, PROMO_BATCH, type Deps } from '../../supabase/functions/brevo-email/drain.ts';
 
 let ok = 0;
 const check = (label: string, cond: unknown, detail?: unknown) => {
@@ -206,6 +206,74 @@ console.error = () => {}; // les refus de Brevo sont voulus dans ces essais
   const refus = world({ fetchStatus: [401], extra: { email_outbox: [mk('w7', 'u1', 5 * 60_000)] } });
   await drain(refus.deps);
   check('bienvenue : refus de Brevo (401) = « failed » avec la raison', row(refus.tables, 'w7').status === 'failed' && /401/.test(row(refus.tables, 'w7').error));
+}
+// publicité aux clients absents depuis 7 jours : au goutte-à-goutte, après les e-mails de commande, tout relu au moment de l'envoi
+{
+  const T1 = '11111111-1111-4111-8111-111111111111';
+  const settings = (promo: boolean) => [{ id: 1, order_emails_enabled: true, inactive_emails_enabled: promo }];
+  const products = [
+    { id: 'a1', name: 'Capuche noire', slug: 'capuche-noire', price: 22500, compare_at_price: 30000, images: ['https://img.example/a.jpg'], is_flash_sale: false, flash_sale_ends_at: null, created_at: '2026-10-20T10:00:00Z', is_active: true, stock: 5 },
+    { id: 'a2', name: 'Slip-on', slug: 'slip-on', price: 15000, compare_at_price: null, images: [], is_flash_sale: false, flash_sale_ends_at: null, created_at: '2026-10-10T10:00:00Z', is_active: true, stock: 2 },
+    { id: 'a3', name: 'Épuisé', slug: 'epuise', price: 9000, compare_at_price: null, images: [], is_flash_sale: false, flash_sale_ends_at: null, created_at: '2026-10-24T10:00:00Z', is_active: true, stock: 0 },
+  ];
+  let n = 0;
+  const mk = (userId: string) => ({ id: `p${++n}`, kind: 'promo_inactive', order_id: null, user_id: userId, status: 'pending', attempts: 0, created_at: iso(NOW - 3600_000 + n * 1000), updated_at: '', sent_at: null });
+  const wp = (rows: Row[], promo = true, extra: Record<string, Row[]> = {}) => {
+    const w = world({ extra: { store_settings: settings(promo), email_outbox: rows, products, email_prefs: [{ user_id: 'u1', token: T1, unsubscribed_at: null }], ...extra } });
+    w.tables.profiles[0].notify_promotions = true;
+    return w;
+  };
+
+  const w = wp([mk('u1')]);
+  const r = await drain(w.deps);
+  const c = w.calls[0];
+  check('publicité : un e-mail part vers le client, avec son prénom et de vrais articles en vente', w.calls.length === 1 && c.body.to[0].email === 'ali@gmail.com' && /Bonjour Ali, vous nous manquez/.test(c.body.htmlContent) && /Capuche noire/.test(c.body.htmlContent) && /Slip-on/.test(c.body.htmlContent), c?.body?.subject);
+  check('publicité : un article épuisé n’est jamais montré', !/Épuisé/.test(c.body.htmlContent));
+  check('publicité : lien « Me désinscrire » (page du site) et en-têtes List-Unsubscribe pour le bouton de la messagerie', c.body.htmlContent.includes(`https://www.albasseshopping.com/desinscription?t=${T1}`) && c.body.headers['List-Unsubscribe'] === `<https://xtitsmmccpkelxfjyqyh.supabase.co/functions/v1/brevo-email?unsub=${T1}>` && c.body.headers['List-Unsubscribe-Post'] === 'List-Unsubscribe=One-Click', c.body.headers);
+  check('publicité : la ligne passe à « sent »', row(w.tables, w.tables.email_outbox[0].id).status === 'sent' && (r as any).sent === 1, w.tables.email_outbox[0]);
+  const plain = world();
+  await drain(plain.deps);
+  check('e-mails de commande : aucun en-tête de désinscription', plain.calls[0].body.headers === undefined);
+
+  const offRows = [mk('u1')];
+  const off = wp(offRows, false);
+  await drain(off.deps);
+  check('interrupteur publicité éteint : rien ne part, la ligne est annulée', off.calls.length === 0 && row(off.tables, offRows[0].id).status === 'skipped' && /publicité/.test(row(off.tables, offRows[0].id).error), row(off.tables, offRows[0].id));
+
+  const badRows = ['u1', 'u2', 'u3', 'u4', 'u5', 'u6'].map(mk);
+  const bad = wp(badRows);
+  bad.tables.profiles.push(
+    { id: 'u3', full_name: 'Bob', email: 'bob@gmail.com', notify_promotions: false },
+    { id: 'u4', full_name: 'Cara', email: 'cara@gmail.com', notify_promotions: true, banned: true },
+    { id: 'u5', full_name: 'Dan', email: 'dan@gmail.com', notify_promotions: true },
+    { id: 'u6', full_name: 'Eve', email: 'eve@gmail.com', notify_promotions: true }
+  );
+  bad.tables.profiles[1].notify_promotions = true; // u2 : fausse adresse
+  bad.tables.email_prefs.push({ user_id: 'u5', token: '55555555-5555-4555-8555-555555555555', unsubscribed_at: iso(NOW - 86_400_000) });
+  const rb = await drain(bad.deps);
+  const rb2 = await drain(bad.deps); // le sixième passe au tour suivant (5 par passage)
+  const states = badRows.map((r) => row(bad.tables, r.id).status);
+  check('publicité : jamais vers une fausse adresse, ni promotions refusées, ni compte bloqué, ni désinscrit, ni sans code', states.slice(1).every((x) => x === 'skipped') && bad.calls.length === 1 && (rb as any).sent === 1 && (rb as any).skipped + (rb2 as any).skipped === 5, { states, rb, rb2 });
+
+  const emptyRows = [mk('u1')];
+  const empty = wp(emptyRows, true, { products: [products[2]] });
+  await drain(empty.deps);
+  check('publicité : aucun article en stock, rien ne part', empty.calls.length === 0 && row(empty.tables, emptyRows[0].id).status === 'skipped' && /aucun article/.test(row(empty.tables, emptyRows[0].id).error), row(empty.tables, emptyRows[0].id));
+
+  const many = wp(Array.from({ length: 8 }, () => mk('u1')));
+  await drain(many.deps);
+  check(`publicité : ${PROMO_BATCH} e-mails au plus par passage (au goutte-à-goutte)`, many.calls.length === PROMO_BATCH, many.calls.length);
+  await drain(many.deps);
+  check('publicité : le passage suivant envoie les autres', many.calls.length === 8, many.calls.length);
+
+  const mixed = wp([...[mk('u1'), mk('u1')], { id: 'o-first', kind: 'order_received', order_id: 'o1', user_id: 'u1', status: 'pending', attempts: 0, created_at: iso(NOW - 60_000), updated_at: '', sent_at: null }]);
+  await drain(mixed.deps);
+  check('publicité : l’e-mail de commande part avant la publicité, même arrivé plus tard', mixed.calls.length === 3 && /Commande reçue/.test(mixed.calls[0].body.subject), mixed.calls.map((x) => x.body.subject));
+
+  const tight = world({ cap: 1, extra: { store_settings: settings(true), email_outbox: [{ id: 'o-only', kind: 'order_received', order_id: 'o1', user_id: 'u1', status: 'pending', attempts: 0, created_at: iso(NOW - 60_000), updated_at: '', sent_at: null }, mk('u1')], products, email_prefs: [{ user_id: 'u1', token: T1, unsubscribed_at: null }] } });
+  tight.tables.profiles[0].notify_promotions = true;
+  await drain(tight.deps);
+  check('plafond du jour atteint par un e-mail de commande : la publicité attend demain', tight.calls.length === 1 && /Commande reçue/.test(tight.calls[0].body.subject), tight.calls.length);
 }
 console.error = quiet;
 console.log(process.exitCode ? '\nDES ECHECS' : `\nTOUT EST BON (${ok} contrôles)`);
