@@ -3703,6 +3703,33 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('client non administrateur : pas d\'interrupteur', (await c.page.getByTestId('wa-order-toggle').count()) === 0 && fs.patches.length === 0);
       await c.ctx.close();
     }
+    // e-mail de test (Brevo) : la carte de la page « Assistant marketing » (fausse fonction)
+    {
+      const fu = accountOf();
+      const answers = [{ ok: false, reason: 'no_key' }, { ok: false, reason: 'brevo', status: 400, detail: 'Sender not valid' }, { ok: true, to: 'ad***@example.com' }];
+      const v = await newVisitor(phone, { storage: { [SK]: fu.session }, fakeUser: fu, fakeStore: { waOrder: true } });
+      const calls = [];
+      await v.page.route('**/functions/v1/brevo-email', async (route) => {
+        const hdr = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+        if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: hdr });
+        calls.push(JSON.parse(route.request().postData() || '{}'));
+        return route.fulfill({ status: 200, headers: { ...hdr, 'content-type': 'application/json' }, body: JSON.stringify(answers[Math.min(calls.length - 1, answers.length - 1)]) });
+      });
+      await v.page.goto(`http://localhost:${port}/admin/assistant-marketing`, { waitUntil: 'load' });
+      await v.page.getByTestId('marketing-email-test').waitFor({ timeout: 25000 });
+      await v.page.getByTestId('marketing-email-test').click();
+      await v.page.getByText(/BREVO_API_KEY/).waitFor({ timeout: 8000 });
+      check('e-mail de test, cle Brevo absente : le message dit ou la mettre (BREVO_API_KEY)', true);
+      await v.page.getByTestId('marketing-email-test').click();
+      await v.page.getByText(/Brevo a refusé l’envoi : Sender not valid|Brevo a refusé l'envoi : Sender not valid/).waitFor({ timeout: 8000 });
+      check('e-mail de test, Brevo refuse : la raison donnee par Brevo est affichee', true);
+      await v.page.getByTestId('marketing-email-test').click();
+      await v.page.getByText(/E-mail de test envoyé à ad\*\*\*@example\.com/).waitFor({ timeout: 8000 });
+      check('e-mail de test envoye : message de succes avec l\'adresse masquee', true);
+      check('la fonction recoit seulement l\'action « test » (aucune adresse envoyee par l\'application)', calls.length === 3 && calls.every((c) => JSON.stringify(c) === '{"action":"test"}'), calls);
+      check('aucune erreur (e-mail de test)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
   }
 
   if (PARTS.includes('2')) {
