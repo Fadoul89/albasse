@@ -45,13 +45,13 @@ export const orderRef = (id: string) => id.replace(/-/g, "").slice(0, 8).toUpper
 export const firstName = (full: unknown) => String(full ?? "").trim().split(/\s+/)[0] || "";
 
 // Mise en page commune des e-mails de la boutique
-export function layout(title: string, bodyHtml: string): string {
+export function layout(title: string, bodyHtml: string, footerNote = "Cet e-mail concerne votre commande."): string {
   return `<!doctype html><html lang="fr"><body style="margin:0;background:#f4f4f7;font-family:Arial,Helvetica,sans-serif;color:#1d2433">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:14px;overflow:hidden">
 <tr><td style="background:#062266;padding:18px 24px;color:#e8c46c;font-size:20px;font-weight:bold">Albasse Shopping</td></tr>
 <tr><td style="padding:24px"><h1 style="margin:0 0 12px;font-size:20px;color:#062266">${escapeHtml(title)}</h1>${bodyHtml}</td></tr>
-<tr><td style="padding:16px 24px;background:#f4f4f7;font-size:12px;color:#6b7280">Albasse Shopping, N'Djamena, Tchad · albasseshopping.com<br>Cet e-mail concerne votre commande.</td></tr>
+<tr><td style="padding:16px 24px;background:#f4f4f7;font-size:12px;color:#6b7280">Albasse Shopping, N'Djamena, Tchad · albasseshopping.com<br>${escapeHtml(footerNote)}</td></tr>
 </table></td></tr></table></body></html>`;
 }
 
@@ -122,4 +122,30 @@ export function orderDeliveredEmail(order: OrderRow, fullName: unknown, loyalty:
       button(`${SITE}/mes-commandes`, "Voir mes commandes")
   );
   return { subject: `Votre commande n° ${ref} est livrée 🎉`, html };
+}
+
+// E-mail de bienvenue, envoyé une seule fois après la création du compte (texte du patron ; la dernière phrase tient compte du compte déjà créé).
+export function welcomeEmail(fullName: unknown): { subject: string; html: string } {
+  const name = firstName(fullName);
+  const why = [
+    "Des articles pour tous les goûts et tous les budgets",
+    "Une expérience d’achat simple et pratique",
+    "Livraison partout au Tchad 🇹🇩",
+    "Un service client à votre écoute",
+  ]
+    .map((l) => `<tr><td style="padding:3px 0;font-size:15px;line-height:22px">✅ ${escapeHtml(l)}</td></tr>`)
+    .join("");
+  const html = layout(
+    "Bienvenue sur Albasse Shopping ! 🎉",
+    para(`Bonjour${name ? ` ${escapeHtml(name)}` : ""} et bienvenue ! ❤️`) +
+      para(`Nous sommes ravis de vous accueillir sur 🌐 <b>www.albasseshopping.com</b>, votre plateforme de vente en ligne 100 % tchadienne 🇹🇩.`) +
+      para("Découvrez une large sélection de vêtements, chaussures, parfums, montres et accessoires pour tous les styles et tous les budgets.") +
+      para("<b>✨ Pourquoi choisir Albasse Shopping ?</b>") +
+      `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 12px">${why}</table>` +
+      para("🤝 Merci de nous faire confiance et de rejoindre notre grande famille !") +
+      para("🛒 Votre compte est créé : profitez pleinement de votre expérience shopping.") +
+      button(SITE, "Découvrir nos articles"),
+    "Vous recevez cet e-mail parce que vous venez de créer un compte sur albasseshopping.com."
+  );
+  return { subject: "Bienvenue chez Albasse Shopping ! 🎉", html };
 }

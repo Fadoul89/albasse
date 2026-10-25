@@ -175,5 +175,37 @@ console.error = () => {}; // les refus de Brevo sont voulus dans ces essais
   await drain(s.deps);
   check('une ligne « en cours » depuis 20 minutes (panne) est reprise et envoyée', s.calls.length === 1 && row(s.tables, 'x2').status === 'sent');
 }
+// e-mail de bienvenue : pas de commande, profil du client, attend que le nom soit enregistré
+{
+  const mk = (id: string, userId: string, ageMs: number) => ({ id, kind: 'welcome', order_id: null, user_id: userId, status: 'pending', attempts: 0, created_at: iso(NOW - ageMs), updated_at: '', sent_at: null });
+  const w = world({ extra: { email_outbox: [mk('w1', 'u1', 5 * 60_000)] } });
+  const r = await drain(w.deps);
+  const c = w.calls[0];
+  check('bienvenue : un e-mail part vers l’adresse du client, avec son prénom et le texte du patron', w.calls.length === 1 && c.body.to[0].email === 'ali@gmail.com' && /Bonjour Ali et bienvenue/.test(c.body.htmlContent) && /Livraison partout au Tchad/.test(c.body.htmlContent) && /rejoindre notre grande famille/.test(c.body.htmlContent) && /Bienvenue chez Albasse Shopping/.test(c.body.subject), c);
+  check('bienvenue : le client a déjà son compte, donc plus de « Créez votre compte »', !/Créez votre compte/.test(c.body.htmlContent) && /Votre compte est créé/.test(c.body.htmlContent));
+  check('bienvenue : le pied de page ne parle pas de commande', !/concerne votre commande/.test(c.body.htmlContent) && /créer un compte/.test(c.body.htmlContent));
+  check('bienvenue : la ligne passe à « sent »', row(w.tables, 'w1').status === 'sent' && (r as any).sent === 1, row(w.tables, 'w1'));
+
+  const fresh = world({ extra: { email_outbox: [mk('w2', 'u1', 10_000)] } });
+  await drain(fresh.deps);
+  check('bienvenue : un compte créé il y a 10 secondes attend (le nom n’est pas encore enregistré)', fresh.calls.length === 0 && row(fresh.tables, 'w2').status === 'pending' && row(fresh.tables, 'w2').attempts === 0);
+
+  const fake = world({ extra: { email_outbox: [mk('w3', 'u2', 5 * 60_000), mk('w4', 'u9', 5 * 60_000)] } });
+  const rf = await drain(fake.deps);
+  check('bienvenue : jamais vers une fausse adresse (compte par téléphone) ni un compte introuvable', fake.calls.length === 0 && row(fake.tables, 'w3').status === 'skipped' && row(fake.tables, 'w4').status === 'skipped' && (rf as any).skipped === 2, rf);
+
+  const banned = world({ extra: { email_outbox: [mk('w5', 'u1', 5 * 60_000)] } });
+  banned.tables.profiles[0].banned = true;
+  await drain(banned.deps);
+  check('bienvenue : jamais vers un compte bloqué', banned.calls.length === 0 && row(banned.tables, 'w5').status === 'skipped');
+
+  const off = world({ on: false, extra: { email_outbox: [mk('w6', 'u1', 5 * 60_000)] } });
+  await drain(off.deps);
+  check('bienvenue : interrupteur éteint, rien ne part', off.calls.length === 0 && row(off.tables, 'w6').status === 'skipped');
+
+  const refus = world({ fetchStatus: [401], extra: { email_outbox: [mk('w7', 'u1', 5 * 60_000)] } });
+  await drain(refus.deps);
+  check('bienvenue : refus de Brevo (401) = « failed » avec la raison', row(refus.tables, 'w7').status === 'failed' && /401/.test(row(refus.tables, 'w7').error));
+}
 console.error = quiet;
 console.log(process.exitCode ? '\nDES ECHECS' : `\nTOUT EST BON (${ok} contrôles)`);

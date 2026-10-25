@@ -1,6 +1,6 @@
 // Envoi automatique des e-mails de commande : lit la file (table email_outbox) et envoie par Brevo.
 // Écrit sans dépendance à Deno (service, variables, fetch et horloge sont passés en paramètres) : testé dans tests/email/drain.test.ts.
-import { orderDeliveredEmail, orderReceivedEmail, realEmail, type OrderRow } from "./orderEmails.ts";
+import { orderDeliveredEmail, orderReceivedEmail, realEmail, welcomeEmail, type OrderRow } from "./orderEmails.ts";
 
 export interface Deps {
   // deno-lint-ignore no-explicit-any
@@ -14,6 +14,7 @@ export const BATCH = 20; // e-mails par passage (un passage par minute)
 export const MAX_ATTEMPTS = 3;
 const NDJAMENA_MS = 3600_000; // UTC+1, sans heure d'été
 const STUCK_MS = 600_000; // un message « en cours » depuis plus de 10 minutes est repris
+const WELCOME_DELAY_MS = 45_000; // l'e-mail de bienvenue attend que le nom saisi à l'inscription soit enregistré
 
 export async function sendBrevo(deps: Deps, key: string, mail: { to: string; name?: string; subject: string; html: string }) {
   const sender = { email: deps.env("EMAIL_SENDER") || "contact@albasseshopping.com", name: deps.env("EMAIL_SENDER_NAME") || "Albasse Shopping" };
@@ -62,11 +63,12 @@ export async function drain(deps: Deps) {
   const room = cap - (sentToday ?? 0);
   if (room <= 0) return { ok: true, sent: 0, capped: true };
 
-  const { data: rows } = await service.from("email_outbox").select("id,kind,order_id,user_id,attempts").eq("status", "pending").order("created_at").limit(Math.min(BATCH, room));
+  const { data: rows } = await service.from("email_outbox").select("id,kind,order_id,user_id,attempts,created_at").eq("status", "pending").order("created_at").limit(Math.min(BATCH, room));
   let sent = 0;
   let failed = 0;
   let skipped = 0;
   for (const row of rows ?? []) {
+    if (row.kind === "welcome" && deps.now() - Date.parse(row.created_at) < WELCOME_DELAY_MS) continue;
     // on « prend » la ligne : un autre passage ne l'enverra pas en double
     const { data: claimed } = await service
       .from("email_outbox")
@@ -80,6 +82,30 @@ export async function drain(deps: Deps) {
       skipped++;
       await service.from("email_outbox").update({ status: "skipped", error: why, updated_at: iso(deps.now()) }).eq("id", row.id);
     };
+    const send = async (to: string, fullName: unknown, mail: { subject: string; html: string }) => {
+      const res = await sendBrevo(deps, key, { to, name: String(fullName ?? "").trim() || undefined, subject: mail.subject, html: mail.html });
+      if (res.ok) {
+        sent++;
+        await service.from("email_outbox").update({ status: "sent", sent_at: iso(deps.now()), error: null, updated_at: iso(deps.now()) }).eq("id", row.id);
+      } else {
+        failed++;
+        // refus définitif de Brevo (clé, expéditeur…) ou 3 essais : on arrête ; sinon on réessaie à la minute suivante
+        const final = (row.attempts ?? 0) + 1 >= MAX_ATTEMPTS || (res.status >= 400 && res.status < 500 && res.status !== 429);
+        await service.from("email_outbox").update({ status: final ? "failed" : "pending", error: `${res.status} ${res.detail}`.slice(0, 300), updated_at: iso(deps.now()) }).eq("id", row.id);
+      }
+    };
+
+    // bienvenue : pas de commande, on lit le profil du client
+    if (row.kind === "welcome") {
+      const { data: client } = await service.from("profiles").select("full_name,email,banned").eq("id", row.user_id).maybeSingle();
+      const dest = realEmail(client?.email);
+      if (!client || client.banned || !dest) {
+        await skip("compte absent, bloqué ou sans adresse e-mail réelle");
+        continue;
+      }
+      await send(dest, client.full_name, welcomeEmail(client.full_name));
+      continue;
+    }
 
     const { data: order } = await service
       .from("orders")
@@ -108,16 +134,7 @@ export async function drain(deps: Deps) {
       mail = orderReceivedEmail(order as OrderRow, profile?.full_name);
     }
 
-    const res = await sendBrevo(deps, key, { to, name: String(profile?.full_name ?? "").trim() || undefined, subject: mail.subject, html: mail.html });
-    if (res.ok) {
-      sent++;
-      await service.from("email_outbox").update({ status: "sent", sent_at: iso(deps.now()), error: null, updated_at: iso(deps.now()) }).eq("id", row.id);
-    } else {
-      failed++;
-      // refus définitif de Brevo (clé, expéditeur…) ou 3 essais : on arrête ; sinon on réessaie à la minute suivante
-      const final = (row.attempts ?? 0) + 1 >= MAX_ATTEMPTS || (res.status >= 400 && res.status < 500 && res.status !== 429);
-      await service.from("email_outbox").update({ status: final ? "failed" : "pending", error: `${res.status} ${res.detail}`.slice(0, 300), updated_at: iso(deps.now()) }).eq("id", row.id);
-    }
+    await send(to, profile?.full_name, mail);
   }
   return { ok: true, sent, failed, skipped };
 }

@@ -50,11 +50,11 @@ const SETTINGS: Record<'whatsappOrder' | 'accountRequired' | 'orderEmails', Sett
     missingValue: false,
     script: 'add-order-emails.sql',
     testID: 'order-emails',
-    title: '📧 E-mails automatiques de commande',
-    onText: '🟢 Activé : « commande reçue » et « commande livrée » partent tout seuls',
+    title: '📧 E-mails automatiques aux clients',
+    onText: '🟢 Activé : « bienvenue », « commande reçue » et « commande livrée » partent tout seuls',
     offText: '⚪ Désactivé : aucun e-mail n’est envoyé aux clients',
-    onToast: { title: '📧 E-mails activés', message: 'Les clients qui ont une vraie adresse e-mail reçoivent la confirmation et l’avis de livraison.' },
-    offToast: { title: '📪 E-mails coupés', message: 'Plus aucun e-mail de commande n’est envoyé.' },
+    onToast: { title: '📧 E-mails activés', message: 'Les clients qui ont une vraie adresse e-mail reçoivent le mot de bienvenue, la confirmation et l’avis de livraison.' },
+    offToast: { title: '📪 E-mails coupés', message: 'Plus aucun e-mail n’est envoyé aux clients.' },
   },
 };
 

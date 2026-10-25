@@ -6,7 +6,6 @@ import { navigationRef } from './navigationRef';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { RootStackParamList } from './types';
 import { colors } from '../theme';
-import { SocialProofTicker } from '../components/SocialProofTicker';
 import { Assistant } from '../components/Assistant';
 import { AdminOrderAlert } from '../components/AdminOrderAlert';
 import { AppDownloadBanner } from '../components/AppDownloadBanner';
@@ -226,7 +225,6 @@ export function RootNavigator() {
         {!signUpFirst && (
           <SafeAreaView edges={['top']} style={styles.tickerSafeArea}>
             <AppDownloadBanner />
-            <SocialProofTicker />
           </SafeAreaView>
         )}
         <View style={styles.stackWrap}>

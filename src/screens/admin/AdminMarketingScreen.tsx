@@ -164,8 +164,8 @@ export function AdminMarketingScreen() {
         <View style={{ marginTop: spacing.md }}>
           <StoreSettingToggle setting="orderEmails" />
           <Text style={styles.mailText}>
-            « Commande reçue » part à la commande, « commande livrée » quand vous passez la commande à « livrée ». Seuls les clients qui ont une vraie adresse
-            e-mail en reçoivent, 150 e-mails par jour au plus.
+            « Bienvenue » part quand un client crée son compte, « commande reçue » à la commande, « commande livrée » quand vous passez la commande à
+            « livrée ». Seuls les clients qui ont une vraie adresse e-mail en reçoivent, 150 e-mails par jour au plus.
           </Text>
         </View>
       </ScrollView>

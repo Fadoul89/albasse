@@ -85,5 +85,15 @@ check('5 livrées : encore 1 commande (singulier)', E.loyaltyLine({ delivered: 5
 }
 check('mise en page : bandeau de la boutique et pied de page', /Albasse Shopping<\/td>/.test(E.layout('Titre', '<p>x</p>')) && /Cet e-mail concerne votre commande/.test(E.layout('Titre', '<p>x</p>')));
 
+// bienvenue
+{
+  const m = E.welcomeEmail('Ali Mahamat');
+  check('bienvenue : objet et titre', m.subject === 'Bienvenue chez Albasse Shopping ! 🎉' && /Bienvenue sur Albasse Shopping ! 🎉/.test(m.html), m.subject);
+  check('bienvenue : prénom, plateforme 100 % tchadienne, vêtements, chaussures, parfums, montres, accessoires', /Bonjour Ali et bienvenue/.test(m.html) && /100 % tchadienne/.test(m.html) && /vêtements, chaussures, parfums, montres et accessoires/.test(m.html));
+  check('bienvenue : les 4 raisons de choisir Albasse', ['tous les goûts et tous les budgets', 'simple et pratique', 'Livraison partout au Tchad', 'service client à votre écoute'].every((t) => m.html.includes(t)));
+  check('bienvenue : merci, compte créé, bouton vers le site, pied de page propre', /grande famille/.test(m.html) && /Votre compte est créé/.test(m.html) && /href="https:\/\/www\.albasseshopping\.com"/.test(m.html) && !/Créez votre compte/.test(m.html) && !/concerne votre commande/.test(m.html));
+  check('bienvenue sans nom : « Bonjour et bienvenue ! », texte piégé échappé', /Bonjour et bienvenue/.test(E.welcomeEmail('').html) && !/<img src=x/.test(E.welcomeEmail('<img src=x onerror=alert(1)>').html));
+}
+
 assert.ok(true);
 console.log(process.exitCode ? '\nDES ECHECS' : `\nTOUT EST BON (${ok} contrôles)`);
