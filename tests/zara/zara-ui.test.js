@@ -265,6 +265,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
             if (fakeStore) {
               if (fakeStore.waOrder === undefined) delete r.whatsapp_order_enabled;
               else if (wants('whatsapp_order_enabled')) r.whatsapp_order_enabled = fakeStore.waOrder;
+              if (fakeStore.orderEmails !== undefined && wants('order_emails_enabled')) r.order_emails_enabled = fakeStore.orderEmails;
             }
             if (fs.accountRequired === 'missing') delete r.account_required;
             else if (wants('account_required')) r.account_required = fs.accountRequired === true;
@@ -290,6 +291,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
           if (missing) return json(route, { code: 'PGRST204', message: `Could not find the '${missing}' column of 'store_settings' in the schema cache` }, 400);
           if ('whatsapp_order_enabled' in body) fakeStore.waOrder = body.whatsapp_order_enabled;
           if ('account_required' in body) fakeStore.accountRequired = body.account_required;
+          if ('order_emails_enabled' in body) fakeStore.orderEmails = body.order_emails_enabled;
           return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } });
         }
         // les promotions publiees en vrai sur le site (fenetre « offre du jour ») ne doivent pas couvrir les pages pendant les tests
@@ -3707,7 +3709,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     {
       const fu = accountOf();
       const answers = [{ ok: false, reason: 'no_key' }, { ok: false, reason: 'brevo', status: 400, detail: 'Sender not valid' }, { ok: true, to: 'ad***@example.com' }];
-      const v = await newVisitor(phone, { storage: { [SK]: fu.session }, fakeUser: fu, fakeStore: { waOrder: true } });
+      const fs = { waOrder: true };
+      const v = await newVisitor(phone, { storage: { [SK]: fu.session }, fakeUser: fu, fakeStore: fs });
       const calls = [];
       await v.page.route('**/functions/v1/brevo-email', async (route) => {
         const hdr = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
@@ -3727,6 +3730,17 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.page.getByText(/E-mail de test envoyé à ad\*\*\*@example\.com/).waitFor({ timeout: 8000 });
       check('e-mail de test envoye : message de succes avec l\'adresse masquee', true);
       check('la fonction recoit seulement l\'action « test » (aucune adresse envoyee par l\'application)', calls.length === 3 && calls.every((c) => JSON.stringify(c) === '{"action":"test"}'), calls);
+      // interrupteur des e-mails automatiques de commande : éteint au départ, la base reçoit order_emails_enabled
+      await v.page.getByTestId('order-emails-toggle').waitFor({ timeout: 15000 });
+      check('e-mails de commande : éteints au départ (« Désactivé »)', /Désactivé/.test(await v.page.getByTestId('order-emails-status').innerText()), await v.page.getByTestId('order-emails-status').innerText());
+      await v.page.getByTestId('order-emails-switch').click();
+      await v.page.getByText('E-mails activés').waitFor({ timeout: 8000 });
+      check('e-mails de commande : on les allume, la base reçoit order_emails_enabled = true', (fs.patches || []).some((b) => b.order_emails_enabled === true), fs.patches);
+      await v.page.waitForFunction(() => /Activé/.test(document.querySelector('[data-testid="order-emails-status"]')?.textContent || ''), null, { timeout: 8000 });
+      check('e-mails de commande : « Activé » affiché après relecture', true);
+      await v.page.getByTestId('order-emails-switch').click();
+      await v.page.getByText('E-mails coupés').waitFor({ timeout: 8000 });
+      check('e-mails de commande : on les éteint, la base reçoit order_emails_enabled = false', (fs.patches || []).some((b) => b.order_emails_enabled === false), fs.patches);
       check('aucune erreur (e-mail de test)', v.errs.length === 0, v.errs);
       await v.ctx.close();
     }

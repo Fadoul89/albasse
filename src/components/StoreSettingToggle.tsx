@@ -1,5 +1,6 @@
 // Admin : un réglage du site en un toucher (colonne booléenne de store_settings), enregistré tout de suite.
-// Le bouton « Commander sur WhatsApp » des fiches produit (page Produits) et le compte obligatoire à l'entrée (page Clients).
+// Le bouton « Commander sur WhatsApp » des fiches produit (page Produits), le compte obligatoire à l'entrée (page Clients) et les e-mails
+// automatiques de commande (page Assistant marketing).
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Switch } from 'react-native';
 import { useStoreSettings } from '../hooks/useStoreSettings';
@@ -9,7 +10,7 @@ import { colors, fonts, radius, spacing } from '../theme';
 import type { StoreSettings } from '../types';
 
 interface Setting {
-  column: 'whatsapp_order_enabled' | 'account_required';
+  column: 'whatsapp_order_enabled' | 'account_required' | 'order_emails_enabled';
   // valeur quand la colonne n'existe pas encore (script SQL pas lancé)
   missingValue: boolean;
   script: string;
@@ -21,7 +22,7 @@ interface Setting {
   offToast: { title: string; message: string };
 }
 
-const SETTINGS: Record<'whatsappOrder' | 'accountRequired', Setting> = {
+const SETTINGS: Record<'whatsappOrder' | 'accountRequired' | 'orderEmails', Setting> = {
   whatsappOrder: {
     column: 'whatsapp_order_enabled',
     missingValue: true,
@@ -43,6 +44,17 @@ const SETTINGS: Record<'whatsappOrder' | 'accountRequired', Setting> = {
     offText: '⚪ Désactivé : tout le monde voit le site sans compte',
     onToast: { title: '🔐 Compte obligatoire', message: 'Les nouveaux visiteurs doivent créer un compte pour entrer.' },
     offToast: { title: '🔓 Site ouvert', message: 'Tout le monde peut de nouveau voir le site sans compte.' },
+  },
+  orderEmails: {
+    column: 'order_emails_enabled',
+    missingValue: false,
+    script: 'add-order-emails.sql',
+    testID: 'order-emails',
+    title: '📧 E-mails automatiques de commande',
+    onText: '🟢 Activé : « commande reçue » et « commande livrée » partent tout seuls',
+    offText: '⚪ Désactivé : aucun e-mail n’est envoyé aux clients',
+    onToast: { title: '📧 E-mails activés', message: 'Les clients qui ont une vraie adresse e-mail reçoivent la confirmation et l’avis de livraison.' },
+    offToast: { title: '📪 E-mails coupés', message: 'Plus aucun e-mail de commande n’est envoyé.' },
   },
 };
 

@@ -4,6 +4,7 @@ import { useAuthStore } from '../../store/authStore';
 import { colors, fonts, radius, spacing } from '../../theme';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { supabase } from '../../lib/supabase';
+import { StoreSettingToggle } from '../../components/StoreSettingToggle';
 
 // Assistant marketing (admin) : écrit des publicités Facebook, TikTok, WhatsApp et Google à partir d'un article.
 const CHANNELS = [
@@ -158,6 +159,14 @@ export function AdminMarketingScreen() {
               {mailResult.text}
             </Text>
           ) : null}
+        </View>
+
+        <View style={{ marginTop: spacing.md }}>
+          <StoreSettingToggle setting="orderEmails" />
+          <Text style={styles.mailText}>
+            « Commande reçue » part à la commande, « commande livrée » quand vous passez la commande à « livrée ». Seuls les clients qui ont une vraie adresse
+            e-mail en reçoivent, 150 e-mails par jour au plus.
+          </Text>
         </View>
       </ScrollView>
     </View>
