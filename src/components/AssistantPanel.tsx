@@ -347,8 +347,10 @@ export function AssistantPanel() {
       ? t.placeholder.phone
       : step === 'co_address'
       ? t.placeholder.address
-      : step === 'cb_day'
+      : step === 'cb_day' || step === 'co_day'
       ? t.placeholder.day
+      : step === 'co_time'
+      ? t.placeholder.time
       : t.placeholder.message;
   const lastIndex = messages.length - 1;
   const rtl = lang === 'ar';

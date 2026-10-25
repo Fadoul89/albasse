@@ -1,11 +1,14 @@
 # Livraison programmée (clients de N'Djamena)
 
-Pour un client qui commande à **N'Djamena**, la page de commande propose maintenant deux choix :
+Pour un client qui commande à **N'Djamena**, la page de commande (et Zara dans le chat) propose de choisir un **jour** et une **heure** de rendez-vous. Zara écrit à l'administrateur sur **Telegram 10 minutes avant** le rendez-vous.
 
-- **Livraison normale** : comme avant, rien ne change.
-- **Livraison programmée** : le client choisit un **jour** et une **heure** de rendez-vous. Zara écrit à l'administrateur sur **Telegram 10 minutes avant** le rendez-vous.
+- La **livraison normale n'est pas affichée dans la liste** : le client voit seulement « Livraison programmée ».
+- S'il ne choisit ni jour ni heure (ou touche « Passer » dans le chat), la commande est prise comme une **livraison normale**, comme avant.
+- Un jour sans heure est refusé avec un message (il faut les deux, ou aucun). Toucher une 2ᵉ fois le jour choisi annule le rendez-vous.
+- Dans les autres villes, rien de tout cela n'apparaît.
 
-Dans les autres villes, le choix n'apparaît pas (livraison normale).
+### Dans le chat de Zara
+Après la ville (N'Djamena), Zara demande : « Voulez-vous choisir le jour et l'heure de votre livraison ? » avec les boutons des jours, « Passer » et « Annuler la commande ». Puis les heures (8h30 à 15h30) et « Autre jour ». Le client peut aussi écrire « demain », « jeudi », « 31/10 », « 14h30 », « midi ». Le récapitulatif et la confirmation rappellent le rendez-vous ; « Modifier » propose « 📅 Rendez-vous ». Tout existe en français et en arabe.
 
 ## Les règles (heure de N'Djamena)
 
@@ -40,12 +43,11 @@ Si le site est publié avant le script, un client qui choisit la livraison progr
 ## Ce qui n'est pas inclus
 
 - L'e-mail de confirmation au client ne mentionne pas encore le rendez-vous.
-- Les commandes passées par Zara dans le chat restent en livraison normale.
 - Le client ne peut pas changer son rendez-vous lui-même (l'administrateur peut le déplacer).
 - Le rappel va aux administrateurs qui ont lié Telegram (Compte › Lier Telegram).
 
 ## Tests
 
-- Jours, heures et fuseau : `TZ=America/Los_Angeles node --import ./tests/zara/register.mjs tests/email/scheduled-delivery.test.ts` (47 contrôles, le résultat est le même sous tous les fuseaux).
+- Jours, heures et fuseau : `TZ=America/Los_Angeles node --import ./tests/zara/register.mjs tests/email/scheduled-delivery.test.ts` (65 contrôles : jours, heures, arabe, texte écrit par le client ; le résultat est le même sous tous les fuseaux).
 - Script SQL sur un Postgres local jetable : `sh tests/sql/run-scheduled-delivery.sh` (78 contrôles : garde-fou, rappel, doublons, Telegram absent, règle des 48 h, relance du script).
-- Navigateur : `PARTS=C node tests/zara/zara-ui.test.js dist 4333` (choix à N'Djamena seulement, enregistrement, confirmation, Mes commandes, administration, script SQL pas encore lancé).
+- Navigateur : `PARTS=C node tests/zara/zara-ui.test.js dist 4333` (page de commande : choix à N'Djamena seulement, enregistrement, confirmation, Mes commandes, administration, script SQL pas encore lancé), `PARTS=O` (chat de Zara : jour, heure, « Passer », texte écrit, modification, ville changée, arabe).

@@ -18,7 +18,7 @@ import { GiftWrapOption } from '../components/GiftWrapOption';
 import { ScheduledDeliveryPicker } from '../components/ScheduledDeliveryPicker';
 import { formatSlot, slotProblem, slotToIso } from '../lib/scheduledDelivery';
 import { trackTikTokEvent } from '../lib/tiktokPixel';
-import type { PaymentMethod, City, DeliveryType } from '../types';
+import type { PaymentMethod, City } from '../types';
 import { isHomeCity } from '../lib/deliveryRules';
 import { fetchLoyaltyStatus, loyaltyDiscount, ordersBeforeDiscount, type LoyaltyStatus } from '../lib/loyaltyDiscount';
 import { DELIVERY_HOURS, GIFT_WRAP_FEE, HOME_CITY, ORDER_VALIDITY_HOURS } from '../constants/shopRules';
@@ -83,18 +83,17 @@ export function CheckoutScreen() {
     if (!cashOnDeliveryAllowed && method === 'cash_on_delivery') setMethod('airtel_money');
   }, [cashOnDeliveryAllowed, method]);
 
-  // Livraison programmée (rendez-vous à un jour et une heure) : seulement pour les clients de N'Djamena. Ailleurs : livraison normale.
-  const [deliveryType, setDeliveryType] = useState<DeliveryType>('standard');
+  // Livraison programmée : à N'Djamena le client peut choisir un jour et une heure de rendez-vous. La livraison normale n'est pas affichée dans la liste :
+  // sans jour ni heure choisis, la commande est prise comme une livraison normale. Dans les autres villes : rien ne change.
   const [slotDay, setSlotDay] = useState<string | null>(null);
   const [slotTime, setSlotTime] = useState<string | null>(null);
   const scheduledAllowed = isHomeCity(city);
   useEffect(() => {
-    if (!scheduledAllowed && deliveryType === 'scheduled') {
-      setDeliveryType('standard');
+    if (!scheduledAllowed) {
       setSlotDay(null);
       setSlotTime(null);
     }
-  }, [scheduledAllowed, deliveryType]);
+  }, [scheduledAllowed]);
 
   const paymentInfo =
     method === 'airtel_money'
@@ -128,15 +127,16 @@ export function CheckoutScreen() {
     }
 
     // rendez-vous de la livraison programmée : revérifié au moment de confirmer (l'heure a pu passer)
-    const scheduled = deliveryType === 'scheduled' && scheduledAllowed;
-    if (scheduled) {
+    // un jour sans heure (ou l'inverse) est refusé ; ni jour ni heure : livraison normale
+    const wantsSlot = scheduledAllowed && (!!slotDay || !!slotTime);
+    if (wantsSlot) {
       const problem = slotProblem(slotDay, slotTime, Date.now());
       if (problem) {
         showToast(problem, { title: 'Livraison programmée', type: 'error' });
         return;
       }
     }
-    const scheduledFor = scheduled && slotDay && slotTime ? slotToIso(slotDay, slotTime) : null;
+    const scheduledFor = wantsSlot && slotDay && slotTime ? slotToIso(slotDay, slotTime) : null;
 
     setSubmitting(true);
     try {
@@ -286,14 +286,13 @@ export function CheckoutScreen() {
 
         {scheduledAllowed ? (
           <>
-            <Text style={styles.sectionTitle}>Type de livraison</Text>
+            <Text style={styles.sectionTitle}>Livraison programmée</Text>
             <ScheduledDeliveryPicker
-              type={deliveryType}
               day={slotDay}
               time={slotTime}
-              onType={(t) => setDeliveryType(t)}
               onDay={(d) => {
-                setSlotDay(d);
+                // toucher une 2e fois le jour choisi annule le rendez-vous
+                setSlotDay(d === slotDay ? null : d);
                 setSlotTime(null);
               }}
               onTime={setSlotTime}

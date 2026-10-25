@@ -1,7 +1,7 @@
 // Livraison programmée (src/lib/scheduledDelivery.ts) : jours et créneaux proposés, contrôle du rendez-vous, textes. Tout se calcule à l'heure de
 // N'Djamena (UTC+1) quel que soit le fuseau du téléphone : à lancer sous plusieurs fuseaux, le résultat doit être le même.
 // Lancer : TZ=America/Los_Angeles node --import ./tests/zara/register.mjs tests/email/scheduled-delivery.test.ts
-import { allSlots, dayKeyOf, dayOptions, flagDeadlineIso, formatSlot, ndjamenaParts, slotInstant, slotProblem, slotToIso, slotsOfDay, timeLabel, waitsForAppointment } from '../../src/lib/scheduledDelivery.ts';
+import { allSlots, dayFromText, dayKeyOf, dayOptions, flagDeadlineIso, formatSlot, ndjamenaParts, slotInstant, slotProblem, slotToIso, slotsOfDay, timeFromText, timeLabel, waitsForAppointment } from '../../src/lib/scheduledDelivery.ts';
 
 let ok = 0;
 const check = (label: string, cond: unknown, detail?: unknown) => {
@@ -79,6 +79,34 @@ check('plus tard : « samedi 31/10 à 14h30 »', formatSlot('2026-10-31T13:30:00
 check('heure en UTC mais jour de N’Djamena : 23:30 UTC = 00h30 le lendemain', formatSlot('2026-10-25T23:30:00.000Z', NOW) === 'demain à 0h30', formatSlot('2026-10-25T23:30:00.000Z', NOW));
 check('texte illisible ou vide : rien', formatSlot('pas une date', NOW) === '' && formatSlot(null, NOW) === '' && formatSlot(undefined, NOW) === '');
 check('aller-retour : ce qu’on enregistre se relit pareil', formatSlot(slotToIso('2026-10-31', '10:30'), NOW) === 'samedi 31/10 à 10h30');
+
+// --- en arabe (chat de Zara) ---
+const daysAr = dayOptions(NOW, 'ar');
+check('arabe : « اليوم », « غداً », puis jour + date', daysAr[0].label === 'اليوم' && daysAr[1].label === 'غداً' && daysAr[2].label === 'الثلاثاء 27/10' && daysAr.length === 8, daysAr.map((d) => d.label));
+check('arabe : les mêmes jours que le français (mêmes clés)', JSON.stringify(daysAr.map((d) => d.key)) === JSON.stringify(days.map((d) => d.key)));
+check('arabe : heures « 14:30 » et « 8:30 »', timeLabel('14:30', 'ar') === '14:30' && timeLabel('08:30', 'ar') === '8:30');
+check('arabe : « اليوم الساعة 14:30 »', formatSlot('2026-10-25T13:30:00.000Z', NOW, 'ar') === 'اليوم الساعة 14:30', formatSlot('2026-10-25T13:30:00.000Z', NOW, 'ar'));
+check('arabe : « غداً الساعة 9:00 »', formatSlot('2026-10-26T08:00:00.000Z', NOW, 'ar') === 'غداً الساعة 9:00', formatSlot('2026-10-26T08:00:00.000Z', NOW, 'ar'));
+check('arabe : « السبت 31/10 الساعة 14:30 »', formatSlot('2026-10-31T13:30:00.000Z', NOW, 'ar') === 'السبت 31/10 الساعة 14:30', formatSlot('2026-10-31T13:30:00.000Z', NOW, 'ar'));
+check('arabe : texte illisible : rien', formatSlot('x', NOW, 'ar') === '');
+
+// --- le jour écrit par le client ---
+const D = (t: string) => dayFromText(t, NOW);
+check('« demain » = 26/10 ; « aujourd’hui » (apostrophe courbe ou droite) = 25/10', D('demain') === '2026-10-26' && D('aujourd’hui') === '2026-10-25' && D("Aujourd'hui") === '2026-10-25', [D('demain'), D('aujourd’hui')]);
+check('jours de la semaine : jeudi = 29/10, mardi = 27/10, « mar » = mardi, majuscules acceptées', D('jeudi') === '2026-10-29' && D('JEUDI') === '2026-10-29' && D('mardi') === '2026-10-27' && D('mar') === '2026-10-27' && D('je veux jeudi svp') === '2026-10-29');
+check('« dimanche » = aujourd’hui (dimanche 25) tant qu’il reste des heures', D('dimanche') === '2026-10-25');
+check('une date : 31/10, 1/11, « samedi 31/10 »', D('31/10') === '2026-10-31' && D('1/11') === '2026-11-01' && D('samedi 31/10') === '2026-10-31');
+check('un jour qui n’est pas proposé (15/11) ou rien de clair : null', D('15/11') === null && D('n’importe quoi') === null && D('') === null && D('29/02') === null);
+check('arabe : غدا / غداً (avec voyelle), اليوم, الخميس, الاثنين, الأربعاء', D('غدا') === '2026-10-26' && D('غداً') === '2026-10-26' && D('اليوم') === '2026-10-25' && D('الخميس') === '2026-10-29' && D('الاثنين') === '2026-10-26' && D('الأربعاء') === '2026-10-28');
+check('arabe : date écrite avec des chiffres arabes (٣١/١٠)', D('٣١/١٠') === '2026-10-31');
+const nowLate = Date.UTC(2026, 9, 25, 13, 30); // 14h30 : plus de rendez-vous aujourd'hui
+check('à 14h30, « aujourd’hui » n’est plus proposé : null ; « dimanche » = le dimanche suivant (1/11)', dayFromText('aujourd’hui', nowLate) === null && dayFromText('dimanche', nowLate) === '2026-11-01', [dayFromText('aujourd’hui', nowLate), dayFromText('dimanche', nowLate)]);
+
+// --- l'heure écrite par le client ---
+const T = (t: string) => timeFromText(t);
+check('14h30, 14:30, 14h, à 10h, 9h30, 10, midi', T('14h30') === '14:30' && T('14:30') === '14:30' && T('14h') === '14:00' && T('à 10h') === '10:00' && T('9h30') === '09:30' && T('10') === '10:00' && T('midi') === '12:00' && T('Midi') === '12:00');
+check('pas un créneau : 14h20, 16h, 8h, 2h, 25h, rien', T('14h20') === null && T('16h') === null && T('8h') === null && T('2h') === null && T('25h') === null && T('bonjour') === null && T('') === null);
+check('arabe : ١٤:٣٠, 10 ساعة, الظهر', T('١٤:٣٠') === '14:30' && T('10 ساعة') === '10:00' && T('الظهر') === '12:00');
 
 // --- délai de 48 h avant le signalement « fausse commande » ---
 const created = '2026-10-25T09:00:00.000Z';

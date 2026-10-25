@@ -3,21 +3,18 @@ import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { colors, fonts, radius, spacing } from '../theme';
 import { SCHEDULED_DELIVERY } from '../constants/shopRules';
 import { dayOptions, formatSlot, slotToIso, slotsOfDay, timeLabel } from '../lib/scheduledDelivery';
-import type { DeliveryType } from '../types';
 
 interface Props {
-  type: DeliveryType;
   day: string | null; // « 2026-10-31 »
   time: string | null; // « 14:30 »
-  onType: (type: DeliveryType) => void;
   onDay: (day: string) => void;
   onTime: (time: string) => void;
   now?: number;
 }
 
-// Choix du type de livraison pour un client de N'Djamena : normale, ou programmée à un jour et une heure (heure de N'Djamena).
-// Les créneaux possibles viennent de src/lib/scheduledDelivery.ts ; la base revérifie le rendez-vous à l'enregistrement.
-export function ScheduledDeliveryPicker({ type, day, time, onType, onDay, onTime, now = Date.now() }: Props) {
+// Livraison programmée d'un client de N'Djamena : le client choisit un jour et une heure de rendez-vous (heure de N'Djamena). La livraison normale
+// n'est volontairement pas dans la liste : sans choix, la commande est prise comme une livraison normale. Les créneaux possibles viennent de src/lib/scheduledDelivery.ts ; la base revérifie le rendez-vous à l'enregistrement.
+export function ScheduledDeliveryPicker({ day, time, onDay, onTime, now = Date.now() }: Props) {
   const days = dayOptions(now);
   const slots = day ? slotsOfDay(day, now) : [];
   const iso = day && time ? slotToIso(day, time) : null;
@@ -25,109 +22,68 @@ export function ScheduledDeliveryPicker({ type, day, time, onType, onDay, onTime
   const last = SCHEDULED_DELIVERY.lastSlot;
 
   return (
-    <View testID="delivery-picker">
-      <Pressable
-        style={[styles.option, type === 'standard' && styles.optionActive]}
-        onPress={() => onType('standard')}
-        accessibilityRole="radio"
-        accessibilityState={{ selected: type === 'standard' }}
-        aria-checked={type === 'standard'}
-        testID="delivery-standard"
-      >
-        <Text style={styles.icon}>🚚</Text>
-        <View style={styles.optionText}>
-          <Text style={styles.optionTitle}>Livraison normale</Text>
-          <Text style={styles.optionSub}>Nous vous livrons dès que votre commande est prête</Text>
-        </View>
-        <View style={[styles.radio, type === 'standard' && styles.radioActive]} />
-      </Pressable>
-
-      <Pressable
-        style={[styles.option, type === 'scheduled' && styles.optionActive]}
-        onPress={() => onType('scheduled')}
-        accessibilityRole="radio"
-        accessibilityState={{ selected: type === 'scheduled' }}
-        aria-checked={type === 'scheduled'}
-        testID="delivery-scheduled"
-      >
+    <View style={styles.box} testID="delivery-picker">
+      <View style={styles.head}>
         <Text style={styles.icon}>📅</Text>
-        <View style={styles.optionText}>
-          <Text style={styles.optionTitle}>Livraison programmée</Text>
-          <Text style={styles.optionSub}>Vous choisissez le jour et l’heure du rendez-vous</Text>
+        <View style={styles.headText}>
+          <Text style={styles.title}>Livraison programmée</Text>
+          <Text style={styles.sub}>Choisissez le jour et l’heure de votre rendez-vous de livraison</Text>
         </View>
-        <View style={[styles.radio, type === 'scheduled' && styles.radioActive]} />
-      </Pressable>
+      </View>
 
-      {type === 'scheduled' ? (
-        <View style={styles.box} testID="delivery-schedule-box">
-          <Text style={styles.label}>Jour du rendez-vous</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayRow}>
-            {days.map((d) => (
+      <View testID="delivery-schedule-box">
+        <Text style={styles.label}>Jour du rendez-vous</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayRow}>
+          {days.map((d) => (
+            <Pressable
+              key={d.key}
+              style={[styles.chip, day === d.key && styles.chipActive]}
+              onPress={() => onDay(d.key)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: day === d.key }}
+              testID={`sched-day-${d.key}`}
+            >
+              <Text style={[styles.chipText, day === d.key && styles.chipTextActive]}>{d.label}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+
+        <Text style={[styles.label, { marginTop: spacing.md }]}>Heure du rendez-vous</Text>
+        {day ? (
+          <View style={styles.slotGrid}>
+            {slots.map((s) => (
               <Pressable
-                key={d.key}
-                style={[styles.chip, day === d.key && styles.chipActive]}
-                onPress={() => onDay(d.key)}
+                key={s.time}
+                style={[styles.chip, time === s.time && s.available && styles.chipActive, !s.available && styles.chipOff]}
+                onPress={() => s.available && onTime(s.time)}
+                disabled={!s.available}
                 accessibilityRole="button"
-                accessibilityState={{ selected: day === d.key }}
-                testID={`sched-day-${d.key}`}
+                accessibilityState={{ selected: time === s.time, disabled: !s.available }}
+                testID={`sched-time-${s.time}`}
               >
-                <Text style={[styles.chipText, day === d.key && styles.chipTextActive]}>{d.label}</Text>
+                <Text style={[styles.chipText, time === s.time && s.available && styles.chipTextActive]}>{s.label}</Text>
               </Pressable>
             ))}
-          </ScrollView>
+          </View>
+        ) : (
+          <Text style={styles.hint}>Choisissez d’abord le jour.</Text>
+        )}
 
-          <Text style={[styles.label, { marginTop: spacing.md }]}>Heure du rendez-vous</Text>
-          {day ? (
-            <View style={styles.slotGrid}>
-              {slots.map((s) => (
-                <Pressable
-                  key={s.time}
-                  style={[styles.chip, time === s.time && s.available && styles.chipActive, !s.available && styles.chipOff]}
-                  onPress={() => s.available && onTime(s.time)}
-                  disabled={!s.available}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: time === s.time, disabled: !s.available }}
-                  testID={`sched-time-${s.time}`}
-                >
-                  <Text style={[styles.chipText, time === s.time && s.available && styles.chipTextActive]}>{s.label}</Text>
-                </Pressable>
-              ))}
-            </View>
-          ) : (
-            <Text style={styles.hint}>Choisissez d’abord le jour.</Text>
-          )}
-
-          {iso ? (
-            <Text style={styles.summary} testID="sched-summary">{`✅ Rendez-vous : ${formatSlot(iso, now)}`}</Text>
-          ) : null}
-          <Text style={styles.hint}>
-            {`Rendez-vous de ${timeLabel(first)} à ${timeLabel(last)}, au moins ${SCHEDULED_DELIVERY.minLeadMinutes / 60} h après votre commande. Soyez disponible à l’heure choisie pour recevoir votre colis.`}
-          </Text>
-        </View>
-      ) : null}
+        {iso ? <Text style={styles.summary} testID="sched-summary">{`✅ Rendez-vous : ${formatSlot(iso, now)}`}</Text> : null}
+        <Text style={styles.hint}>
+          {`Rendez-vous de ${timeLabel(first)} à ${timeLabel(last)}, au moins ${SCHEDULED_DELIVERY.minLeadMinutes / 60} h après votre commande. Soyez disponible à l’heure choisie pour recevoir votre colis.`}
+        </Text>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  option: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: colors.panel,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: spacing.sm,
-  },
-  optionActive: { borderColor: colors.gold },
+  head: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.md },
   icon: { fontSize: 22 },
-  optionText: { flex: 1, minWidth: 0 },
-  optionTitle: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 14 },
-  optionSub: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 12, marginTop: 2 },
-  radio: { width: 18, height: 18, borderRadius: 9, borderWidth: 2, borderColor: colors.creamFaint },
-  radioActive: { borderColor: colors.gold, backgroundColor: colors.gold },
+  headText: { flex: 1, minWidth: 0 },
+  title: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 14 },
+  sub: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 12, marginTop: 2 },
   box: { backgroundColor: colors.panelAlt, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.sm },
   label: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 12, marginBottom: 8 },
   dayRow: { gap: 8, paddingRight: 8 },

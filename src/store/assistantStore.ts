@@ -33,6 +33,7 @@ import {
 import { hasArabic, type Lang, type PayMethodKey, type Who } from '../lib/assistantLang';
 import { categoryLabel, fcfa, texts, withName as applyName, type Texts } from '../lib/assistantText';
 import { isArabicPage } from '../lib/googleTranslate';
+import { dayFromText as slotDayFromText, dayOptions, formatSlot, slotProblem, slotToIso, slotsOfDay, timeFromText, timeLabel } from '../lib/scheduledDelivery';
 import {
   ANY_BUDGET,
   aboutReply,
@@ -145,6 +146,8 @@ export interface ChatAction {
     | 'orderCity'
     | 'orderPay'
     | 'orderGift'
+    | 'orderDay'
+    | 'orderTime'
     | 'orderConfirm'
     | 'orderEdit'
     | 'orderCancel'
@@ -193,6 +196,8 @@ export type Step =
   | 'co_phone'
   | 'co_address'
   | 'co_city'
+  | 'co_day'
+  | 'co_time'
   | 'co_pay'
   | 'co_gift'
   | 'co_confirm'
@@ -213,6 +218,9 @@ export interface OrderDraft {
   giftWrap: boolean | null;
   // remise fidélité (−10 % à la 7ᵉ commande, une fois) ; absente dans une commande commencée avant cette règle : pas de remise
   loyalty?: LoyaltyStatus;
+  // livraison programmée (clients de N'Djamena) : rendez-vous choisi (jour + heure) ; skip : le client a passé la question = livraison normale.
+  // Sans valeur : la question n'a pas encore été posée.
+  slot?: { day: string | null; time: string | null; skip?: boolean } | null;
 }
 
 interface AssistantState {
@@ -262,7 +270,7 @@ const RANK_KEY = 'albasse_zara_rank';
 const GREETING_WAIT_MS = 10000;
 let connectedAt: number | null = null;
 const MAX_SAVED = 40;
-const STEPS: Step[] = ['ask_lang', 'ask_name', 'menu', 'ask_city', 'ask_who', 'ask_type', 'ask_budget', 'co_name', 'co_phone', 'co_address', 'co_city', 'co_pay', 'co_gift', 'co_confirm'];
+const STEPS: Step[] = ['ask_lang', 'ask_name', 'menu', 'ask_city', 'ask_who', 'ask_type', 'ask_budget', 'co_name', 'co_phone', 'co_address', 'co_city', 'co_day', 'co_time', 'co_pay', 'co_gift', 'co_confirm'];
 const CTX_KINDS = ['query', 'category', 'gift', 'who', 'promo', 'new'];
 
 interface Saved {
@@ -1529,6 +1537,17 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       await askOrderCity();
       return;
     }
+    // N'Djamena : rendez-vous de livraison (facultatif, « Passer » = livraison normale) avant le paiement
+    if (isHomeCity(d.city.name) && !d.slot?.skip) {
+      if (!d.slot?.day) {
+        await askSlotDay();
+        return;
+      }
+      if (!d.slot.time) {
+        await askSlotTime();
+        return;
+      }
+    }
     if (!d.method) {
       await askPayment();
       return;
@@ -1554,6 +1573,66 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       // N'Djamena seulement : il peut écrire sa ville
     }
     await say(T().checkout.askCity, { fast: true, actions: [...popular.map((name) => ({ label: name, kind: 'orderCity' as const, payload: name })), cancelOrderChip()] });
+  }
+
+  // --- rendez-vous de livraison (N'Djamena) : le jour, puis l'heure ; « Passer » = livraison normale
+  async function askSlotDay() {
+    setStep('co_day');
+    const days = dayOptions(Date.now(), get().lang);
+    await say(T().checkout.askDay, {
+      fast: true,
+      actions: [...days.map((x) => ({ label: x.label, kind: 'orderDay' as const, payload: x.key })), { label: T().chip.skipSlot, kind: 'orderDay' as const, payload: 'skip' }, cancelOrderChip()],
+    });
+  }
+
+  async function askSlotTime() {
+    const day = get().order?.slot?.day;
+    if (!day) {
+      await askSlotDay();
+      return;
+    }
+    const lang = get().lang;
+    const free = slotsOfDay(day, Date.now()).filter((x) => x.available);
+    if (free.length === 0) {
+      // les heures du jour choisi sont passées : on repart du jour
+      patchOrder({ slot: null });
+      await say(T().checkout.slotLost, { fast: true });
+      await askSlotDay();
+      return;
+    }
+    setStep('co_time');
+    const dayLabel = dayOptions(Date.now(), lang).find((x) => x.key === day)?.label ?? day;
+    await say(T().checkout.askTime(dayLabel), {
+      fast: true,
+      actions: [...free.map((x) => ({ label: timeLabel(x.time, lang), kind: 'orderTime' as const, payload: x.time })), { label: T().chip.otherDay, kind: 'orderEdit' as const, payload: 'slot' }, cancelOrderChip()],
+    });
+  }
+
+  async function chooseSlotDay(key: string) {
+    if (key === 'skip') {
+      patchOrder({ slot: { day: null, time: null, skip: true } });
+      await nextCheckoutStep();
+      return;
+    }
+    if (!dayOptions(Date.now()).some((x) => x.key === key)) {
+      await say(T().checkout.pickButton, { fast: true });
+      await askSlotDay();
+      return;
+    }
+    patchOrder({ slot: { day: key, time: null } });
+    await nextCheckoutStep();
+  }
+
+  async function chooseSlotTime(time: string) {
+    const day = get().order?.slot?.day ?? null;
+    if (slotProblem(day, time, Date.now())) {
+      patchOrder({ slot: null }); // le rendez-vous n'est plus possible : on repart du jour
+      await say(T().checkout.slotLost, { fast: true });
+      await nextCheckoutStep();
+      return;
+    }
+    patchOrder({ slot: { day, time } });
+    await nextCheckoutStep();
   }
 
   async function askPayment() {
@@ -1585,11 +1664,18 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       patchOrder({ city: { name: text.slice(0, 40), fee: null, agency: null } }); // villes indisponibles : l'équipe confirmera les frais
     }
     const d = get().order;
+    if (d?.city && !isHomeCity(d.city.name)) patchOrder({ slot: null });
     if (d?.city && d.method === 'cash_on_delivery' && !isHomeCity(d.city.name)) {
       patchOrder({ method: null });
       await say(T().checkout.codOnlyHome, { fast: true });
     }
     await nextCheckoutStep();
+  }
+
+  // « mardi 27/10 à 10h00 » : le rendez-vous choisi, ou null (livraison normale)
+  function slotLabelOf(d: OrderDraft): string | null {
+    const iso = d.city && isHomeCity(d.city.name) && d.slot?.day && d.slot.time ? slotToIso(d.slot.day, d.slot.time) : null;
+    return iso ? formatSlot(iso, Date.now(), get().lang) : null;
   }
 
   async function showRecap() {
@@ -1603,6 +1689,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         lines: items.map((i) => ({ name: shortName(i.product.name), variant: variantText(i.size, i.color), qty: i.quantity, subtotal: i.product.price * i.quantity })),
         city: d.city.name,
         fee: d.city.fee,
+        slot: slotLabelOf(d),
         gift: d.giftWrap,
         discount,
         total,
@@ -1656,6 +1743,15 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       await askPayment();
       return;
     }
+    // le rendez-vous est revérifié au moment d'enregistrer (l'heure a pu passer pendant la conversation)
+    const wantsSlot = isHomeCity(d.city.name) && !!d.slot?.day && !!d.slot.time;
+    if (wantsSlot && slotProblem(d.slot?.day ?? null, d.slot?.time ?? null, Date.now())) {
+      patchOrder({ slot: null });
+      await say(c.slotLost, { fast: true });
+      await nextCheckoutStep();
+      return;
+    }
+    const scheduledFor = wantsSlot && d.slot?.day && d.slot.time ? slotToIso(d.slot.day, d.slot.time) : null;
     const { items, total, discount } = orderTotals(d);
     const label = c.methodLabel(d.method);
     let created: Awaited<ReturnType<typeof createOrder>>;
@@ -1672,6 +1768,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         shippingCity: d.city.name,
         giftWrap: d.giftWrap,
         loyaltyDiscount: discount,
+        ...(scheduledFor ? { deliveryType: 'scheduled' as const, scheduledFor } : {}),
         viaAssistant: true, // la commande note l'appareil : statistiques de Zara
       });
     } catch (e) {
@@ -1707,6 +1804,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     const home = isHomeCity(d.city.name);
     const lines = [c.placed(firstNameOfFullName(d.name) ?? d.name, created.order.id.slice(0, 8)), c.totalToPay(total), instructions];
     if (d.giftWrap) lines.push(c.giftIncluded);
+    if (scheduledFor) lines.push(c.slotLine(formatSlot(scheduledFor, Date.now(), get().lang)));
     const points = Math.floor(total / LOYALTY_FCFA_PER_POINT); // la base ajoute floor(total / 5000) points quand la commande est livrée
     if (points >= 1) lines.push(T().loyalty.orderPoints(points));
     lines.push(T().serviceNote(home));
@@ -1760,6 +1858,25 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       case 'co_city':
         await setOrderCity(text);
         return true;
+      case 'co_day': {
+        const key = slotDayFromText(text, Date.now());
+        if (key) await chooseSlotDay(key);
+        else if (yesNo(text) === 'no' || /passer|sans rendez|normal|plus tard|تخط|بدون/.test(normalize(text))) await chooseSlotDay('skip');
+        else {
+          await say(c.pickButton, { fast: true });
+          await askSlotDay();
+        }
+        return true;
+      }
+      case 'co_time': {
+        const time = timeFromText(text);
+        if (time) await chooseSlotTime(time);
+        else {
+          await say(c.pickButton, { fast: true });
+          await askSlotTime();
+        }
+        return true;
+      }
       case 'co_pay': {
         const method = paymentFrom(text);
         if (!method) {
@@ -1814,6 +1931,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         { label: chips.editPhone, kind: 'orderEdit', payload: 'phone' },
         { label: chips.editAddress, kind: 'orderEdit', payload: 'address' },
         { label: chips.editCity, kind: 'orderEdit', payload: 'city' },
+        ...(get().order?.city && isHomeCity(get().order!.city!.name) ? [{ label: chips.editSlot, kind: 'orderEdit' as const, payload: 'slot' }] : []),
         { label: chips.editPay, kind: 'orderEdit', payload: 'method' },
         { label: chips.editGift, kind: 'orderEdit', payload: 'giftWrap' },
         cancelOrderChip(),
@@ -2958,6 +3076,16 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         if (get().order) await setOrderCity(action.payload ?? action.label);
         else await say(T().checkout.resumeLost, { fast: true, actions: [checkoutChip(), menuBtn()] });
         return;
+      case 'orderDay':
+        userSays(action.label);
+        if (get().order) await chooseSlotDay(action.payload ?? '');
+        else await say(T().checkout.resumeLost, { fast: true, actions: [checkoutChip(), menuBtn()] });
+        return;
+      case 'orderTime':
+        userSays(action.label);
+        if (get().order) await chooseSlotTime(action.payload ?? '');
+        else await say(T().checkout.resumeLost, { fast: true, actions: [checkoutChip(), menuBtn()] });
+        return;
       case 'orderPay':
         userSays(action.label);
         if (get().order) await choosePayment((action.payload as PayMethodKey) ?? 'airtel_money');
@@ -2985,7 +3113,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
           return;
         }
         const field = action.payload;
-        if (field === 'name' || field === 'phone' || field === 'address' || field === 'city' || field === 'method' || field === 'giftWrap') {
+        if (field === 'name' || field === 'phone' || field === 'address' || field === 'city' || field === 'method' || field === 'giftWrap' || field === 'slot') {
           patchOrder({ [field]: null } as Partial<OrderDraft>);
           await nextCheckoutStep();
         } else await editChooser();

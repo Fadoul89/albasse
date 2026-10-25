@@ -9,8 +9,10 @@ const MIN_MS = 60_000;
 const DAY_MS = 86_400_000;
 const NDJAMENA_OFFSET_MS = HOUR_MS;
 
+export type SlotLang = 'fr' | 'ar';
 const DAYS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
 const DAYS_SHORT = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'];
+const DAYS_AR = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 
 const two = (n: number) => String(n).padStart(2, '0');
 
@@ -54,7 +56,8 @@ export interface Slot {
   label: string; // « 14h30 »
   available: boolean; // false : trop proche (moins de 2 h)
 }
-export const timeLabel = (time: string) => `${Number(time.slice(0, 2))}h${time.slice(3, 5)}`;
+// « 14h30 » ; en arabe « 14:30 » (chiffres latins, comme le reste du site)
+export const timeLabel = (time: string, lang: SlotLang = 'fr') => (lang === 'ar' ? `${Number(time.slice(0, 2))}:${time.slice(3, 5)}` : `${Number(time.slice(0, 2))}h${time.slice(3, 5)}`);
 
 // les créneaux d'un jour, avec ceux qui sont encore possibles
 export function slotsOfDay(dayKey: string, now: number): Slot[] {
@@ -70,7 +73,7 @@ export interface DayOption {
 }
 
 // les jours proposés : de aujourd'hui à dans 7 jours, seulement ceux où il reste au moins un créneau
-export function dayOptions(now: number): DayOption[] {
+export function dayOptions(now: number, lang: SlotLang = 'fr'): DayOption[] {
   const out: DayOption[] = [];
   const todayStart = slotInstant(dayKeyOf(now), '00:00') as number;
   for (let i = 0; i <= SCHEDULED_DELIVERY.maxDaysAhead; i++) {
@@ -78,7 +81,8 @@ export function dayOptions(now: number): DayOption[] {
     const key = dayKeyOf(at);
     if (!slotsOfDay(key, now).some((s) => s.available)) continue;
     const p = ndjamenaParts(at);
-    out.push({ key, label: i === 0 ? "Aujourd'hui" : i === 1 ? 'Demain' : `${DAYS_SHORT[p.weekday]} ${two(p.day)}/${two(p.month)}` });
+    const date = `${two(p.day)}/${two(p.month)}`;
+    out.push({ key, label: lang === 'ar' ? (i === 0 ? 'اليوم' : i === 1 ? 'غداً' : `${DAYS_AR[p.weekday]} ${date}`) : i === 0 ? "Aujourd'hui" : i === 1 ? 'Demain' : `${DAYS_SHORT[p.weekday]} ${date}` });
   }
   return out;
 }
@@ -113,15 +117,68 @@ export function flagDeadlineIso(o: { created_at: string; payment_method?: string
   return new Date(base + FLAG_AFTER_MS).toISOString();
 }
 
-// « aujourd'hui à 14h30 », « demain à 9h00 », « samedi 31/10 à 14h30 » (par rapport à maintenant)
-export function formatSlot(iso: string | null | undefined, now: number = Date.now()): string {
+// « aujourd'hui à 14h30 », « demain à 9h00 », « samedi 31/10 à 14h30 » (par rapport à maintenant) ; en arabe « اليوم الساعة 14:30 »
+export function formatSlot(iso: string | null | undefined, now: number = Date.now(), lang: SlotLang = 'fr'): string {
   const at = Date.parse(String(iso ?? ''));
   if (!Number.isFinite(at)) return '';
   const p = ndjamenaParts(at);
-  const time = `${p.hour}h${two(p.minute)}`;
   const today = dayKeyOf(now);
   const day = dayKeyOf(at);
+  const tomorrow = day === dayKeyOf(now + DAY_MS);
+  const date = `${two(p.day)}/${two(p.month)}`;
+  if (lang === 'ar') {
+    const time = `${p.hour}:${two(p.minute)}`;
+    return `${day === today ? 'اليوم' : tomorrow ? 'غداً' : `${DAYS_AR[p.weekday]} ${date}`} الساعة ${time}`;
+  }
+  const time = `${p.hour}h${two(p.minute)}`;
   if (day === today) return `aujourd'hui à ${time}`;
-  if (day === dayKeyOf(now + DAY_MS)) return `demain à ${time}`;
-  return `${DAYS[p.weekday]} ${two(p.day)}/${two(p.month)} à ${time}`;
+  if (tomorrow) return `demain à ${time}`;
+  return `${DAYS[p.weekday]} ${date} à ${time}`;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Ce que le client écrit dans le chat de Zara : « demain », « jeudi », « 31/10 », « 14h30 »…
+// ---------------------------------------------------------------------------------------------
+const fold = (text: string) =>
+  text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f\u064b-\u065f]/g, '') // accents français et voyelles brèves arabes
+    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ى/g, 'ي')
+    .replace(/ة/g, 'ه')
+    .toLowerCase();
+
+const WEEKDAY_WORDS: RegExp[] = [
+  /\b(dimanche|dim)\b|الاحد/,
+  /\b(lundi|lun)\b|الاثنين|الإثنين/,
+  /\b(mardi|mar)\b|الثلاثاء/,
+  /\b(mercredi|mer)\b|الاربعاء/,
+  /\b(jeudi|jeu)\b|الخميس/,
+  /\b(vendredi|ven)\b|الجمعه/,
+  /\b(samedi|sam)\b|السبت/,
+];
+
+// le jour proposé (« 2026-10-31 ») que le texte désigne ; null si le texte n'en désigne aucun ou si ce jour n'est pas proposé
+export function dayFromText(text: string, now: number): string | null {
+  const t = fold(text);
+  const keys = dayOptions(now).map((d) => d.key);
+  const pick = (key: string) => (keys.includes(key) ? key : null);
+  if (/aujourd|\bauj\b|اليوم/.test(t)) return pick(dayKeyOf(now));
+  if (/demain|غدا|بكره|بكرا/.test(t)) return pick(dayKeyOf(now + DAY_MS));
+  const date = /(\d{1,2})\s*[/.-]\s*(\d{1,2})/.exec(t);
+  if (date) return keys.find((k) => k.endsWith(`-${two(Number(date[2]))}-${two(Number(date[1]))}`)) ?? null;
+  const wd = WEEKDAY_WORDS.findIndex((re) => re.test(t));
+  if (wd >= 0) return keys.find((k) => ndjamenaParts(slotInstant(k, '12:00') as number).weekday === wd) ?? null;
+  return null;
+}
+
+// l'heure de rendez-vous (« 14:30 ») que le texte désigne ; null si ce n'est pas un des créneaux
+export function timeFromText(text: string): string | null {
+  const t = fold(text);
+  if (/\bmidi\b|الظهر/.test(t)) return '12:00';
+  const m = /(\d{1,2})\s*(?:h|:|ساعه|س)?\s*(\d{2})?(?!\d)/.exec(t);
+  if (!m) return null;
+  const time = `${two(Number(m[1]))}:${m[2] ?? '00'}`;
+  return allSlots().includes(time) ? time : null;
 }

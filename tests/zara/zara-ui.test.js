@@ -5388,6 +5388,11 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         await sleep(200);
       }
     };
+    // a N'Djamena Zara propose un rendez-vous de livraison (facultatif) : « Passer » = livraison normale, puis la question du paiement
+    const tapHomeSkip = async (p) => {
+      await tapExact(p, homeCity.name, /Voulez-vous choisir le jour et l’heure/);
+      await tapExact(p, 'Passer', /Comment souhaitez-vous payer/);
+    };
     const cartCount = (p) => p.evaluate(() => (JSON.parse(localStorage.getItem('albasse-cart') || '{"state":{"items":[]}}').state.items || []).length);
     const realErrs = (c) => c.errs.filter((e) => !/Erreur création commande/.test(e));
 
@@ -5459,6 +5464,10 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await typeIn(c.page, 'Farcha, face à la pharmacie');
       await waitText(c.page, /Dans quelle ville doit-on vous livrer/);
       await typeIn(c.page, homeCity.name);
+      await waitText(c.page, /Voulez-vous choisir le jour et l’heure/);
+      const slotChips = await chipLabels(c.page);
+      check('a N\'Djamena : Zara propose les jours, « Passer » et annuler ; la livraison normale n\'est pas dans la liste', slotChips.length >= 9 && slotChips[slotChips.length - 2] === 'Passer' && slotChips[slotChips.length - 1] === 'Annuler la commande' && !slotChips.some((l) => /normale/i.test(l)), slotChips);
+      await typeIn(c.page, 'passer');
       await waitText(c.page, /Comment souhaitez-vous payer/);
       check('a N\'Djamena : paiement a la livraison propose en plus d\'Airtel Money et Moov Money', (await chipLabels(c.page)).join('|') === '💵 À la livraison|📱 Airtel Money|📲 Moov Money|Annuler la commande', await chipLabels(c.page));
       await typeIn(c.page, 'je paie à la livraison');
@@ -5472,7 +5481,107 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const b = db.created[0];
       const done = await panelOf(c.page).getByText(/a bien été enregistrée/).last().innerText();
       check('enregistre : paiement a la livraison, sans emballage, bon total ; confirmation sans numero Mobile Money', db.created.length === 1 && b.payment_method === 'cash_on_delivery' && !('gift_wrap' in b) && b.total === price + homeFee && /Vous payez en espèces directement à la livraison/.test(done) && !/Envoyez|Payez ici/.test(done) && !/Emballage cadeau inclus/.test(done) && /réglez dans ce délai|valable 48 h/.test(done) && new RegExp(`vous rapportera ${Math.floor((price + homeFee) / 5000)} points? une fois livrée`).test(done), { total: b.total, done });
+      check('« Passer » : la commande est prise comme une livraison normale (aucun champ de rendez-vous)', !('delivery_type' in b) && !('scheduled_for' in b), b);
+      check('recapitulatif sans rendez-vous : aucune ligne « Livraison programmee »', !/Livraison programmée/.test(recap), recap);
       check('aucune erreur (paiement a la livraison)', c.errs.length === 0, c.errs);
+      await c.ctx.close();
+    }
+
+    // --- O2b. N'Djamena : le client choisit un rendez-vous de livraison (jour puis heure) dans le chat
+    {
+      const fu = mkMember('Ahmed Hassan');
+      const db = newDb();
+      const c = await orderVisitor(fu, db, { qty: 1 });
+      await openOrderChat(c);
+      await ask(c.page, 'je veux commander', /Quelle est votre adresse de livraison/);
+      await typeIn(c.page, 'Farcha, face à la pharmacie');
+      await waitText(c.page, /Dans quelle ville doit-on vous livrer/);
+      await tapExact(c.page, homeCity.name, /Voulez-vous choisir le jour et l’heure/);
+      const dayChips = await chipLabels(c.page);
+      check('jours proposes : « Aujourd\'hui » ou « Demain » en premier, 7 ou 8 jours, puis « Passer » et annuler', /^(Aujourd'hui|Demain)$/.test(dayChips[0]) && dayChips.length >= 9 && dayChips.length <= 10 && dayChips[dayChips.length - 2] === 'Passer', dayChips);
+      await tapExact(c.page, dayChips[1], /Quelle heure pour/);
+      const timeChips = await chipLabels(c.page);
+      check('heures proposees : 15 heures de 8h30 a 15h30, « Autre jour » et annuler', timeChips.length === 17 && timeChips[0] === '8h30' && timeChips[14] === '15h30' && timeChips[15] === '↩️ Autre jour' && timeChips[16] === 'Annuler la commande', timeChips);
+      await c.page.screenshot({ path: path.join(OUT, 'O2b-heures.png') });
+      await tapExact(c.page, '↩️ Autre jour', /Voulez-vous choisir le jour et l’heure/);
+      check('« Autre jour » : Zara repose la question du jour', (await chipLabels(c.page)).join('|') === dayChips.join('|'));
+      await tapExact(c.page, dayChips[1], /Quelle heure pour/);
+      await tapExact(c.page, '10h00', /Comment souhaitez-vous payer/);
+      await tapExact(c.page, '💵 À la livraison', /Souhaitez-vous l’emballage cadeau/);
+      await tapExact(c.page, 'Non, merci', /Récapitulatif de votre commande/);
+      const recap = await panelOf(c.page).getByText(/Récapitulatif de votre commande/).last().innerText();
+      check('recapitulatif : « Livraison programmee : … a 10h00 »', /📅 Livraison programmée : .* à 10h00/.test(recap), recap);
+      check('recapitulatif : boutons Confirmer / Modifier / Annuler, rien d\'enregistre', (await chipLabels(c.page)).join('|') === '✅ Confirmer la commande|✏️ Modifier|Annuler la commande' && db.attempts.length === 0);
+      await c.page.screenshot({ path: path.join(OUT, 'O2b-recapitulatif.png') });
+      await tapExact(c.page, '✅ Confirmer la commande', /a bien été enregistrée/);
+      const b = db.created[0];
+      check('enregistre : « scheduled » et l\'heure exacte (10h00 a N\'Djamena = 09:00 UTC), entre 2 h et 8 jours apres maintenant', db.created.length === 1 && b.delivery_type === 'scheduled' && /^\d{4}-\d{2}-\d{2}T09:00:00\.000Z$/.test(b.scheduled_for) && Date.parse(b.scheduled_for) - Date.now() > 2 * 3600_000 && Date.parse(b.scheduled_for) - Date.now() < 8 * 86_400_000 && b.shipping_city === homeCity.name && b.payment_method === 'cash_on_delivery', b);
+      const done = await panelOf(c.page).getByText(/a bien été enregistrée/).last().innerText();
+      check('confirmation : rappelle le rendez-vous', /📅 Livraison programmée : .* à 10h00/.test(done), done);
+      check('aucune erreur (rendez-vous dans le chat)', c.errs.length === 0, c.errs);
+      await c.ctx.close();
+    }
+
+    // --- O2c. en ecrivant le jour et l'heure ; modifier le rendez-vous ; « Passer » apres coup
+    {
+      const fu = mkMember('Ahmed Hassan');
+      const db = newDb();
+      const c = await orderVisitor(fu, db, { qty: 1 });
+      await openOrderChat(c);
+      await ask(c.page, 'je veux commander', /Quelle est votre adresse de livraison/);
+      await typeIn(c.page, 'Farcha, face à la pharmacie');
+      await waitText(c.page, /Dans quelle ville doit-on vous livrer/);
+      await typeIn(c.page, homeCity.name);
+      await waitText(c.page, /Voulez-vous choisir le jour et l’heure/);
+      await typeIn(c.page, 'bof');
+      await waitText(c.page, /Touchez un des boutons ci-dessous/);
+      await sleep(1500);
+      check('un texte qui n\'est pas un jour : Zara repose la question du jour', (await panelOf(c.page).getByText(/Voulez-vous choisir le jour et l’heure/).count()) === 2);
+      await typeIn(c.page, 'demain');
+      await waitText(c.page, /Quelle heure pour/);
+      await typeIn(c.page, '14h20');
+      await waitText(c.page, /Touchez un des boutons ci-dessous/);
+      await typeIn(c.page, 'à 14h30');
+      await waitText(c.page, /Comment souhaitez-vous payer/);
+      await tapExact(c.page, '💵 À la livraison', /Souhaitez-vous l’emballage cadeau/);
+      await tapExact(c.page, 'Non, merci', /Récapitulatif de votre commande/);
+      let recap = await panelOf(c.page).getByText(/Récapitulatif de votre commande/).last().innerText();
+      check('« demain » puis « à 14h30 » ecrits : le recapitulatif dit « demain a 14h30 »', /📅 Livraison programmée : demain à 14h30/.test(recap), recap);
+      await tapExact(c.page, '✏️ Modifier', /Que voulez-vous modifier/);
+      check('« Modifier » propose « Rendez-vous » (ville de la boutique)', (await chipLabels(c.page)).includes('📅 Rendez-vous'), await chipLabels(c.page));
+      await tapExact(c.page, '📅 Rendez-vous', /Voulez-vous choisir le jour et l’heure/);
+      await tapExact(c.page, 'Passer', /Récapitulatif de votre commande/);
+      recap = await panelOf(c.page).getByText(/Récapitulatif de votre commande/).last().innerText();
+      check('« Passer » apres coup : le rendez-vous disparait du recapitulatif', !/Livraison programmée/.test(recap), recap);
+      await tapExact(c.page, '✅ Confirmer la commande', /a bien été enregistrée/);
+      check('enregistre sans rendez-vous', db.created.length === 1 && !('delivery_type' in db.created[0]) && !('scheduled_for' in db.created[0]), db.created[0]);
+      check('aucune erreur (rendez-vous ecrit)', c.errs.length === 0, c.errs);
+      await c.ctx.close();
+    }
+
+    // --- O2d. rendez-vous choisi puis ville changee : le rendez-vous disparait (il n'existe qu'a N'Djamena)
+    {
+      const fu = mkMember('Ahmed Hassan');
+      const db = newDb();
+      const c = await orderVisitor(fu, db, { qty: 1 });
+      await openOrderChat(c);
+      await ask(c.page, 'je veux commander', /Quelle est votre adresse de livraison/);
+      await typeIn(c.page, 'Farcha, face à la pharmacie');
+      await waitText(c.page, /Dans quelle ville doit-on vous livrer/);
+      await tapExact(c.page, homeCity.name, /Voulez-vous choisir le jour et l’heure/);
+      await typeIn(c.page, 'demain');
+      await waitText(c.page, /Quelle heure pour/);
+      await typeIn(c.page, 'midi');
+      await waitText(c.page, /Comment souhaitez-vous payer/);
+      await tapExact(c.page, '📱 Airtel Money', /Souhaitez-vous l’emballage cadeau/);
+      await tapExact(c.page, 'Non, merci', /Récapitulatif de votre commande/);
+      await tapExact(c.page, '✏️ Modifier', /Que voulez-vous modifier/);
+      await tapExact(c.page, '🏙️ Ville', /Dans quelle ville doit-on vous livrer/);
+      await tapExact(c.page, farCity.name, /Récapitulatif de votre commande/);
+      const recap = await panelOf(c.page).getByText(/Récapitulatif de votre commande/).last().innerText();
+      check('ville changee : plus de rendez-vous dans le recapitulatif', !/Livraison programmée/.test(recap) && new RegExp(`Livraison à ${esc(farCity.name)}`).test(recap), recap);
+      await tapExact(c.page, '✅ Confirmer la commande', /a bien été enregistrée/);
+      check('enregistre hors N\'Djamena sans rendez-vous', db.created.length === 1 && !('delivery_type' in db.created[0]) && !('scheduled_for' in db.created[0]) && db.created[0].shipping_city === farCity.name, db.created[0]);
       await c.ctx.close();
     }
 
@@ -5495,13 +5604,13 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('une question au milieu de la commande : Zara repond, puis repose la question en cours (la commande reste ouverte)', (await panelOf(c.page).getByText(/Quelle est votre adresse de livraison/).count()) === addressAsks + 1 && (await c.page.evaluate(() => JSON.parse(sessionStorage.getItem('albasse_zara_v1')).step)) === 'co_address');
       await typeIn(c.page, 'Quartier Moursal');
       await waitText(c.page, /Dans quelle ville doit-on vous livrer/);
-      await tapExact(c.page, homeCity.name, /Comment souhaitez-vous payer/);
+      await tapHomeSkip(c.page);
       await tapExact(c.page, '💵 À la livraison', /Souhaitez-vous l’emballage cadeau/);
       await tapExact(c.page, 'Non, merci', /Récapitulatif de votre commande/);
       const recap1 = await panelOf(c.page).getByText(/Récapitulatif de votre commande/).last().innerText();
       check('le telephone « +235 66 12 34 56 » est enregistre en 8 chiffres : 66123456', /📞 66123456/.test(recap1), recap1);
       await tapExact(c.page, '✏️ Modifier', /Que voulez-vous modifier/);
-      check('modifier : nom, telephone, adresse, ville, paiement, emballage', (await chipLabels(c.page)).join('|') === '👤 Nom|📞 Téléphone|📍 Adresse|🏙️ Ville|💳 Paiement|🎁 Emballage|Annuler la commande', await chipLabels(c.page));
+      check('modifier (a N\'Djamena) : nom, telephone, adresse, ville, rendez-vous, paiement, emballage', (await chipLabels(c.page)).join('|') === '👤 Nom|📞 Téléphone|📍 Adresse|🏙️ Ville|📅 Rendez-vous|💳 Paiement|🎁 Emballage|Annuler la commande', await chipLabels(c.page));
       await tapExact(c.page, '📍 Adresse', /Quelle est votre adresse de livraison/);
       await typeIn(c.page, 'Quartier Chagoua, rue 5');
       await waitText(c.page, /📍 Quartier Chagoua, rue 5, /);
@@ -5522,7 +5631,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await openOrderChat(c);
       await ask(c.page, 'je veux commander', /Quelle est votre adresse de livraison/);
       await typeIn(c.page, 'Quartier Farcha');
-      await tapExact(c.page, homeCity.name, /Comment souhaitez-vous payer/);
+      await tapHomeSkip(c.page);
       await tapExact(c.page, '💵 À la livraison', /Souhaitez-vous l’emballage cadeau/);
       await tapExact(c.page, 'Non, merci', /Récapitulatif de votre commande/);
       await tapExact(c.page, '✅ Confirmer la commande', /Je n’ai pas pu enregistrer votre commande/);
@@ -5545,7 +5654,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await openOrderChat(c);
       await ask(c.page, 'je veux commander', /Quelle est votre adresse de livraison/);
       await typeIn(c.page, 'Quartier Farcha');
-      await tapExact(c.page, homeCity.name, /Comment souhaitez-vous payer/);
+      await tapHomeSkip(c.page);
       await tapExact(c.page, '📲 Moov Money', /Souhaitez-vous l’emballage cadeau/);
       await tapExact(c.page, 'Non, merci', /Récapitulatif de votre commande/);
       await tapExact(c.page, '✅ Confirmer la commande', /Je n’ai pas pu enregistrer votre commande/);
@@ -5566,7 +5675,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await openOrderChat(c);
       await ask(c.page, 'je veux commander', /Quelle est votre adresse de livraison/);
       await typeIn(c.page, 'Quartier Farcha');
-      await tapExact(c.page, homeCity.name, /Comment souhaitez-vous payer/);
+      await tapHomeSkip(c.page);
       await tapExact(c.page, '💵 À la livraison', /Souhaitez-vous l’emballage cadeau/);
       await tapExact(c.page, 'Non, merci', /Récapitulatif de votre commande/);
       await tapExact(c.page, '✅ Confirmer la commande', /Je n’ai pas pu enregistrer votre commande/);
@@ -5588,7 +5697,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await openOrderChat(c);
       await ask(c.page, 'je veux commander', /Quelle est votre adresse de livraison/);
       await typeIn(c.page, 'Quartier Farcha');
-      await tapExact(c.page, homeCity.name, /Comment souhaitez-vous payer/);
+      await tapHomeSkip(c.page);
       await tapExact(c.page, '💵 À la livraison', /Souhaitez-vous l’emballage cadeau/);
       await tapExact(c.page, 'Non, merci', /Récapitulatif de votre commande/);
       bump = 500;
@@ -5631,6 +5740,38 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await c.ctx.close();
     }
 
+    // --- O8b. arabe : rendez-vous de livraison a N'Djamena (jours et heures en arabe, recapitulatif de droite a gauche)
+    {
+      const fu = mkMember('Ahmed Hassan');
+      const db = newDb();
+      const c = await orderVisitor(fu, db, { qty: 1 });
+      await openOrderChat(c);
+      await ask(c.page, 'je veux commander', /Quelle est votre adresse de livraison/);
+      await c.page.getByTestId('assistant-lang').click();
+      await waitText(c.page, /ما عنوان التوصيل؟/);
+      await typeIn(c.page, 'حي فرشا قرب الصيدلية');
+      await waitText(c.page, /في أي مدينة يجب أن نوصّل إليك؟/);
+      await tapExact(c.page, homeCity.name, /هل تريد اختيار يوم وساعة التوصيل في إنجامينا/);
+      const dayChips = await chipLabels(c.page);
+      check('arabe : jours (اليوم أو غداً en premier), « تخطي » et annuler', /^(اليوم|غداً)$/.test(dayChips[0]) && dayChips[dayChips.length - 2] === 'تخطي' && dayChips[dayChips.length - 1] === 'إلغاء الطلب', dayChips);
+      await tapExact(c.page, dayChips[1], /في أي ساعة/);
+      const timeChips = await chipLabels(c.page);
+      check('arabe : 15 heures de 8:30 a 15:30, « يوم آخر » et annuler', timeChips.length === 17 && timeChips[0] === '8:30' && timeChips[14] === '15:30' && timeChips[15] === '↩️ يوم آخر', timeChips);
+      await tapExact(c.page, '10:00', /كيف تريد الدفع؟/);
+      await tapExact(c.page, (await chipLabels(c.page))[0], /هل تريد تغليف الهدية؟/);
+      await tapExact(c.page, 'لا، شكراً', /ملخص طلبك/);
+      const recap = await panelOf(c.page).getByText(/ملخص طلبك/).last().innerText();
+      check('recapitulatif arabe : « 📅 توصيل بموعد محدد : … الساعة 10:00 »', /📅 توصيل بموعد محدد: .* الساعة 10:00/.test(recap), recap);
+      await c.page.screenshot({ path: path.join(OUT, 'O8b-arabe-rendez-vous.png') });
+      await tapExact(c.page, '✅ تأكيد الطلب', /تم تسجيل طلبك رقم #/);
+      const b = db.created[0];
+      check('arabe : enregistre « scheduled » a 10:00 (09:00 UTC)', db.created.length === 1 && b.delivery_type === 'scheduled' && /T09:00:00\.000Z$/.test(b.scheduled_for), b);
+      const done = await panelOf(c.page).getByText(/تم تسجيل طلبك رقم #/).last().innerText();
+      check('confirmation arabe : rappelle le rendez-vous', /📅 توصيل بموعد محدد: .* الساعة 10:00/.test(done), done);
+      check('aucune erreur (rendez-vous en arabe)', c.errs.length === 0, c.errs);
+      await c.ctx.close();
+    }
+
     // --- O9. statistiques de Zara : la colonne n'existe pas encore dans la base (script pas applique) -> la commande est enregistree quand meme, sans l'appareil
     {
       const fu = mkMember('Ahmed Hassan');
@@ -5642,6 +5783,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await typeIn(c.page, 'Farcha, face à la pharmacie');
       await waitText(c.page, /Dans quelle ville doit-on vous livrer/);
       await typeIn(c.page, homeCity.name);
+      await waitText(c.page, /Voulez-vous choisir le jour et l’heure/);
+      await typeIn(c.page, 'passer');
       await waitText(c.page, /Comment souhaitez-vous payer/);
       await typeIn(c.page, 'je paie à la livraison');
       await waitText(c.page, /Souhaitez-vous l’emballage cadeau/);
@@ -5895,10 +6038,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         await cityPick(page, 'Moundou');
         check('livraison programmee : pas de choix pour Moundou', (await page.getByTestId('delivery-picker').count()) === 0);
         await cityPick(page, "N'Djamena");
-        check("livraison programmee : N'Djamena propose « Livraison normale » (choisie) et « Livraison programmee »", (await page.getByTestId('delivery-picker').count()) === 1 && (await page.getByTestId('delivery-standard').getAttribute('aria-checked')) === 'true' && (await page.getByTestId('delivery-scheduled').getAttribute('aria-checked')) === 'false');
-        check('livraison normale choisie : ni jours ni heures affiches', (await page.getByTestId('delivery-schedule-box').count()) === 0);
-        await page.getByTestId('delivery-scheduled').click();
-        await sleep(300);
+        check("livraison programmee : N'Djamena montre le choix du jour et de l'heure tout de suite, SANS « Livraison normale » dans la liste", (await page.getByTestId('delivery-picker').count()) === 1 && (await page.getByTestId('delivery-schedule-box').count()) === 1 && (await page.getByText('Livraison programmée', { exact: true }).count()) >= 1 && (await page.getByText(/Livraison normale/).count()) === 0 && (await page.getByTestId('delivery-standard').count()) === 0);
+        check('livraison programmee : aucun rendez-vous choisi au depart', (await page.getByTestId('sched-summary').count()) === 0);
         const dayIds = await page.locator('[data-testid^="sched-day-"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')));
         check('programmee : 7 ou 8 jours proposes, a partir d\'aujourd\'hui ou de demain', dayIds.length >= 7 && dayIds.length <= 8, dayIds);
         const firstLabel = (await page.locator('[data-testid^="sched-day-"]').first().innerText()).trim();
@@ -5913,7 +6054,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         await cityPick(page, 'Sarh');
         check('programmee : changer pour Sarh retire le choix', (await page.getByTestId('delivery-picker').count()) === 0);
         await cityPick(page, "N'Djamena");
-        check('programmee : retour a N\'Djamena = livraison normale par defaut (le choix precedent est oublie)', (await page.getByTestId('delivery-standard').getAttribute('aria-checked')) === 'true');
+        check('programmee : retour a N\'Djamena = aucun rendez-vous (le choix precedent est oublie) et aucun jour choisi', (await page.getByTestId('sched-summary').count()) === 0 && (await page.locator('[data-testid^="sched-time-"]').count()) === 0);
         check('aucune erreur (choix de livraison)', c.errs.length === 0, c.errs);
         await c.ctx.close();
       }
@@ -5926,16 +6067,12 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         await page.getByPlaceholder('Adresse (quartier, rue)').fill('Farcha, rue 12');
         await cityPick(page, "N'Djamena");
         await page.getByRole('radio', { name: /Paiement à la livraison/ }).click();
-        await page.getByTestId('delivery-scheduled').click();
-        await confirmBtn(page).click();
-        await page.getByText(/Choisissez le jour et l.heure du rendez-vous/).first().waitFor({ timeout: 5000 });
-        check('programmee sans jour ni heure : message et RIEN n\'est enregistre', (db.attempts ?? []).length === 0);
         const dayEl = page.locator('[data-testid^="sched-day-"]').nth(1);
         const dayKey = (await dayEl.getAttribute('data-testid')).replace('sched-day-', '');
         await dayEl.click();
         await confirmBtn(page).click();
-        await sleep(600);
-        check('programmee avec le jour mais sans l\'heure : rien n\'est enregistre', (db.attempts ?? []).length === 0);
+        await page.getByText(/Choisissez le jour et l.heure du rendez-vous/).first().waitFor({ timeout: 5000 });
+        check('un jour choisi sans l\'heure : message et RIEN n\'est enregistre', (db.attempts ?? []).length === 0);
         await page.getByTestId('sched-time-10:00').click();
         await sleep(300);
         const summary = await page.getByTestId('sched-summary').innerText();
@@ -5977,7 +6114,6 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         const { page } = c;
         await page.getByPlaceholder('Adresse (quartier, rue)').fill('Quartier Nord');
         await cityPick(page, "N'Djamena");
-        await page.getByTestId('delivery-scheduled').click();
         await page.locator('[data-testid^="sched-day-"]').nth(1).click();
         await page.getByTestId('sched-time-11:30').click();
         await cityPick(page, 'Sarh');
@@ -5996,17 +6132,19 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         await page.getByPlaceholder('Adresse (quartier, rue)').fill('Farcha, rue 12');
         await cityPick(page, "N'Djamena");
         await page.getByRole('radio', { name: /Paiement à la livraison/ }).click();
-        await page.getByTestId('delivery-scheduled').click();
-        await page.locator('[data-testid^="sched-day-"]').nth(1).click();
+        const dayEl2 = page.locator('[data-testid^="sched-day-"]').nth(1);
+        await dayEl2.click();
         await page.getByTestId('sched-time-14:00').click();
         await confirmBtn(page).click();
         await page.getByText(/La livraison programmée n.est pas encore disponible/).first().waitFor({ timeout: 8000 });
         check('script SQL pas lance : message clair, aucune commande enregistree sans son rendez-vous', (db.created ?? []).length === 0 && (db.attempts ?? []).length === 1);
-        // le client choisit alors la livraison normale : la commande passe
-        await page.getByTestId('delivery-standard').click();
+        // le client touche une 2e fois le jour choisi : plus de rendez-vous, la commande est prise comme une livraison normale
+        await dayEl2.click();
+        await sleep(300);
+        check('toucher une 2e fois le jour choisi annule le rendez-vous (plus d\'heures ni de resume)', (await page.getByTestId('sched-summary').count()) === 0 && (await page.locator('[data-testid^="sched-time-"]').count()) === 0);
         await confirmBtn(page).click();
         await page.getByText('Merci d\'avoir acheté avec ALBASSE SHOPPING !').waitFor({ timeout: 15000 });
-        check('puis livraison normale : la commande est enregistree', (db.created ?? []).length === 1 && !('delivery_type' in db.created[0]));
+        check('puis sans rendez-vous : la commande est enregistree en livraison normale', (db.created ?? []).length === 1 && !('delivery_type' in db.created[0]));
         await c.ctx.close();
       }
 

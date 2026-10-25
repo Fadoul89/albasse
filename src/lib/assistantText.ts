@@ -28,6 +28,7 @@ export interface RecapData {
   fee: number | null; // null : frais à confirmer par l'équipe
   gift: boolean;
   discount?: number; // remise fidélité (FCFA) déjà déduite du total
+  slot?: string | null; // livraison programmée (N'Djamena) : « mardi 27/10 à 10h00 » ; sans valeur : livraison normale
   total: number;
   name: string;
   phone: string;
@@ -69,7 +70,7 @@ export interface Texts {
   askNameMember: string;
   nice(name: string): string;
   footer: string;
-  placeholder: { message: string; name: string; city: string; amount: string; fullName: string; phone: string; address: string; day: string };
+  placeholder: { message: string; name: string; city: string; amount: string; fullName: string; phone: string; address: string; day: string; time: string };
   ui: { writing: string; close: string; reset: string; send: string; input: string; whatsappPill: string; whatsappAria: string; closeTeaser: string; otherLang: string };
   chooseLang: string;
   fabLabel: string;
@@ -106,6 +107,9 @@ export interface Texts {
     editCity: string;
     editPay: string;
     editGift: string;
+    editSlot: string;
+    otherDay: string;
+    skipSlot: string;
     useAddress(address: string): string;
     orderPage: string;
     retry: string;
@@ -183,6 +187,10 @@ export interface Texts {
     badPhone: string;
     askAddress: string;
     askCity: string;
+    askDay: string;
+    askTime(day: string): string;
+    slotLost: string;
+    slotLine(label: string): string;
     askPay(home: boolean): string;
     askGift: string;
     methodLabel(method: PayMethodKey): string;
@@ -438,7 +446,7 @@ const FR: Texts = {
   askNameMember: 'Je vois que vous êtes connecté(e) 😊 Votre compte n’a pas encore de prénom : comment puis-je vous appeler ?',
   nice: (name) => `Enchantée ${name} ! 😊`,
   footer: `${ASSISTANT_NAME} est une assistante automatique. Pour une commande ou un souci, écrivez-nous sur WhatsApp.`,
-  placeholder: { message: 'Écrivez votre message…', name: 'Écrivez votre prénom…', city: 'Écrivez votre ville…', amount: 'Écrivez un montant…', fullName: 'Écrivez votre nom complet…', phone: 'Ex. 66123456', address: 'Quartier, rue, repère…', day: 'Ou écrivez le jour (ex. jeudi)…' },
+  placeholder: { message: 'Écrivez votre message…', name: 'Écrivez votre prénom…', city: 'Écrivez votre ville…', amount: 'Écrivez un montant…', fullName: 'Écrivez votre nom complet…', phone: 'Ex. 66123456', address: 'Quartier, rue, repère…', day: 'Ou écrivez le jour (ex. jeudi)…', time: 'Ou écrivez l’heure (ex. 14h30)…' },
   ui: {
     writing: 'Zara est en train d’écrire…',
     close: 'Fermer',
@@ -485,6 +493,9 @@ const FR: Texts = {
     editCity: '🏙️ Ville',
     editPay: '💳 Paiement',
     editGift: '🎁 Emballage',
+    editSlot: '📅 Rendez-vous',
+    otherDay: '↩️ Autre jour',
+    skipSlot: 'Passer',
     useAddress: (address) => `📍 Utiliser : ${address.length > 26 ? `${address.slice(0, 25).trimEnd()}…` : address}`,
     orderPage: '📄 Page de commande',
     retry: '🔄 Réessayer',
@@ -651,6 +662,10 @@ const FR: Texts = {
     badPhone: 'Le numéro doit contenir 8 chiffres et commencer par 6 ou 9 (ex. 66123456). Pouvez-vous le réécrire ? 📞',
     askAddress: 'Quelle est votre adresse de livraison ? Quartier, rue, repère… 📍',
     askCity: 'Dans quelle ville doit-on vous livrer ? 🚚',
+    askDay: '📅 Voulez-vous choisir le jour et l’heure de votre livraison à N’Djamena ? Touchez un jour, ou « Passer ».',
+    askTime: (day) => `⏰ Quelle heure pour ${day} ? Les rendez-vous vont de 8h30 à 15h30 (au moins 2 h après votre commande).`,
+    slotLost: 'Ce rendez-vous n’est plus possible (il doit avoir lieu au moins 2 h après votre commande). Choisissons un autre jour et une autre heure 📅',
+    slotLine: (label) => `📅 Livraison programmée : ${label}`,
     askPay: (home) =>
       home
         ? `Comment souhaitez-vous payer ? 💳\n💵 À la livraison (${HOME_CITY}), ou à l’avance par Airtel Money ou Moov Money.`
@@ -662,6 +677,7 @@ const FR: Texts = {
         '📝 Récapitulatif de votre commande :',
         ...d.lines.map((l) => `• ${l.name}${l.variant} × ${l.qty} : ${fcfa(l.subtotal)}`),
         `🚚 Livraison à ${d.city} : ${d.fee === null ? 'à confirmer par l’équipe' : d.fee === 0 ? 'gratuite' : fcfa(d.fee)}`,
+        ...(d.slot ? [`📅 Livraison programmée : ${d.slot}`] : []),
         ...(d.gift ? [`🎁 Emballage cadeau : ${fcfa(GIFT_WRAP_FEE)}`] : []),
         ...(d.discount ? [`⭐ Remise fidélité −10 % (vous êtes un client fidèle, merci !) : −${fcfa(d.discount)}`] : []),
         `💰 Total : ${fcfa(d.total)}`,
@@ -989,7 +1005,7 @@ const AR: Texts = {
   askNameMember: 'أرى أنك مسجّل الدخول 😊 حسابك لا يحتوي على اسم بعد، فكيف يمكنني أن أناديك؟',
   nice: (name) => `سعدت بمعرفتك يا ${name}! 😊`,
   footer: 'زارا كينغز مساعدة آلية. لأي طلب أو مشكلة، راسلنا على واتساب.',
-  placeholder: { message: 'اكتب رسالتك…', name: 'اكتب اسمك الأول…', city: 'اكتب مدينتك…', amount: 'اكتب مبلغا…', fullName: 'اكتب اسمك الكامل…', phone: 'مثال: 66123456', address: 'الحي، الشارع، معلم قريب…', day: 'أو اكتب اليوم (مثال: الخميس)…' },
+  placeholder: { message: 'اكتب رسالتك…', name: 'اكتب اسمك الأول…', city: 'اكتب مدينتك…', amount: 'اكتب مبلغا…', fullName: 'اكتب اسمك الكامل…', phone: 'مثال: 66123456', address: 'الحي، الشارع، معلم قريب…', day: 'أو اكتب اليوم (مثال: الخميس)…', time: 'أو اكتب الساعة (مثال: 14:30)…' },
   ui: {
     writing: 'زارا تكتب الآن…',
     close: 'إغلاق',
@@ -1036,6 +1052,9 @@ const AR: Texts = {
     editCity: '🏙️ المدينة',
     editPay: '💳 الدفع',
     editGift: '🎁 التغليف',
+    editSlot: '📅 الموعد',
+    otherDay: '↩️ يوم آخر',
+    skipSlot: 'تخطي',
     useAddress: (address) => `📍 استخدم: ${address.length > 26 ? `${address.slice(0, 25).trimEnd()}…` : address}`,
     orderPage: '📄 صفحة الطلب',
     retry: '🔄 إعادة المحاولة',
@@ -1204,6 +1223,10 @@ const AR: Texts = {
     badPhone: 'يجب أن يتكون الرقم من 8 أرقام ويبدأ بـ 6 أو 9 (مثال: 66123456). هل يمكنك كتابته من جديد؟ 📞',
     askAddress: 'ما عنوان التوصيل؟ الحي، الشارع، معلم قريب… 📍',
     askCity: 'في أي مدينة يجب أن نوصّل إليك؟ 🚚',
+    askDay: '📅 هل تريد اختيار يوم وساعة التوصيل في إنجامينا؟ اختر يوماً، أو اضغط «تخطي».',
+    askTime: (day) => `⏰ في أي ساعة (${day})؟ المواعيد من 8:30 إلى 15:30 (بعد ساعتين على الأقل من طلبك).`,
+    slotLost: 'لم يعد هذا الموعد ممكناً (يجب أن يكون بعد ساعتين على الأقل من طلبك). لنختر يوماً وساعة أخرى 📅',
+    slotLine: (label) => `📅 توصيل بموعد محدد: ${label}`,
     askPay: (home) =>
       home
         ? 'كيف تريد الدفع؟ 💳\n💵 عند الاستلام (إنجامينا)، أو مسبقاً عبر Airtel Money أو Moov Money.'
@@ -1215,6 +1238,7 @@ const AR: Texts = {
         '📝 ملخص طلبك:',
         ...d.lines.map((l) => `• ${l.name}${l.variant} × ${l.qty}: ${fcfa(l.subtotal)}`),
         `🚚 التوصيل إلى ${d.city}: ${d.fee === null ? 'سيؤكدها الفريق' : d.fee === 0 ? 'مجاني' : fcfa(d.fee)}`,
+        ...(d.slot ? [`📅 توصيل بموعد محدد: ${d.slot}`] : []),
         ...(d.gift ? [`🎁 تغليف الهدية: ${fcfa(GIFT_WRAP_FEE)}`] : []),
         ...(d.discount ? [`⭐ خصم الوفاء 10% (أنت زبون وفي، شكراً!): -${fcfa(d.discount)}`] : []),
         `💰 المجموع: ${fcfa(d.total)}`,
