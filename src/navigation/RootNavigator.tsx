@@ -6,10 +6,10 @@ import { navigationRef } from './navigationRef';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { RootStackParamList } from './types';
 import { colors } from '../theme';
-import { SocialProofTicker } from '../components/SocialProofTicker';
 import { Assistant } from '../components/Assistant';
 import { AdminOrderAlert } from '../components/AdminOrderAlert';
 import { AppDownloadBanner } from '../components/AppDownloadBanner';
+import { RecentPurchasesTicker } from '../components/RecentPurchasesTicker';
 import { trackPageView } from '../lib/analytics';
 import { startShortcutInstallTracking, trackAppInstallIfNeeded } from '../lib/appInstallTracking';
 import { recordPushClickFromUrl } from '../lib/pushClicks';
@@ -226,7 +226,7 @@ export function RootNavigator() {
         {!signUpFirst && (
           <SafeAreaView edges={['top']} style={styles.tickerSafeArea}>
             <AppDownloadBanner />
-            <SocialProofTicker />
+            <RecentPurchasesTicker />
           </SafeAreaView>
         )}
         <View style={styles.stackWrap}>

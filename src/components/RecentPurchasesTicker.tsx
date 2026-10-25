@@ -1,24 +1,36 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
 import { colors, fonts, radius } from '../theme';
-import { shuffledSocialProofItems, type SocialProofItem } from '../constants/socialProofNotifications';
+import { fetchRecentPurchases } from '../lib/recentPurchases';
+import { purchaseText, type RecentPurchase } from '../lib/recentPurchasesText';
 
 const SPEED_PX_PER_SEC = 55;
 const BANNER_BLUE = '#2D5BFF';
 
-function buildNoticeText(items: SocialProofItem[]) {
-  return items.map((it) => `${it.icon} ${it.text}`).join('   •   ') + '   •   ';
-}
+const buildNoticeText = (items: RecentPurchase[]) => items.map((p) => purchaseText(p)).join('   •   ') + '   •   ';
 
-export function SocialProofTicker() {
-  const itemsRef = useRef<SocialProofItem[]>(shuffledSocialProofItems());
-  const [noticeText, setNoticeText] = useState(() => buildNoticeText(itemsRef.current));
+// Bande défilante de vraies commandes récentes (ville + article). Cachée tant qu'il n'y en a pas : rien n'est inventé.
+export function RecentPurchasesTicker() {
+  const [items, setItems] = useState<RecentPurchase[]>([]);
+  const noticeText = buildNoticeText(items);
   const [setWidth, setSetWidth] = useState(0);
+  const [trackWidth, setTrackWidth] = useState(0);
+  // peu de commandes : le texte tient dans la barre, il reste fixe (pas de défilement ni de trou à droite)
+  const scrolls = trackWidth > 0 && setWidth > trackWidth;
   const translateX = useRef(new Animated.Value(0)).current;
   const measuredForWidth = useRef(0);
 
   useEffect(() => {
-    if (setWidth === 0) return;
+    let alive = true;
+    fetchRecentPurchases().then((rows) => alive && setItems(rows));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    translateX.setValue(0);
+    if (!scrolls) return;
     let stopped = false;
 
     const runLoop = () => {
@@ -29,13 +41,7 @@ export function SocialProofTicker() {
         easing: Easing.linear,
         useNativeDriver: true,
       }).start(({ finished }) => {
-        if (finished && !stopped) {
-          // Reshuffle content for variety; the reset to 0 happens in the same
-          // frame as the wrap, so the loop stays visually seamless.
-          itemsRef.current = shuffledSocialProofItems();
-          setNoticeText(buildNoticeText(itemsRef.current));
-          runLoop();
-        }
+        if (finished && !stopped) runLoop();
       });
     };
 
@@ -43,11 +49,12 @@ export function SocialProofTicker() {
     return () => {
       stopped = true;
     };
-  }, [setWidth]);
+  }, [setWidth, scrolls]);
 
+  if (items.length === 0) return null;
   return (
-    <View style={styles.wrapper}>
-      <View style={styles.track}>
+    <View style={styles.wrapper} testID="recent-purchases">
+      <View style={styles.track} onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}>
         <Animated.View style={[styles.row, { transform: [{ translateX }] }]}>
           <Text
             style={styles.text}
@@ -60,11 +67,13 @@ export function SocialProofTicker() {
               }
             }}
           >
-            {noticeText}
+            {scrolls ? noticeText : noticeText.replace(/[\s•]+$/, '')}
           </Text>
-          <Text style={styles.text} numberOfLines={1}>
-            {noticeText}
-          </Text>
+          {scrolls ? (
+            <Text style={styles.text} numberOfLines={1}>
+              {noticeText}
+            </Text>
+          ) : null}
         </Animated.View>
       </View>
     </View>

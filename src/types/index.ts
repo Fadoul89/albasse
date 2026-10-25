@@ -328,6 +328,8 @@ export interface StoreSettings {
   whatsapp_order_enabled?: boolean;
   // compte obligatoire à l'entrée du site (absent tant que add-account-required.sql n'est pas lancé : site ouvert)
   account_required?: boolean;
+  // e-mails automatiques de commande par Brevo (absent tant que add-order-emails.sql n'est pas lancé : éteints)
+  order_emails_enabled?: boolean;
   left_ad_items: AdItem[];
   right_ad_items: AdItem[];
   updated_at: string;

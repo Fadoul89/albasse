@@ -43,7 +43,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   // rank : rang du jour renvoye par la fonction de la base (null : fonction pas installee). fakeUser : compte simule (token : reponse a une connexion par mot de passe ; delay : lenteur du profil en ms). fakeOrders : { list: [...], patches: [] } = fausse table des commandes.
   // zaraInstall : par defaut, le visiteur a deja repondu « Plus tard » a l'installation (Zara ne la propose pas) ; null = vrai nouveau
   // visiteur, pour les parties qui testent l'installation
-  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, fakeSales = null, fakeCallbacks = null, fakePushes = null, fakeStore = null, fakeCats = null, fakeOnline = null, initScripts = [], zaraInstall = 'dismissed', zaraPush = 'later', installAfterSignUp = '1', pushPerm = null, pushAnswer = 'granted', fakeAi = null } = {}) {
+  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, fakeSales = null, fakeCallbacks = null, fakePushes = null, fakeStore = null, fakeCats = null, fakeOnline = null, fakeRecent = null, initScripts = [], zaraInstall = 'dismissed', zaraPush = 'later', installAfterSignUp = '1', pushPerm = null, pushAnswer = 'granted', fakeAi = null } = {}) {
     const ctx = await b.newContext(opts);
     if (cookies) await ctx.addCookies(cookies);
     if (lang) storage = { albasse_zara_lang: lang, ...storage };
@@ -224,6 +224,13 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
           fakeOnline.calls = (fakeOnline.calls || 0) + 1;
           return json(route, fakeOnline.n);
         }
+        // barre « achats recents » (add-recent-purchases.sql) : fakeRecent.rows = les vraies commandes recentes renvoyees (fakeRecent.calls = appels) ;
+        // sans fakeRecent : fonction absente (script pas lance), la barre est cachee
+        if (u.pathname === '/rest/v1/rpc/recent_purchases' && m === 'POST') {
+          if (!fakeRecent) return json(route, { code: 'PGRST202', message: 'Could not find the function public.recent_purchases(p_limit) in the schema cache' }, 404);
+          fakeRecent.calls = (fakeRecent.calls || 0) + 1;
+          return json(route, fakeRecent.rows);
+        }
         // ordre des categories (add-category-order.sql) : les vraies categories avec un faux sort_order. fakeCats.order = { slug: numero } ;
         // missing = colonne absente (script pas lance) ; patches = numeros recus de la page admin ({ id, sort_order })
         if (fakeCats && u.pathname === '/rest/v1/categories') {
@@ -265,6 +272,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
             if (fakeStore) {
               if (fakeStore.waOrder === undefined) delete r.whatsapp_order_enabled;
               else if (wants('whatsapp_order_enabled')) r.whatsapp_order_enabled = fakeStore.waOrder;
+              if (fakeStore.orderEmails !== undefined && wants('order_emails_enabled')) r.order_emails_enabled = fakeStore.orderEmails;
             }
             if (fs.accountRequired === 'missing') delete r.account_required;
             else if (wants('account_required')) r.account_required = fs.accountRequired === true;
@@ -290,6 +298,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
           if (missing) return json(route, { code: 'PGRST204', message: `Could not find the '${missing}' column of 'store_settings' in the schema cache` }, 400);
           if ('whatsapp_order_enabled' in body) fakeStore.waOrder = body.whatsapp_order_enabled;
           if ('account_required' in body) fakeStore.accountRequired = body.account_required;
+          if ('order_emails_enabled' in body) fakeStore.orderEmails = body.order_emails_enabled;
           return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } });
         }
         // les promotions publiees en vrai sur le site (fenetre « offre du jour ») ne doivent pas couvrir les pages pendant les tests
@@ -3707,7 +3716,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     {
       const fu = accountOf();
       const answers = [{ ok: false, reason: 'no_key' }, { ok: false, reason: 'brevo', status: 400, detail: 'Sender not valid' }, { ok: true, to: 'ad***@example.com' }];
-      const v = await newVisitor(phone, { storage: { [SK]: fu.session }, fakeUser: fu, fakeStore: { waOrder: true } });
+      const fs = { waOrder: true };
+      const v = await newVisitor(phone, { storage: { [SK]: fu.session }, fakeUser: fu, fakeStore: fs });
       const calls = [];
       await v.page.route('**/functions/v1/brevo-email', async (route) => {
         const hdr = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
@@ -3727,6 +3737,17 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.page.getByText(/E-mail de test envoyé à ad\*\*\*@example\.com/).waitFor({ timeout: 8000 });
       check('e-mail de test envoye : message de succes avec l\'adresse masquee', true);
       check('la fonction recoit seulement l\'action « test » (aucune adresse envoyee par l\'application)', calls.length === 3 && calls.every((c) => JSON.stringify(c) === '{"action":"test"}'), calls);
+      // interrupteur des e-mails automatiques de commande : éteint au départ, la base reçoit order_emails_enabled
+      await v.page.getByTestId('order-emails-toggle').waitFor({ timeout: 15000 });
+      check('e-mails de commande : éteints au départ (« Désactivé »)', /Désactivé/.test(await v.page.getByTestId('order-emails-status').innerText()), await v.page.getByTestId('order-emails-status').innerText());
+      await v.page.getByTestId('order-emails-switch').click();
+      await v.page.getByText('E-mails activés').waitFor({ timeout: 8000 });
+      check('e-mails de commande : on les allume, la base reçoit order_emails_enabled = true', (fs.patches || []).some((b) => b.order_emails_enabled === true), fs.patches);
+      await v.page.waitForFunction(() => /Activé/.test(document.querySelector('[data-testid="order-emails-status"]')?.textContent || ''), null, { timeout: 8000 });
+      check('e-mails de commande : « Activé » affiché après relecture', true);
+      await v.page.getByTestId('order-emails-switch').click();
+      await v.page.getByText('E-mails coupés').waitFor({ timeout: 8000 });
+      check('e-mails de commande : on les éteint, la base reçoit order_emails_enabled = false', (fs.patches || []).some((b) => b.order_emails_enabled === false), fs.patches);
       check('aucune erreur (e-mail de test)', v.errs.length === 0, v.errs);
       await v.ctx.close();
     }
@@ -3760,7 +3781,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await waitWall(v.page);
       await sleep(1500);
       const txt = await wall(v.page).innerText();
-      check('compte obligatoire : l\'ecran d\'entree couvre l\'accueil (ALBASSE SHOPPING, Bienvenue)', /ALBASSE SHOPPING/.test(txt) && /Bienvenue/.test(txt) && /Créez votre compte gratuit pour découvrir nos articles/.test(txt), txt.slice(0, 200));
+      check('compte obligatoire : l\'ecran d\'entree couvre l\'accueil (ALBASSE SHOPPING, Bienvenue)', /ALBASSE SHOPPING/.test(txt) && /Bienvenue sur Albasse Shopping/.test(txt) && /Livraison partout au Tchad/.test(txt) && /Créez votre compte dès maintenant/.test(txt), txt.slice(0, 200));
       const yOf = async (loc) => (await loc.boundingBox())?.y ?? -1;
       const yForm = await yOf(wall(v.page).getByTestId('register-name'));
       const ySwitch = await yOf(wall(v.page).getByText('J’ai déjà un compte', { exact: true }));
@@ -4235,6 +4256,32 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await openHome(v);
       check('script SQL pas encore lance : compteur cache (aucun nombre invente)', (await v.page.getByTestId('home-online').count()) === 0 && (await v.page.getByText(/\d+ (?:personnes )?en ligne/).count()) === 0);
       check('aucune ecriture reelle', v.writes.every((w) => /visitor_sessions/.test(w)), v.writes);
+      await v.ctx.close();
+    }
+    // barre bleue « achats recents » : seulement de vraies commandes, cachee sinon
+    {
+      const v = await newVisitor(phone);
+      await openHome(v);
+      check('achats recents : script SQL pas lance ou aucune commande, la barre est cachee (rien d\'invente)', (await v.page.getByTestId('recent-purchases').count()) === 0 && (await v.page.getByText(/a commandé/).count()) === 0);
+      await v.ctx.close();
+    }
+    {
+      const fr = { rows: [] };
+      const v = await newVisitor(phone, { fakeRecent: fr });
+      await openHome(v);
+      check('achats recents : la base repond « aucune commande recente », la barre est cachee', fr.calls >= 1 && (await v.page.getByTestId('recent-purchases').count()) === 0);
+      await v.ctx.close();
+    }
+    {
+      const fr = { rows: [{ city: "N'Djamena", product: 'Capuche   noire', created_at: new Date(Date.now() - 2 * 3600_000).toISOString() }, { city: null, product: 'Slip-on', created_at: new Date(Date.now() - 20 * 60_000).toISOString() }] };
+      const v = await newVisitor(phone, { fakeRecent: fr });
+      await openHome(v);
+      const bar = v.page.getByTestId('recent-purchases');
+      await bar.waitFor({ timeout: 15000 });
+      const txt = (await bar.innerText()).replace(/\s+/g, ' ');
+      check('achats recents : de vraies commandes, ville + article + il y a 2 h / 20 min (aucun nom de client)', /Un client de N'Djamena a commandé : Capuche noire · il y a 2 h/.test(txt) && /Un client a commandé : Slip-on · il y a 20 min/.test(txt), txt);
+      check('achats recents : aucun des anciens faux textes (noms, temoignages)', !/Amina|Youssouf|Fatima Saleh|témoign|avis 5/i.test(txt));
+      check('achats recents : la barre est tout en haut de la page', (await bar.boundingBox()).y < 120);
       await v.ctx.close();
     }
     {
