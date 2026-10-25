@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Platform } from 'react-native';
+import { Image } from 'expo-image';
 import { useRoute, type RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing } from '../theme';
@@ -11,6 +12,8 @@ import { useCities } from '../hooks/useCities';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { PAYMENT_LABELS, STATUS_LABELS, formatXAF, invoiceBreakdown, invoiceNumber, orderNumberLabel } from '../lib/invoice';
 import type { Order } from '../types';
+
+const LOGO = require('../../assets/logo.jpg');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -101,7 +104,12 @@ export function InvoiceScreen() {
             <View style={styles.paper} testID="invoice-paper">
               <View style={styles.topRow}>
                 <View style={{ flex: 1, minWidth: 220 }}>
-                  <Text style={styles.shopName}>{settings.shop_name || 'Albasse Shopping'}</Text>
+                  <View style={styles.brandRow}>
+                    <View testID="invoice-logo" style={styles.logoWrap}>
+                      <Image source={LOGO} style={styles.logo} contentFit="cover" />
+                    </View>
+                    <Text style={styles.shopName}>{settings.shop_name || 'Albasse Shopping'}</Text>
+                  </View>
                   {shopLines.map((l) => (
                     <Text key={String(l)} style={styles.small}>{l}</Text>
                   ))}
@@ -201,7 +209,10 @@ const styles = StyleSheet.create({
   noticeText: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 14, lineHeight: 21 },
   paper: { alignSelf: 'stretch', maxWidth: 720, width: '100%', backgroundColor: '#ffffff', borderRadius: radius.md, padding: spacing.lg, gap: spacing.md },
   topRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: spacing.md },
-  shopName: { color: '#062266', fontFamily: fonts.bodyBold, fontSize: 20, marginBottom: 4 },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
+  logoWrap: { width: 64, height: 64, borderRadius: 32, overflow: 'hidden', backgroundColor: '#000000' },
+  logo: { width: 64, height: 64 },
+  shopName: { flexShrink: 1, color: '#062266', fontFamily: fonts.bodyBold, fontSize: 20 },
   titleBox: { alignItems: 'flex-end', gap: 2 },
   docTitle: { color: INK, fontFamily: fonts.bodyBold, fontSize: 22, letterSpacing: 2 },
   docNumber: { color: '#062266', fontFamily: fonts.bodyBold, fontSize: 15 },

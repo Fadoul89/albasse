@@ -5857,6 +5857,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         check('facture : l\'adresse est /facture/<commande>', new URL(page.url()).pathname === '/facture/' + E1.id, page.url());
         const paper = (await page.getByTestId('invoice-paper').innerText()).replace(/\s+/g, ' ');
         check('facture : « FACTURE », numero FA-AAAA-000012 et commande N° 12', /FACTURE/.test(paper) && /FA-\d{4}-000012/.test(paper) && /Commande N° 12/.test(paper), paper.slice(0, 200));
+        const logoOk = await page.getByTestId('invoice-logo').locator('img').first().evaluate((el) => el.complete && el.naturalWidth > 0).catch(() => false);
+        check('facture : le logo de la boutique est en haut a gauche, a cote du nom', logoOk && (await page.getByTestId('invoice-logo').boundingBox()).x < 120);
         check('facture : le client, son telephone, son adresse', /Aminata Hassan/.test(paper) && /66123456/.test(paper) && /Quartier Farcha, Moundou/.test(paper));
         check('facture : 2 lignes avec variante, quantite et prix (Soulier noir Taille 42 · Noir ; Montre x2 70 000)', (await page.getByTestId('invoice-row').count()) === 2 && /Soulier noir/.test(paper) && /Taille 42 · Noir/.test(paper) && /70\s000 FCFA/.test(paper), paper);
         check('facture : livraison 2 500 FCFA (le reste du total) et total 92 500 FCFA', /2\s500 FCFA/.test(await page.getByTestId('invoice-delivery').innerText()) && /92\s500 FCFA/.test(await page.getByTestId('invoice-total').innerText()));
