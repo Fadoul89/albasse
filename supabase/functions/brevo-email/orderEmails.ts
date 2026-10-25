@@ -19,6 +19,7 @@ export interface OrderItemRow {
 }
 export interface OrderRow {
   id: string;
+  order_number?: number | null; // numéro de commande donné par la base (1, 2, 3…)
   items: OrderItemRow[];
   total: number;
   payment_method: string;
@@ -42,6 +43,9 @@ export const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&
 // 22 500 FCFA (espaces insécables : le montant ne se coupe pas en fin de ligne)
 export const fmt = (n: number) => `${String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, " ")} FCFA`;
 export const orderRef = (id: string) => id.replace(/-/g, "").slice(0, 8).toUpperCase();
+// « 12 » (numéro de commande) ; l'ancien repère de 8 caractères tant que la commande n'a pas de numéro
+export const orderLabel = (o: { id: string; order_number?: number | null }) => (o.order_number ? String(o.order_number) : orderRef(o.id));
+export const invoiceLink = (id: string) => `${SITE}/facture/${id}`;
 export const firstName = (full: unknown) => String(full ?? "").trim().split(/\s+/)[0] || "";
 
 // Mise en page commune des e-mails de la boutique
@@ -85,7 +89,7 @@ export function paymentLine(method: string): string {
 }
 
 export function orderReceivedEmail(order: OrderRow, fullName: unknown): { subject: string; html: string } {
-  const ref = orderRef(order.id);
+  const ref = orderLabel(order);
   const name = firstName(fullName);
   const city = String(order.shipping_city ?? "").trim();
   const pay = paymentLine(order.payment_method);
@@ -96,7 +100,8 @@ export function orderReceivedEmail(order: OrderRow, fullName: unknown): { subjec
       itemsTable(order) +
       (city ? para(`🚚 Livraison à <b>${escapeHtml(city)}</b>. Nos services de livraison sont ouverts de ${DELIVERY_HOURS}.`) : "") +
       (pay ? para(escapeHtml(pay)) : "") +
-      button(`${SITE}/mes-commandes`, "Suivre mes commandes")
+      button(`${SITE}/mes-commandes`, "Suivre mes commandes") +
+      para(`🧾 <a href="${invoiceLink(order.id)}" style="color:#062266;font-weight:bold">Voir ma facture</a> (connectez-vous avec votre compte pour l'ouvrir).`)
   );
   return { subject: `Commande reçue n° ${ref} — Albasse Shopping`, html };
 }
@@ -110,7 +115,7 @@ export function loyaltyLine(l: Loyalty): string {
 }
 
 export function orderDeliveredEmail(order: OrderRow, fullName: unknown, loyalty: Loyalty): { subject: string; html: string } {
-  const ref = orderRef(order.id);
+  const ref = orderLabel(order);
   const name = firstName(fullName);
   const fidelity = loyaltyLine(loyalty);
   const html = layout(
@@ -119,7 +124,8 @@ export function orderDeliveredEmail(order: OrderRow, fullName: unknown, loyalty:
       para(`Votre commande <b>n° ${ref}</b> a été livrée. Merci de votre confiance !`) +
       (fidelity ? para(escapeHtml(fidelity)) : "") +
       para("Un souci avec votre commande ? Répondez simplement à cet e-mail, nous vous aidons.") +
-      button(`${SITE}/mes-commandes`, "Voir mes commandes")
+      button(`${SITE}/mes-commandes`, "Voir mes commandes") +
+      para(`🧾 <a href="${invoiceLink(order.id)}" style="color:#062266;font-weight:bold">Voir ma facture</a>`)
   );
   return { subject: `Votre commande n° ${ref} est livrée 🎉`, html };
 }

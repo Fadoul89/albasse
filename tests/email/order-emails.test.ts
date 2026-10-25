@@ -96,5 +96,16 @@ check('mise en page : le logo vient d’une adresse publique du site (https://ww
   check('bienvenue sans nom : « Bonjour et bienvenue ! », texte piégé échappé', /Bonjour et bienvenue/.test(E.welcomeEmail('').html) && !/<img src=x/.test(E.welcomeEmail('<img src=x onerror=alert(1)>').html));
 }
 
+// numéro de commande et facture dans les e-mails
+{
+  const r = E.orderReceivedEmail(order({ order_number: 12 }), 'Awa');
+  check('numéro de commande : « n° 12 » dans l’objet et dans le texte', r.subject === 'Commande reçue n° 12 — Albasse Shopping' && /n° 12<\/b>/.test(r.html), r.subject);
+  check('commande reçue : lien « Voir ma facture » vers la facture de cette commande', r.html.includes(`https://www.albasseshopping.com/facture/${ID}`) && /Voir ma facture/.test(r.html));
+  const d = E.orderDeliveredEmail(order({ order_number: 12 }), 'Awa', { delivered: 1, used: false });
+  check('commande livrée : numéro 12 et lien vers la facture', d.subject === 'Votre commande n° 12 est livrée 🎉' && d.html.includes(`/facture/${ID}`), d.subject);
+  const old = E.orderReceivedEmail(order(), 'Awa');
+  check('sans numéro (script pas lancé) : l’ancien repère de 8 caractères reste', /n° 0C7E6708/.test(old.subject));
+}
+
 assert.ok(true);
 console.log(process.exitCode ? '\nDES ECHECS' : `\nTOUT EST BON (${ok} contrôles)`);

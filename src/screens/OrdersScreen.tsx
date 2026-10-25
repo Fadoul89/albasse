@@ -15,6 +15,10 @@ import { LOYALTY_DISCOUNT_RATE } from '../lib/loyaltyDiscount';
 import { useToastStore } from '../store/toastStore';
 import { CountdownTimer } from '../components/CountdownTimer';
 import { formatOrderDate, getOrderDay } from '../lib/formatDuration';
+import { orderNumberLabel } from '../lib/invoice';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/types';
 import type { Order, OrderStatus } from '../types';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
@@ -190,11 +194,12 @@ function OrderCard({
 }) {
   const canEditItems = order.status === 'pending' && order.items.length > 1;
   const canEditGift = order.status === 'pending';
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
-        <Text style={styles.orderId}>Commande #{order.id.slice(0, 8)}</Text>
+        <Text style={styles.orderId} testID="order-number">Commande {orderNumberLabel(order)}</Text>
         <Text style={styles.status}>{STATUS_LABELS[order.status]}</Text>
       </View>
       <View style={styles.dateRow}>
@@ -280,6 +285,15 @@ function OrderCard({
         <Text style={styles.paymentMethod}>{PAYMENT_LABELS[order.payment_method] ?? order.payment_method}</Text>
         <Text style={styles.total}>{formatXAF(order.total)}</Text>
       </View>
+      <Pressable
+        onPress={() => navigation.navigate('Invoice', { orderId: order.id })}
+        accessibilityRole="button"
+        accessibilityLabel="Voir la facture"
+        style={styles.invoiceBtn}
+        testID="order-invoice"
+      >
+        <Text style={styles.invoiceText}>🧾 Voir la facture</Text>
+      </Pressable>
 
       {order.status === 'shipped' && (
         <GoldButton
@@ -404,4 +418,6 @@ const styles = StyleSheet.create({
   footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   paymentMethod: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 12 },
   total: { color: colors.goldLight, fontFamily: fonts.displayBold, fontSize: 17 },
+  invoiceBtn: { alignSelf: 'flex-start', marginTop: spacing.sm, borderWidth: 1, borderColor: colors.gold, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 8 },
+  invoiceText: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 13 },
 });

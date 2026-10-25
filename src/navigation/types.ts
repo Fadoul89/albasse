@@ -6,6 +6,7 @@ export type RootStackParamList = {
   Travel: undefined;
   Install: undefined;
   Unsubscribe: { t?: string } | undefined;
+  Invoice: { orderId: string };
   Login: undefined;
   Register: undefined;
   ForgotPassword: undefined;
