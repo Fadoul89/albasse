@@ -83,6 +83,14 @@ check('la graine fait tourner les choix (autre ordre) sans jamais sortir des art
 check('même graine : même résultat (stable)', pickAds(catalog, view, noSales, { limit: 3, seed: 5 }).map((a) => a.item.id).join('') === pickAds(catalog, view, noSales, { limit: 3, seed: 5 }).map((a) => a.item.id).join(''));
 check('graine négative ou énorme : pas d’erreur', pickAds(catalog, view, noSales, { limit: 3, seed: -7 }).length === 3 && pickAds(catalog, view, noSales, { limit: 3, seed: 10 ** 12 }).length === 3);
 
+// --- les phrases en arabe (chat de Zara en arabe) ---
+check('arabe : 5 commandes → « كثير من الزبائن اشتروا هذا المنتج »', /^كثير من الزبائن اشتروا هذا المنتج: 5 طلبات/.test(adLine({ sales: 5, stock: 0 }, false, 'ar') ?? ''), adLine({ sales: 5, stock: 0 }, false, 'ar'));
+check('arabe : 3 commandes → le chiffre seul, sans « كثير »', /^3 زبائن طلبوا هذا المنتج/.test(adLine({ sales: 3, stock: 0 }, false, 'ar') ?? ''));
+check('arabe : stock 3, client ordinaire → « بقي 3 فقط في المخزون. » (pas « نادر »)', adLine({ sales: 0, stock: 3 }, false, 'ar') === 'بقي 3 فقط في المخزون.');
+check('arabe : stock 3, métier haut placé → « منتج نادر: بقي منه 3 فقط. » ; stock 1 → une seule pièce', adLine({ sales: 0, stock: 3 }, true, 'ar') === 'منتج نادر: بقي منه 3 فقط.' && adLine({ sales: 0, stock: 1 }, true, 'ar') === 'منتج نادر: بقيت قطعة واحدة فقط.' && adLine({ sales: 0, stock: 1 }, false, 'ar') === 'بقيت قطعة واحدة فقط في المخزون.');
+check('arabe : aucun fait vrai → aucun message ; aucune phrase interdite', adLine({ sales: 0, stock: 0 }, true, 'ar') === null && ['ar'].every(() => [adLine({ sales: 9, stock: 2 }, true, 'ar'), adLine({ sales: 9, stock: 2 }, false, 'ar')].every((l) => l && !FORBIDDEN_CLAIMS.test(l))));
+check('productAdLine accepte la langue (arabe)', productAdLine({ id: 'x', stock: 2 }, new Map(), true, 'ar') === 'منتج نادر: بقي منه 2 فقط.');
+
 // --- le delai d'affichage choisi par l'admin ---
 check('delai : colonne absente, vide ou bizarre → 5 secondes', [undefined, null, '', 'abc', NaN, {}].every((v) => zaraAdsDelaySeconds(v) === ZARA_ADS_DELAY_DEFAULT) && ZARA_ADS_DELAY_DEFAULT === 5);
 check('delai : 0 reste 0 (tout de suite), 10 reste 10, « 30 » (texte) donne 30', zaraAdsDelaySeconds(0) === 0 && zaraAdsDelaySeconds(10) === 10 && zaraAdsDelaySeconds('30') === 30);

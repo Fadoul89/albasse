@@ -376,6 +376,14 @@ export interface Texts {
     validity: string;
     proof(n: number): string;
   };
+  // un clic sur la publicité « Zara vous conseille » : Zara prend le relais dans le chat, comme vendeuse
+  advise: {
+    intro(name: string, price: string): string;
+    ask: string;
+    gone: string;
+    chipOrder: string;
+    chipOthers: string;
+  };
   // rappel WhatsApp : prénom, numéro, accord du client ; ensuite la demande part à l'équipe (liste dans l'admin)
   callback: {
     askName: string;
@@ -908,6 +916,13 @@ const FR: Texts = {
     callbackOffer: 'Si vous préférez, l’équipe peut vous écrire sur WhatsApp quand vous serez prêt(e) 📲',
     validity: `⏳ Si vous commandez, la commande reste valable ${ORDER_VALIDITY_HOURS} h.`,
     proof: (n) => `👍 Cet article a été commandé ${n} fois ces 7 derniers jours.`,
+  },
+  advise: {
+    intro: (name, price) => `Bonjour{nom} 😊 Je suis Zara, votre conseillère. J’ai choisi pour vous « ${name} » : ${price}.`,
+    ask: 'Je peux m’occuper de votre commande tout de suite 🛍️ Une question sur cet article ? Écrivez-la ici, je vous réponds.',
+    gone: 'Cet article n’est plus disponible pour le moment{nom} 🙏 Voulez-vous voir d’autres idées ?',
+    chipOrder: '🛒 Commander cet article',
+    chipOthers: '🔎 D’autres idées',
   },
   callback: {
     askName: 'Avec plaisir 😊 Quel est votre prénom ?',
@@ -1472,6 +1487,13 @@ const AR: Texts = {
     callbackOffer: 'إذا أحببت، يمكن للفريق أن يراسلك على واتساب عندما تكون جاهزا 📲',
     validity: `⏳ إذا طلبت، يبقى الطلب صالحا لمدة ${ORDER_VALIDITY_HOURS} ساعة.`,
     proof: (n) => `👍 تم طلب هذا المنتج ${n} مرات خلال الأيام السبعة الأخيرة.`,
+  },
+  advise: {
+    intro: (name, price) => `مرحبا{nom} 😊 أنا زارا، مستشارتك. اخترت لك «${name}»: ${price}.`,
+    ask: 'يمكنني تجهيز طلبك الآن 🛍️ هل لديك سؤال عن هذا المنتج؟ اكتبه هنا وسأجيبك.',
+    gone: 'هذا المنتج غير متوفر حاليا{nom} 🙏 هل تريد أن أعرض عليك أفكارا أخرى؟',
+    chipOrder: '🛒 اطلب هذا المنتج',
+    chipOthers: '🔎 أفكار أخرى',
   },
   callback: {
     askName: 'بكل سرور 😊 ما اسمك الأول؟',
