@@ -15,7 +15,7 @@ import { supabase } from '../lib/supabase';
 import { getCurrentSessionId } from '../lib/analytics';
 import { getProductSales } from '../lib/assistantData';
 import type { SalesMap } from '../lib/assistantSales';
-import { isSeniorProfession, productAdLine } from '../lib/zaraAds';
+import { isSeniorProfession, productAdLine, zaraAdsDelaySeconds } from '../lib/zaraAds';
 import { colors, fonts, radius, spacing } from '../theme';
 
 const SHOW_DELAY_MS = 1500;
@@ -32,8 +32,10 @@ export function SmartPromotionPopup() {
   const { categories } = useCategories();
   const { products } = useProducts();
   const showToast = useToastStore((s) => s.show);
-  const { settings } = useStoreSettings();
+  const { settings, isLoading: settingsLoading } = useStoreSettings();
   const zaraAds = settings.zara_ads_enabled === true;
+  // quand Zara gère les publicités, la fenêtre s'ouvre après le délai choisi par l'admin (sinon 1,5 s comme avant)
+  const showDelayMs = zaraAds ? zaraAdsDelaySeconds(settings.zara_ads_delay_seconds) * 1000 : SHOW_DELAY_MS;
 
   const [visible, setVisible] = useState(false);
   const [claiming, setClaiming] = useState(false);
@@ -50,19 +52,20 @@ export function SmartPromotionPopup() {
   }, [zaraAds, promotion?.product_id]);
 
   useEffect(() => {
-    if (!promotion) return;
+    if (!promotion || settingsLoading) return;
     let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
 
     AsyncStorage.getItem(seenKey(promotion.id)).then((seen) => {
       if (cancelled || seen) return;
-      const timer = setTimeout(() => setVisible(true), SHOW_DELAY_MS);
-      return () => clearTimeout(timer);
+      timer = setTimeout(() => setVisible(true), showDelayMs);
     });
 
     return () => {
       cancelled = true;
+      if (timer) clearTimeout(timer);
     };
-  }, [promotion?.id]);
+  }, [promotion?.id, settingsLoading, showDelayMs]);
 
   if (!promotion) return null;
 

@@ -342,6 +342,8 @@ export interface StoreSettings {
   inactive_emails_daily_limit?: number;
   // publicités de Zara à l'écran (accueil + fenêtre de promotion) ; absent tant que add-zara-ads.sql n'est pas lancé : éteintes
   zara_ads_enabled?: boolean;
+  // après combien de secondes la publicité de Zara s'affiche (0 à 120) ; absent tant que add-zara-ads-delay.sql n'est pas lancé : 5 secondes
+  zara_ads_delay_seconds?: number;
   // ligne facultative en bas des factures (NIF, RCCM…) ; absente tant que add-order-numbers-invoices.sql n'est pas lancé
   invoice_legal_line?: string | null;
   left_ad_items: AdItem[];

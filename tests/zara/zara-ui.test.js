@@ -294,6 +294,9 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
               // publicites de Zara : fakeStore.zaraAds undefined = colonne absente (script add-zara-ads.sql pas lance), sinon true / false
               if (fakeStore.zaraAds === undefined) delete r.zara_ads_enabled;
               else if (wants('zara_ads_enabled')) r.zara_ads_enabled = fakeStore.zaraAds;
+              // delai de la publicite : fakeStore.zaraDelay undefined = colonne absente (script add-zara-ads-delay.sql pas lance)
+              if (fakeStore.zaraDelay === undefined) delete r.zara_ads_delay_seconds;
+              else if (wants('zara_ads_delay_seconds')) r.zara_ads_delay_seconds = fakeStore.zaraDelay;
             }
             if (fs.accountRequired === 'missing') delete r.account_required;
             else if (wants('account_required')) r.account_required = fs.accountRequired === true;
@@ -315,13 +318,14 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         if (fakeStore && u.pathname === '/rest/v1/store_settings' && m === 'PATCH') {
           const body = JSON.parse(req.postData() || '{}');
           (fakeStore.patches = fakeStore.patches || []).push(body);
-          const missing = ('zara_ads_enabled' in body && fakeStore.zaraAds === undefined && 'zara_ads_enabled') || ('whatsapp_order_enabled' in body && fakeStore.waOrder === undefined && 'whatsapp_order_enabled') || ('account_required' in body && fakeStore.accountRequired === 'missing' && 'account_required');
+          const missing = ('zara_ads_delay_seconds' in body && fakeStore.zaraDelay === undefined && 'zara_ads_delay_seconds') || ('zara_ads_enabled' in body && fakeStore.zaraAds === undefined && 'zara_ads_enabled') || ('whatsapp_order_enabled' in body && fakeStore.waOrder === undefined && 'whatsapp_order_enabled') || ('account_required' in body && fakeStore.accountRequired === 'missing' && 'account_required');
           if (missing) return json(route, { code: 'PGRST204', message: `Could not find the '${missing}' column of 'store_settings' in the schema cache` }, 400);
           if ('whatsapp_order_enabled' in body) fakeStore.waOrder = body.whatsapp_order_enabled;
           if ('account_required' in body) fakeStore.accountRequired = body.account_required;
           if ('order_emails_enabled' in body) fakeStore.orderEmails = body.order_emails_enabled;
           if ('inactive_emails_enabled' in body) fakeStore.inactiveEmails = body.inactive_emails_enabled;
           if ('zara_ads_enabled' in body) fakeStore.zaraAds = body.zara_ads_enabled;
+          if ('zara_ads_delay_seconds' in body) fakeStore.zaraDelay = body.zara_ads_delay_seconds;
           return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } });
         }
         // les promotions publiees en vrai sur le site (fenetre « offre du jour ») ne doivent pas couvrir les pages pendant les tests
@@ -665,7 +669,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     await offFalse.ctx.close();
 
     // b. interrupteur allume, visiteur ordinaire, aucune commande en base : « Plus que N en stock », jamais « article rare » ni « beaucoup »
-    const guest = await home7({ fakeStore: { zaraAds: true } });
+    const guest = await home7({ fakeStore: { zaraAds: true, zaraDelay: 0 } });
     await waitAd(guest.page);
     const gl = await adText(guest.page);
     check('visiteur : « Plus que N en stock. » (vrai stock), jamais « Article rare » ni « Beaucoup de clients »', /^Plus (que \d|qu'un seul) en stock\.$/.test(gl), gl);
@@ -682,7 +686,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
 
     // c. client haut place (metier du compte) : « Article rare : il n'en reste que N » (vrai stock)
     const dir = memberWith('Directeur');
-    const boss = await home7({ fakeStore: { zaraAds: true }, storage: { [SK7]: dir.session, albasse_zara_name: 'Fatimé' }, fakeUser: dir });
+    const boss = await home7({ fakeStore: { zaraAds: true, zaraDelay: 0 }, storage: { [SK7]: dir.session, albasse_zara_name: 'Fatimé' }, fakeUser: dir });
     await waitAd(boss.page);
     const bl = await adText(boss.page);
     check('metier « Directeur » : « Article rare : il n’en reste que N. » (vrai stock)', /^Article rare : il n'en reste (que \d|qu'un seul)\.$/.test(bl), bl);
@@ -693,14 +697,14 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
 
     // d. etudiant : le meme fait, dit simplement
     const stu = memberWith('Étudiant');
-    const student = await home7({ fakeStore: { zaraAds: true }, storage: { [SK7]: stu.session, albasse_zara_name: 'Fatimé' }, fakeUser: stu });
+    const student = await home7({ fakeStore: { zaraAds: true, zaraDelay: 0 }, storage: { [SK7]: stu.session, albasse_zara_name: 'Fatimé' }, fakeUser: stu });
     await waitAd(student.page);
     const sl = await adText(student.page);
     check('metier « Étudiant » : « Plus que N en stock. » (jamais « Article rare »)', /^Plus (que \d|qu'un seul) en stock\.$/.test(sl), sl);
     await student.ctx.close();
 
     // e. de vraies commandes (3 ou plus) : « Beaucoup de clients ont acheté », avec le vrai chiffre, et seulement pour cet article
-    const sold = await home7({ fakeStore: { zaraAds: true }, fakeSales: { rows: [{ product_id: abundant.id, orders_count: 8 }, { product_id: rare[0].id, orders_count: 1 }] } });
+    const sold = await home7({ fakeStore: { zaraAds: true, zaraDelay: 0 }, fakeSales: { rows: [{ product_id: abundant.id, orders_count: 8 }, { product_id: rare[0].id, orders_count: 1 }] } });
     await waitAd(sold.page);
     const al = await adText(sold.page);
     const aname = ((await sold.page.getByTestId('zara-ad-name').textContent()) || '').trim();
@@ -711,7 +715,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
 
     // f. fenetre de promotion : la phrase de Zara sous le message quand l'offre concerne un article
     const promo = { id: '00000000-0000-4000-8000-0000000000aa', name: 'Test', category_id: null, product_id: rare[0].id, gift: null, min_purchase: 0, start_date: '2020-01-01', end_date: '2099-12-31', end_time: '23:59:59', max_beneficiaries: null, claimed_count: 0, message: 'Offre du jour pour vous', image_url: null, button_text: 'PROFITER DE L’OFFRE', is_active: true, created_at: '2026-10-01T00:00:00Z' };
-    const withPromo = await home7({ fakeStore: { zaraAds: true }, fakePromos: [promo] });
+    const withPromo = await home7({ fakeStore: { zaraAds: true, zaraDelay: 0 }, fakePromos: [promo] });
     await withPromo.page.getByTestId('promo-zara-line').waitFor({ timeout: 25000 });
     const pl = ((await withPromo.page.getByTestId('promo-zara-line').textContent()) || '').trim();
     check('fenetre de promotion : « Zara : Plus que N en stock. » sous le message de l’offre', /^💬 Zara : Plus (que \d|qu'un seul) en stock\.$/.test(pl), pl);
@@ -722,9 +726,34 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     check('interrupteur eteint : la fenetre de promotion n’a aucune phrase de Zara', (await promoOff.page.getByTestId('promo-zara-line').count()) === 0 && /Offre du jour pour vous/.test(await promoOff.page.locator('body').innerText()));
     await promoOff.ctx.close();
 
+    // delai choisi par l'admin : la carte de l'accueil n'apparait qu'apres N secondes (5 s par defaut quand la colonne n'existe pas encore)
+    const late = await home7({ fakeStore: { zaraAds: true, zaraDelay: 7 } });
+    await sleep(3500);
+    check('delai de 7 s : apres 3,5 s la publicite de Zara n’est pas encore la', (await late.page.getByTestId('zara-ad').count()) === 0);
+    await late.page.getByTestId('zara-ad').waitFor({ timeout: 25000 });
+    check('delai de 7 s : la publicite apparait ensuite', true);
+    await late.ctx.close();
+    const instant = await home7({ fakeStore: { zaraAds: true, zaraDelay: 0 } });
+    await instant.page.getByTestId('zara-ad').waitFor({ timeout: 15000 });
+    check('delai « tout de suite » (0 s) : la publicite apparait des que les ventes sont lues', true);
+    await instant.ctx.close();
+    const dflt = await home7({ fakeStore: { zaraAds: true } });
+    await sleep(2500);
+    check('colonne du delai absente : 5 secondes par defaut (pas encore la apres 2,5 s)', (await dflt.page.getByTestId('zara-ad').count()) === 0);
+    await dflt.page.getByTestId('zara-ad').waitFor({ timeout: 25000 });
+    check('colonne du delai absente : la publicite apparait ensuite', true);
+    await dflt.ctx.close();
+    // fenetre de promotion : meme delai quand Zara gere les publicites
+    const promoLate = await home7({ fakeStore: { zaraAds: true, zaraDelay: 8 }, fakePromos: [promo] });
+    await sleep(4000);
+    check('delai de 8 s : la fenetre de promotion n’est pas ouverte apres 4 s', (await promoLate.page.getByTestId('promo-zara-line').count()) === 0 && !/Offre du jour pour vous/.test(await promoLate.page.locator('body').innerText()));
+    await promoLate.page.getByTestId('promo-zara-line').waitFor({ timeout: 25000 });
+    check('delai de 8 s : la fenetre s’ouvre ensuite avec la phrase de Zara', true);
+    await promoLate.ctx.close();
+
     // g. l'interrupteur de l'admin (page « Promotions intelligentes ») : la base recoit zara_ads_enabled ; colonne absente : il faut lancer le script
     const adm = memberWith(null, true);
-    const fs7 = { zaraAds: false, waOrder: true, patches: [] };
+    const fs7 = { zaraAds: false, zaraDelay: 5, waOrder: true, patches: [] };
     const admin = await newVisitor(phone, { storage: { [SK7]: adm.session }, fakeUser: adm, fakeStore: fs7 });
     await admin.page.goto(`${BASE}/admin/promotions`, { waitUntil: 'load' });
     await admin.page.getByTestId('zara-ads-toggle').waitFor({ timeout: 25000 });
@@ -740,6 +769,16 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     await admin.page.getByTestId('zara-ads-switch').click();
     await admin.page.getByText('Publicités de Zara coupées', { exact: false }).waitFor({ timeout: 8000 });
     check('admin : on l’eteint, la base recoit zara_ads_enabled = false', (fs7.patches || []).some((b) => b.zara_ads_enabled === false), fs7.patches);
+    // choix du delai : un toucher, la base recoit zara_ads_delay_seconds
+    await admin.page.getByTestId('zara-delay').waitFor({ timeout: 15000 });
+    check('admin : delai affiche : 5 secondes', /5 secondes/.test(await admin.page.getByTestId('zara-delay-status').innerText()), await admin.page.getByTestId('zara-delay-status').innerText());
+    await admin.page.getByTestId('zara-delay-10').click();
+    await admin.page.getByText(/10 secondes après l’ouverture de l’accueil\./).first().waitFor({ timeout: 8000 });
+    check('admin : « 10 s » choisi, la base recoit zara_ads_delay_seconds = 10', (fs7.patches || []).some((b) => b.zara_ads_delay_seconds === 10), fs7.patches);
+    await admin.page.getByTestId('zara-delay-0').click();
+    await admin.page.getByText(/s’affiche tout de suite/).first().waitFor({ timeout: 8000 });
+    check('admin : « Tout de suite » choisi, la base recoit zara_ads_delay_seconds = 0', (fs7.patches || []).some((b) => b.zara_ads_delay_seconds === 0), fs7.patches);
+    await admin.page.screenshot({ path: path.join(OUT, '7f-admin-delai.png') });
     await admin.ctx.close();
     const adm2 = memberWith(null, true);
     const noCol = await newVisitor(phone, { storage: { [SK7]: adm2.session }, fakeUser: adm2, fakeStore: { waOrder: true, patches: [] } });
@@ -749,6 +788,10 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     await noCol.page.getByTestId('zara-ads-switch').click();
     await noCol.page.getByText(/Lancez d’abord le script add-zara-ads\.sql/).waitFor({ timeout: 8000 });
     check('admin : colonne absente (script pas lance) : message « Lancez d’abord le script add-zara-ads.sql »', true);
+    await noCol.page.getByTestId('zara-delay-15').click();
+    await noCol.page.getByText(/Lancez d’abord le script add-zara-ads-delay\.sql/).waitFor({ timeout: 8000 });
+    check('admin : colonne du delai absente : message « Lancez d’abord le script add-zara-ads-delay.sql »', true);
+    check('admin : le delai revient sur 5 secondes apres l’echec', /5 secondes/.test(await noCol.page.getByTestId('zara-delay-status').innerText()));
     check('admin : l’interrupteur revient sur « Désactivé » apres l’echec', /Désactivé/.test(await noCol.page.getByTestId('zara-ads-status').innerText()));
     await noCol.ctx.close();
   }

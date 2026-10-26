@@ -14,6 +14,21 @@ import { LOW_STOCK_MAX, SALES_WINDOW_DAYS, provenSales, type SalesMap } from './
 // À partir de ce nombre de vraies commandes, on dit « beaucoup de clients ont acheté » ; en dessous : le chiffre seul.
 export const MANY_SALES = 5;
 
+// Après combien de secondes la publicité de Zara s'affiche (choisi par l'admin, page Promotions intelligentes). 0 = tout de suite.
+export const ZARA_ADS_DELAY_CHOICES = [0, 3, 5, 10, 15, 30, 60];
+export const ZARA_ADS_DELAY_DEFAULT = 5;
+export const ZARA_ADS_DELAY_MAX = 120;
+
+// Le délai lu dans les réglages (colonne absente ou valeur bizarre : 5 secondes), toujours entre 0 et 120 secondes.
+export function zaraAdsDelaySeconds(value: unknown): number {
+  if (value === null || value === undefined || value === '') return ZARA_ADS_DELAY_DEFAULT;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return ZARA_ADS_DELAY_DEFAULT;
+  return Math.min(ZARA_ADS_DELAY_MAX, Math.max(0, Math.round(n)));
+}
+
+export const zaraAdsDelayLabel = (seconds: number): string => (seconds <= 0 ? 'Tout de suite' : `${seconds} s`);
+
 // Les métiers « haut placés », écrits par le client dans son compte (champ libre) ; mots entiers, accents et arabe pliés comme normalize().
 const SENIOR_WORDS = [
   'directeur', 'directrice', 'dg', 'pdg', 'dga', 'president', 'presidente', 'ministre', 'depute', 'senateur', 'gouverneur', 'prefet', 'maire',
