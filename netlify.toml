@@ -9,6 +9,11 @@
   # depuis son ajout.
   SECRETS_SCAN_OMIT_PATHS = "albasse-app/google-services.json"
 
+# Pages vues par Google et les réseaux sociaux : accueil, produits, catégories (netlify/edge-functions/og-preview.ts)
+[[edge_functions]]
+  path = "/"
+  function = "og-preview"
+
 [[edge_functions]]
   path = "/produit/*"
   function = "og-preview"
@@ -16,6 +21,15 @@
 [[edge_functions]]
   path = "/categorie/*"
   function = "og-preview"
+
+# Plan du site et robots.txt toujours à jour (netlify/edge-functions/sitemap.ts)
+[[edge_functions]]
+  path = "/sitemap.xml"
+  function = "sitemap"
+
+[[edge_functions]]
+  path = "/robots.txt"
+  function = "sitemap"
 
 [[redirects]]
   from = "/*"

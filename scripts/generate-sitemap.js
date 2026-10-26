@@ -79,9 +79,29 @@ ${allUrls
 
   fs.writeFileSync(path.join(distDir, 'sitemap.xml'), xml);
 
+  // fichier de secours : le vrai plan du site et le vrai robots.txt sont refaits à chaque demande par
+  // netlify/edge-functions/sitemap.ts (même liste de pages privées : un test compare les deux)
+  const PRIVATE_PATHS = [
+    '/admin/',
+    '/connexion',
+    '/inscription',
+    '/mot-de-passe-oublie',
+    '/reinitialiser-mot-de-passe',
+    '/commande',
+    '/facture/',
+    '/mes-commandes',
+    '/panier',
+    '/compte',
+    '/mes-messages',
+    '/mes-favoris',
+    '/notifications',
+    '/espace-affilie',
+    '/desinscription',
+    '/roue-de-la-chance',
+  ];
   const robots = `User-agent: *
 Allow: /
-Disallow: /admin/
+${PRIVATE_PATHS.map((p) => `Disallow: ${p}`).join('\n')}
 
 Sitemap: ${SITE_URL}/sitemap.xml
 `;
