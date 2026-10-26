@@ -30,6 +30,9 @@ export interface Product {
   stock: number;
   is_flash_sale: boolean;
   flash_sale_ends_at: string | null;
+  // promotion de Zara (7 jours) et ancien prix mis de côté ; absents tant que add-zara-promotions.sql n'est pas lancé
+  promo_ends_at?: string | null;
+  old_price_saved?: number | null;
   notify_on_publish: boolean;
   is_active: boolean;
   affiliate_commission_rate: number | null;

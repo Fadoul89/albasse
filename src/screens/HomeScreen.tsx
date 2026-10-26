@@ -21,6 +21,7 @@ import { ZaraAdCard } from '../components/ZaraAdCard';
 import { WebPushBanner } from '../components/WebPushBanner';
 import { fetchOnlineCount, onlineLabel } from '../lib/onlineCount';
 import { coldSeasonActive, coldSeasonPicks } from '../lib/coldSeason';
+import { activeFlash, activePromotions, nextPromoChange } from '../lib/promotions';
 
 const ONLINE_REFRESH_MS = 30000;
 
@@ -43,8 +44,18 @@ export function HomeScreen() {
   const phoneAds = width < 700;
   const gridColumns = width >= 700 ? 4 : 2;
 
-  const flashSale = products.filter((p) => p.is_flash_sale);
-  const flashEndsAt = flashSale[0]?.flash_sale_ends_at;
+  // La Vente flash (24 h) et les Promotions de Zara disparaissent toutes seules à leur fin ; l'ancien prix n'est montré que pour elles (lib/promotions)
+  const [now, setNow] = useState(() => Date.now());
+  const nextChange = nextPromoChange(allProducts, now);
+  useEffect(() => {
+    if (nextChange === null) return;
+    const id = setTimeout(() => setNow(Date.now()), Math.min(Math.max(nextChange - Date.now() + 500, 500), 2_000_000_000));
+    return () => clearTimeout(id);
+  }, [nextChange]);
+  const { items: flashSale, endsAt: flashEndsAt } = activeFlash(products, now);
+  const { items: promoAll, endsAt: promoEndsAt } = activePromotions(products, now);
+  const promoItems = promoAll.slice(0, 12);
+  const promoEndLabel = promoEndsAt ? new Date(promoEndsAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', timeZone: 'Africa/Ndjamena' }) : '';
   // saison fraîche (jusqu'à fin décembre) : les vrais blousons et manteaux en vente, la plus grande remise réelle d'abord (jamais un porte-manteau)
   const coldPicks = coldSeasonActive() ? coldSeasonPicks(products, (p) => ({ name: p.name, price: p.price, compareAt: p.compare_at_price, stock: p.stock, hasImage: !!p.images?.[0] }), 6) : [];
 
@@ -187,7 +198,7 @@ export function HomeScreen() {
       )}
 
       {flashSale.length > 0 && flashEndsAt && (
-        <View style={styles.flashSection}>
+        <View style={styles.flashSection} testID="home-flash">
           <View style={styles.flashHeader}>
             <View>
               <Animated.View
@@ -206,10 +217,31 @@ export function HomeScreen() {
               </Animated.View>
               <Text style={styles.flashSubtitle}>Offres limitées dans le temps</Text>
             </View>
-            <CountdownTimer endsAt={flashEndsAt} />
+            <CountdownTimer endsAt={flashEndsAt} onExpire={() => setNow(Date.now())} />
           </View>
           <FlatList
             data={flashSale}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={{ paddingHorizontal: spacing.md }}
+            renderItem={({ item }) => (
+              <View style={{ marginRight: spacing.md }}>
+                <ProductCard product={item} />
+              </View>
+            )}
+          />
+        </View>
+      )}
+
+      {promoItems.length > 0 && (
+        <View style={styles.coldSection} testID="home-promotions">
+          <View style={styles.coldHeader}>
+            <Text style={styles.coldBadge}>🏷️ PROMOTIONS</Text>
+            <Text style={styles.coldSubtitle}>{`Prix réduits jusqu’au ${promoEndLabel}`}</Text>
+          </View>
+          <FlatList
+            data={promoItems}
             horizontal
             showsHorizontalScrollIndicator={false}
             keyExtractor={(item) => item.id}

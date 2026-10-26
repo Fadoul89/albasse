@@ -18,6 +18,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing } from '../theme';
 import { useProductBySlug, useProducts } from '../hooks/useProducts';
+import { shownOldPrice } from '../lib/promotions';
 import { useReviews } from '../hooks/useReviews';
 import { useCategories } from '../hooks/useCategories';
 import { useCartStore } from '../store/cartStore';
@@ -287,9 +288,7 @@ export function ProductScreen({ route }: Props) {
 
               <View style={styles.priceRow}>
                 <Text style={styles.price}>{formatXAF(product.price)}</Text>
-                {product.compare_at_price && (
-                  <Text style={styles.comparePrice}>{formatXAF(product.compare_at_price)}</Text>
-                )}
+                {shownOldPrice(product) && <Text style={styles.comparePrice} testID="product-old-price">{formatXAF(shownOldPrice(product) as number)}</Text>}
               </View>
             </View>
 

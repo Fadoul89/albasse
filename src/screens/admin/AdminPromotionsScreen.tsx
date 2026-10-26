@@ -30,6 +30,7 @@ import { TimeField } from '../../components/TimeField';
 import { ScheduledPushes } from '../../components/ScheduledPushes';
 import { StoreSettingToggle } from '../../components/StoreSettingToggle';
 import { ZaraAdsDelay } from '../../components/ZaraAdsDelay';
+import { ZaraPromoPicker } from '../../components/ZaraPromoPicker';
 import type { SmartPromotion, AdItem } from '../../types';
 
 type TargetType = 'category' | 'product' | 'none';
@@ -40,7 +41,7 @@ export function AdminPromotionsScreen() {
   const profile = useAuthStore((s) => s.profile);
   const { promotions, isLoading, refresh } = useSmartPromotions();
   const { categories } = useCategories();
-  const { products } = useProducts();
+  const { products } = useProducts({ raw: true });
   const { settings: storeSettings, refresh: refreshStoreSettings } = useStoreSettings();
   const showToast = useToastStore((s) => s.show);
 
@@ -316,6 +317,7 @@ export function AdminPromotionsScreen() {
         contentContainerStyle={{ padding: spacing.md, paddingBottom: 60 }}
         ListHeaderComponent={
           <View style={styles.form}>
+            <ZaraPromoPicker />
             <StoreSettingToggle setting="zaraAds" />
             <ZaraAdsDelay />
             <Text style={[styles.helperText, { marginBottom: spacing.md }]}>

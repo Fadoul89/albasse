@@ -27,7 +27,7 @@ export function AdminProductFormScreen({ route }: Props) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const productId = route.params?.productId;
   const { product: existing } = useProduct(productId ?? '');
-  const { products: allProducts } = useProducts();
+  const { products: allProducts } = useProducts({ raw: true });
   const { categories } = useCategories();
   const isEditing = Boolean(productId && existing);
 
@@ -205,6 +205,11 @@ export function AdminProductFormScreen({ route }: Props) {
         <Field label="Description" value={description} onChangeText={setDescription} multiline />
         <Field label="Prix (FCFA)" value={price} onChangeText={setPrice} keyboardType="numeric" />
         <Field label="Prix barré (optionnel)" value={comparePrice} onChangeText={setComparePrice} keyboardType="numeric" />
+        <Text style={styles.priceHint} testID="old-price-hint">
+          {`Le prix barré ne s’affiche que pendant une Vente flash (24 h) ou une promotion choisie par Zara ; sinon il est mis de côté, sans être effacé.${
+            existing?.old_price_saved ? ` Ancien prix mis de côté : ${Number(existing.old_price_saved).toLocaleString('fr-FR')} FCFA.` : ''
+          }`}
+        </Text>
         <Field label="Stock" value={stock} onChangeText={setStock} keyboardType="numeric" />
         <Text style={styles.label}>Photos</Text>
         <View style={styles.imagesRow}>
@@ -338,6 +343,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.md, paddingBottom: 60 },
   label: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 12, marginBottom: 6 },
+  priceHint: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11.5, lineHeight: 16, marginTop: -6, marginBottom: spacing.md },
   input: {
     backgroundColor: colors.panel,
     borderRadius: radius.md,
