@@ -37,7 +37,7 @@ Googlebot, Google-InspectionTool (test d'adresse de Search Console), Bing, DuckD
 ## À savoir
 - **Compte obligatoire à l'entrée** (réglage « Clients » de l'administration) : un visiteur qui arrive depuis Google doit d'abord se connecter ou créer un compte avant de voir le produit. Google voit la fiche, mais le visiteur est freiné : c'est un choix de la boutique, non modifié ici. Mesurable plus tard avec Google Search Console.
 - Le SEO agit en **semaines**, pas en jours : Google doit revenir lire les pages.
-- **Google Search Console** (gratuit) n'est pas encore connecté : c'est la prochaine étape utile pour voir les vraies recherches. Ajouter le site, ajouter l'adresse du plan `https://www.albasseshopping.com/sitemap.xml`.
+- **Google Search Console** : propriété `https://www.albasseshopping.com/` **validée le 26 octobre 2026** par le fichier `public/google80a7957df67d5261.html` (**à ne jamais supprimer** : Google le revérifie pour garder le statut de propriétaire). Envoyer `sitemap.xml` dans le menu « Sitemaps ». Les premières statistiques arrivent en 2 à 3 jours.
 
 ## Étapes suivantes (non commencées)
 - Étape 2 : Zara propose titre et description des fiches sans description (50) ou trop courtes (95), l'administrateur valide avant publication.
