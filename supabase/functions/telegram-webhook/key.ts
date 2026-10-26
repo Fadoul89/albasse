@@ -3,12 +3,17 @@
 // Ce fichier ne touche ni au réseau ni à la base (tout passe par `deps`) : il est donc testable (tests/email/telegram-key.test.ts).
 
 export const BOT_KEY_RE = /^[0-9]{6,12}:[A-Za-z0-9_-]{30,}$/;
+// une clé au milieu d'un texte (message de BotFather collé en entier) : numéro du bot, « : », puis 30 caractères ou plus, sans lettre collée autour
+const KEY_IN_TEXT_RE = /(?<![A-Za-z0-9_-])[0-9]{6,12}:[A-Za-z0-9_-]{30,}(?![A-Za-z0-9_-])/g;
 
-// « 8795982983:AAF… », avec ou sans « /cle » devant ; espaces et retours à la ligne (venus du copier-coller) ignorés
+// « 8795982983:AAF… », avec ou sans « /cle » devant ; espaces et retours à la ligne (venus du copier-coller) ignorés.
+// Si le message de BotFather est collé en entier, on prend la clé qu'il contient (seulement s'il n'y en a qu'une).
 export function extractBotKey(text: unknown): string | null {
   if (typeof text !== "string") return null;
   const candidate = text.replace(/^\s*\/cle(?:@[A-Za-z0-9_]+)?/i, "").replace(/\s+/g, "");
-  return BOT_KEY_RE.test(candidate) ? candidate : null;
+  if (BOT_KEY_RE.test(candidate)) return candidate;
+  const found = new Set(text.match(KEY_IN_TEXT_RE) ?? []);
+  return found.size === 1 ? [...found][0] : null;
 }
 
 export interface KeyDeps {

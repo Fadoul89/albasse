@@ -85,15 +85,29 @@ Deno.serve(async (req: Request) => {
   const text: string | undefined = message?.text;
   const chatId: number | undefined = message?.chat?.id;
 
+  // petit journal (jamais le texte du message, seulement sa longueur et le résultat) pour comprendre ce qui arrive quand une clé est envoyée
+  const logEvent = async (outcome: string, keyFound: boolean) => {
+    try {
+      await supabase.from("telegram_key_events").insert({ chat_id: chatId ?? null, text_length: text?.length ?? 0, key_found: keyFound, outcome });
+    } catch {
+      // le journal ne doit jamais bloquer le bot
+    }
+  };
+
   // une clé de bot envoyée par un administrateur dans la conversation privée : changement de clé (voir key.ts)
   const newKey = extractBotKey(text);
   if (newKey && chatId && message?.chat?.type === "private") {
     try {
-      await processNewKey(keyDeps, chatId, message?.message_id, newKey);
+      await logEvent(await processNewKey(keyDeps, chatId, message?.message_id, newKey), true);
     } catch (e) {
       console.error("changement de clé", e instanceof Error ? e.name : "erreur");
+      await logEvent("error", true);
     }
     return new Response("ok");
+  }
+  // un long message sans clé reconnaissable (clé coupée, mauvais message copié…) : noté pour le diagnostic
+  if (chatId && message?.chat?.type === "private" && (text?.length ?? 0) >= 30 && !text?.startsWith("/start")) {
+    await logEvent("no-key-in-text", false);
   }
 
   if (text && chatId && text.startsWith("/start")) {

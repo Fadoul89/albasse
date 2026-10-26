@@ -59,3 +59,17 @@ end;
 $$;
 revoke all on function public.set_telegram_bot_token(text) from public, anon, authenticated;
 grant execute on function public.set_telegram_bot_token(text) to service_role;
+
+-- Petit journal du changement de clé (jamais le texte du message ni la clé : seulement la longueur et le résultat), pour comprendre
+-- ce qui arrive quand une clé est envoyée au bot. Réservé au serveur : pas de droit pour les visiteurs.
+create table if not exists public.telegram_key_events (
+  id bigint generated always as identity primary key,
+  at timestamptz not null default now(),
+  chat_id bigint,
+  text_length integer not null default 0,
+  key_found boolean not null default false,
+  outcome text
+);
+alter table public.telegram_key_events enable row level security;
+revoke all on public.telegram_key_events from public, anon, authenticated;
+grant select, insert, delete on public.telegram_key_events to service_role;

@@ -26,6 +26,13 @@ check('clé avec espaces autour', extractBotKey(`  ${NEW}  `) === NEW);
 check('clé coupée par des espaces et retours à la ligne (copier-coller)', extractBotKey(`1234567890:\nAAExempleNouvelleCle Fausse9876543210zz`) === NEW);
 check('« /cle » devant', extractBotKey(`/cle ${NEW}`) === NEW);
 check('« /cle@NomDuBot » devant', extractBotKey(`/cle@AlbasseShoppingBot ${NEW}`) === NEW);
+// message de BotFather collé en entier (phrases autour de la clé)
+const BOTFATHER_MESSAGE = `Your token was replaced. Use this token to access the HTTP API:\n${NEW}\nKeep your token secure and store it safely, it can be used by anyone to control your bot.\n\nFor a description of the Bot API, see this page: https://core.telegram.org/bots/api`;
+check('message de BotFather collé en entier : la clé est trouvée', extractBotKey(BOTFATHER_MESSAGE) === NEW);
+check('message de BotFather avec « Done! … t.me/… » : la clé est trouvée', extractBotKey(`Done! Congratulations on your new bot. You will find it at t.me/AlbasseShoppingBot.\n\nUse this token to access the HTTP API:\n${NEW}\n\nKeep your token secure.`) === NEW);
+check('deux clés différentes dans le même message : refusé (on ne devine pas)', extractBotKey(`${OLD}\n${NEW}`) === null);
+check('la même clé deux fois : acceptée', extractBotKey(`${NEW}\n${NEW}`) === NEW);
+check('clé collée à des lettres : pas reconnue', extractBotKey(`abc${NEW}def`) === null);
 check('un message normal n\'est pas une clé', extractBotKey('Bonjour, je voudrais une commande') === null);
 check('/start n\'est pas une clé', extractBotKey('/start 0c7e6708-fb70-413c-9862-6e041adc963f') === null);
 check('numéro seul n\'est pas une clé', extractBotKey('1234567890') === null);
