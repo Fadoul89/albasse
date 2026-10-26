@@ -48,6 +48,9 @@ export function HomeScreen() {
   // saison fraîche (jusqu'à fin décembre) : les vrais blousons et manteaux en vente, la plus grande remise réelle d'abord (jamais un porte-manteau)
   const coldPicks = coldSeasonActive() ? coldSeasonPicks(products, (p) => ({ name: p.name, price: p.price, compareAt: p.compare_at_price, stock: p.stock, hasImage: !!p.images?.[0] }), 6) : [];
 
+  // largeur du cadre « SERVICE QUALITÉ GARANTIE » : l'horloge a exactement la même (elle ne le dépasse jamais)
+  const [tagWidth, setTagWidth] = useState(0);
+
   const glow = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.loop(
@@ -120,7 +123,7 @@ export function HomeScreen() {
       >
         <Text style={styles.brand}>ALBASSE</Text>
         <Text style={styles.brandSub}>SHOPPING</Text>
-        <View style={styles.taglineFrame}>
+        <View style={styles.taglineFrame} testID="home-tagline" onLayout={(e) => setTagWidth(e.nativeEvent.layout.width)}>
           <View style={styles.taglineRow}>
             <Animated.Text
               style={[
@@ -148,8 +151,8 @@ export function HomeScreen() {
             </Animated.Text>
           </View>
         </View>
-        {/* heure locale des villes du Tchad, une ville toutes les 10 secondes (demande du patron) */}
-        <CityClock />
+        {/* heure locale des villes du Tchad, une ville toutes les 10 secondes, de la largeur du cadre ci-dessus (demande du patron) */}
+        <CityClock width={tagWidth} />
       </LinearGradient>
 
       {/* une seule ligne qui défile, sans titre « Catégories » (demande du patron) */}

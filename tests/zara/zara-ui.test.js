@@ -531,17 +531,23 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const cats = await page.getByTestId('home-categories').boundingBox();
     check('horloge : au-dessus de la ligne des categories', !!box && !!cats && box.y + box.height <= cats.y + 1, { box, cats });
     check('horloge : visible en entier dans la largeur du telephone (390)', !!box && box.x >= 0 && box.x + box.width <= 390, box);
-    check('horloge : bandeau tres fin (entre 30 et 40 px de haut)', !!box && box.height >= 30 && box.height <= 40, box);
-    // chaque ville : toutes ses cases tiennent dans le bandeau, a droite de l'heure (largeur du telephone : 390)
+    const pillBox = await page.getByTestId('city-clock').locator('[role="timer"]').boundingBox();
+    check('horloge : bandeau fin (entre 34 et 44 px de haut)', !!pillBox && pillBox.height >= 34 && pillBox.height <= 44, pillBox);
+    // la largeur de l'horloge = celle du cadre SERVICE QUALITE GARANTIE (elle ne le depasse jamais), centree comme lui
+    const frameBox = await page.getByTestId('home-tagline').boundingBox();
+    check('horloge : exactement la largeur du cadre SERVICE QUALITE GARANTIE (a 2 px pres), meme position', !!pillBox && !!frameBox && Math.abs(pillBox.width - frameBox.width) <= 2 && Math.abs(pillBox.x - frameBox.x) <= 2, { pillBox, frameBox });
+    // chaque ville : le nom tient en entier dans sa place, a droite de l'heure, sans etre coupe ni depasser le bandeau
     const fits = async (pg, label, widthPx) => {
       const pill = await pg.getByTestId('city-clock').locator('[role="timer"]').boundingBox();
+      const frame = await pg.getByTestId('home-tagline').boundingBox();
       const time = await pg.getByTestId('city-clock-time').boundingBox();
-      const tiles = await pg.getByTestId('city-clock-city').boundingBox();
-      const okFit = !!pill && !!time && !!tiles && tiles.x >= time.x + time.width && tiles.x + tiles.width <= pill.x + pill.width - 2 && pill.x >= 0 && pill.x + pill.width <= widthPx;
-      return okFit ? null : `${label} : ${JSON.stringify({ pill, time, tiles })}`;
+      const slot = await pg.getByTestId('city-clock-slot').boundingBox();
+      const cut = await pg.getByTestId('city-clock-city').evaluate((el) => el.scrollWidth > el.clientWidth + 1);
+      const okFit = !!pill && !!frame && !!time && !!slot && !cut && pill.width <= frame.width + 2 && slot.x >= time.x + time.width && slot.x + slot.width <= pill.x + pill.width && pill.x >= 0 && pill.x + pill.width <= widthPx;
+      return okFit ? null : `${label} : ${JSON.stringify({ pill, frame, time, slot, cut })}`;
     };
-    const tileInfo = await page.getByTestId('city-clock-city').evaluate((el) => ({ n: el.children.length, h: el.firstElementChild ? el.firstElementChild.getBoundingClientRect().height : 0 }));
-    check("horloge : le nom de la ville est ecrit dans des cases (une par lettre : N'Djamena = 9)", tileInfo.n === 9 && tileInfo.h >= 18, tileInfo);
+    const cityInfo = await page.getByTestId('city-clock-city').evaluate((el) => { const c = getComputedStyle(el); return { size: parseFloat(c.fontSize), upper: c.textTransform === 'uppercase', color: c.color, family: c.fontFamily }; });
+    check("horloge : le nom de la ville en lettres claires (majuscules, jaune, 14 px ou plus, meme ecriture que le cadre)", cityInfo.size >= 14 && cityInfo.upper && /254,\s*203,\s*0/.test(cityInfo.color) && /Manrope/i.test(cityInfo.family), cityInfo);
     const digitsSize = await page.getByTestId('city-clock-time').evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
     check('heure bien lisible (chiffres >= 18 px)', digitsSize >= 18, digitsSize);
     const logo = await page.getByText('ALBASSE', { exact: true }).evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
@@ -553,12 +559,12 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const misfit = [await fits(page, "N'Djamena", 390)];
     for (let i = 0; i < 8; i++) {
       await page.clock.runFor(10000);
-      await sleep(250);
+      await sleep(1000); // le nom glisse pendant 0,6 s
       const c = (await read()).city;
       seen.push(c);
       misfit.push(await fits(page, c, 390));
     }
-    check('horloge : les 8 villes tiennent dans le bandeau (390 px)', misfit.every((m) => m === null), misfit.filter(Boolean));
+    check('horloge : les 8 villes tiennent dans le bandeau, sans depasser le cadre (390 px)', misfit.every((m) => m === null), misfit.filter(Boolean));
     check("rotation : N'Djamena, Abeche, Moundou, Moussoro, Ati, Mongo, Sarh, Amdjarass, puis de nouveau N'Djamena", seen.join('|') === "N'Djamena|Abéché|Moundou|Moussoro|Ati|Mongo|Sarh|Amdjarass|N'Djamena", seen);
     await page.clock.runFor(60000);
     await sleep(1000);
@@ -575,6 +581,31 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     check("telephone au fuseau de Los Angeles : l'heure reste 06:15 (heure du Tchad)", wt === '06:15', wt);
     await w.ctx.close();
 
+    // mouvement automatique, en temps reel (sans fausse horloge) : a la 10e seconde l'ancien nom (qui sort) et le nouveau (qui arrive) sont ensemble
+    // dans la place un court instant, puis il ne reste que le nouveau
+    const live = await newVisitor(phone, { storage: { albasse_zara_name: 'Fatimé' } });
+    await live.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+    await live.page.waitForSelector('[data-testid="city-clock-slot"]', { timeout: 20000 });
+    const slid = await live.page.evaluate(() => new Promise((resolve) => {
+      const slot = document.querySelector('[data-testid="city-clock-slot"]');
+      const t0 = performance.now();
+      let both = false;
+      let moved = false;
+      const tick = () => {
+        const txt = slot.textContent || '';
+        if (/N'Djamena/i.test(txt) && /Abéché/i.test(txt)) {
+          both = true;
+          const xs = Array.from(slot.querySelectorAll('[dir]')).map((e) => e.getBoundingClientRect().x);
+          if (new Set(xs.map((x) => Math.round(x))).size > 1) moved = true;
+        }
+        if (performance.now() - t0 > 14000) resolve({ both, moved, final: (slot.textContent || '').trim() });
+        else requestAnimationFrame(tick);
+      };
+      tick();
+    }));
+    check("horloge : le nom glisse tout seul a la 10e seconde (N'Djamena sort pendant qu'Abeche arrive), puis il ne reste qu'Abeche", slid.both && slid.final === 'Abéché', slid);
+    await live.ctx.close();
+
     // un petit telephone (320 px) : meme les noms les plus longs (N'Djamena, Amdjarass) tiennent dans le bandeau
     const small = await newVisitor({ ...phone, viewport: { width: 320, height: 640 } }, { storage: { albasse_zara_name: 'Fatimé' } });
     await small.ctx.clock.install({ time: new Date('2026-10-26T05:15:00Z') });
@@ -584,10 +615,10 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const smallMisfit = [await fits(small.page, "N'Djamena", 320)];
     for (let i = 0; i < 7; i++) {
       await small.page.clock.runFor(10000);
-      await sleep(250);
+      await sleep(1000);
       smallMisfit.push(await fits(small.page, ((await small.page.getByTestId('city-clock-city').textContent()) || '').trim(), 320));
     }
-    check('horloge : les 8 villes tiennent aussi sur un petit telephone (320 px)', smallMisfit.every((m) => m === null), smallMisfit.filter(Boolean));
+    check('horloge : les 8 villes tiennent aussi sur un petit telephone (320 px), sans depasser le cadre', smallMisfit.every((m) => m === null), smallMisfit.filter(Boolean));
     await sleep(900);
     await small.page.screenshot({ path: path.join(OUT, '6c-horloge-320.png') });
     await small.ctx.close();
