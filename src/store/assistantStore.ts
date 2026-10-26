@@ -1521,9 +1521,9 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       await say(T().cart.empty, { fast: true, actions: [sayBtn(T().chip.advice, 'conseil'), sayBtn(T().chip.promotions, 'promotions'), menuBtn()] });
       return 'empty';
     }
-    // comme sur la page de commande : il faut un compte pour commander (l'article reste choisi)
+    // sans compte : la page de commande demande prénom, nom, téléphone et e-mail, puis crée le compte à la confirmation (l'article reste choisi)
     if (!useAuthStore.getState().profile) {
-      await say(T().cart.needLogin, { fast: true, actions: [{ label: T().chip.createAccount, kind: 'register', highlight: true }, { label: T().chip.login, kind: 'login' }, menuBtn()] });
+      await say(T().cart.guestOrder, { fast: true, actions: [{ label: T().chip.orderPage, kind: 'orderPage', highlight: true }, { label: T().chip.login, kind: 'login' }, menuBtn()] });
       return 'login';
     }
     const check = await verifyCart();

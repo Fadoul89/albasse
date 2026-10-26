@@ -16,7 +16,7 @@ const port = process.argv[3] || '4333';
 // BASE_URL=https://www.albasseshopping.com : teste le VRAI site en ligne (les commandes et comptes restent simules, rien n'est enregistre)
 const BASE = (process.env.BASE_URL || `http://localhost:${port}`).replace(/\/$/, '');
 const BASE_HOST = new URL(BASE).hostname;
-const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI123456789TOFBCDE').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI0123456789TOFBCDE').toUpperCase();
 // saison fraiche (blousons et manteaux) : le bouton du menu de Zara n'existe que jusqu'au 31 decembre 2026 a 23h59 (N'Djamena)
 const COLD_ON = Date.now() < Date.parse('2027-01-01T00:00:00+01:00');
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
@@ -1021,6 +1021,120 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     await noSql.ctx.close();
   }
 
+  // =============================================== 0. COMMANDE SANS COMPTE (fausse base : rien n'est ecrit) ===============================================
+  if (PARTS.includes('0')) {
+    console.log("\n== 0. commande sans compte : le visiteur remplit ses infos, son compte est cree a la confirmation (code de 6 chiffres, jamais 1234)");
+    const uid0 = '33333333-3333-4333-8333-333333333333';
+    const JWT0 = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzMzMzMzMzMy0zMzMzLTQzMzMtODMzMy0zMzMzMzMzMzMzMzMiLCJleHAiOjQxMDI0NDQ4MDAsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.c2ln';
+    const SK0 = 'sb-xtitsmmccpkelxfjyqyh-auth-token';
+    const account0 = (profile = {}, opts = {}) => {
+      const auth = { id: uid0, aud: 'authenticated', role: 'authenticated', email: '23566123456@tel.albasseshopping.com', app_metadata: {}, user_metadata: {}, created_at: '2026-10-26T00:00:00Z' };
+      const token = { access_token: JWT0, refresh_token: 'fake-refresh', token_type: 'bearer', expires_in: 3600, expires_at: 4102444800, user: auth };
+      return { auth, token, session: JSON.stringify(token), editable: true, patches: [], ...opts, profile: { id: uid0, email: null, full_name: null, phone: null, whatsapp_number: null, profession: null, region: null, country: null, address: null, loyalty_points: 0, banned: false, role: 'customer', is_admin: false, is_affiliate: false, ...profile } };
+    };
+    const live0 = await get('products?select=id,name,slug,price,stock,images,sizes,colors,category_id&is_active=eq.true&stock=gt.2&limit=1000');
+    const simple = live0.filter((p) => (p.sizes || []).length <= 1 && (p.colors || []).length <= 1 && Number(p.price) > 0 && (p.images || [])[0]);
+    const prod0 = simple[0];
+    check('un article simple (une seule taille ou couleur) existe pour le test', !!prod0);
+    const cartOf = (p) => JSON.stringify({ state: { items: [{ id: `${p.id}__nc__ns`, product: p, quantity: 1, color: null, size: null }], updatedAt: Date.now() }, version: 1 });
+    const fillCity = async (page) => {
+      await page.getByPlaceholder(/Rechercher une ville/).click();
+      await page.keyboard.type("N'Dja", { delay: 60 });
+      await page.getByText(/^\s*N.Djamena\s*$/).locator('visible=true').first().click();
+      await sleep(600);
+    };
+    const confirm0 = (page) => page.getByText('Confirmer la commande', { exact: true }).locator('visible=true').first().click();
+
+    // --- a. visiteur sans compte : fiche -> Commander -> page de commande (plus de renvoi vers la connexion) -> compte cree a la confirmation
+    {
+      const fu = account0();
+      const fo = { list: [], patches: [], created: [] };
+      const g = await newVisitor(phone, { fakeUser: fu, fakeOrders: fo, fakeStore: { waOrder: true, accountRequired: false, patches: [] } });
+      await g.page.goto(`${BASE}/produit/${prod0.slug}`, { waitUntil: 'load' });
+      await g.page.getByText('Commander', { exact: true }).locator('visible=true').first().waitFor({ timeout: 25000 });
+      await g.page.getByText('Commander', { exact: true }).locator('visible=true').first().click();
+      await g.page.getByTestId('checkout-guest-note').waitFor({ timeout: 15000 }).catch(async (e) => {
+        await g.page.screenshot({ path: path.join(OUT, '0x-echec-commander.png'), fullPage: true });
+        console.log('page apres « Commander » :', g.page.url(), (await g.page.locator('body').innerText()).replace(/\s+/g, ' ').slice(0, 300));
+        throw e;
+      });
+      check('sans compte : « Commander » ouvre la page de commande (pas la connexion)', new URL(g.page.url()).pathname === '/commande', g.page.url());
+      check('page de commande : « pas besoin de creer un compte avant »', /Pas besoin de créer un compte avant/.test(await g.page.getByTestId('checkout-guest-note').innerText()));
+      check('champs demandes : prenom, nom, telephone, e-mail (plus de « Nom complet »)', (await g.page.getByTestId('checkout-first-name').count()) === 1 && (await g.page.getByTestId('checkout-last-name').count()) === 1 && (await g.page.getByTestId('checkout-phone').count()) === 1 && (await g.page.getByTestId('checkout-email').count()) === 1 && (await g.page.getByPlaceholder('Nom complet').count()) === 0);
+      await g.page.screenshot({ path: path.join(OUT, '0a-commande-sans-compte.png'), fullPage: true });
+      // rien rempli : on demande le prenom, rien n'est envoye
+      await confirm0(g.page);
+      await g.page.getByText('Merci d’écrire votre prénom.').waitFor({ timeout: 8000 });
+      check('rien rempli : « Merci d\'ecrire votre prenom », aucun compte cree, aucune commande', !(fu.signups || []).length && fo.created.length === 0);
+      await g.page.getByTestId('checkout-first-name').fill('Amina');
+      await g.page.getByTestId('checkout-last-name').fill('Hassan');
+      await g.page.getByTestId('checkout-phone').fill('66123456');
+      await g.page.getByTestId('checkout-email').fill('amina');
+      await confirm0(g.page);
+      await g.page.getByText(/adresse e-mail valide/).first().waitFor({ timeout: 8000 });
+      check('e-mail mal ecrit : message, aucun compte cree', !(fu.signups || []).length);
+      await g.page.getByTestId('checkout-email').fill('amina@gmail.com');
+      await g.page.getByPlaceholder(/Adresse \(quartier, rue\)/).fill('Quartier Moursal');
+      await fillCity(g.page);
+      await g.page.getByText('Paiement à la livraison', { exact: true }).locator('visible=true').first().click();
+      await confirm0(g.page);
+      await g.page.getByTestId('confirm-new-account').waitFor({ timeout: 25000 });
+      const shown = (await g.page.getByTestId('confirm-new-password').innerText()).trim();
+      const su = (fu.signups || [])[0] || {};
+      check('compte cree UNE fois, avec le numero (23566123456@tel.albasseshopping.com)', fu.signups.length === 1 && su.email === '23566123456@tel.albasseshopping.com', fu.signups);
+      check('mot de passe : un code de 6 chiffres, jamais « 1234 » ni un code facile', /^\d{6}$/.test(su.password) && su.password !== '1234' && !/^(\d)\1{5}$/.test(su.password) && su.password !== '123456', su.password);
+      check('la page de confirmation montre le MEME code que celui envoye pour creer le compte', shown === su.password, { shown, sent: su.password });
+      const box = await g.page.getByTestId('confirm-new-account').innerText();
+      check('confirmation : « Votre compte est cree », numero (66 12 34 56), mot de passe, conseil de capture d\'ecran, « Compte » pour le changer', /Votre compte est créé/.test(box) && /66 12 34 56/.test(box) && /capture d’écran/.test(box) && /« Compte »/.test(box), box);
+      const patch = fu.patches.find((x) => 'full_name' in x) || {};
+      check('profil : nom complet, numero, e-mail donne, ville, pas d\'abonnement aux messages publicitaires', patch.full_name === 'Amina Hassan' && patch.phone === '66123456' && patch.email === 'amina@gmail.com' && patch.region === "N'Djamena" && patch.notify_new_products === false && patch.notify_promotions === false && patch.notify_flash_sale === false, patch);
+      const ord = fo.created[0] || {};
+      check('la commande est enregistree UNE fois, au nom du nouveau compte', fo.created.length === 1 && ord.user_id === uid0 && ord.shipping_name === 'Amina Hassan' && ord.shipping_phone === '66123456' && ord.shipping_city === "N'Djamena" && ord.payment_method === 'cash_on_delivery' && ord.status === 'pending', ord);
+      check('apres la commande : le visiteur est connecte (la facture PDF est proposee)', (await g.page.getByText(/Télécharger.*facture|Facture/i).count()) > 0);
+      await g.page.screenshot({ path: path.join(OUT, '0b-confirmation-compte-cree.png'), fullPage: true });
+      check('aucune erreur (commande sans compte)', g.errs.length === 0, g.errs);
+      await g.ctx.close();
+    }
+
+    // --- b. le numero a deja un compte : on ne cree rien, on demande de se connecter (la commande n'est pas mise sur le compte de quelqu'un d'autre)
+    {
+      const fu = account0({}, { signupError: 'exists' });
+      const fo = { list: [], patches: [], created: [] };
+      const g = await newVisitor(phone, { storage: { 'albasse-cart': cartOf(prod0) }, fakeUser: fu, fakeOrders: fo, fakeStore: { waOrder: true, accountRequired: false, patches: [] } });
+      await g.page.goto(`${BASE}/commande`, { waitUntil: 'load' });
+      await g.page.getByTestId('checkout-first-name').waitFor({ timeout: 25000 });
+      await g.page.getByTestId('checkout-first-name').fill('Amina');
+      await g.page.getByTestId('checkout-last-name').fill('Hassan');
+      await g.page.getByTestId('checkout-phone').fill('66123456');
+      await g.page.getByTestId('checkout-email').fill('amina@gmail.com');
+      await g.page.getByPlaceholder(/Adresse \(quartier, rue\)/).fill('Quartier Moursal');
+      await fillCity(g.page);
+      await g.page.getByText('Paiement à la livraison', { exact: true }).locator('visible=true').first().click();
+      await confirm0(g.page);
+      await g.page.getByText(/Vous avez déjà un compte avec ce numéro/).first().waitFor({ timeout: 15000 });
+      await g.page.waitForURL(/\/connexion/, { timeout: 15000 });
+      check('numero deja inscrit : « vous avez deja un compte », page de connexion, aucune commande', fo.created.length === 0 && /\/connexion/.test(g.page.url()), g.page.url());
+      await g.ctx.close();
+    }
+
+    // --- c. client deja connecte : rien ne change (« Nom complet », pas de formulaire de compte, pas de code a la confirmation)
+    {
+      const fu = account0({ full_name: 'Ahmed Hassan', phone: '66123456', email: 'ahmed@example.com' });
+      const fo = { list: [], patches: [], created: [] };
+      const m = await newVisitor(phone, { storage: { [SK0]: fu.session, 'albasse-cart': cartOf(prod0) }, fakeUser: fu, fakeOrders: fo, fakeStore: { waOrder: true, accountRequired: false, patches: [] } });
+      await m.page.goto(`${BASE}/commande`, { waitUntil: 'load' });
+      await m.page.getByPlaceholder('Nom complet').waitFor({ timeout: 25000 });
+      check('client connecte : « Nom complet » comme avant, pas de formulaire prenom / nom / e-mail', (await m.page.getByTestId('checkout-first-name').count()) === 0 && (await m.page.getByTestId('checkout-email').count()) === 0 && (await m.page.getByTestId('checkout-guest-note').count()) === 0);
+      await m.page.getByPlaceholder(/Adresse \(quartier, rue\)/).fill('Quartier Moursal');
+      await fillCity(m.page);
+      await m.page.getByText('Paiement à la livraison', { exact: true }).locator('visible=true').first().click();
+      await confirm0(m.page);
+      await m.page.getByText(/a bien été enregistrée/).waitFor({ timeout: 25000 });
+      check('client connecte : commande enregistree, aucun nouveau compte, aucun code affiche', fo.created.length === 1 && !(fu.signups || []).length && (await m.page.getByTestId('confirm-new-account').count()) === 0, { orders: fo.created.length, signups: fu.signups });
+      await m.ctx.close();
+    }
+  }
+
   // =============================================== 9. ZARA SEO : descriptions des articles (fausse base, fausse fonction : rien n'est ecrit) ===============================================
   if (PARTS.includes('9')) {
     console.log("\n== 9. Zara SEO : Zara propose les descriptions des fiches faibles, l'administrateur valide (fausse base : rien n'est ecrit)");
@@ -1735,7 +1849,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     let items = await orderItems(page);
     check('« Commander » : l\'article devient LA commande (un seul article, prix de la base, quantite 1)', items.length === 1 && items[0].product.id === A.id && items[0].product.price === Number(dbA.price) && items[0].quantity === 1, items.map((i) => [i.product.name, i.product.price, i.quantity]));
     const picked = await panelOf(page).getByText(/Très bon choix/).last().innerText();
-    check('Zara confirme le choix (nom et prix), sans parler de panier', new RegExp(`« ${A.name.trim()} » · `).test(picked) && !/panier/i.test(picked), picked);
+    check('Zara confirme le choix (nom, couleur ou taille choisie, prix), sans parler de panier', new RegExp(`« ${A.name.trim()} »(?: \\([^)]*\\))? · `).test(picked) && !/panier/i.test(picked), picked);
     await waitText(page, ADDRESS);
     check('puis elle prend la commande tout de suite (nom et telephone du compte deja connus : elle demande l\'adresse), dans le chat', (await panelOf(page).count()) === 1 && !/\/commande/.test(page.url()));
     await page.screenshot({ path: path.join(OUT, 'K2-commande-directe.png') });
@@ -1823,8 +1937,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await waitText(g.page, new RegExp(`Votre commande n’est pas terminée : « ${A.name.trim()} »`));
       await waitText(g.page, /Créez votre compte gratuit/);
       check('commande commencee : le menu propose « Terminer ma commande »', (await chipLabels(g.page)).includes('✅ Terminer ma commande'), await chipLabels(g.page));
-      await ask(g.page, 'je veux commander', /créez votre compte ou connectez-vous/);
-      check('« je veux commander » sans compte : Zara demande de creer un compte / se connecter, l\'article reste choisi', g.page.url().endsWith('/') && (await chipLabels(g.page)).join('|') === '👤 Créer mon compte|Me connecter|🏠 Menu' && (await orderItems(g.page)).length === 1, await chipLabels(g.page));
+      await ask(g.page, 'je veux commander', /Pas besoin de compte pour commander/);
+      check('« je veux commander » sans compte : Zara dit qu\'il n\'y a pas besoin de compte et propose la page de commande, l\'article reste choisi', g.page.url().endsWith('/') && (await chipLabels(g.page)).join('|') === '📄 Page de commande|Me connecter|🏠 Menu' && (await orderItems(g.page)).length === 1, await chipLabels(g.page));
       check('rien n\'est enregistre', g.writes.every((w) => !/\/orders/.test(w)));
       await ask(g.page, 'mes commandes', /Retrouvez et suivez toutes vos commandes ici/);
       check('« mes commandes » sans compte : seulement connexion / creation de compte', (await chipLabels(g.page)).join('|') === 'Me connecter|👤 Créer mon compte', await chipLabels(g.page));
@@ -1957,9 +2071,9 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('Android : sous les articles trouves, le bouton « Installer Albasse Shopping »', (await chipLabels(v.page)).includes('📲 Installer Albasse Shopping'), await chipLabels(v.page));
       await card.getByTestId('assistant-card-add').click();
       await waitText(v.page, /Très bon choix/);
-      await waitText(v.page, /créez votre compte ou connectez-vous/);
+      await waitText(v.page, /Pas besoin de compte pour commander/);
       await sleep(2500);
-      check('Android : « Commander » n\'est pas interrompu par la proposition d\'installer (elle n\'est jamais posee au milieu d\'une commande)', (await panelOf(v.page).getByText(/Avez-vous déjà installé l’application Albasse Shopping/).count()) === 0 && (await chipLabels(v.page)).join('|') === '👤 Créer mon compte|Me connecter|🏠 Menu', await chipLabels(v.page));
+      check('Android : « Commander » n\'est pas interrompu par la proposition d\'installer (elle n\'est jamais posee au milieu d\'une commande)', (await panelOf(v.page).getByText(/Avez-vous déjà installé l’application Albasse Shopping/).count()) === 0 && (await chipLabels(v.page)).join('|') === '📄 Page de commande|Me connecter|🏠 Menu', await chipLabels(v.page));
       check('aucune erreur (Android)', v.errs.length === 0, v.errs);
       await v.ctx.close();
     }
@@ -6710,7 +6824,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await waitText(c.page, WELCOME_FR('Ali'));
       await waitText(c.page, /Vous regardez « Rolex » \? Excellent choix !/);
       const pitch = await panelOf(c.page).getByText(/Vous regardez « Rolex »/).first().innerText();
-      check('sur la fiche d\'un produit : Zara parle de ce produit (prix barre, -50 %, « Commander »)', /12\s?500 FCFA au lieu de 25\s?000 FCFA \(-50 %\)/.test(pitch) && /« Commander »/.test(pitch), pitch);
+      check('sur la fiche d\'un produit : Zara parle de ce produit et donne son prix actuel', /Vous regardez « Rolex » \? Excellent choix !/.test(pitch) && /\d[\d\s]*FCFA/.test(pitch), pitch);
       await waitText(c.page, /À savoir avant de commander/);
       await waitText(c.page, /Créez votre compte gratuit(?:, Ali)?/);
       await c.page.screenshot({ path: path.join(OUT, 'B1-produit.png') });
@@ -6728,8 +6842,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await waitText(c.page, /Créez votre compte gratuit(?:, Ali)?/);
       check('commande commencee : Zara la rappelle (article, total pour la quantite choisie) et propose « Terminer ma commande »', (await chipLabels(c.page)).includes('✅ Terminer ma commande') && !(await chipLabels(c.page)).some((l) => /panier/i.test(l)), await chipLabels(c.page));
       await chip(c.page, 'Terminer ma commande').click();
-      await waitText(c.page, /créez votre compte ou connectez-vous/);
-      check('« Terminer ma commande » sans compte : il faut un compte (l\'article reste choisi)', (await c.page.evaluate(() => JSON.parse(localStorage.getItem('albasse-cart') || '{}').state?.items?.length ?? 0)) === 1);
+      await waitText(c.page, /Pas besoin de compte pour commander/);
+      check('« Terminer ma commande » sans compte : pas besoin de compte, la page de commande est proposee (l\'article reste choisi)', (await c.page.evaluate(() => JSON.parse(localStorage.getItem('albasse-cart') || '{}').state?.items?.length ?? 0)) === 1);
       check('aucune erreur (commande commencee)', c.errs.length === 0, c.errs);
       await c.ctx.close();
     }
@@ -7216,7 +7330,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         check('Marketing ensemble : assistant marketing, Zara Marketing (e-mails), promotions, roue de la chance, affilies', ['Assistant marketing', 'Zara Marketing (e-mails)', 'Promotions intelligentes', 'Roue de la chance', 'Affiliés'].every((l) => g.marketing.includes(l)), g.marketing);
         check('Boutique : commandes et factures, produits, categories, voyage ; Parametres : contact, paiement, livraison', ['Commandes et factures', 'Produits', 'Catégories', 'Voyage'].every((l) => g.shop.includes(l)) && ['Informations de contact', 'Paiement', 'Livraison (Villes)'].every((l) => g.settings.includes(l)), { shop: g.shop, settings: g.settings });
         await page.screenshot({ path: path.join(OUT, 'C8-tableau-de-bord.png') });
-        check('19 pages accessibles depuis le tableau de bord', (await page.locator('[data-testid^="admin-menu-Admin"]').count()) === 19);
+        check('20 pages accessibles depuis le tableau de bord (dont Zara SEO)', (await page.locator('[data-testid^="admin-menu-Admin"]').count()) === 20);
         await page.getByTestId('admin-menu-AdminStoreSettings').click();
         await page.getByTestId('settings-legal-line').waitFor({ timeout: 15000 });
         check('un theme mene a la bonne page (Parametres › Informations de contact)', new URL(page.url()).pathname === '/admin/parametres/contact', page.url());

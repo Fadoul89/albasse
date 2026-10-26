@@ -296,6 +296,7 @@ export interface Texts {
     addError: string;
     empty: string;
     needLogin: string;
+    guestOrder: string;
     priceChanged(name: string, from: string, to: string): string;
     blocked(name: string, stock: number): string;
     askWhich: string;
@@ -834,6 +835,7 @@ const FR: Texts = {
     addError: 'Je n’arrive pas à préparer la commande de cet article pour le moment. Réessayez dans un instant, ou touchez le produit pour l’ouvrir.',
     empty: 'Vous n’avez pas encore choisi d’article 🛍️ Dites-moi ce que vous cherchez : touchez « Commander » sous l’article voulu, je m’occupe du reste.',
     needLogin: 'Pour valider votre commande, créez votre compte ou connectez-vous (c’est gratuit). L’article reste choisi 🛍️',
+    guestOrder: 'Pas besoin de compte pour commander 😊 Je vous ouvre la page de commande : écrivez votre prénom, votre nom, votre téléphone et votre e-mail, et votre compte se crée tout seul quand vous confirmez. L’article reste choisi 🛍️',
     priceChanged: (name, from, to) => `ℹ️ Le prix de « ${name} » a changé : ${from} → ${to}.`,
     blocked: (name, stock) => (stock > 0 ? `⚠️ Il ne reste que ${stock} « ${name} » : choisissez une quantité plus petite pour commander.` : `⚠️ « ${name} » n’est plus disponible : choisissez un autre article.`),
     askWhich: 'Lequel voulez-vous commander ?',
@@ -1407,6 +1409,7 @@ const AR: Texts = {
     addError: 'لا أستطيع تجهيز طلب هذا المنتج الآن. حاول بعد قليل، أو افتح المنتج مباشرة.',
     empty: 'لم تختر أي منتج بعد 🛍️ أخبرني بما تبحث عنه: اضغط «اطلب» تحت المنتج المطلوب وأتكفل بالباقي.',
     needLogin: 'لإتمام طلبك، أنشئ حسابك أو سجل الدخول (مجاني). المنتج الذي اخترته محفوظ 🛍️',
+    guestOrder: 'لا حاجة إلى حساب لإتمام الطلب 😊 سأفتح لك صفحة الطلب: اكتب اسمك الأول واسم العائلة ورقم هاتفك وبريدك الإلكتروني، وسيُنشأ حسابك تلقائياً عند التأكيد. المنتج الذي اخترته محفوظ 🛍️',
     priceChanged: (name, from, to) => `ℹ️ تغير سعر «${name}»: ${from} ← ${to}.`,
     blocked: (name, stock) => (stock > 0 ? `⚠️ لم يبق سوى ${stock} من «${name}»: اختر كمية أقل لإتمام الطلب.` : `⚠️ «${name}» لم يعد متوفرا: اختر منتجا آخر.`),
     askWhich: 'أي منتج تريد أن تطلب؟',

@@ -165,14 +165,7 @@ export function ProductScreen({ route }: Props) {
     }
     setOrderItem(product, quantity, pickedColor, pickedSize);
     trackAddToCart(product.id);
-    if (!profile) {
-      showToast('Créez un compte ou connectez-vous pour passer une commande.', {
-        title: 'Compte requis',
-        type: 'info',
-      });
-      navigation.navigate('Login');
-      return;
-    }
+    // sans compte, le visiteur commande quand même : ses informations sont demandées sur la page de commande et son compte est créé à la confirmation
     navigation.navigate('Checkout');
   };
 
