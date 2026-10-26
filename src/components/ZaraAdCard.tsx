@@ -1,15 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, Animated, Easing } from 'react-native';
 import { Image } from 'expo-image';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { RootStackParamList } from '../navigation/types';
 import type { Product } from '../types';
 import { useStoreSettings } from '../hooks/useStoreSettings';
 import { useAuthStore } from '../store/authStore';
 import { getProductSales } from '../lib/assistantData';
 import type { SalesMap } from '../lib/assistantSales';
 import { isSeniorProfession, pickAds, zaraAdsDelaySeconds } from '../lib/zaraAds';
+import { useAssistantStore } from '../store/assistantStore';
 import { colors, fonts, radius, spacing } from '../theme';
 
 const AVATAR = require('../../assets/assistante-avatar.jpg');
@@ -18,11 +16,10 @@ const MAX_ADS = 3;
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
 
-// Publicité de Zara sur l'accueil (si l'admin la laisse gérer les publicités) : un article réel, avec un message qui ne dit que des faits VRAIS
+// Publicité de Zara sur l'accueil (si l'admin la laisse gérer les publicités) : un article réel, avec un message qui ne dit que des faits VRAIS ; un toucher ouvre le chat de Zara sur cet article
 // (commandes réelles, stock réel : lib/zaraAds). Un client haut placé (métier du compte) lit « Article rare » quand le stock est vraiment petit.
 // Sans fait vrai à dire, la carte reste cachée.
 export function ZaraAdCard({ products }: { products: Product[] }) {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { settings, isLoading } = useStoreSettings();
   const profession = useAuthStore((s) => s.profile?.profession);
   const enabled = settings.zara_ads_enabled === true;
@@ -77,9 +74,10 @@ export function ZaraAdCard({ products }: { products: Product[] }) {
     <View style={styles.wrap} testID="zara-ad">
       <Pressable
         style={styles.card}
-        accessibilityRole="link"
-        accessibilityLabel={`Zara vous conseille : ${ad.line} ${p.name}`}
-        onPress={() => navigation.navigate('Product', { slug: p.slug })}
+        accessibilityRole="button"
+        accessibilityLabel={`Zara vous conseille : ${ad.line} ${p.name}. Toucher pour parler à Zara.`}
+        // un clic : Zara ouvre le chat et prend le relais comme vendeuse (elle présente l'article et propose de le commander)
+        onPress={() => useAssistantStore.getState().adviseProduct(p.slug)}
         testID="zara-ad-open"
       >
         <Animated.View style={{ opacity: fade }}>
@@ -101,7 +99,7 @@ export function ZaraAdCard({ products }: { products: Product[] }) {
               <Text style={styles.price}>{formatXAF(p.price)}</Text>
             </View>
             <View style={styles.cta}>
-              <Text style={styles.ctaText}>Voir ›</Text>
+              <Text style={styles.ctaText}>Voir avec Zara ›</Text>
             </View>
           </View>
         </Animated.View>

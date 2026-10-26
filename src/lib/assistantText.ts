@@ -113,6 +113,7 @@ export interface Texts {
     skipSlot: string;
     useAddress(address: string): string;
     orderPage: string;
+    invoice: string;
     retry: string;
     points: string;
     earnPoints: string;
@@ -203,6 +204,7 @@ export interface Texts {
     priceChanged: string;
     codOnlyHome: string;
     placed(name: string, id: string): string;
+    invoiceReady: string;
     totalToPay(total: number): string;
     giftIncluded: string;
     payCash: string;
@@ -376,6 +378,14 @@ export interface Texts {
     validity: string;
     proof(n: number): string;
   };
+  // un clic sur la publicité « Zara vous conseille » : Zara prend le relais dans le chat, comme vendeuse
+  advise: {
+    intro(name: string, price: string): string;
+    ask: string;
+    gone: string;
+    chipOrder: string;
+    chipOthers: string;
+  };
   // rappel WhatsApp : prénom, numéro, accord du client ; ensuite la demande part à l'équipe (liste dans l'admin)
   callback: {
     askName: string;
@@ -506,6 +516,7 @@ const FR: Texts = {
     skipSlot: 'Passer',
     useAddress: (address) => `📍 Utiliser : ${address.length > 26 ? `${address.slice(0, 25).trimEnd()}…` : address}`,
     orderPage: '📄 Page de commande',
+    invoice: '📄 Télécharger ma facture',
     retry: '🔄 Réessayer',
     points: '🏆 Mes points',
     earnPoints: '🎁 Gagner des points',
@@ -701,6 +712,7 @@ const FR: Texts = {
     priceChanged: 'Les prix ou le stock ont changé : voici le nouveau récapitulatif. Vérifiez, puis confirmez à nouveau 👇',
     codOnlyHome: `Le paiement à la livraison est possible seulement à ${HOME_CITY}. Choisissez Airtel Money ou Moov Money 📱`,
     placed: (name, id) => `🎉 Merci ${name} ! Votre commande #${id} a bien été enregistrée.`,
+    invoiceReady: '🧾 Votre facture est prête : touchez « Télécharger ma facture ».',
     totalToPay: (total) => `💰 Total à régler : ${fcfa(total)}`,
     giftIncluded: `🎁 Emballage cadeau inclus (${fcfa(GIFT_WRAP_FEE)})`,
     payCash: '💵 Vous payez en espèces directement à la livraison.',
@@ -909,6 +921,13 @@ const FR: Texts = {
     validity: `⏳ Si vous commandez, la commande reste valable ${ORDER_VALIDITY_HOURS} h.`,
     proof: (n) => `👍 Cet article a été commandé ${n} fois ces 7 derniers jours.`,
   },
+  advise: {
+    intro: (name, price) => `Bonjour{nom} 😊 Je suis Zara, votre conseillère. J’ai choisi pour vous « ${name} » : ${price}.`,
+    ask: 'Je peux m’occuper de votre commande tout de suite 🛍️ Une question sur cet article ? Écrivez-la ici, je vous réponds.',
+    gone: 'Cet article n’est plus disponible pour le moment{nom} 🙏 Voulez-vous voir d’autres idées ?',
+    chipOrder: '🛒 Commander cet article',
+    chipOthers: '🔎 D’autres idées',
+  },
   callback: {
     askName: 'Avec plaisir 😊 Quel est votre prénom ?',
     askPhone: (name) => `Merci ${name} 🙏 Quel est votre numéro WhatsApp ? (exemple : 66 12 34 56)`,
@@ -1071,6 +1090,7 @@ const AR: Texts = {
     skipSlot: 'تخطي',
     useAddress: (address) => `📍 استخدم: ${address.length > 26 ? `${address.slice(0, 25).trimEnd()}…` : address}`,
     orderPage: '📄 صفحة الطلب',
+    invoice: '📄 تحميل فاتورتي',
     retry: '🔄 إعادة المحاولة',
     points: '🏆 نقاطي',
     earnPoints: '🎁 اكسب نقاطاً',
@@ -1268,6 +1288,7 @@ const AR: Texts = {
     priceChanged: 'تغيّرت الأسعار أو المخزون: هذا هو الملخص الجديد. راجعه ثم أكّد من جديد 👇',
     codOnlyHome: 'الدفع عند الاستلام ممكن فقط في إنجامينا. اختر Airtel Money أو Moov Money 📱',
     placed: (name, id) => `🎉 شكراً ${name}! تم تسجيل طلبك رقم #${id} بنجاح.`,
+    invoiceReady: '🧾 فاتورتك جاهزة: اضغط على «تحميل فاتورتي».',
     totalToPay: (total) => `💰 المبلغ المطلوب: ${fcfa(total)}`,
     giftIncluded: `🎁 تغليف الهدية مُضمَّن (${fcfa(GIFT_WRAP_FEE)})`,
     payCash: '💵 تدفع نقداً عند الاستلام مباشرة.',
@@ -1472,6 +1493,13 @@ const AR: Texts = {
     callbackOffer: 'إذا أحببت، يمكن للفريق أن يراسلك على واتساب عندما تكون جاهزا 📲',
     validity: `⏳ إذا طلبت، يبقى الطلب صالحا لمدة ${ORDER_VALIDITY_HOURS} ساعة.`,
     proof: (n) => `👍 تم طلب هذا المنتج ${n} مرات خلال الأيام السبعة الأخيرة.`,
+  },
+  advise: {
+    intro: (name, price) => `مرحبا{nom} 😊 أنا زارا، مستشارتك. اخترت لك «${name}»: ${price}.`,
+    ask: 'يمكنني تجهيز طلبك الآن 🛍️ هل لديك سؤال عن هذا المنتج؟ اكتبه هنا وسأجيبك.',
+    gone: 'هذا المنتج غير متوفر حاليا{nom} 🙏 هل تريد أن أعرض عليك أفكارا أخرى؟',
+    chipOrder: '🛒 اطلب هذا المنتج',
+    chipOthers: '🔎 أفكار أخرى',
   },
   callback: {
     askName: 'بكل سرور 😊 ما اسمك الأول؟',

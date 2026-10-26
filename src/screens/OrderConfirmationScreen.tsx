@@ -6,6 +6,8 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing } from '../theme';
 import { GoldButton } from '../components/GoldButton';
+import { InvoiceDownloadButton } from '../components/InvoiceDownloadButton';
+import { useAuthStore } from '../store/authStore';
 import { DELIVERY_HOURS, GIFT_WRAP_FEE, ORDER_VALIDITY_HOURS } from '../constants/shopRules';
 import { formatSlot } from '../lib/scheduledDelivery';
 
@@ -18,6 +20,7 @@ interface Props {
 export function OrderConfirmationScreen({ route }: Props) {
   const { orderId, total, instructions, giftWrap, scheduledFor } = route.params;
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const signedIn = useAuthStore((s) => !!s.profile?.id); // la facture PDF n'est donnée qu'au compte qui a passé la commande
 
   return (
     <View style={styles.screen}>
@@ -48,10 +51,12 @@ export function OrderConfirmationScreen({ route }: Props) {
           {`⏳ Pour éviter les fausses commandes, chaque commande est valable ${ORDER_VALIDITY_HOURS} h.\n🕗 Nos services de livraison sont ouverts de ${DELIVERY_HOURS}.`}
         </Text>
 
+        {signedIn ? <InvoiceDownloadButton orderId={orderId} style={{ marginTop: spacing.xl, width: '100%' }} /> : null}
         <GoldButton
           label="Voir mes commandes"
+          variant={signedIn ? 'outline' : 'gold'}
           onPress={() => navigation.reset({ index: 0, routes: [{ name: 'Tabs', params: { screen: 'Orders' } as never }] })}
-          style={{ marginTop: spacing.xl, width: '100%' }}
+          style={{ marginTop: signedIn ? spacing.sm : spacing.xl, width: '100%' }}
         />
         <GoldButton
           label="Continuer mes achats"

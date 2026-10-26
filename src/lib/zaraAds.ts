@@ -67,26 +67,39 @@ export function adFacts(view: Pick<AdView, 'id' | 'stock'>, sales: SalesMap | nu
   return { sales: provenSales(sales, view.id), stock: stock >= 1 && stock <= LOW_STOCK_MAX ? stock : 0 };
 }
 
-const salesSentence = (n: number) =>
-  n >= MANY_SALES
-    ? `Beaucoup de clients ont acheté cet article : ${n} commandes ces ${SALES_WINDOW_DAYS} derniers jours.`
-    : `${n} clients ont commandé cet article ces ${SALES_WINDOW_DAYS} derniers jours.`;
+export type AdLang = 'fr' | 'ar';
 
-const rareSentence = (stock: number) => (stock === 1 ? "Article rare : il n'en reste qu'un seul." : `Article rare : il n'en reste que ${stock}.`);
-const lowStockSentence = (stock: number) => (stock === 1 ? "Plus qu'un seul en stock." : `Plus que ${stock} en stock.`);
+const salesSentence = (n: number, lang: AdLang) =>
+  lang === 'ar'
+    ? n >= MANY_SALES
+      ? `كثير من الزبائن اشتروا هذا المنتج: ${n} طلبات خلال الأيام السبعة الأخيرة.`
+      : `${n} زبائن طلبوا هذا المنتج خلال الأيام السبعة الأخيرة.`
+    : n >= MANY_SALES
+      ? `Beaucoup de clients ont acheté cet article : ${n} commandes ces ${SALES_WINDOW_DAYS} derniers jours.`
+      : `${n} clients ont commandé cet article ces ${SALES_WINDOW_DAYS} derniers jours.`;
+
+const rareSentence = (stock: number, lang: AdLang) =>
+  lang === 'ar'
+    ? stock === 1 ? 'منتج نادر: بقيت قطعة واحدة فقط.' : `منتج نادر: بقي منه ${stock} فقط.`
+    : stock === 1 ? "Article rare : il n'en reste qu'un seul." : `Article rare : il n'en reste que ${stock}.`;
+
+const lowStockSentence = (stock: number, lang: AdLang) =>
+  lang === 'ar'
+    ? stock === 1 ? 'بقيت قطعة واحدة فقط في المخزون.' : `بقي ${stock} فقط في المخزون.`
+    : stock === 1 ? "Plus qu'un seul en stock." : `Plus que ${stock} en stock.`;
 
 // Le message de Zara pour cet article, ou null s'il n'y a aucun fait vrai à dire.
-export function adLine(facts: AdFacts, senior: boolean): string | null {
-  const proof = facts.sales > 0 ? salesSentence(facts.sales) : null;
-  const rare = facts.stock > 0 ? (senior ? rareSentence(facts.stock) : lowStockSentence(facts.stock)) : null;
+export function adLine(facts: AdFacts, senior: boolean, lang: AdLang = 'fr'): string | null {
+  const proof = facts.sales > 0 ? salesSentence(facts.sales, lang) : null;
+  const rare = facts.stock > 0 ? (senior ? rareSentence(facts.stock, lang) : lowStockSentence(facts.stock, lang)) : null;
   const parts = senior ? [rare, proof] : [proof, rare];
   const text = parts.filter((p): p is string => !!p).join(' ');
   return text || null;
 }
 
 // Le message d'un article précis (fenêtre de promotion) : null si rien de vrai à dire.
-export function productAdLine(view: Pick<AdView, 'id' | 'stock'>, sales: SalesMap | null | undefined, senior: boolean): string | null {
-  return adLine(adFacts(view, sales), senior);
+export function productAdLine(view: Pick<AdView, 'id' | 'stock'>, sales: SalesMap | null | undefined, senior: boolean, lang: AdLang = 'fr'): string | null {
+  return adLine(adFacts(view, sales), senior, lang);
 }
 
 export interface Ad<T> {

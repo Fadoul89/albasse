@@ -651,10 +651,11 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const adText = async (pg) => ((await pg.getByTestId('zara-ad-line').textContent()) || '').trim();
     const waitAd = async (pg) => { await pg.getByTestId('zara-ad').waitFor({ timeout: 25000 }); await sleep(900); };
 
-    const live = await get('products?select=id,name,slug,price,stock,images&is_active=eq.true&stock=gt.0&limit=1000');
+    const live = await get('products?select=id,name,slug,price,stock,images,sizes,colors&is_active=eq.true&stock=gt.0&limit=1000');
     const withPhoto = live.filter((p) => (p.images || [])[0] && Number(p.price) > 0);
     const rare = withPhoto.filter((p) => p.stock <= 5);
-    const abundant = withPhoto.find((p) => p.stock > 5);
+    // un article sans choix de taille ni de couleur : « Commander » le prend tout de suite
+    const abundant = withPhoto.find((p) => p.stock > 5 && (p.sizes || []).length === 0 && (p.colors || []).length <= 1) || withPhoto.find((p) => p.stock > 5);
     console.log('info  articles a vrai petit stock :', rare.length, '| article abondant du test :', abundant && abundant.name.trim());
     check('le catalogue a des articles a vrai petit stock (stock 5 ou moins) et un article abondant', rare.length >= 2 && !!abundant);
 
@@ -679,9 +680,18 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const gcats = await guest.page.getByTestId('home-categories').boundingBox();
     check('la carte de Zara est juste sous la ligne des categories, dans la largeur du telephone', !!gbox && !!gcats && gbox.y >= gcats.y && gbox.x >= 0 && gbox.x + gbox.width <= 390, { gbox, gcats });
     await guest.page.screenshot({ path: path.join(OUT, '7a-pub-zara-visiteur.png') });
+    // un toucher sur la carte : Zara ouvre le chat et prend le relais comme vendeuse (plus de fiche produit)
     await guest.page.getByTestId('zara-ad-open').click();
-    await guest.page.waitForURL(/\/produit\//, { timeout: 15000 });
-    check('un toucher sur la carte ouvre la fiche de l’article', /\/produit\//.test(guest.page.url()), guest.page.url());
+    await waitText(guest.page, /Je suis Zara, votre conseillère/);
+    await waitText(guest.page, /Je peux m’occuper de votre commande tout de suite/);
+    const gChat = await panelOf(guest.page).innerText();
+    check('toucher la pub : le chat de Zara s’ouvre (la page reste l’accueil, pas de fiche produit)', !/\/produit\//.test(guest.page.url()) && /Je suis Zara, votre conseillère/.test(gChat), guest.page.url());
+    check('Zara presente CET article (la fiche dans le chat, avec son nom)', (await cardsOf(guest.page).count()) === 1 && gChat.includes(gname.slice(0, 18)), { gname });
+    check('Zara redit le vrai fait de la pub (« Plus que N en stock. »), sans « Article rare » ni « Beaucoup »', /Plus (que \d|qu'un seul) en stock\./.test(gChat) && !/Article rare|Beaucoup de clients/.test(gChat), gChat.slice(0, 400));
+    const gChips = await chipLabels(guest.page);
+    check('boutons de la vendeuse : « Commander cet article » en premier, « D’autres idées », menu, WhatsApp', gChips[0] === '🛒 Commander cet article' && gChips.includes('🔎 D’autres idées') && gChips.some((c) => /WhatsApp/.test(c)), gChips);
+    check('Zara n’a PAS fait l’accueil habituel (pas de question de langue ni de prenom)', !/Choisissez votre langue|اختر لغتك/.test(gChat) && !/Quel est votre prénom/.test(gChat));
+    await guest.page.screenshot({ path: path.join(OUT, '7g-pub-zara-chat.png') });
     await guest.ctx.close();
 
     // c. client haut place (metier du compte) : « Article rare : il n'en reste que N » (vrai stock)
@@ -711,6 +721,15 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     check('8 vraies commandes : « Beaucoup de clients ont acheté cet article : 8 commandes ces 7 derniers jours. »', /^Beaucoup de clients ont acheté cet article : 8 commandes ces 7 derniers jours\./.test(al) && aname === abundant.name.trim(), { al, aname });
     check('l’article le plus commande passe en premier (1 seule commande : pas de chiffre pour l’autre)', !/1 commande|1 clients/.test(al), al);
     await sold.page.screenshot({ path: path.join(OUT, '7c-pub-zara-commandes.png') });
+    // un toucher : Zara reprend la preuve VRAIE (8 commandes) puis « Commander cet article » lance la commande dans le chat
+    await sold.page.getByTestId('zara-ad-open').click();
+    await waitText(sold.page, /Je suis Zara, votre conseillère/);
+    await waitText(sold.page, /Je peux m’occuper de votre commande tout de suite/);
+    const sChat = await panelOf(sold.page).innerText();
+    check('toucher la pub (8 vraies commandes) : Zara redit « Beaucoup de clients ont acheté cet article : 8 commandes… »', /Beaucoup de clients ont acheté cet article : 8 commandes/.test(sChat), sChat.slice(0, 500));
+    const sCards = await cardsOf(sold.page).count();
+    await tap(sold.page, 'Commander cet article', /Très bon choix/);
+    check('« Commander cet article » : Zara choisit l’article pour le client et lance la commande dans le chat', (await panelOf(sold.page).innerText()).includes('Très bon choix') && sCards === 1);
     await sold.ctx.close();
 
     // f. fenetre de promotion : la phrase de Zara sous le message quand l'offre concerne un article
@@ -5860,8 +5879,32 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const airtelLine = payRow.airtel_payment_url ? `Payez ici : ${payRow.airtel_payment_url}` : `Envoyez ${numRe(total)} FCFA au ${esc(payRow.airtel_number || '60 60 51 51')} \\(Airtel Money\\)`;
       check('confirmation : numero de commande, total, instructions de paiement, emballage cadeau, horaires et 48 h', done.includes(`#${b.id.slice(0, 8)}`) && new RegExp(`Total à régler : ${numRe(total)} FCFA`).test(done) && new RegExp(airtelLine).test(done) && /Emballage cadeau inclus/.test(done) && /valable 48 h/.test(done) && /8h30 à 16h/.test(done) && new RegExp(`Fidélité : cette commande vous rapportera ${Math.floor(total / 5000)} points? une fois livrée`).test(done), done);
       check('confirmation : jamais « payee » ni « confirmee par la boutique » (seulement « enregistree »)', !/payée|paiement reçu|commande confirmée/i.test(done), done);
-      check('le panier est vide apres l\'enregistrement, et boutons Mes commandes / Menu', (await cartCount(c.page)) === 0 && (await chipLabels(c.page)).join('|') === '📦 Mes commandes|🏠 Menu', await chipLabels(c.page));
+      check('le panier est vide apres l\'enregistrement, et boutons Facture / Mes commandes / Menu', (await cartCount(c.page)) === 0 && (await chipLabels(c.page)).join('|') === '📄 Télécharger ma facture|📦 Mes commandes|🏠 Menu', await chipLabels(c.page));
+      check('confirmation : Zara annonce que la facture est prete', /Votre facture est prête/.test(done), done);
       await c.page.screenshot({ path: path.join(OUT, 'O2-confirmation.png') });
+      // facture PDF : le bouton de Zara demande le PDF a la fonction serveur avec le jeton du compte et le telecharge sans quitter le chat
+      {
+        const calls = [];
+        const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'authorization, apikey, content-type, x-client-info', 'access-control-allow-methods': 'POST, OPTIONS', 'access-control-expose-headers': 'Content-Disposition' };
+        const fakePdf = Buffer.from('%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n');
+        await c.page.route('**/functions/v1/order-invoice', async (route) => {
+          if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS });
+          calls.push({ auth: route.request().headers().authorization || '', body: JSON.parse(route.request().postData() || '{}') });
+          return route.fulfill({ status: 200, headers: { ...CORS, 'content-type': 'application/pdf', 'content-disposition': 'attachment; filename="Facture-FA-2026-000012.pdf"' }, body: fakePdf });
+        });
+        const [dl] = await Promise.all([c.page.waitForEvent('download', { timeout: 15000 }), panelOf(c.page).getByTestId('assistant-chip').filter({ hasText: /Télécharger ma facture/ }).click()]);
+        const saved = fs.readFileSync(await dl.path());
+        check('facture PDF : un fichier « Facture-FA-2026-000012.pdf » est telecharge (le nom donne par le serveur)', dl.suggestedFilename() === 'Facture-FA-2026-000012.pdf' && saved.subarray(0, 5).toString() === '%PDF-', dl.suggestedFilename());
+        check('facture PDF : la demande part avec le jeton du compte, l\'action « pdf » et LA commande qui vient d\'etre passee', calls.length === 1 && /^Bearer eyJ/.test(calls[0].auth) && calls[0].body.action === 'pdf' && calls[0].body.order_id === b.id, calls);
+        await c.page.getByText('Facture téléchargée').waitFor({ timeout: 8000 });
+        check('facture PDF : message « Facture telechargee » et Zara reste ouverte (le chat n\'est pas ferme)', (await panelOf(c.page).getByTestId('assistant-chip').count()) >= 3 && new URL(c.page.url()).pathname === '/');
+        // fonction pas en ligne (404) : la facture s'ouvre a l'ecran, le chat se ferme
+        await c.page.unroute('**/functions/v1/order-invoice');
+        await c.page.route('**/functions/v1/order-invoice', (route) => (route.request().method() === 'OPTIONS' ? route.fulfill({ status: 204, headers: CORS }) : route.fulfill({ status: 404, headers: { ...CORS, 'content-type': 'application/json' }, body: JSON.stringify({ code: 'NOT_FOUND', message: 'Requested function was not found' }) })));
+        await panelOf(c.page).getByTestId('assistant-chip').filter({ hasText: /Télécharger ma facture/ }).click();
+        await c.page.waitForURL(new RegExp(`/facture/${b.id}$`), { timeout: 10000 });
+        check('facture PDF : fonction absente (404) : la page « Facture » de la commande s\'ouvre a la place (jamais d\'impasse)', true);
+      }
       await ask(c.page, 'oui', /./).catch(() => {});
       await sleep(1500);
       check('un « oui » apres coup ne refait PAS de commande', db.attempts.length === 1 && db.created.length === 1);
@@ -6696,6 +6739,29 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         await page.getByText('🖨️ Imprimer / Enregistrer en PDF').click();
         check('facture : « Imprimer / Enregistrer en PDF » ouvre l\'impression', (await page.evaluate(() => window.__printed)) === 1);
         check('facture : seule la facture sort a l\'impression (regle d\'impression presente)', await page.evaluate(() => !!document.querySelector('style[data-invoice-print]')));
+        // facture PDF : « Telecharger ma facture » demande le PDF de CETTE commande a la fonction serveur avec le jeton du compte
+        {
+          const calls = [];
+          const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'authorization, apikey, content-type, x-client-info', 'access-control-allow-methods': 'POST, OPTIONS', 'access-control-expose-headers': 'Content-Disposition' };
+          await page.route('**/functions/v1/order-invoice', async (route) => {
+            if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS });
+            calls.push({ auth: route.request().headers().authorization || '', body: JSON.parse(route.request().postData() || '{}') });
+            return route.fulfill({ status: 200, headers: { ...CORS, 'content-type': 'application/pdf', 'content-disposition': 'attachment; filename="Facture-FA-2026-000012.pdf"' }, body: Buffer.from('%PDF-1.4\n%%EOF\n') });
+          });
+          check('facture : deux boutons, « Telecharger ma facture » puis « Imprimer »', (await page.getByText('📄 Télécharger ma facture').count()) === 1 && (await page.getByText('🖨️ Imprimer / Enregistrer en PDF').count()) === 1);
+          const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 15000 }), page.getByText('📄 Télécharger ma facture').click()]);
+          check('facture : « Telecharger ma facture » donne le fichier PDF de cette commande avec le jeton du compte', dl.suggestedFilename() === 'Facture-FA-2026-000012.pdf' && calls.length === 1 && /^Bearer eyJ/.test(calls[0].auth) && calls[0].body.action === 'pdf' && calls[0].body.order_id === E1.id, calls);
+          // page de confirmation apres la commande : le meme bouton, en premier ; « Voir mes commandes » passe en second
+          await page.goto(`${BASE}/commande/confirmation?orderId=${E1.id}&total=92500`, { waitUntil: 'load' });
+          await page.getByText(/Merci d.avoir acheté/).waitFor({ timeout: 15000 });
+          await page.getByText('📄 Télécharger ma facture').waitFor({ timeout: 15000 });
+          const buttons = await page.evaluate(() => [...document.querySelectorAll('[role="button"], [tabindex="0"]')].map((e) => e.innerText.trim()).filter((t) => /Télécharger ma facture|Voir mes commandes|Continuer mes achats/.test(t)));
+          check('confirmation de commande : « Telecharger ma facture », « Voir mes commandes », « Continuer mes achats » dans cet ordre', buttons.join('|') === '📄 Télécharger ma facture|Voir mes commandes|Continuer mes achats', buttons);
+          await page.screenshot({ path: path.join(OUT, 'C7b-confirmation-facture.png') });
+          const [dl2] = await Promise.all([page.waitForEvent('download', { timeout: 15000 }), page.getByText('📄 Télécharger ma facture').click()]);
+          check('confirmation de commande : le bouton telecharge la facture PDF de la commande', dl2.suggestedFilename() === 'Facture-FA-2026-000012.pdf' && calls.length === 2 && calls[1].body.order_id === E1.id, calls);
+          await page.unroute('**/functions/v1/order-invoice');
+        }
         await page.evaluate(() => document.querySelectorAll('div').forEach((d) => { if (d.scrollTop) d.scrollTop = 0; }));
         await page.screenshot({ path: path.join(OUT, 'C7-facture.png'), fullPage: true });
         // impression : seule la facture sort (PDF fabrique par le navigateur avec les regles d'impression)

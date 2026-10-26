@@ -74,6 +74,7 @@ import {
 import { fetchCartStatus, fetchLoyaltyPoints, fetchPaymentNumbers, fetchProductForCart, getCatalog, getCategories, getCities, getProductSales, getStoreInfo, logAssistantEvent, requestCallback, startChatToday, toCard, type AssistantProduct, type CallbackSource } from '../lib/assistantData';
 import { compareFacts, declaredStyle, jobFrom, jobKindOfProfession, rankForStyle, styleOrder, threeRanges, toneOf, type JobKind, type StyleKey } from '../lib/assistantPersona';
 import { callbackDays, callbackNote, dayFromText, LOW_STOCK_MAX, provenSales, type CallbackDay } from '../lib/assistantSales';
+import { adFacts, adLine, isSeniorProfession } from '../lib/zaraAds';
 import { clearIntent, currentDevice, markIntent } from '../lib/assistantAttribution';
 import { pushReminderNow, recordPushReminder } from '../lib/pushReminder';
 import { getWebPushIssue, isWebPushBlocked, PUSH_PERMISSION_NOT_GRANTED, subscribeToWebPush } from '../lib/webPushSubscription';
@@ -154,6 +155,7 @@ export interface ChatAction {
     | 'orderCancel'
     | 'orderAddress'
     | 'orderPage'
+    | 'invoice'
     | 'interest'
     | 'account'
     | 'callback'
@@ -244,6 +246,8 @@ interface AssistantState {
   // notifications (installée sans notifications). Toucher la bulle ouvre Zara directement sur cette proposition.
   installInviteDue: () => boolean;
   openFor: (intent: 'install' | 'push') => void;
+  // un clic sur la publicité « Zara vous conseille » : Zara ouvre le chat et prend le relais comme vendeuse (présente l'article avec des faits vrais, propose de le commander)
+  adviseProduct: (slug: string) => void;
   // client qui vient de se connecter pendant la conversation : Zara le reconnaît à son prénom (une seule fois par visite)
   greetMember: () => void;
   closeChat: () => void;
@@ -488,7 +492,7 @@ const COLD_QUERY: Record<Lang, string> = { fr: 'blouson manteau', ar: 'جاكي�
 // la commande en cours, compte, WhatsApp, menu, installer). L'ancien « Voir mon panier » part : il n'y a plus de panier. Les réponses à une question passée (taille, jour, budget, pour qui, confirmer...) partent.
 const OLD_CHIP_KINDS = new Set<ChatAction['kind']>([
   'say', 'whatsapp', 'register', 'login', 'orders', 'account', 'category', 'menu', 'checkout', 'link', 'policy', 'pair', 'add',
-  'install', 'installHelp', 'iosGuide', 'interest', 'style', 'orderPage', 'categoryPage', 'openChrome', 'pushOn',
+  'install', 'installHelp', 'iosGuide', 'interest', 'style', 'orderPage', 'invoice', 'categoryPage', 'openChrome', 'pushOn',
 ]);
 // Ces phrases parlent de ce qui est affiché en ce moment (le budget de ces articles, les comparer) : pas sur un ancien message.
 const CONTEXT_SAYS = new Set(['budget', ...Object.values(COMPARE_SAY), ...Object.values(RANGES_SAY)]);
@@ -843,6 +847,42 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     if (!get().messages.some((m) => m.role === 'assistant' && m.text.includes(T().cart.tapPlus))) lines.push(T().cart.tapPlus);
     if (install && !saidBefore(T().install.productNudge)) lines.push(T().install.productNudge);
     await say(lines.join('\n'), { actions });
+  }
+
+  // Un clic sur la publicité « Zara vous conseille » : Zara prend le relais comme vendeuse. Elle présente CET article (vrais prix, vrai stock,
+  // vraies commandes : jamais de fausse rareté), puis propose de le commander et répond aux questions.
+  async function adviseReply(slug: string) {
+    // une commande en cours dans le chat : Zara ne l'interrompt pas
+    if (get().step.startsWith('co_')) return;
+    if (!get().name) set({ name: await rememberedName() });
+    const t = T().advise;
+    const lang = get().lang;
+    let catalog: CatalogProduct[] = [];
+    try {
+      catalog = await getCatalog();
+    } catch {
+      // catalogue illisible : Zara le dit et propose le menu
+    }
+    const product = catalog.find((p) => p.slug === slug && p.stock > 0 && p.price > 0);
+    if (get().step === 'ask_lang' || get().step === 'ask_name') setStep('menu'); // le client vient de la publicité : pas de questions d'accueil
+    if (!product) {
+      await say(withName(t.gone), { actions: [sayBtn(t.chipOthers, 'conseil'), sayBtn(T().chip.promotions, 'promotions'), menuBtn(), wa()] });
+      return;
+    }
+    setCtx({ kind: 'query', query: product.name });
+    const senior = isSeniorProfession(useAuthStore.getState().profile?.profession);
+    const sales = await getProductSales().catch(() => new Map<string, number>());
+    const line = adLine(adFacts({ id: product.id, stock: product.stock }, sales), senior, lang);
+    // les raisons vraies de la fiche (remise, couleurs, tailles) sans répéter le stock déjà dit
+    const lowStockText = T().why.lowStock(product.stock);
+    const reasons = whyReasons(product, ANY_BUDGET, lang).filter((r) => r !== lowStockText && r !== T().why.inStock);
+    const lines = [t.intro(shortName(product.name), fcfa(product.price))];
+    if (line) lines.push(line);
+    if (reasons.length > 0) lines.push(reasons.join(' · '));
+    await say(withName(lines.join('\n')), { products: [toCard(product)] });
+    await say(t.ask, {
+      actions: [{ label: t.chipOrder, kind: 'add', payload: product.slug, highlight: true }, sayBtn(t.chipOthers, 'conseil'), menuBtn(), wa()],
+    });
   }
 
   async function promoReply() {
@@ -1835,10 +1875,12 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     const points = Math.floor(total / LOYALTY_FCFA_PER_POINT); // la base ajoute floor(total / 5000) points quand la commande est livrée
     if (points >= 1) lines.push(T().loyalty.orderPoints(points));
     lines.push(T().serviceNote(home));
+    lines.push(c.invoiceReady);
     useCartStore.getState().clear();
     setOrder(null);
     setStep('menu');
-    const after: ChatAction[] = [{ label: T().chip.orders, kind: 'orders' }, menuBtn()];
+    // la facture PDF de cette commande (la fonction serveur ne la donne qu'au compte qui a passé la commande)
+    const after: ChatAction[] = [{ label: T().chip.invoice, kind: 'invoice', payload: created.order.id, highlight: true }, { label: T().chip.orders, kind: 'orders' }, menuBtn()];
     await say(lines.join('\n'), { actions: after });
     // le bon moment pour proposer l'application (une seule fois) : suivre sa commande en un toucher
     await maybeOfferInstall(after);
@@ -3307,6 +3349,11 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       if (get().loading) return;
       if (intent === 'install') void run(installReply);
       else void run(async () => void (await maybeRemindPush()));
+    },
+    adviseProduct: (slug) => {
+      set({ open: true, teaserDismissed: true });
+      if (get().loading || !slug) return;
+      void run(() => adviseReply(slug));
     },
     greetMember: () => {
       if (get().loading || !shouldGreetMember()) return;

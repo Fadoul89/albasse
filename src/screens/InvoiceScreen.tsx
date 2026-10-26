@@ -6,6 +6,7 @@ import type { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing } from '../theme';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { GoldButton } from '../components/GoldButton';
+import { InvoiceDownloadButton } from '../components/InvoiceDownloadButton';
 import { useAuthStore } from '../store/authStore';
 import { useStoreSettings } from '../hooks/useStoreSettings';
 import { useCities } from '../hooks/useCities';
@@ -177,7 +178,8 @@ export function InvoiceScreen() {
 
             {Platform.OS === 'web' ? (
               <View style={styles.actions}>
-                <GoldButton label="🖨️ Imprimer / Enregistrer en PDF" onPress={print} />
+                <InvoiceDownloadButton orderId={order.id} />
+                <GoldButton label="🖨️ Imprimer / Enregistrer en PDF" variant="outline" onPress={print} />
                 <Text style={styles.hint}>Dans la fenêtre d'impression, choisissez « Enregistrer au format PDF ».</Text>
               </View>
             ) : null}
