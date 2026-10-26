@@ -1,6 +1,6 @@
 // Admin : un réglage du site en un toucher (colonne booléenne de store_settings), enregistré tout de suite.
 // Le bouton « Commander sur WhatsApp » des fiches produit (page Produits), le compte obligatoire à l'entrée (page Clients) et les e-mails
-// automatiques aux clients et la publicité aux clients absents (page Assistant marketing).
+// automatiques aux clients et la publicité aux clients absents (page Assistant marketing), les publicités de Zara à l'écran (page Promotions).
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Switch } from 'react-native';
 import { useStoreSettings } from '../hooks/useStoreSettings';
@@ -10,7 +10,7 @@ import { colors, fonts, radius, spacing } from '../theme';
 import type { StoreSettings } from '../types';
 
 interface Setting {
-  column: 'whatsapp_order_enabled' | 'account_required' | 'order_emails_enabled' | 'inactive_emails_enabled';
+  column: 'whatsapp_order_enabled' | 'account_required' | 'order_emails_enabled' | 'inactive_emails_enabled' | 'zara_ads_enabled';
   // valeur quand la colonne n'existe pas encore (script SQL pas lancé)
   missingValue: boolean;
   script: string;
@@ -22,7 +22,7 @@ interface Setting {
   offToast: { title: string; message: string };
 }
 
-const SETTINGS: Record<'whatsappOrder' | 'accountRequired' | 'orderEmails' | 'inactiveEmails', Setting> = {
+const SETTINGS: Record<'whatsappOrder' | 'accountRequired' | 'orderEmails' | 'inactiveEmails' | 'zaraAds', Setting> = {
   whatsappOrder: {
     column: 'whatsapp_order_enabled',
     missingValue: true,
@@ -66,6 +66,17 @@ const SETTINGS: Record<'whatsappOrder' | 'accountRequired' | 'orderEmails' | 'in
     offText: '⚪ Désactivé : aucun e-mail publicitaire n’est envoyé',
     onToast: { title: '📣 Publicité par e-mail activée', message: 'Chaque matin, un petit nombre de clients absents depuis 7 jours reçoivent vos articles du moment.' },
     offToast: { title: '📪 Publicité par e-mail coupée', message: 'Plus aucun e-mail publicitaire n’est envoyé.' },
+  },
+  zaraAds: {
+    column: 'zara_ads_enabled',
+    missingValue: false,
+    script: 'add-zara-ads.sql',
+    testID: 'zara-ads',
+    title: '🤖 Zara gère les publicités à l’écran',
+    onText: '🟢 Activé : Zara choisit l’article et écrit le message (vrais chiffres seulement)',
+    offText: '⚪ Désactivé : aucune publicité de Zara à l’écran',
+    onToast: { title: '🤖 Zara gère les publicités', message: 'Sur l’accueil et dans les promotions, Zara met en avant vos articles avec des chiffres vrais (commandes réelles, stock réel).' },
+    offToast: { title: '⚪ Publicités de Zara coupées', message: 'Zara n’affiche plus de publicité à l’écran.' },
   },
 };
 

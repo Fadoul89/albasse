@@ -9,9 +9,13 @@ import { useActivePromotion } from '../hooks/useActivePromotion';
 import { useAuthStore } from '../store/authStore';
 import { useCategories } from '../hooks/useCategories';
 import { useProducts } from '../hooks/useProducts';
+import { useStoreSettings } from '../hooks/useStoreSettings';
 import { useToastStore } from '../store/toastStore';
 import { supabase } from '../lib/supabase';
 import { getCurrentSessionId } from '../lib/analytics';
+import { getProductSales } from '../lib/assistantData';
+import type { SalesMap } from '../lib/assistantSales';
+import { isSeniorProfession, productAdLine } from '../lib/zaraAds';
 import { colors, fonts, radius, spacing } from '../theme';
 
 const SHOW_DELAY_MS = 1500;
@@ -28,9 +32,22 @@ export function SmartPromotionPopup() {
   const { categories } = useCategories();
   const { products } = useProducts();
   const showToast = useToastStore((s) => s.show);
+  const { settings } = useStoreSettings();
+  const zaraAds = settings.zara_ads_enabled === true;
 
   const [visible, setVisible] = useState(false);
   const [claiming, setClaiming] = useState(false);
+  const [sales, setSales] = useState<SalesMap | null>(null);
+
+  // Zara ajoute sa phrase (faits vrais seulement) quand l'admin lui confie les publicités et que l'offre concerne un article
+  useEffect(() => {
+    if (!zaraAds || !promotion?.product_id) return;
+    let alive = true;
+    getProductSales().then((m) => alive && setSales(m));
+    return () => {
+      alive = false;
+    };
+  }, [zaraAds, promotion?.product_id]);
 
   useEffect(() => {
     if (!promotion) return;
@@ -58,6 +75,8 @@ export function SmartPromotionPopup() {
 
   const targetCategory = promotion.category_id ? categories.find((c) => c.id === promotion.category_id) : null;
   const targetProduct = promotion.product_id ? products.find((p) => p.id === promotion.product_id) : null;
+
+  const zaraLine = zaraAds && targetProduct && sales ? productAdLine({ id: targetProduct.id, stock: targetProduct.stock }, sales, isSeniorProfession(profile?.profession)) : null;
 
   const dismiss = async () => {
     setVisible(false);
@@ -112,6 +131,11 @@ export function SmartPromotionPopup() {
 
           <Text style={styles.greeting}>{greeting}</Text>
           <Text style={styles.message}>{body}</Text>
+          {zaraLine && (
+            <Text style={styles.zaraLine} testID="promo-zara-line">
+              💬 Zara : {zaraLine}
+            </Text>
+          )}
           <Text style={styles.validity}>⏰ {validityLabel}</Text>
 
           {isAuthenticated ? (
@@ -156,6 +180,7 @@ const styles = StyleSheet.create({
   image: { width: '100%', height: 140, borderRadius: radius.lg, marginBottom: spacing.md },
   greeting: { color: colors.goldLight, fontFamily: fonts.displayBold, fontSize: 18, marginBottom: spacing.sm, textAlign: 'center' },
   message: { color: colors.cream, fontFamily: fonts.body, fontSize: 14, lineHeight: 20, textAlign: 'center', marginBottom: spacing.sm },
+  zaraLine: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 13, lineHeight: 18, textAlign: 'center', marginBottom: spacing.sm },
   validity: { color: colors.creamFaint, fontFamily: fonts.bodyMedium, fontSize: 12, textAlign: 'center', marginBottom: spacing.lg },
   primaryBtn: {
     flex: 1,
