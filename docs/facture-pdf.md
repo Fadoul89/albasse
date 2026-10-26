@@ -17,7 +17,7 @@ La facture PDF a **les mêmes chiffres** que la page « Facture » : numéro `FA
 - L'envoi sur Telegram n'est possible que **depuis la base** (secret partagé gardé dans le coffre-fort Supabase, le même que pour les e-mails et le rapport de Zara). Le code du bot Telegram est relu dans le coffre-fort : rien n'est écrit en clair dans le code.
 
 ## Fichiers
-- `supabase/functions/order-invoice/` : `index.ts` (service), `invoice.ts` (calculs et dessin, testable), `logo.ts` (logo réduit en texte, aucun réseau).
+- `supabase/functions/order-invoice/` : `index.ts` (service), `invoice.ts` (calculs et dessin, testable), le logo est le même fichier que sur le site (`public/icon-192.png`), lu une fois sur albasseshopping.com ; s'il est introuvable, la facture est dessinée sans logo.
 - `add-order-invoice-telegram.sql` : déclencheur après chaque commande (sans danger à relancer ; **une commande n'échoue jamais** à cause de la facture).
 - `src/lib/invoiceDownload.ts` et `src/components/InvoiceDownloadButton.tsx` : le bouton du site.
 - `tests/email/invoice-pdf.test.ts` (chiffres, texte, dessin), parties O et C de `tests/zara/zara-ui.test.js` (boutons).

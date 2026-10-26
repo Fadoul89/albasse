@@ -61,10 +61,10 @@ export interface InvoiceData {
 // (arabe, emoji…) au lieu de faire échouer toute la facture. Les espaces spéciales et le « − » deviennent des signes simples.
 export function pdfText(value: unknown): string {
   return String(value ?? "")
-    .replace(/[     ]/g, " ")
-    .replace(/−/g, "-")
+    .replace(/[\u00A0\u202F\u2007\u2009\u200A]/g, " ")
+    .replace(/\u2212/g, "-")
     .replace(/[\r\n\t]+/g, " ")
-    .replace(/[^\x20-\x7E\xA0-\xFF‘’“”–—•€…]/g, "")
+    .replace(/[^\x20-\x7E\xA0-\xFF\u2018\u2019\u201C\u201D\u2013\u2014\u2022\u20AC\u2026]/g, "")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -132,18 +132,20 @@ const hex = (rgb: PdfLib["rgb"], h: string) => rgb(parseInt(h.slice(1, 3), 16) /
 const A4 = { w: 595.28, h: 841.89 };
 const MARGIN = 42;
 
-export async function buildInvoicePdf(lib: PdfLib, data: InvoiceData, logoJpeg: Uint8Array | null): Promise<Uint8Array> {
+// logoImage : le fichier du logo (PNG ou JPEG, reconnu à ses premiers octets) ou null : sans logo, la facture reste complète
+export async function buildInvoicePdf(lib: PdfLib, data: InvoiceData, logoImage: Uint8Array | null): Promise<Uint8Array> {
   const { order, shop } = data;
   const b = invoiceBreakdown(order);
   const doc = await lib.PDFDocument.create();
   const regular = await doc.embedFont(lib.StandardFonts.Helvetica);
   const bold = await doc.embedFont(lib.StandardFonts.HelveticaBold);
   let logo: any = null;
-  if (logoJpeg) {
+  if (logoImage) {
     try {
-      logo = await doc.embedJpg(logoJpeg);
+      const isPng = logoImage[0] === 0x89 && logoImage[1] === 0x50;
+      logo = isPng ? await doc.embedPng(logoImage) : await doc.embedJpg(logoImage);
     } catch {
-      logo = null; // pas de logo : la facture reste complète
+      logo = null; // logo illisible : pas de logo
     }
   }
 

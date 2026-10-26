@@ -4,13 +4,12 @@
 // Le dessin demande « pdf-lib » (pas ajouté au projet : la fonction serveur le charge elle-même) : PDF_LIB=/chemin/vers/pdf-lib/cjs/index.js ou npm i --no-save pdf-lib.
 // Si pdftotext est installé, le texte du PDF est relu pour vérifier les chiffres écrits.
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { invoiceBreakdown, invoiceNumber, orderNumberLabel, PAYMENT_LABELS, STATUS_LABELS, formatXAF as screenXAF } from '../../src/lib/invoice.ts';
 import { GIFT_WRAP_FEE } from '../../src/constants/shopRules.ts';
 import * as pdf from '../../supabase/functions/order-invoice/invoice.ts';
-import { LOGO_JPEG_BASE64 } from '../../supabase/functions/order-invoice/logo.ts';
 import type { Order } from '../../src/types';
 
 let ok = 0;
@@ -87,8 +86,10 @@ try {
 if (!lib) {
   console.log('SAUTÉ le dessin : pdf-lib introuvable (PDF_LIB=… ou npm i --no-save pdf-lib)');
 } else {
-  const logo = Uint8Array.from(Buffer.from(LOGO_JPEG_BASE64, 'base64'));
-  check('logo : fichier JPEG valide', logo[0] === 0xff && logo[1] === 0xd8 && logo.byteLength < 20000, logo.byteLength);
+  // le logo du site (PNG, chargé par la fonction depuis albasseshopping.com/icon-192.png) et l'ancien logo JPEG : les deux se dessinent
+  const logo = new Uint8Array(readFileSync('public/icon-192.png'));
+  const logoJpeg = new Uint8Array(readFileSync('assets/logo.jpg'));
+  check('logos : un PNG (reconnu à ses 2 premiers octets) et un JPEG', logo[0] === 0x89 && logo[1] === 0x50 && logoJpeg[0] === 0xff && logoJpeg[1] === 0xd8);
   const shop = { shop_name: 'Albasse Shopping', address: 'Avenue Mobutu', postal_code: '', city: "N'Djamena", country: 'Tchad', phone: '+235 66 00 00 00', email: 'contact@albasseshopping.com', invoice_legal_line: 'Albasse Shopping · RCCM TD-NDJ-00-0000' };
   const dir = mkdtempSync(path.join(tmpdir(), 'facture-'));
   const text = (bytes: Uint8Array, name: string): string | null => {
@@ -105,6 +106,10 @@ if (!lib) {
   const o1 = mk({ total: 85500, gift_wrap: true, loyalty_discount: 9000, payment_reference: 'AM123' });
   const bytes1 = await pdf.buildInvoicePdf(lib, { order: o1, shop, cityFeeUndefined: false }, logo);
   check('PDF valide (%PDF- … %%EOF)', Buffer.from(bytes1.subarray(0, 5)).toString() === '%PDF-' && Buffer.from(bytes1.subarray(-8)).toString().includes('%%EOF'));
+  const noLogo = await pdf.buildInvoicePdf(lib, { order: o1, shop, cityFeeUndefined: false }, null);
+  const withJpeg = await pdf.buildInvoicePdf(lib, { order: o1, shop, cityFeeUndefined: false }, logoJpeg);
+  const broken = await pdf.buildInvoicePdf(lib, { order: o1, shop, cityFeeUndefined: false }, new Uint8Array([0x89, 0x50, 1, 2, 3]));
+  check('logo PNG et logo JPEG : la facture est plus grosse qu\'sans logo ; logo illisible : dessinée sans logo, sans erreur', bytes1.byteLength > noLogo.byteLength + 1000 && withJpeg.byteLength > noLogo.byteLength + 1000 && Math.abs(broken.byteLength - noLogo.byteLength) < 50, [bytes1.byteLength, withJpeg.byteLength, noLogo.byteLength, broken.byteLength]);
   check('une seule page pour 2 articles', (await pageCount(bytes1)) === 1);
   const t1 = text(bytes1, 'f1.pdf');
   if (t1 === null) console.log('SAUTÉ la relecture du texte : pdftotext absent');

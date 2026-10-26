@@ -4,6 +4,7 @@
 //      « x-cron-secret » (le même que pour « brevo-email » et « zara-report-poster », gardé dans le coffre-fort Supabase) :
 //        POST { "action": "telegram", "order_id": "…" }              : envoie le PDF sur le Telegram des administrateurs
 //        POST { "action": "telegram", "order_id": "…", "dry": true }  : dessine seulement et répond avec la taille (rien n'est envoyé)
+//        POST { "action": "selftest" }  : dessine une facture d'EXEMPLE (aucune commande) ; avec "send": true elle part sur Telegram
 //   2. Le client (ou l'administrateur) télécharge la facture depuis le site avec son jeton de connexion :
 //        POST { "action": "pdf", "order_id": "…" }  + en-tête « Authorization: Bearer <jeton> »  →  le fichier PDF
 //      Un client ne reçoit que SES commandes ; l'administrateur reçoit toutes les commandes. Sans compte : refusé.
@@ -12,7 +13,6 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import * as pdfLib from "npm:pdf-lib@1.17.1";
 import { buildInvoicePdf, formatXAF, invoiceFileName, invoiceNumber, orderNumberLabel, pdfText, type InvoiceOrder } from "./invoice.ts";
-import { LOGO_JPEG_BASE64 } from "./logo.ts";
 
 const service = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
@@ -34,7 +34,25 @@ const safeEqual = (a: string, b: string) => {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const logoBytes = () => Uint8Array.from(atob(LOGO_JPEG_BASE64), (c) => c.charCodeAt(0));
+// le logo : le même fichier que sur le site (public/icon-192.png), lu une fois puis gardé ; s'il est introuvable, la facture est dessinée sans logo
+const LOGO_URL = "https://www.albasseshopping.com/icon-192.png";
+let logoCache: Uint8Array | null = null;
+async function loadLogo(): Promise<Uint8Array | null> {
+  if (logoCache) return logoCache;
+  try {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 6000);
+    const res = await fetch(LOGO_URL, { signal: ctl.signal });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    if (bytes.byteLength === 0 || bytes.byteLength > 500_000) return null;
+    logoCache = bytes;
+    return bytes;
+  } catch {
+    return null;
+  }
+}
 
 // la commande, les réglages de la boutique et la ville (pour « Gratuite » ou « À définir ») : tout est relu dans la base
 async function loadInvoice(orderId: string) {
@@ -49,7 +67,7 @@ async function loadInvoice(orderId: string) {
 async function makePdf(orderId: string) {
   const loaded = await loadInvoice(orderId);
   if (!loaded) return null;
-  const bytes = await buildInvoicePdf(pdfLib as never, { order: loaded.order, shop: loaded.shop, cityFeeUndefined: loaded.cityFeeUndefined }, logoBytes());
+  const bytes = await buildInvoicePdf(pdfLib as never, { order: loaded.order, shop: loaded.shop, cityFeeUndefined: loaded.cityFeeUndefined }, await loadLogo());
   return { bytes, order: loaded.order };
 }
 
@@ -69,13 +87,43 @@ Deno.serve(async (req: Request) => {
     if (req.method !== "POST") return json({ error: "méthode refusée" }, 405);
     const body = await req.json().catch(() => ({}));
     const orderId = String(body?.order_id ?? "");
-    if (!UUID.test(orderId)) return json({ error: "commande inconnue" }, 400);
 
     // --- 1. appel de la base : secret partagé
     const given = req.headers.get("x-cron-secret") ?? "";
     if (given) {
       const { data: secret } = await service.rpc("email_cron_secret");
       if (typeof secret !== "string" || !safeEqual(given, secret)) return json({ error: "non autorisé" }, 401);
+
+      // essai : une facture d'EXEMPLE (aucune commande lue ni créée) pour vérifier le dessin sur le vrai serveur ; envoyée seulement avec « send »
+      if (body?.action === "selftest") {
+        const { data: shop } = await service.from("store_settings").select("*").eq("id", 1).maybeSingle();
+        const sample: InvoiceOrder = {
+          id: "00000000-0000-4000-8000-000000000000",
+          order_number: null,
+          items: [{ product_name: "Article d'exemple", unit_price: 25000, quantity: 1, color: "Noir", size: "M" }],
+          total: 27500,
+          status: "pending",
+          payment_method: "airtel_money",
+          shipping_name: "Client exemple",
+          shipping_phone: "66 00 00 00",
+          shipping_address: "Quartier exemple",
+          shipping_city: "N'Djamena",
+          gift_wrap: false,
+          loyalty_discount: 0,
+          created_at: new Date().toISOString(),
+        };
+        const bytes = await buildInvoicePdf(pdfLib as never, { order: sample, shop: shop ?? {}, cityFeeUndefined: false }, await loadLogo());
+        if (body?.send !== true) return json({ ok: true, selftest: true, bytes: bytes.byteLength });
+        const { data: creds } = await service.rpc("zara_report_credentials");
+        const token = creds?.token as string | undefined;
+        const chats = ((creds?.chat_ids ?? []) as number[]).filter((c) => Number.isFinite(c));
+        if (!token || chats.length === 0) return json({ error: "Telegram : bot ou administrateur non lié" }, 500);
+        let sent = 0;
+        for (const chat of chats) if (await telegramSend(token, chat, bytes, sample, "🧾 EXEMPLE de facture PDF (aucune vraie commande) : voici ce que vous recevrez à chaque commande.").catch(() => false)) sent++;
+        return json({ ok: sent > 0, selftest: true, sent, bytes: bytes.byteLength });
+      }
+
+      if (!UUID.test(orderId)) return json({ error: "commande inconnue" }, 400);
       if (body?.action !== "telegram") return json({ error: "action inconnue" }, 400);
 
       const made = await makePdf(orderId);
@@ -95,6 +143,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // --- 2. le client ou l'administrateur connecté : jeton de connexion
+    if (!UUID.test(orderId)) return json({ error: "commande inconnue" }, 400);
     const jwt = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
     if (!jwt) return json({ error: "connexion requise" }, 401);
     if (body?.action !== "pdf") return json({ error: "action inconnue" }, 400);
