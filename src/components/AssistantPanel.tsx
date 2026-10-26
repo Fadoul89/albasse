@@ -24,6 +24,7 @@ import { hasArabic, type Lang } from '../lib/assistantLang';
 import { currentDevice, markIntent } from '../lib/assistantAttribution';
 import { texts } from '../lib/assistantText';
 import { openInChrome } from '../lib/pwaInstallPrompt';
+import { downloadOrOpenInvoice } from '../lib/invoiceDownload';
 import { ASSISTANT_NAME, WHATSAPP_URL } from '../constants/assistant';
 
 const AVATAR = require('../../assets/assistante-avatar.jpg');
@@ -312,6 +313,13 @@ export function AssistantPanel() {
       case 'cart':
       case 'checkout':
         checkout();
+        return;
+      // la facture PDF de la commande qui vient d'être passée : téléchargée sans quitter le chat (sinon elle s'ouvre à l'écran)
+      case 'invoice':
+        if (action.payload) {
+          const orderId = action.payload;
+          void downloadOrOpenInvoice(orderId, () => go(() => navigationRef.navigate('Invoice', { orderId })));
+        }
         return;
       case 'orderPage':
         go(() => navigationRef.navigate('Checkout')); // la page de commande du site, si le client préfère (l'article reste choisi)

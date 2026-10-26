@@ -113,6 +113,7 @@ export interface Texts {
     skipSlot: string;
     useAddress(address: string): string;
     orderPage: string;
+    invoice: string;
     retry: string;
     points: string;
     earnPoints: string;
@@ -203,6 +204,7 @@ export interface Texts {
     priceChanged: string;
     codOnlyHome: string;
     placed(name: string, id: string): string;
+    invoiceReady: string;
     totalToPay(total: number): string;
     giftIncluded: string;
     payCash: string;
@@ -514,6 +516,7 @@ const FR: Texts = {
     skipSlot: 'Passer',
     useAddress: (address) => `📍 Utiliser : ${address.length > 26 ? `${address.slice(0, 25).trimEnd()}…` : address}`,
     orderPage: '📄 Page de commande',
+    invoice: '📄 Télécharger ma facture',
     retry: '🔄 Réessayer',
     points: '🏆 Mes points',
     earnPoints: '🎁 Gagner des points',
@@ -709,6 +712,7 @@ const FR: Texts = {
     priceChanged: 'Les prix ou le stock ont changé : voici le nouveau récapitulatif. Vérifiez, puis confirmez à nouveau 👇',
     codOnlyHome: `Le paiement à la livraison est possible seulement à ${HOME_CITY}. Choisissez Airtel Money ou Moov Money 📱`,
     placed: (name, id) => `🎉 Merci ${name} ! Votre commande #${id} a bien été enregistrée.`,
+    invoiceReady: '🧾 Votre facture est prête : touchez « Télécharger ma facture ».',
     totalToPay: (total) => `💰 Total à régler : ${fcfa(total)}`,
     giftIncluded: `🎁 Emballage cadeau inclus (${fcfa(GIFT_WRAP_FEE)})`,
     payCash: '💵 Vous payez en espèces directement à la livraison.',
@@ -1086,6 +1090,7 @@ const AR: Texts = {
     skipSlot: 'تخطي',
     useAddress: (address) => `📍 استخدم: ${address.length > 26 ? `${address.slice(0, 25).trimEnd()}…` : address}`,
     orderPage: '📄 صفحة الطلب',
+    invoice: '📄 تحميل فاتورتي',
     retry: '🔄 إعادة المحاولة',
     points: '🏆 نقاطي',
     earnPoints: '🎁 اكسب نقاطاً',
@@ -1283,6 +1288,7 @@ const AR: Texts = {
     priceChanged: 'تغيّرت الأسعار أو المخزون: هذا هو الملخص الجديد. راجعه ثم أكّد من جديد 👇',
     codOnlyHome: 'الدفع عند الاستلام ممكن فقط في إنجامينا. اختر Airtel Money أو Moov Money 📱',
     placed: (name, id) => `🎉 شكراً ${name}! تم تسجيل طلبك رقم #${id} بنجاح.`,
+    invoiceReady: '🧾 فاتورتك جاهزة: اضغط على «تحميل فاتورتي».',
     totalToPay: (total) => `💰 المبلغ المطلوب: ${fcfa(total)}`,
     giftIncluded: `🎁 تغليف الهدية مُضمَّن (${fcfa(GIFT_WRAP_FEE)})`,
     payCash: '💵 تدفع نقداً عند الاستلام مباشرة.',

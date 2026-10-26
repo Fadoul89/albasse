@@ -5879,8 +5879,32 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const airtelLine = payRow.airtel_payment_url ? `Payez ici : ${payRow.airtel_payment_url}` : `Envoyez ${numRe(total)} FCFA au ${esc(payRow.airtel_number || '60 60 51 51')} \\(Airtel Money\\)`;
       check('confirmation : numero de commande, total, instructions de paiement, emballage cadeau, horaires et 48 h', done.includes(`#${b.id.slice(0, 8)}`) && new RegExp(`Total à régler : ${numRe(total)} FCFA`).test(done) && new RegExp(airtelLine).test(done) && /Emballage cadeau inclus/.test(done) && /valable 48 h/.test(done) && /8h30 à 16h/.test(done) && new RegExp(`Fidélité : cette commande vous rapportera ${Math.floor(total / 5000)} points? une fois livrée`).test(done), done);
       check('confirmation : jamais « payee » ni « confirmee par la boutique » (seulement « enregistree »)', !/payée|paiement reçu|commande confirmée/i.test(done), done);
-      check('le panier est vide apres l\'enregistrement, et boutons Mes commandes / Menu', (await cartCount(c.page)) === 0 && (await chipLabels(c.page)).join('|') === '📦 Mes commandes|🏠 Menu', await chipLabels(c.page));
+      check('le panier est vide apres l\'enregistrement, et boutons Facture / Mes commandes / Menu', (await cartCount(c.page)) === 0 && (await chipLabels(c.page)).join('|') === '📄 Télécharger ma facture|📦 Mes commandes|🏠 Menu', await chipLabels(c.page));
+      check('confirmation : Zara annonce que la facture est prete', /Votre facture est prête/.test(done), done);
       await c.page.screenshot({ path: path.join(OUT, 'O2-confirmation.png') });
+      // facture PDF : le bouton de Zara demande le PDF a la fonction serveur avec le jeton du compte et le telecharge sans quitter le chat
+      {
+        const calls = [];
+        const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'authorization, apikey, content-type, x-client-info', 'access-control-allow-methods': 'POST, OPTIONS', 'access-control-expose-headers': 'Content-Disposition' };
+        const fakePdf = Buffer.from('%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n');
+        await c.page.route('**/functions/v1/order-invoice', async (route) => {
+          if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS });
+          calls.push({ auth: route.request().headers().authorization || '', body: JSON.parse(route.request().postData() || '{}') });
+          return route.fulfill({ status: 200, headers: { ...CORS, 'content-type': 'application/pdf', 'content-disposition': 'attachment; filename="Facture-FA-2026-000012.pdf"' }, body: fakePdf });
+        });
+        const [dl] = await Promise.all([c.page.waitForEvent('download', { timeout: 15000 }), panelOf(c.page).getByTestId('assistant-chip').filter({ hasText: /Télécharger ma facture/ }).click()]);
+        const saved = fs.readFileSync(await dl.path());
+        check('facture PDF : un fichier « Facture-FA-2026-000012.pdf » est telecharge (le nom donne par le serveur)', dl.suggestedFilename() === 'Facture-FA-2026-000012.pdf' && saved.subarray(0, 5).toString() === '%PDF-', dl.suggestedFilename());
+        check('facture PDF : la demande part avec le jeton du compte, l\'action « pdf » et LA commande qui vient d\'etre passee', calls.length === 1 && /^Bearer eyJ/.test(calls[0].auth) && calls[0].body.action === 'pdf' && calls[0].body.order_id === b.id, calls);
+        await c.page.getByText('Facture téléchargée').waitFor({ timeout: 8000 });
+        check('facture PDF : message « Facture telechargee » et Zara reste ouverte (le chat n\'est pas ferme)', (await panelOf(c.page).getByTestId('assistant-chip').count()) >= 3 && new URL(c.page.url()).pathname === '/');
+        // fonction pas en ligne (404) : la facture s'ouvre a l'ecran, le chat se ferme
+        await c.page.unroute('**/functions/v1/order-invoice');
+        await c.page.route('**/functions/v1/order-invoice', (route) => (route.request().method() === 'OPTIONS' ? route.fulfill({ status: 204, headers: CORS }) : route.fulfill({ status: 404, headers: { ...CORS, 'content-type': 'application/json' }, body: JSON.stringify({ code: 'NOT_FOUND', message: 'Requested function was not found' }) })));
+        await panelOf(c.page).getByTestId('assistant-chip').filter({ hasText: /Télécharger ma facture/ }).click();
+        await c.page.waitForURL(new RegExp(`/facture/${b.id}$`), { timeout: 10000 });
+        check('facture PDF : fonction absente (404) : la page « Facture » de la commande s\'ouvre a la place (jamais d\'impasse)', true);
+      }
       await ask(c.page, 'oui', /./).catch(() => {});
       await sleep(1500);
       check('un « oui » apres coup ne refait PAS de commande', db.attempts.length === 1 && db.created.length === 1);
@@ -6715,6 +6739,29 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         await page.getByText('🖨️ Imprimer / Enregistrer en PDF').click();
         check('facture : « Imprimer / Enregistrer en PDF » ouvre l\'impression', (await page.evaluate(() => window.__printed)) === 1);
         check('facture : seule la facture sort a l\'impression (regle d\'impression presente)', await page.evaluate(() => !!document.querySelector('style[data-invoice-print]')));
+        // facture PDF : « Telecharger ma facture » demande le PDF de CETTE commande a la fonction serveur avec le jeton du compte
+        {
+          const calls = [];
+          const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'authorization, apikey, content-type, x-client-info', 'access-control-allow-methods': 'POST, OPTIONS', 'access-control-expose-headers': 'Content-Disposition' };
+          await page.route('**/functions/v1/order-invoice', async (route) => {
+            if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS });
+            calls.push({ auth: route.request().headers().authorization || '', body: JSON.parse(route.request().postData() || '{}') });
+            return route.fulfill({ status: 200, headers: { ...CORS, 'content-type': 'application/pdf', 'content-disposition': 'attachment; filename="Facture-FA-2026-000012.pdf"' }, body: Buffer.from('%PDF-1.4\n%%EOF\n') });
+          });
+          check('facture : deux boutons, « Telecharger ma facture » puis « Imprimer »', (await page.getByText('📄 Télécharger ma facture').count()) === 1 && (await page.getByText('🖨️ Imprimer / Enregistrer en PDF').count()) === 1);
+          const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 15000 }), page.getByText('📄 Télécharger ma facture').click()]);
+          check('facture : « Telecharger ma facture » donne le fichier PDF de cette commande avec le jeton du compte', dl.suggestedFilename() === 'Facture-FA-2026-000012.pdf' && calls.length === 1 && /^Bearer eyJ/.test(calls[0].auth) && calls[0].body.action === 'pdf' && calls[0].body.order_id === E1.id, calls);
+          // page de confirmation apres la commande : le meme bouton, en premier ; « Voir mes commandes » passe en second
+          await page.goto(`${BASE}/commande/confirmation?orderId=${E1.id}&total=92500`, { waitUntil: 'load' });
+          await page.getByText(/Merci d.avoir acheté/).waitFor({ timeout: 15000 });
+          await page.getByText('📄 Télécharger ma facture').waitFor({ timeout: 15000 });
+          const buttons = await page.evaluate(() => [...document.querySelectorAll('[role="button"], [tabindex="0"]')].map((e) => e.innerText.trim()).filter((t) => /Télécharger ma facture|Voir mes commandes|Continuer mes achats/.test(t)));
+          check('confirmation de commande : « Telecharger ma facture », « Voir mes commandes », « Continuer mes achats » dans cet ordre', buttons.join('|') === '📄 Télécharger ma facture|Voir mes commandes|Continuer mes achats', buttons);
+          await page.screenshot({ path: path.join(OUT, 'C7b-confirmation-facture.png') });
+          const [dl2] = await Promise.all([page.waitForEvent('download', { timeout: 15000 }), page.getByText('📄 Télécharger ma facture').click()]);
+          check('confirmation de commande : le bouton telecharge la facture PDF de la commande', dl2.suggestedFilename() === 'Facture-FA-2026-000012.pdf' && calls.length === 2 && calls[1].body.order_id === E1.id, calls);
+          await page.unroute('**/functions/v1/order-invoice');
+        }
         await page.evaluate(() => document.querySelectorAll('div').forEach((d) => { if (d.scrollTop) d.scrollTop = 0; }));
         await page.screenshot({ path: path.join(OUT, 'C7-facture.png'), fullPage: true });
         // impression : seule la facture sort (PDF fabrique par le navigateur avec les regles d'impression)

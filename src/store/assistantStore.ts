@@ -155,6 +155,7 @@ export interface ChatAction {
     | 'orderCancel'
     | 'orderAddress'
     | 'orderPage'
+    | 'invoice'
     | 'interest'
     | 'account'
     | 'callback'
@@ -491,7 +492,7 @@ const COLD_QUERY: Record<Lang, string> = { fr: 'blouson manteau', ar: 'جاكي�
 // la commande en cours, compte, WhatsApp, menu, installer). L'ancien « Voir mon panier » part : il n'y a plus de panier. Les réponses à une question passée (taille, jour, budget, pour qui, confirmer...) partent.
 const OLD_CHIP_KINDS = new Set<ChatAction['kind']>([
   'say', 'whatsapp', 'register', 'login', 'orders', 'account', 'category', 'menu', 'checkout', 'link', 'policy', 'pair', 'add',
-  'install', 'installHelp', 'iosGuide', 'interest', 'style', 'orderPage', 'categoryPage', 'openChrome', 'pushOn',
+  'install', 'installHelp', 'iosGuide', 'interest', 'style', 'orderPage', 'invoice', 'categoryPage', 'openChrome', 'pushOn',
 ]);
 // Ces phrases parlent de ce qui est affiché en ce moment (le budget de ces articles, les comparer) : pas sur un ancien message.
 const CONTEXT_SAYS = new Set(['budget', ...Object.values(COMPARE_SAY), ...Object.values(RANGES_SAY)]);
@@ -1874,10 +1875,12 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     const points = Math.floor(total / LOYALTY_FCFA_PER_POINT); // la base ajoute floor(total / 5000) points quand la commande est livrée
     if (points >= 1) lines.push(T().loyalty.orderPoints(points));
     lines.push(T().serviceNote(home));
+    lines.push(c.invoiceReady);
     useCartStore.getState().clear();
     setOrder(null);
     setStep('menu');
-    const after: ChatAction[] = [{ label: T().chip.orders, kind: 'orders' }, menuBtn()];
+    // la facture PDF de cette commande (la fonction serveur ne la donne qu'au compte qui a passé la commande)
+    const after: ChatAction[] = [{ label: T().chip.invoice, kind: 'invoice', payload: created.order.id, highlight: true }, { label: T().chip.orders, kind: 'orders' }, menuBtn()];
     await say(lines.join('\n'), { actions: after });
     // le bon moment pour proposer l'application (une seule fois) : suivre sa commande en un toucher
     await maybeOfferInstall(after);
