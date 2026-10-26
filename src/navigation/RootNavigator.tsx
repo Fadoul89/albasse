@@ -47,6 +47,7 @@ import { AdminCallbacksScreen } from '../screens/admin/AdminCallbacksScreen';
 import { AdminAbandonedCartsScreen } from '../screens/admin/AdminAbandonedCartsScreen';
 import { AdminNotificationsScreen } from '../screens/admin/AdminNotificationsScreen';
 import { AdminPromotionsScreen } from '../screens/admin/AdminPromotionsScreen';
+import { AdminZaraSeoScreen } from '../screens/admin/AdminZaraSeoScreen';
 import { SmartPromotionPopup } from '../components/SmartPromotionPopup';
 import { WheelPopup } from '../components/WheelPopup';
 import { AppDownloadPopup } from '../components/AppDownloadPopup';
@@ -117,6 +118,7 @@ const linking: LinkingOptions<RootStackParamList> = {
       AdminAbandonedCarts: 'admin/paniers-abandonnes',
       AdminNotifications: 'admin/notifications',
       AdminPromotions: 'admin/promotions',
+      AdminZaraSeo: 'admin/zara-seo',
       AdminProducts: 'admin/produits',
       AdminProductForm: 'admin/produits/edition',
       AdminOrders: 'admin/commandes',
@@ -269,6 +271,7 @@ export function RootNavigator() {
             <Stack.Screen name="AdminAbandonedCarts" component={AdminAbandonedCartsScreen} />
             <Stack.Screen name="AdminNotifications" component={AdminNotificationsScreen} />
             <Stack.Screen name="AdminPromotions" component={AdminPromotionsScreen} />
+            <Stack.Screen name="AdminZaraSeo" component={AdminZaraSeoScreen} />
             <Stack.Screen name="AdminStoreSettings" component={AdminStoreSettingsScreen} />
             <Stack.Screen name="Contact" component={ContactScreen} />
             <Stack.Screen name="CustomerNotifications" component={CustomerNotificationsScreen} />

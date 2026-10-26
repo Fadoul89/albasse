@@ -16,7 +16,7 @@ const port = process.argv[3] || '4333';
 // BASE_URL=https://www.albasseshopping.com : teste le VRAI site en ligne (les commandes et comptes restent simules, rien n'est enregistre)
 const BASE = (process.env.BASE_URL || `http://localhost:${port}`).replace(/\/$/, '');
 const BASE_HOST = new URL(BASE).hostname;
-const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI12345678TOFBCDE').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI123456789TOFBCDE').toUpperCase();
 // saison fraiche (blousons et manteaux) : le bouton du menu de Zara n'existe que jusqu'au 31 decembre 2026 a 23h59 (N'Djamena)
 const COLD_ON = Date.now() < Date.parse('2027-01-01T00:00:00+01:00');
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
@@ -1019,6 +1019,161 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     await noSql.page.getByText('Pas enregistré').first().waitFor({ timeout: 8000 });
     check('script pas lance : l\'interrupteur automatique dit « Lancez d’abord le script add-zara-promotions.sql » et reste eteint', /Désactivé/.test(await noSql.page.getByTestId('zara-auto-flash-status').innerText()) && (await noSql.page.getByText(/Lancez d’abord le script add-zara-promotions\.sql dans Supabase\./).count()) >= 1);
     await noSql.ctx.close();
+  }
+
+  // =============================================== 9. ZARA SEO : descriptions des articles (fausse base, fausse fonction : rien n'est ecrit) ===============================================
+  if (PARTS.includes('9')) {
+    console.log("\n== 9. Zara SEO : Zara propose les descriptions des fiches faibles, l'administrateur valide (fausse base : rien n'est ecrit)");
+    const uid9 = '22222222-2222-4222-8222-222222222222';
+    const JWT9 = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyMjIyMjIyMi0yMjIyLTQyMjItODIyMi0yMjIyMjIyMjIyMjIiLCJleHAiOjQxMDI0NDQ4MDAsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.c2ln';
+    const SK9 = 'sb-xtitsmmccpkelxfjyqyh-auth-token';
+    const member9 = (isAdmin) => {
+      const auth = { id: uid9, aud: 'authenticated', role: 'authenticated', email: 'test@example.com', app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' };
+      const token = { access_token: JWT9, refresh_token: 'fake-refresh', token_type: 'bearer', expires_in: 3600, expires_at: 4102444800, user: auth };
+      return { auth, token, session: JSON.stringify(token), editable: false, patches: [], profile: { id: uid9, email: 'test@example.com', full_name: 'Ahmed Hassan', phone: '66123456', whatsapp_number: null, profession: null, region: null, country: 'Tchad', address: null, loyalty_points: 0, banned: false, role: isAdmin ? 'admin' : 'customer', is_admin: isAdmin, is_affiliate: false } };
+    };
+    const HDR9 = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+    const json9 = (route, body, status = 200) => route.fulfill({ status, headers: { ...HDR9, 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    const GOOD9 = 'Montre homme au cadran blanc texturé et bracelet noir souple. Un modèle sobre et élégant, facile à porter au quotidien.';
+    const R = (i, name, description, extra = {}) => ({ id: `0000000${i}-0000-4000-8000-00000000000${i}`, name, slug: `zs-${i}`, description, stock: 5, is_active: true, images: [], created_at: `2026-10-${String(10 + i).padStart(2, '0')}T00:00:00Z`, description_zara_at: null, description_before_zara: null, ...extra });
+    const makeDb = () => ({
+      rows: [
+        R(1, 'Lunettes Panthère VIP', null),
+        R(2, 'Montre KEEP MOVING', ''),
+        R(3, 'Sandale  MS', 'Courte'),
+        R(4, 'Ceinture homme', 'Trop courte'),
+        R(5, 'Parfum 110 Degrees', GOOD9),
+        R(6, 'Parfum 110 degrees', GOOD9),
+        R(7, 'Survêtement ZEGNA', GOOD9),
+        R(8, 'Article désactivé', null, { is_active: false }),
+        R(9, 'Déjà fait par Zara', 'Description de Zara pour cet article, claire et utile pour Google et pour les acheteurs.', { description_zara_at: '2026-10-25T10:00:00Z', description_before_zara: 'Ancienne' }),
+      ],
+      invoke: [], apply: [], undo: [], missing: false, failInvoke: false,
+    });
+    const wire9 = async (page, db) => {
+      await page.route((url) => url.pathname.endsWith('/rest/v1/products') && /select=/.test(url.search) && /description_zara_at|zs-/.test(url.search) === true, async (route) => {
+        if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: HDR9 });
+        if (db.missing) return json9(route, { code: '42703', message: 'column products.description_zara_at does not exist' }, 400);
+        return json9(route, db.rows);
+      });
+      if (db.missing) {
+        await page.route((url) => url.pathname.endsWith('/rest/v1/products') && /select=id/.test(url.search) && !/description_zara_at/.test(url.search), (route) => (route.request().method() === 'OPTIONS' ? route.fulfill({ status: 204, headers: HDR9 }) : json9(route, db.rows.map((r) => ({ ...r, description_zara_at: undefined, description_before_zara: undefined })))));
+      }
+      await page.route(/\/functions\/v1\/zara-seo/, (route) => {
+        if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: HDR9 });
+        const body = JSON.parse(route.request().postData() || '{}');
+        db.invoke.push({ ids: body.ids, auth: route.request().headers()['authorization'] || '' });
+        if (db.failInvoke) return json9(route, { ok: false, reason: 'error' });
+        const items = body.ids.map((id, k) => {
+          const r = db.rows.find((x) => x.id === id);
+          return { id, name: r.name, current: r.description || '', proposal: k === 0 ? `${r.name}, un modèle au style affirmé et facile à porter au quotidien. À commander sur Albasse Shopping.` : `${r.name.replace(/\s+/g, ' ')}. À commander sur Albasse Shopping, boutique en ligne au Tchad.`, source: k === 0 ? 'ia' : 'modele', problems: k === 0 ? [] : ['IA indisponible'] };
+        });
+        return json9(route, { ok: true, items });
+      });
+      await page.route(/\/rest\/v1\/rpc\/zara_apply_seo/, (route) => {
+        if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: HDR9 });
+        const body = JSON.parse(route.request().postData() || '{}');
+        db.apply.push(body);
+        for (const it of body.p_items) {
+          const r = db.rows.find((x) => x.id === it.id);
+          if (r) { r.description_before_zara = r.description || ''; r.description = it.description; r.description_zara_at = '2026-10-26T18:00:00Z'; }
+        }
+        return json9(route, { applied: body.p_items.length, skipped: [] });
+      });
+      await page.route(/\/rest\/v1\/rpc\/zara_undo_seo/, (route) => {
+        if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: HDR9 });
+        const body = JSON.parse(route.request().postData() || '{}');
+        db.undo.push(body);
+        for (const id of body.p_ids) {
+          const r = db.rows.find((x) => x.id === id);
+          if (r) { r.description = r.description_before_zara || ''; r.description_before_zara = null; r.description_zara_at = null; }
+        }
+        return json9(route, body.p_ids.length);
+      });
+    };
+    const statsOf = async (page) => (await page.getByTestId('zara-seo-stat-value').allInnerTexts()).map(Number);
+
+    // --- a. l'administrateur
+    const db = makeDb();
+    const adm9 = member9(true);
+    const seoAdmin = await newVisitor(phone, { storage: { [SK9]: adm9.session }, fakeUser: adm9, fakeStore: { waOrder: true, patches: [] } });
+    await wire9(seoAdmin.page, db);
+    await seoAdmin.page.goto(`${BASE}/admin/zara-seo`, { waitUntil: 'load' });
+    await seoAdmin.page.getByTestId('zara-seo-panel').waitFor({ timeout: 25000 });
+    await seoAdmin.page.waitForFunction(() => document.querySelectorAll('[data-testid="zara-seo-stat-value"]').length === 4, null, { timeout: 15000 });
+    check('Zara SEO : le titre et le texte disent que rien n\'est publie avant validation et que l\'ancienne description est gardee', /rien n’est publié\s+avant/.test(await seoAdmin.page.getByTestId('zara-seo-panel').innerText()) && /L’ancienne description est toujours gardée/.test(await seoAdmin.page.getByTestId('zara-seo-panel').innerText()));
+    check('Zara SEO : bilan = 8 en vente (le desactive n\'est pas compte), 2 sans description, 2 trop courtes, 4 correctes', JSON.stringify(await statsOf(seoAdmin.page)) === JSON.stringify([8, 2, 2, 4]), await statsOf(seoAdmin.page));
+    await seoAdmin.page.getByTestId('zara-seo-dup-toggle').click();
+    check('Zara SEO : 1 nom en double signale (majuscules ignorees), a renommer par la boutique', /1 nom d’article en double/.test(await seoAdmin.page.getByTestId('zara-seo-dup-toggle').innerText()) && /À renommer vous-même/.test(await seoAdmin.page.getByTestId('zara-seo-dup-list').innerText()) && /Parfum 110/.test(await seoAdmin.page.getByTestId('zara-seo-dup-list').innerText()));
+    check('Zara SEO : rien n\'est demande a la fonction tant qu\'on n\'a pas touche le bouton', db.invoke.length === 0 && (await seoAdmin.page.getByTestId('zara-seo-drafts').count()) === 0);
+    const btn = seoAdmin.page.getByText(/Zara, prépare \d+ descriptions/);
+    check('Zara SEO : le bouton annonce « 4 descriptions (4 à faire) »', /Zara, prépare 4 descriptions \(4 à faire\)/.test(await btn.innerText()), await btn.innerText());
+    await seoAdmin.page.screenshot({ path: path.join(OUT, '9a-zara-seo-bilan.png'), fullPage: true });
+    await btn.click();
+    await seoAdmin.page.getByTestId('zara-seo-drafts').waitFor({ timeout: 15000 });
+    check('Zara SEO : la fonction recoit les 4 fiches faibles (sans description d\'abord, la plus recente en premier), avec la connexion de l\'administrateur', db.invoke.length === 1 && db.invoke[0].ids.length === 4 && db.invoke[0].ids.join() === ['00000002-0000-4000-8000-000000000002', '00000001-0000-4000-8000-000000000001', '00000004-0000-4000-8000-000000000004', '00000003-0000-4000-8000-000000000003'].join() && db.invoke[0].auth.startsWith('Bearer '), db.invoke);
+    check('Zara SEO : 4 propositions, chacune avec « Avant » et une zone de texte modifiable', (await seoAdmin.page.getByTestId('zara-seo-draft').count()) === 4 && (await seoAdmin.page.getByTestId('zara-seo-text').count()) === 4);
+    const draftsText = await seoAdmin.page.getByTestId('zara-seo-drafts').innerText();
+    check('Zara SEO : « — aucune description — » pour une fiche vide, et l\'ancien texte court pour les autres', /— aucune description —/.test(draftsText) && /Courte/.test(draftsText) && /Trop courte/.test(draftsText));
+    check('Zara SEO : l\'origine est indiquee (« d\'apres la photo » ou « avec les faits connus »)', /écrit d’après la photo/.test(draftsText) && /faits connus/.test(draftsText));
+    check('Zara SEO : rien n\'est publie tant qu\'on n\'a pas valide', db.apply.length === 0);
+    await seoAdmin.page.screenshot({ path: path.join(OUT, '9b-zara-seo-propositions.png'), fullPage: true });
+    // correction d'un texte + une fiche non retenue
+    const edited = 'Lunettes de soleil à monture épaisse et verres foncés, un style affirmé et facile à porter.';
+    await seoAdmin.page.getByTestId('zara-seo-text').first().fill(edited);
+    await seoAdmin.page.getByTestId('zara-seo-keep').nth(3).click();
+    check('Zara SEO : le bouton compte 3 descriptions a publier', (await seoAdmin.page.getByText(/Valider et publier \(3\)/).count()) === 1);
+    await seoAdmin.page.getByText(/Valider et publier \(3\)/).click();
+    await seoAdmin.page.getByText(/3 descriptions publiées/).waitFor({ timeout: 10000 });
+    check('Zara SEO : « Valider » publie UNE fois, 3 articles, avec le texte corrige, sans la fiche decochee', db.apply.length === 1 && db.apply[0].p_items.length === 3 && db.apply[0].p_items[0].description === edited && !db.apply[0].p_items.some((i) => i.id.startsWith('00000003')), db.apply);
+    check('Zara SEO : la publication ne contient que des numeros d\'articles et des descriptions (aucun prix, aucun nom, aucun stock)', db.apply[0].p_items.every((i) => Object.keys(i).sort().join() === 'description,id') && Object.keys(db.apply[0]).join() === 'p_items');
+    await seoAdmin.page.waitForFunction(() => document.querySelectorAll('[data-testid="zara-seo-drafts"]').length === 0, null, { timeout: 8000 });
+    await seoAdmin.page.waitForFunction(() => JSON.stringify([...document.querySelectorAll('[data-testid="zara-seo-stat-value"]')].map((e) => Number(e.textContent))) === '[8,0,1,7]', null, { timeout: 8000 }).catch(() => {});
+    check('Zara SEO : apres la publication, le bilan est relu (plus que 1 trop courte, 7 correctes)', JSON.stringify(await statsOf(seoAdmin.page)) === JSON.stringify([8, 0, 1, 7]), await statsOf(seoAdmin.page));
+    // deja ecrites par Zara + annuler
+    await seoAdmin.page.getByTestId('zara-seo-done-toggle').waitFor({ timeout: 8000 });
+    check('Zara SEO : « 4 descriptions déjà écrites par Zara » (1 ancienne + 3 nouvelles)', /4 descriptions déjà écrites par Zara/.test(await seoAdmin.page.getByTestId('zara-seo-done-toggle').innerText()), await seoAdmin.page.getByTestId('zara-seo-done-toggle').innerText());
+    await seoAdmin.page.getByTestId('zara-seo-done-toggle').click();
+    check('Zara SEO : la liste montre les 4 avec « Remettre l\'ancienne »', (await seoAdmin.page.getByTestId('zara-seo-done-item').count()) === 4 && (await seoAdmin.page.getByTestId('zara-seo-undo').count()) === 4);
+    await seoAdmin.page.getByTestId('zara-seo-undo').first().click();
+    await seoAdmin.page.getByText('L’ancienne description est remise.').waitFor({ timeout: 8000 });
+    check('Zara SEO : « Remettre l\'ancienne » appelle la base une fois, pour cet article seulement', db.undo.length === 1 && db.undo[0].p_ids.length === 1, db.undo);
+    check('Zara SEO : l\'article rendu a son ancienne description (et sa fiche redevient « a faire »)', db.rows.find((r) => r.id === db.undo[0].p_ids[0]).description_zara_at === null);
+    check('Zara SEO : aucune erreur (administrateur)', seoAdmin.errs.length === 0, seoAdmin.errs);
+    await seoAdmin.ctx.close();
+
+    // --- b. la fonction ne repond pas : message clair, rien ne casse
+    const dbFail = makeDb();
+    dbFail.failInvoke = true;
+    const adm9b = member9(true);
+    const seoFail = await newVisitor(phone, { storage: { [SK9]: adm9b.session }, fakeUser: adm9b, fakeStore: { waOrder: true, patches: [] } });
+    await wire9(seoFail.page, dbFail);
+    await seoFail.page.goto(`${BASE}/admin/zara-seo`, { waitUntil: 'load' });
+    await seoFail.page.getByTestId('zara-seo-panel').waitFor({ timeout: 25000 });
+    await seoFail.page.waitForFunction(() => document.querySelectorAll('[data-testid="zara-seo-stat-value"]').length === 4, null, { timeout: 15000 });
+    await seoFail.page.getByText(/Zara, prépare \d+ descriptions/).click();
+    await seoFail.page.getByText(/Zara n’a pas pu préparer les descriptions/).first().waitFor({ timeout: 10000 });
+    check('Zara SEO : si la fonction echoue, message clair, aucune proposition, rien n\'est publie', (await seoFail.page.getByTestId('zara-seo-drafts').count()) === 0 && dbFail.apply.length === 0);
+    await seoFail.ctx.close();
+
+    // --- c. script SQL pas lance : message clair
+    const dbMiss = makeDb();
+    dbMiss.missing = true;
+    const adm9c = member9(true);
+    const seoMiss = await newVisitor(phone, { storage: { [SK9]: adm9c.session }, fakeUser: adm9c, fakeStore: { waOrder: true, patches: [] } });
+    await wire9(seoMiss.page, dbMiss);
+    await seoMiss.page.goto(`${BASE}/admin/zara-seo`, { waitUntil: 'load' });
+    await seoMiss.page.getByTestId('zara-seo-missing').waitFor({ timeout: 25000 });
+    check('Zara SEO : script pas lance : « Lancez d\'abord le script add-zara-seo.sql dans Supabase »', /add-zara-seo\.sql/.test(await seoMiss.page.getByTestId('zara-seo-missing').innerText()));
+    await seoMiss.ctx.close();
+
+    // --- d. un client (pas administrateur) ne voit rien
+    const cust9 = member9(false);
+    const seoCust = await newVisitor(phone, { storage: { [SK9]: cust9.session }, fakeUser: cust9, fakeStore: { waOrder: true, patches: [] } });
+    await seoCust.page.goto(`${BASE}/admin/zara-seo`, { waitUntil: 'load' });
+    await seoCust.page.getByText('Accès réservé aux administrateurs.').waitFor({ timeout: 25000 });
+    check('Zara SEO : un client connecte (pas administrateur) : « Accès réservé aux administrateurs »', (await seoCust.page.getByTestId('zara-seo-panel').count()) === 0);
+    await seoCust.ctx.close();
   }
 
   // =============================================== A. CONSEILLERE : UNE QUESTION A LA FOIS (francais) ===============================================
