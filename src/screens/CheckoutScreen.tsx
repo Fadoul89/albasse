@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import { useNavigation } from '@react-navigation/native';
@@ -21,11 +21,13 @@ import { formatSlot, slotProblem, slotToIso } from '../lib/scheduledDelivery';
 import { trackTikTokEvent } from '../lib/tiktokPixel';
 import type { PaymentMethod, City } from '../types';
 import { isHomeCity } from '../lib/deliveryRules';
+import { useStoreSettings } from '../hooks/useStoreSettings';
+import { guestOrderAllowed } from '../lib/accountWall';
+import { CHAD_PHONE_REGEX, generateTempPassword, guestFullName, guestInfoProblem, type NewAccountNotice } from '../lib/guestAccount';
 import { fetchLoyaltyStatus, loyaltyDiscount, ordersBeforeDiscount, type LoyaltyStatus } from '../lib/loyaltyDiscount';
 import { DELIVERY_HOURS, GIFT_WRAP_FEE, HOME_CITY, ORDER_VALIDITY_HOURS } from '../constants/shopRules';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
-const CHAD_PHONE_REGEX = /^[69]\d{7}$/;
 
 const PAYMENT_OPTIONS: { value: PaymentMethod; label: string; icon: string }[] = [
   { value: 'airtel_money', label: 'Airtel Money', icon: '📱' },
@@ -42,12 +44,13 @@ export function CheckoutScreen() {
   // une commande = un article (choisi avec « Commander » sur la fiche ou dans Zara)
   const item = items[0] ?? null;
   const profile = useAuthStore((s) => s.profile);
-
+  const signUp = useAuthStore((s) => s.signUp);
+  // commander sans compte : seulement si « Compte obligatoire » est désactivé (sinon, comme avant : connexion ou création de compte d'abord)
+  const { settings: storeSettings, isLoading: settingsLoading } = useStoreSettings();
+  const guestAllowed = guestOrderAllowed(storeSettings.account_required);
   useEffect(() => {
-    if (!profile) {
-      navigation.replace('Login');
-    }
-  }, [profile]);
+    if (!profile && !settingsLoading && !guestAllowed) navigation.replace('Login');
+  }, [profile, settingsLoading, guestAllowed]);
 
   useEffect(() => {
     trackTikTokEvent('InitiateCheckout', {
@@ -60,6 +63,13 @@ export function CheckoutScreen() {
 
   const [name, setName] = useState(profile?.full_name ?? '');
   const [phone, setPhone] = useState(profile?.phone ?? '');
+  // visiteur sans compte : prénom, nom et e-mail demandés ici ; son compte est créé quand il confirme
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [email, setEmail] = useState('');
+  const isGuest = !profile;
+  // le compte créé à la confirmation (numéro + code) : gardé même si la commande doit être renvoyée, pour l'afficher sur la page de confirmation
+  const newAccountRef = useRef<NewAccountNotice | null>(null);
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
   const [selectedCity, setSelectedCity] = useState<City | null>(null);
@@ -104,11 +114,19 @@ export function CheckoutScreen() {
       : null;
 
   const handleSubmit = async () => {
-    if (!profile) {
+    if (isGuest && !guestAllowed) {
       navigation.replace('Login');
       return;
     }
-    if (!name || !phone || !address || !city) {
+    const shippingName = isGuest ? guestFullName({ firstName, lastName }) : name;
+    if (isGuest) {
+      const problem = guestInfoProblem({ firstName, lastName, phone, email });
+      if (problem) {
+        showToast(problem, { title: 'Vos informations', type: 'error' });
+        return;
+      }
+    }
+    if (!shippingName || !phone || !address || !city) {
       showToast('Merci de remplir toutes les informations de livraison.', { title: 'Champs manquants', type: 'error' });
       return;
     }
@@ -141,12 +159,37 @@ export function CheckoutScreen() {
 
     setSubmitting(true);
     try {
+      // visiteur sans compte : on crée son compte avec son numéro, puis la commande est enregistrée à son nom
+      let buyer = profile;
+      if (!buyer) {
+        const password = generateTempPassword();
+        const res = await signUp(password, { fullName: shippingName, phone, email: email.trim(), address, region: city, country: 'Tchad', acceptsNotifications: false });
+        if (res.error || res.needsEmailConfirmation) {
+          const exists = !!res.error && res.error.startsWith('Un compte existe déjà');
+          showToast(
+            exists
+              ? 'Vous avez déjà un compte avec ce numéro. Connectez-vous avec votre numéro et votre mot de passe pour commander.'
+              : res.error ?? 'Votre compte n’a pas pu être créé. Écrivez-nous sur WhatsApp, nous prenons votre commande.',
+            { title: exists ? 'Compte existant' : 'Compte non créé', type: 'error' }
+          );
+          if (exists) navigation.navigate('Login');
+          return;
+        }
+        buyer = useAuthStore.getState().profile;
+        if (!buyer) {
+          showToast('Votre compte n’a pas pu être ouvert. Merci de réessayer.', { title: 'Compte non créé', type: 'error' });
+          return;
+        }
+        newAccountRef.current = { phone, password };
+        setName(shippingName); // si la commande doit être renvoyée, le nom est déjà là (le compte est ouvert)
+      }
+
       const { order, error } = await createOrder({
-        userId: profile.id,
+        userId: buyer.id,
         items,
         total: grandTotal,
         paymentMethod: method,
-        shippingName: name,
+        shippingName,
         shippingPhone: phone,
         shippingAddress: address,
         shippingCity: city,
@@ -183,7 +226,14 @@ export function CheckoutScreen() {
       }
 
       clearCart();
-      navigation.navigate('OrderConfirmation', { orderId: order.id, total: grandTotal, instructions, giftWrap, ...(scheduledFor ? { scheduledFor } : {}) });
+      navigation.navigate('OrderConfirmation', {
+        orderId: order.id,
+        total: grandTotal,
+        instructions,
+        giftWrap,
+        ...(scheduledFor ? { scheduledFor } : {}),
+        ...(newAccountRef.current ? { newAccount: newAccountRef.current } : {}),
+      });
     } catch (e) {
       console.error('Exception création commande:', e);
       showToast(e instanceof Error ? e.message : String(e), { title: 'Erreur inattendue', type: 'error' });
@@ -192,7 +242,7 @@ export function CheckoutScreen() {
     }
   };
 
-  if (!profile) return null;
+  if (isGuest && (settingsLoading || !guestAllowed)) return null; // on attend de savoir si le compte est obligatoire (sinon : retour à la connexion)
 
   if (!item) {
     return (
@@ -253,13 +303,39 @@ export function CheckoutScreen() {
         </View>
 
         <Text style={styles.sectionTitle}>Livraison</Text>
-        <TextInput
-          value={name}
-          onChangeText={setName}
-          placeholder="Nom complet"
-          placeholderTextColor={colors.creamFaint}
-          style={styles.input}
-        />
+        {isGuest ? (
+          <>
+            <Text style={styles.guestNote} testID="checkout-guest-note">
+              {'👋 Pas besoin de créer un compte avant : nous le créons pour vous quand vous confirmez la commande.'}
+            </Text>
+            <TextInput
+              value={firstName}
+              onChangeText={setFirstName}
+              placeholder="Prénom *"
+              placeholderTextColor={colors.creamFaint}
+              autoComplete="given-name"
+              style={styles.input}
+              testID="checkout-first-name"
+            />
+            <TextInput
+              value={lastName}
+              onChangeText={setLastName}
+              placeholder="Nom *"
+              placeholderTextColor={colors.creamFaint}
+              autoComplete="family-name"
+              style={styles.input}
+              testID="checkout-last-name"
+            />
+          </>
+        ) : (
+          <TextInput
+            value={name}
+            onChangeText={setName}
+            placeholder="Nom complet"
+            placeholderTextColor={colors.creamFaint}
+            style={styles.input}
+          />
+        )}
         <TextInput
           value={phone}
           onChangeText={(text) => setPhone(text.replace(/\D/g, '').slice(0, 8))}
@@ -268,7 +344,21 @@ export function CheckoutScreen() {
           keyboardType="phone-pad"
           maxLength={8}
           style={styles.input}
+          testID="checkout-phone"
         />
+        {isGuest ? (
+          <TextInput
+            value={email}
+            onChangeText={setEmail}
+            placeholder="Adresse e-mail *"
+            placeholderTextColor={colors.creamFaint}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoComplete="email"
+            style={styles.input}
+            testID="checkout-email"
+          />
+        ) : null}
         <TextInput
           value={address}
           onChangeText={setAddress}
@@ -404,6 +494,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   content: { paddingHorizontal: spacing.md, paddingBottom: 60 },
   emptyBox: { padding: spacing.lg, alignItems: 'stretch' },
+  guestNote: { color: colors.goldLight, fontFamily: fonts.bodyMedium, fontSize: 13, lineHeight: 19, marginBottom: spacing.sm },
   emptyText: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 14, lineHeight: 20, textAlign: 'center' },
   itemCard: {
     flexDirection: 'row',

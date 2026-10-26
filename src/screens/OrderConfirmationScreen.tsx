@@ -10,6 +10,7 @@ import { InvoiceDownloadButton } from '../components/InvoiceDownloadButton';
 import { useAuthStore } from '../store/authStore';
 import { DELIVERY_HOURS, GIFT_WRAP_FEE, ORDER_VALIDITY_HOURS } from '../constants/shopRules';
 import { formatSlot } from '../lib/scheduledDelivery';
+import { prettyChadPhone } from '../lib/guestAccount';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
 
@@ -18,7 +19,7 @@ interface Props {
 }
 
 export function OrderConfirmationScreen({ route }: Props) {
-  const { orderId, total, instructions, giftWrap, scheduledFor } = route.params;
+  const { orderId, total, instructions, giftWrap, scheduledFor, newAccount } = route.params;
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const signedIn = useAuthStore((s) => !!s.profile?.id); // la facture PDF n'est donnée qu'au compte qui a passé la commande
 
@@ -44,6 +45,24 @@ export function OrderConfirmationScreen({ route }: Props) {
         {instructions ? (
           <View style={styles.instructionsBox}>
             <Text style={styles.instructionsText}>{instructions}</Text>
+          </View>
+        ) : null}
+
+        {newAccount ? (
+          <View style={styles.accountBox} testID="confirm-new-account">
+            <Text style={styles.accountTitle}>✅ Votre compte est créé</Text>
+            <Text style={styles.accountText}>Pour retrouver vos commandes et votre facture, connectez-vous avec :</Text>
+            <Text style={styles.accountLine}>
+              {'Numéro : '}
+              <Text style={styles.accountValue}>{prettyChadPhone(newAccount.phone)}</Text>
+            </Text>
+            <Text style={styles.accountLine}>
+              {'Mot de passe : '}
+              <Text style={styles.accountValue} testID="confirm-new-password" selectable>
+                {newAccount.password}
+              </Text>
+            </Text>
+            <Text style={styles.accountHint}>📸 Faites une capture d’écran pour le garder. Vous pourrez le changer dans « Compte ».</Text>
           </View>
         ) : null}
 
@@ -106,6 +125,12 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   instructionsText: { color: colors.cream, fontFamily: fonts.body, fontSize: 13, lineHeight: 19, textAlign: 'center' },
+  accountBox: { backgroundColor: colors.panel, borderRadius: radius.md, borderWidth: 1, borderColor: colors.gold, padding: spacing.md, marginTop: spacing.lg, width: '100%', alignItems: 'center' },
+  accountTitle: { color: colors.goldLight, fontFamily: fonts.bodyBold, fontSize: 15, marginBottom: 6 },
+  accountText: { color: colors.cream, fontFamily: fonts.body, fontSize: 13, lineHeight: 19, textAlign: 'center', marginBottom: 8 },
+  accountLine: { color: colors.cream, fontFamily: fonts.body, fontSize: 15, marginTop: 2 },
+  accountValue: { color: colors.goldLight, fontFamily: fonts.displayBold, fontSize: 19, letterSpacing: 1 },
+  accountHint: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 12.5, lineHeight: 18, textAlign: 'center', marginTop: 10 },
   gift: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 14, textAlign: 'center', marginBottom: spacing.md },
   note: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 12.5, lineHeight: 19, textAlign: 'center', marginTop: spacing.md },
 });

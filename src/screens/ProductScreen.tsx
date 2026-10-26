@@ -33,6 +33,7 @@ import { GoldButton } from '../components/GoldButton';
 import { ProductCard } from '../components/ProductCard';
 import { FavoriteButton } from '../components/FavoriteButton';
 import { useStoreSettings } from '../hooks/useStoreSettings';
+import { guestOrderAllowed } from '../lib/accountWall';
 import { WebPushBanner } from '../components/WebPushBanner';
 
 // badges de confiance (fond transparent, réduits pour le téléphone)
@@ -165,7 +166,9 @@ export function ProductScreen({ route }: Props) {
     }
     setOrderItem(product, quantity, pickedColor, pickedSize);
     trackAddToCart(product.id);
-    if (!profile) {
+    // sans compte, le visiteur commande quand même (ses informations sont demandées sur la page de commande, son compte est créé à la confirmation)
+    // sauf si « Compte obligatoire » est activé : il doit alors créer son compte ou se connecter d'abord
+    if (!profile && !guestOrderAllowed(storeSettings.account_required)) {
       showToast('Créez un compte ou connectez-vous pour passer une commande.', {
         title: 'Compte requis',
         type: 'info',
