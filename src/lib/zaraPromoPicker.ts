@@ -12,6 +12,7 @@ export const MIN_STOCK_PROMO = 3;
 export const MIN_INTEREST_FLASH = 5; // vues + 5 × paniers + j'aime (20 au plus) sur la semaine
 export const MIN_INTEREST_PROMO = 3;
 export const MAX_PER_CATEGORY_FLASH = 2; // pas toute la Vente flash dans la même rubrique
+export const FLASH_COOLDOWN_DAYS = 3; // un article qui vient d'avoir une Vente flash se repose : les choix tournent
 export const MAX_PER_CATEGORY_PROMO = 3;
 
 // une ligne de zara_promotion_stats (base)
@@ -30,6 +31,7 @@ export interface PromoStatRow {
   sold: number; // unités vendues sur 30 jours
   flash_active: boolean;
   promo_active: boolean;
+  last_flash_at?: string | null; // dernière Vente flash de l'article
 }
 
 export interface PromoPick {
@@ -79,7 +81,7 @@ export function reasonsFor(r: Pick<PromoStatRow, 'views' | 'carts' | 'likes' | '
 
 const discountFactor = (pct: number) => 1 + Math.min(pct, 40) / 40; // ×1 à ×2 : une remise plus forte aide, sans écraser l'intérêt réel
 
-export function pickPromotions(rows: PromoStatRow[]): PromoPlan {
+export function pickPromotions(rows: PromoStatRow[], now: number = Date.now()): PromoPlan {
   const notes: string[] = [];
   const pool = rows
     .map((r) => {
@@ -121,8 +123,12 @@ export function pickPromotions(rows: PromoStatRow[]): PromoPlan {
   };
 
   // Vente flash : les articles les plus demandés (vues, paniers, j'aime), avec du stock pour vendre et une remise vraie
+  const rested = (x: (typeof pool)[number]) => {
+    const t = x.r.last_flash_at ? Date.parse(x.r.last_flash_at) : NaN;
+    return !Number.isFinite(t) || t < now - FLASH_COOLDOWN_DAYS * 86_400_000;
+  };
   const flashPool = pool
-    .filter((x) => x.interest >= MIN_INTEREST_FLASH && n(x.r.stock) >= MIN_STOCK_FLASH)
+    .filter((x) => x.interest >= MIN_INTEREST_FLASH && n(x.r.stock) >= MIN_STOCK_FLASH && rested(x))
     .sort((a, b) => b.interest * discountFactor(b.pct as number) - a.interest * discountFactor(a.pct as number) || n(b.r.stock) - n(a.r.stock) || byName(a, b));
   const flashChosen = take(flashPool, FLASH_COUNT, MAX_PER_CATEGORY_FLASH);
   const flashIds = new Set(flashChosen.map((x) => x.r.id));

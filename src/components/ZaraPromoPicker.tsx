@@ -1,10 +1,13 @@
 // Admin (page Promotions intelligentes) : Zara propose les articles de la Vente flash (24 h) et des Promotions (7 jours) d'après les statistiques réelles du site.
 // L'administrateur voit la liste et les VRAIES raisons (vues, paniers, j'aime, ventes, stock), puis valide en un toucher : rien n'est publié avant.
 // Aucun prix de vente n'est modifié : l'ancien prix barré ne s'affiche que pendant la Vente flash ou la Promotion (script add-zara-promotions.sql).
+// La Vente flash peut aussi être AUTOMATIQUE (interrupteur) : à chaque fin de Vente flash (24 h), Zara choisit seule les articles suivants (fonction de la base, toutes les 5 minutes).
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { useStoreSettings } from '../hooks/useStoreSettings';
+import { StoreSettingToggle } from './StoreSettingToggle';
 import { useToastStore } from '../store/toastStore';
 import { colors, fonts, radius, spacing } from '../theme';
 import { GoldButton } from './GoldButton';
@@ -18,6 +21,7 @@ const isMissing = (error: { code?: string; message?: string } | null) =>
 
 export function ZaraPromoPicker() {
   const showToast = useToastStore((t) => t.show);
+  const { settings, refresh: refreshSettings } = useStoreSettings();
   const [rows, setRows] = useState<PromoStatRow[] | null>(null);
   const [plan, setPlan] = useState<PromoPlan | null>(null);
   const [busy, setBusy] = useState<'' | 'load' | 'apply' | 'stop'>('');
@@ -80,21 +84,40 @@ export function ZaraPromoPicker() {
       showToast(isMissing(error) ? 'Lancez d’abord le script add-zara-promotions.sql dans Supabase.' : error.message, { title: 'Pas arrêté', type: 'error' });
       return;
     }
-    showToast('Plus de Vente flash ni de promotion sur le site. Les anciens prix restent enregistrés.', { title: 'Arrêté ✓', type: 'success' });
+    showToast('Plus de Vente flash ni de promotion sur le site, et la Vente flash automatique est coupée. Les anciens prix restent enregistrés.', { title: 'Arrêté ✓', type: 'success' });
     setPlan(null);
     await load();
+    refreshSettings(); // « Arrêter » coupe aussi la Vente flash automatique
   };
 
   const flashNow = rows ? rows.filter((r) => r.flash_active).length : 0;
   const promoNow = rows ? rows.filter((r) => r.promo_active).length : 0;
+  const autoOn = settings.zara_auto_flash_enabled === true;
+  const last = settings.zara_auto_flash_last ?? null;
+  const lastText = !last
+    ? null
+    : last.count > 0
+    ? `Dernier choix automatique : ${new Date(last.at).toLocaleString('fr-FR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Ndjamena' })} · ${last.count} article${last.count > 1 ? 's' : ''}${last.names?.length ? ` : ${last.names.join(', ')}` : ''}`
+    : `Dernier passage : pas assez de visites pour choisir (Zara ne choisit jamais au hasard).`;
 
   return (
     <View style={styles.card} testID="zara-promo-picker">
       <Text style={styles.title}>⚡ Zara choisit : Vente flash et Promotions</Text>
       <Text style={styles.text}>
-        Zara regarde les statistiques de la semaine (vues, ajouts au panier, j’aime, ventes, stock) et propose les articles. Elle ne change aucun prix : l’ancien prix barré s’affiche seulement
-        pendant une Vente flash ({FLASH_HOURS} h, elle disparaît ensuite) ou une Promotion ({PROMO_DAYS} jours). Rien n’est publié avant votre « Valider ».
+        Zara regarde les statistiques de la semaine (vues, ajouts au panier, j’aime, ventes, stock) pour choisir les articles. Elle ne modifie JAMAIS le prix d’un article : l’ancien prix barré s’affiche seulement
+        pendant une Vente flash ({FLASH_HOURS} h, elle disparaît ensuite) ou une Promotion ({PROMO_DAYS} jours).
       </Text>
+
+      <View style={{ marginTop: spacing.md }}>
+        <StoreSettingToggle setting="zaraAutoFlash" />
+        <Text style={styles.small} testID="zara-auto-flash-help">
+          Quand l’interrupteur est allumé : dès qu’une Vente flash est finie, Zara choisit seule les {FLASH_COUNT} articles suivants (les plus demandés, avec du stock et une vraie remise, jamais le même article
+          deux fois de suite). Vous pouvez la couper quand vous voulez.
+        </Text>
+        {lastText ? <Text style={styles.status} testID="zara-auto-flash-last">{lastText}</Text> : null}
+      </View>
+
+      <Text style={[styles.text, { marginTop: spacing.md }]}>Pour choisir vous-même (Vente flash et Promotions) : Zara propose, rien n’est publié avant votre « Valider ».</Text>
 
       {missing ? (
         <Text style={styles.warn} testID="zara-promo-missing">Lancez d’abord le script add-zara-promotions.sql dans Supabase (SQL Editor).</Text>
@@ -127,7 +150,7 @@ export function ZaraPromoPicker() {
         </View>
       ) : null}
 
-      {!missing && (flashNow > 0 || promoNow > 0) ? (
+      {!missing && (flashNow > 0 || promoNow > 0 || autoOn) ? (
         <Pressable style={styles.stopBtn} onPress={() => setConfirmStop(true)} disabled={busy !== ''} accessibilityRole="button" testID="zara-promo-stop">
           {busy === 'stop' ? <ActivityIndicator color={colors.cream} /> : <Text style={styles.stopText}>⏹ Arrêter la Vente flash et les promotions</Text>}
         </Pressable>
@@ -136,7 +159,7 @@ export function ZaraPromoPicker() {
       <ConfirmDialog
         visible={confirmStop}
         title="Arrêter la Vente flash et les promotions ?"
-        message="Les articles reprennent leur prix normal sans ancien prix barré. Les anciens prix restent enregistrés : Zara pourra les remettre en promotion plus tard."
+        message="Les articles reprennent leur prix normal sans ancien prix barré. Cela coupe aussi la Vente flash automatique. Les anciens prix restent enregistrés : Zara pourra les remettre en promotion plus tard."
         confirmLabel="Oui, arrêter"
         destructive
         onConfirm={stop}

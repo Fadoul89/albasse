@@ -15,6 +15,8 @@ create function cron.schedule(job_name text, sched text, cmd text) returns bigin
 create function cron.unschedule(job_name text) returns boolean language plpgsql as $$ begin delete from cron.job where jobname = job_name; return true; end $$;
 
 create table public.profiles (id uuid primary key, is_admin boolean not null default false);
+create table public.store_settings (id integer primary key, shop_name text);
+insert into public.store_settings(id, shop_name) values (1, 'Albasse Shopping');
 create function public.is_admin() returns boolean language sql stable security definer set search_path = public as $$ select coalesce((select is_admin from profiles where id = auth.uid()), false) $$;
 
 create table public.products (

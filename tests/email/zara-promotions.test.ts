@@ -5,7 +5,7 @@ import {
   type PromoFields,
 } from '../../src/lib/promotions.ts';
 import {
-  FLASH_COUNT, MAX_PER_CATEGORY_FLASH, MAX_PER_CATEGORY_PROMO, MIN_STOCK_FLASH, PROMO_COUNT, interestOf, pickPromotions, reasonsFor,
+  FLASH_COOLDOWN_DAYS, FLASH_COUNT, MAX_PER_CATEGORY_FLASH, MAX_PER_CATEGORY_PROMO, MIN_STOCK_FLASH, PROMO_COUNT, interestOf, pickPromotions, reasonsFor,
   type PromoStatRow,
 } from '../../src/lib/zaraPromoPicker.ts';
 
@@ -158,6 +158,24 @@ check('intérêt = vues + 5 × paniers + j\'aime (20 au plus)', interestOf({ vie
   const b = pickPromotions([...same].reverse());
   check('égalité parfaite : le choix ne dépend pas de l\'ordre de lecture (même noms)', a.flash.map((x) => x.name).join() === b.flash.map((x) => x.name).join());
   check('raisons : « 1 vue », « 1 ajout au panier », « 1 vendu »', reasonsFor({ views: 1, carts: 1, likes: 0, sold: 1, stock: 4 }, 12).join(' | ') === '👁 1 vue cette semaine | 🛒 1 ajout au panier | 📦 1 vendu ce mois | 4 en stock | vraie remise −12 %');
+}
+
+{
+  // repos de 3 jours : un article qui vient d'avoir une Vente flash n'y revient pas tout de suite (les choix tournent), mais peut aller en Promotion
+  seq = 0;
+  const day = 86_400_000;
+  const rows = [
+    R({ name: 'Hier en flash', views: 90, carts: 6, last_flash_at: new Date(NOW - 1 * day).toISOString(), category_id: 'a' }),
+    R({ name: 'Il y a 2 jours', views: 80, carts: 6, last_flash_at: new Date(NOW - 2 * day).toISOString(), category_id: 'b' }),
+    R({ name: 'Il y a 4 jours', views: 70, carts: 6, last_flash_at: new Date(NOW - 4 * day).toISOString(), category_id: 'c' }),
+    R({ name: 'Jamais', views: 40, carts: 1, category_id: 'd' }),
+    R({ name: 'Date illisible', views: 30, carts: 1, last_flash_at: 'bientôt', category_id: 'e' }),
+  ];
+  const plan = pickPromotions(rows, NOW);
+  check(`repos de ${FLASH_COOLDOWN_DAYS} jours : l'article de la veille et d'il y a 2 jours ne reviennent pas en Vente flash`, plan.flash.map((x) => x.name).join() === 'Il y a 4 jours,Jamais,Date illisible', plan.flash.map((x) => x.name));
+  check('repos : les articles qui se reposent peuvent aller en Promotion (ils sont demandés)', plan.promo.map((x) => x.name).join() === 'Hier en flash,Il y a 2 jours', plan.promo.map((x) => x.name));
+  const none = pickPromotions(rows.map((r) => ({ ...r, last_flash_at: undefined })), NOW);
+  check('sans date de dernière vente flash : aucun repos (les 4 plus demandés)', none.flash.map((x) => x.name).join() === 'Hier en flash,Il y a 2 jours,Il y a 4 jours,Jamais', none.flash.map((x) => x.name));
 }
 
 console.log(`\n${ok} vérifications réussies${process.exitCode ? ', ÉCHECS ci-dessus' : ''}`);

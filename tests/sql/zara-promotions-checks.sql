@@ -40,7 +40,8 @@ select t.ok('P4 (sans ancien prix) : rien à mettre de côté', (select compare_
 select t.ok('P5 : vente flash en cours : l''ancien prix reste affiché', (select is_flash_sale and compare_at_price = 12000 from public.products where slug = 'p5'));
 select t.ok('P6 : vente flash terminée : plus de flash, ancien prix mis de côté', (select not is_flash_sale and flash_sale_ends_at is null and compare_at_price is null and old_price_saved = 9000 from public.products where slug = 'p6'));
 select t.ok('P10 : « flash » sans date de fin = pas une vraie vente flash : retiré', (select not is_flash_sale and compare_at_price is null and old_price_saved = 7000 from public.products where slug = 'p10'));
-select t.ok('le nettoyage est planifié toutes les 5 minutes', (select count(*) = 1 and min(schedule) = '*/5 * * * *' from cron.job where jobname = 'zara-promotions-cleanup'));
+select t.ok('le nettoyage est planifié toutes les 5 minutes, la vente flash automatique aussi', (select count(*) = 1 and min(schedule) = '*/5 * * * *' from cron.job where jobname = 'zara-promotions-cleanup') and (select count(*) = 1 and min(schedule) = '2-59/5 * * * *' from cron.job where jobname = 'zara-auto-flash'));
+select t.ok('la vente flash automatique est ÉTEINTE au départ (rien ne se lance seul)', (select not zara_auto_flash_enabled and zara_auto_flash_last is null from public.store_settings where id = 1));
 
 -- 2. une vraie remise
 select t.ok('remise vraie : 20 % → 20', public.zara_real_discount(10000, 12500) = 20);
@@ -57,6 +58,9 @@ select t.fails('un visiteur ne peut pas lire les statistiques', 'select public.z
 select t.fails('un visiteur ne peut pas publier', 'select public.zara_apply_promotions(array[]::uuid[], array[]::uuid[])', 'permission denied');
 select t.fails('un visiteur ne peut pas tout arrêter', 'select public.zara_stop_promotions()', 'permission denied');
 select t.fails('un visiteur ne peut pas lancer le nettoyage', 'select public.zara_promotions_cleanup()', 'permission denied');
+select t.fails('un visiteur ne peut pas lancer la vente flash automatique', 'select public.zara_auto_flash_run()', 'permission denied');
+select t.fails('un visiteur ne peut pas mettre un article en vente flash', 'select public.zara_set_flash(array[]::uuid[], 24)', 'permission denied');
+select t.fails('un visiteur ne peut pas lire les chiffres internes', 'select * from public.zara_promotion_rows(7)', 'permission denied');
 reset role;
 select t.as_client();
 set role authenticated;
@@ -64,6 +68,9 @@ select t.fails('un client (pas administrateur) ne peut pas lire les statistiques
 select t.fails('un client ne peut pas publier', 'select public.zara_apply_promotions(array[]::uuid[], array[]::uuid[])', 'réservé aux administrateurs');
 select t.fails('un client ne peut pas tout arrêter', 'select public.zara_stop_promotions()', 'réservé aux administrateurs');
 select t.fails('un client ne peut pas lancer le nettoyage', 'select public.zara_promotions_cleanup()', 'permission denied');
+select t.fails('un client ne peut pas lancer la vente flash automatique', 'select public.zara_auto_flash_run()', 'permission denied');
+select t.fails('un client ne peut pas mettre un article en vente flash', 'select public.zara_set_flash(array[]::uuid[], 24)', 'permission denied');
+select t.fails('un client ne peut pas lire les chiffres internes', 'select * from public.zara_promotion_rows(7)', 'permission denied');
 reset role;
 
 -- 4. les statistiques (administrateur)
@@ -140,3 +147,106 @@ select t.ok('ancien prix saisi à la main hors promotion : mis de côté (pas pe
 -- 10. relancer le nettoyage ne change plus rien
 create temp table again as select public.zara_promotions_cleanup() as j;
 select t.ok('nettoyage relancé : rien à faire', (select (j->>'flash_ended')::int = 0 and (j->>'promo_ended')::int = 0 and (j->>'old_price_saved')::int = 0 from again), (select j from again));
+
+-- ===================================== 11. LA VENTE FLASH AUTOMATIQUE =====================================
+-- on repart d'un catalogue propre : les mêmes articles que le test de src/lib/zaraPromoPicker.ts (tests/email/zara-promotions.test.ts)
+delete from public.products; delete from public.product_views; delete from public.cart_events; delete from public.orders;
+update public.store_settings set zara_auto_flash_enabled = false, zara_auto_flash_last = null where id = 1;
+create function t.mkp(p_name text, p_slug text, p_views int, p_carts int, p_likes int, p_cat text, p_price numeric default 10000, p_old numeric default 12500, p_stock int default 20, p_promo timestamptz default null) returns void language plpgsql as $$
+declare pid uuid := gen_random_uuid();
+begin
+  insert into public.products(id, name, slug, price, compare_at_price, stock, category_id, likes_count, promo_ends_at)
+  values (pid, p_name, p_slug, p_price, p_old, p_stock, ('00000000-0000-4000-8000-0000000000' || p_cat)::uuid, p_likes, p_promo);
+  insert into public.product_views(product_id, viewed_at) select pid, now() - interval '1 day' from generate_series(1, p_views);
+  insert into public.cart_events(product_id, created_at) select pid, now() - interval '1 day' from generate_series(1, p_carts);
+end $$;
+select t.mkp('Star', 'star', 80, 6, 30, '01');
+select t.mkp('Montre', 'montre', 60, 4, 10, '02');
+select t.mkp('Sac', 'sac', 40, 2, 0, '03');
+select t.mkp('Parfum', 'parfum', 35, 1, 0, '04');
+select t.mkp('Lunettes', 'lunettes', 33, 1, 0, '05');
+select t.mkp('Faux ancien prix', 'faux', 500, 50, 0, '06', 2500, 10000);
+select t.mkp('Sans ancien prix', 'sans', 500, 50, 0, '06', 10000, null);
+select t.mkp('Presque epuisee', 'epuisee', 500, 50, 0, '06', 10000, 12500, 2);
+select t.mkp('Deja en promo', 'promo', 500, 50, 0, '06', 10000, 12500, 20, now() + interval '3 days');
+select t.mkp('Petite remise', 'petite', 500, 50, 0, '06', 9800, 10000);
+select public.zara_promotions_cleanup();
+create temp table prices_before as select slug, price from public.products;
+grant select on prices_before to public;
+
+-- 11a. éteinte : rien
+create temp table a1 as select public.zara_auto_flash_run() as j;
+grant select on a1 to public;
+select t.ok('interrupteur éteint : « skipped off », aucune vente flash lancée', (select j->>'skipped' = 'off' from a1) and (select count(*) = 0 from public.products where is_flash_sale));
+
+-- 11b. allumée : Zara choisit seule les 4 articles les plus demandés (comme dans le test des fonctions pures)
+update public.store_settings set zara_auto_flash_enabled = true where id = 1;
+create temp table a2 as select public.zara_auto_flash_run() as j;
+grant select on a2 to public;
+select t.ok('allumée : 4 articles en vente flash : Star, Montre, Sac, Parfum (dans cet ordre dans la note)',
+  (select (j->>'flash')::int = 4 from a2) and (select zara_auto_flash_last -> 'names' = '["Star", "Montre", "Sac", "Parfum"]'::jsonb and (zara_auto_flash_last ->> 'count')::int = 4 from public.store_settings where id = 1),
+  (select zara_auto_flash_last from public.store_settings where id = 1));
+select t.ok('ces 4 articles : vente flash de 24 h, ancien prix affiché, date de dernière vente flash notée',
+  (select count(*) = 4 and bool_and(is_flash_sale and compare_at_price = 12500 and last_flash_at is not null and flash_sale_ends_at between now() + interval '23 hours 59 minutes' and now() + interval '24 hours 1 minute')
+     from public.products where slug in ('star', 'montre', 'sac', 'parfum')));
+select t.ok('JAMAIS choisis : remise fausse (75 %), sans ancien prix, presque épuisé, déjà en promotion, remise de 2 %',
+  (select count(*) = 0 from public.products where slug in ('faux', 'sans', 'epuisee', 'promo', 'petite') and is_flash_sale));
+select t.ok('Lunettes (le 5e) attend : il n''y a que 4 places', (select not is_flash_sale from public.products where slug = 'lunettes'));
+select t.ok('LE PRIX DE VENTE N''A PAS CHANGÉ (aucun article)', (select count(*) = 0 from public.products p join prices_before b using (slug) where p.price <> b.price));
+
+-- 11c. une vente flash est en cours : Zara attend
+create temp table a3 as select public.zara_auto_flash_run() as j;
+grant select on a3 to public;
+select t.ok('vente flash en cours : « skipped en_cours », rien de nouveau', (select j->>'skipped' = 'en_cours' from a3) and (select count(*) = 4 from public.products where is_flash_sale));
+
+-- 11d. les 24 h sont passées : elle disparaît, et Zara choisit les SUIVANTS (jamais les 4 de la veille : repos de 3 jours)
+update public.products set flash_sale_ends_at = now() - interval '1 minute' where is_flash_sale;
+create temp table a4 as select public.zara_auto_flash_run() as j;
+grant select on a4 to public;
+select t.ok('24 h passées : les 4 premiers ne sont plus en vente flash (ancien prix de côté)', (select count(*) = 4 and bool_and(not is_flash_sale and compare_at_price is null and old_price_saved = 12500) from public.products where slug in ('star', 'montre', 'sac', 'parfum')));
+select t.ok('les articles SUIVANTS : seulement Lunettes (les 4 de la veille se reposent 3 jours)', (select (j->>'flash')::int = 1 from a4) and (select zara_auto_flash_last -> 'names' = '["Lunettes"]'::jsonb from public.store_settings where id = 1) and (select is_flash_sale from public.products where slug = 'lunettes'), (select j from a4));
+
+-- 11e. plus rien d'assez demandé : Zara ne choisit rien au hasard
+update public.products set flash_sale_ends_at = now() - interval '1 minute' where is_flash_sale;
+create temp table a5 as select public.zara_auto_flash_run() as j;
+grant select on a5 to public;
+select t.ok('plus aucun article éligible : rien n''est choisi (note « pas assez de visites »), aucune vente flash', (select (j->>'picked')::int = 0 from a5) and (select zara_auto_flash_last ->> 'note' = 'pas assez de visites' from public.store_settings where id = 1) and (select count(*) = 0 from public.products where is_flash_sale));
+create temp table at1 as select zara_auto_flash_last ->> 'at' as at from public.store_settings where id = 1;
+select pg_sleep(0.05);
+select public.zara_auto_flash_run();
+select t.ok('relancé sans rien à choisir : la note n''est pas réécrite en boucle', (select zara_auto_flash_last ->> 'at' from public.store_settings where id = 1) = (select at from at1));
+
+-- 11f. après le repos de 3 jours, un article peut revenir
+update public.products set last_flash_at = now() - interval '4 days' where slug = 'star';
+select public.zara_auto_flash_run();
+select t.ok('après 3 jours de repos : Star peut revenir en vente flash', (select is_flash_sale from public.products where slug = 'star'));
+
+-- 11g. une vente flash de l'administrateur en cours : Zara n'en lance pas d'autre
+update public.products set flash_sale_ends_at = now() - interval '1 minute' where is_flash_sale;
+select public.zara_promotions_cleanup();
+select t.mkp('Choix patron', 'patron', 1, 0, 0, '07');
+update public.products set is_flash_sale = true, flash_sale_ends_at = now() + interval '3 hours', compare_at_price = 12500 where slug = 'patron';
+create temp table a6 as select public.zara_auto_flash_run() as j;
+grant select on a6 to public;
+select t.ok('vente flash de l''administrateur en cours : Zara attend sa fin', (select j->>'skipped' = 'en_cours' from a6));
+
+-- 11h. pas plus de 2 articles de la même rubrique
+delete from public.products; delete from public.product_views; delete from public.cart_events;
+update public.store_settings set zara_auto_flash_last = null where id = 1;
+select t.mkp('Chaud ' || i, 'chaud' || i, 100 - i, 5, 0, '01') from generate_series(1, 6) i;
+select t.mkp('Autre ' || i, 'autre' || i, 40 - i, 1, 0, '0' || (i + 1)) from generate_series(1, 4) i;
+select public.zara_auto_flash_run();
+select t.ok('2 articles de la même rubrique au plus : 2 « Chaud » + 2 « Autre »', (select count(*) filter (where name like 'Chaud%') = 2 and count(*) filter (where name like 'Autre%') = 2 and count(*) = 4 from public.products where is_flash_sale), (select string_agg(name, ',' order by name) from public.products where is_flash_sale));
+
+-- 11i. « Arrêter » coupe tout, y compris la vente flash automatique (sinon elle repartirait dans 5 minutes)
+select t.as_admin();
+set role authenticated;
+select public.zara_stop_promotions();
+reset role;
+select t.ok('« Arrêter » : plus de vente flash, interrupteur automatique coupé, aucun ancien prix affiché', (select count(*) = 0 from public.products where is_flash_sale or compare_at_price is not null) and (select not zara_auto_flash_enabled from public.store_settings where id = 1));
+create temp table a7 as select public.zara_auto_flash_run() as j;
+grant select on a7 to public;
+select t.ok('après « Arrêter » : Zara ne relance rien', (select j->>'skipped' = 'off' from a7) and (select count(*) = 0 from public.products where is_flash_sale));
+
+-- 11j. le prix de vente n'a JAMAIS changé, nulle part, pendant tous ces essais
+select t.ok('aucun prix de vente modifié (10 000 pour les articles « Chaud », 9 800 / 2 500 intacts à l''étape précédente)', (select count(*) = 0 from public.products where slug like 'chaud%' and price <> 10000));
