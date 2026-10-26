@@ -10,7 +10,7 @@ import { colors, fonts, radius, spacing } from '../theme';
 import type { StoreSettings } from '../types';
 
 interface Setting {
-  column: 'whatsapp_order_enabled' | 'account_required' | 'order_emails_enabled' | 'inactive_emails_enabled' | 'zara_ads_enabled';
+  column: 'whatsapp_order_enabled' | 'account_required' | 'order_emails_enabled' | 'inactive_emails_enabled' | 'zara_ads_enabled' | 'zara_auto_flash_enabled';
   // valeur quand la colonne n'existe pas encore (script SQL pas lancé)
   missingValue: boolean;
   script: string;
@@ -22,7 +22,7 @@ interface Setting {
   offToast: { title: string; message: string };
 }
 
-const SETTINGS: Record<'whatsappOrder' | 'accountRequired' | 'orderEmails' | 'inactiveEmails' | 'zaraAds', Setting> = {
+const SETTINGS: Record<'whatsappOrder' | 'accountRequired' | 'orderEmails' | 'inactiveEmails' | 'zaraAds' | 'zaraAutoFlash', Setting> = {
   whatsappOrder: {
     column: 'whatsapp_order_enabled',
     missingValue: true,
@@ -77,6 +77,17 @@ const SETTINGS: Record<'whatsappOrder' | 'accountRequired' | 'orderEmails' | 'in
     offText: '⚪ Désactivé : aucune publicité de Zara à l’écran',
     onToast: { title: '🤖 Zara gère les publicités', message: 'Sur l’accueil et dans les promotions, Zara met en avant vos articles avec des chiffres vrais (commandes réelles, stock réel).' },
     offToast: { title: '⚪ Publicités de Zara coupées', message: 'Zara n’affiche plus de publicité à l’écran.' },
+  },
+  zaraAutoFlash: {
+    column: 'zara_auto_flash_enabled',
+    missingValue: false,
+    script: 'add-zara-promotions.sql',
+    testID: 'zara-auto-flash',
+    title: '⚡ Vente flash automatique par Zara',
+    onText: '🟢 Activé : à chaque fin de Vente flash (24 h), Zara choisit seule les 4 articles suivants',
+    offText: '⚪ Désactivé : Zara ne lance aucune Vente flash toute seule',
+    onToast: { title: '⚡ Vente flash automatique', message: 'Zara choisit seule les articles de la Vente flash (24 h) d’après les statistiques, dans les 5 minutes qui suivent. Elle ne modifie aucun prix.' },
+    offToast: { title: '⚪ Vente flash automatique coupée', message: 'Zara ne lance plus de Vente flash toute seule. Celle en cours se termine normalement.' },
   },
 };
 

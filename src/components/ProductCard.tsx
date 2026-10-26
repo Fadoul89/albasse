@@ -5,6 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import type { Product } from '../types';
+import { realDiscountPct, shownOldPrice } from '../lib/promotions';
 import { colors, fonts, radius, spacing } from '../theme';
 import { StarRating } from './StarRating';
 import { FavoriteButton } from './FavoriteButton';
@@ -20,20 +21,20 @@ const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
 export function ProductCard({ product, columns = 2 }: { product: Product; columns?: number }) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const CARD_WIDTH = cardWidth(columns);
-  const discount =
-    product.compare_at_price && product.compare_at_price > product.price
-      ? Math.round((1 - product.price / product.compare_at_price) * 100)
-      : null;
+  // l'ancien prix et le « -X % » seulement pendant une vraie promotion (vente flash ou promotion de Zara en cours)
+  const oldPrice = shownOldPrice(product);
+  const discount = oldPrice ? realDiscountPct(product.price, oldPrice) : null;
 
   return (
     <Pressable
+      testID={`product-card-${product.slug}`}
       style={[styles.card, { width: CARD_WIDTH }]}
       onPress={() => navigation.navigate('Product', { slug: product.slug })}
     >
       <View style={styles.imageWrap}>
         <Image source={{ uri: product.images[0] }} style={styles.image} contentFit="cover" transition={150} />
         {discount && (
-          <View style={styles.badge}>
+          <View style={styles.badge} testID="product-discount-badge">
             <Text style={styles.badgeText}>-{discount}%</Text>
           </View>
         )}
@@ -44,9 +45,7 @@ export function ProductCard({ product, columns = 2 }: { product: Product; column
       </Text>
       <View style={styles.priceRow}>
         <Text style={styles.price}>{formatXAF(product.price)}</Text>
-        {product.compare_at_price && (
-          <Text style={styles.comparePrice}>{formatXAF(product.compare_at_price)}</Text>
-        )}
+        {oldPrice && <Text style={styles.comparePrice} testID="product-old-price">{formatXAF(oldPrice)}</Text>}
       </View>
       <StarRating rating={product.rating} size={11} reviewCount={product.review_count} />
     </Pressable>

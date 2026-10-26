@@ -30,6 +30,9 @@ export interface Product {
   stock: number;
   is_flash_sale: boolean;
   flash_sale_ends_at: string | null;
+  // promotion de Zara (7 jours) et ancien prix mis de côté ; absents tant que add-zara-promotions.sql n'est pas lancé
+  promo_ends_at?: string | null;
+  old_price_saved?: number | null;
   notify_on_publish: boolean;
   is_active: boolean;
   affiliate_commission_rate: number | null;
@@ -344,6 +347,9 @@ export interface StoreSettings {
   zara_ads_enabled?: boolean;
   // après combien de secondes la publicité de Zara s'affiche (0 à 120) ; absent tant que add-zara-ads-delay.sql n'est pas lancé : 5 secondes
   zara_ads_delay_seconds?: number;
+  // Vente flash automatique de Zara (24 h) et son dernier choix ; absents tant que add-zara-promotions.sql n'est pas lancé : éteinte
+  zara_auto_flash_enabled?: boolean;
+  zara_auto_flash_last?: { at: string; count: number; names?: string[]; note?: string } | null;
   // ligne facultative en bas des factures (NIF, RCCM…) ; absente tant que add-order-numbers-invoices.sql n'est pas lancé
   invoice_legal_line?: string | null;
   left_ad_items: AdItem[];

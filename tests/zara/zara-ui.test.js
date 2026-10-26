@@ -16,7 +16,7 @@ const port = process.argv[3] || '4333';
 // BASE_URL=https://www.albasseshopping.com : teste le VRAI site en ligne (les commandes et comptes restent simules, rien n'est enregistre)
 const BASE = (process.env.BASE_URL || `http://localhost:${port}`).replace(/\/$/, '');
 const BASE_HOST = new URL(BASE).hostname;
-const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI1234567TOFBCDE').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI12345678TOFBCDE').toUpperCase();
 // saison fraiche (blousons et manteaux) : le bouton du menu de Zara n'existe que jusqu'au 31 decembre 2026 a 23h59 (N'Djamena)
 const COLD_ON = Date.now() < Date.parse('2027-01-01T00:00:00+01:00');
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
@@ -297,6 +297,12 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
               // delai de la publicite : fakeStore.zaraDelay undefined = colonne absente (script add-zara-ads-delay.sql pas lance)
               if (fakeStore.zaraDelay === undefined) delete r.zara_ads_delay_seconds;
               else if (wants('zara_ads_delay_seconds')) r.zara_ads_delay_seconds = fakeStore.zaraDelay;
+              // vente flash automatique de Zara : fakeStore.zaraAutoFlash undefined = colonne absente (script add-zara-promotions.sql pas lance), sinon true / false
+              if (fakeStore.zaraAutoFlash === undefined) { delete r.zara_auto_flash_enabled; delete r.zara_auto_flash_last; }
+              else {
+                if (wants('zara_auto_flash_enabled')) r.zara_auto_flash_enabled = fakeStore.zaraAutoFlash;
+                if (wants('zara_auto_flash_last')) r.zara_auto_flash_last = fakeStore.zaraAutoFlashLast || null;
+              }
             }
             if (fs.accountRequired === 'missing') delete r.account_required;
             else if (wants('account_required')) r.account_required = fs.accountRequired === true;
@@ -318,7 +324,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         if (fakeStore && u.pathname === '/rest/v1/store_settings' && m === 'PATCH') {
           const body = JSON.parse(req.postData() || '{}');
           (fakeStore.patches = fakeStore.patches || []).push(body);
-          const missing = ('zara_ads_delay_seconds' in body && fakeStore.zaraDelay === undefined && 'zara_ads_delay_seconds') || ('zara_ads_enabled' in body && fakeStore.zaraAds === undefined && 'zara_ads_enabled') || ('whatsapp_order_enabled' in body && fakeStore.waOrder === undefined && 'whatsapp_order_enabled') || ('account_required' in body && fakeStore.accountRequired === 'missing' && 'account_required');
+          const missing = ('zara_auto_flash_enabled' in body && fakeStore.zaraAutoFlash === undefined && 'zara_auto_flash_enabled') || ('zara_ads_delay_seconds' in body && fakeStore.zaraDelay === undefined && 'zara_ads_delay_seconds') || ('zara_ads_enabled' in body && fakeStore.zaraAds === undefined && 'zara_ads_enabled') || ('whatsapp_order_enabled' in body && fakeStore.waOrder === undefined && 'whatsapp_order_enabled') || ('account_required' in body && fakeStore.accountRequired === 'missing' && 'account_required');
           if (missing) return json(route, { code: 'PGRST204', message: `Could not find the '${missing}' column of 'store_settings' in the schema cache` }, 400);
           if ('whatsapp_order_enabled' in body) fakeStore.waOrder = body.whatsapp_order_enabled;
           if ('account_required' in body) fakeStore.accountRequired = body.account_required;
@@ -326,6 +332,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
           if ('inactive_emails_enabled' in body) fakeStore.inactiveEmails = body.inactive_emails_enabled;
           if ('zara_ads_enabled' in body) fakeStore.zaraAds = body.zara_ads_enabled;
           if ('zara_ads_delay_seconds' in body) fakeStore.zaraDelay = body.zara_ads_delay_seconds;
+          if ('zara_auto_flash_enabled' in body) fakeStore.zaraAutoFlash = body.zara_auto_flash_enabled;
           return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } });
         }
         // les promotions publiees en vrai sur le site (fenetre « offre du jour ») ne doivent pas couvrir les pages pendant les tests
@@ -813,6 +820,205 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     check('admin : le delai revient sur 5 secondes apres l’echec', /5 secondes/.test(await noCol.page.getByTestId('zara-delay-status').innerText()));
     check('admin : l’interrupteur revient sur « Désactivé » apres l’echec', /Désactivé/.test(await noCol.page.getByTestId('zara-ads-status').innerText()));
     await noCol.ctx.close();
+  }
+
+  // =============================================== 8. VENTE FLASH 24 H, ANCIEN PRIX SEULEMENT EN PROMOTION, ZARA CHOISIT LES ARTICLES ===============================================
+  if (PARTS.includes('8')) {
+    console.log("\n== 8. vente flash qui disparait apres 24 h, ancien prix seulement en promotion, Zara choisit les articles (fausse base : rien n'est ecrit)");
+    const uid8 = '11111111-1111-4111-8111-111111111111';
+    const JWT8 = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMTExMTExMS0xMTExLTQxMTEtODExMS0xMTExMTExMTExMTEiLCJleHAiOjQxMDI0NDQ4MDAsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.c2ln';
+    const SK8 = 'sb-xtitsmmccpkelxfjyqyh-auth-token';
+    const member8 = (isAdmin) => {
+      const auth = { id: uid8, aud: 'authenticated', role: 'authenticated', email: 'test@example.com', app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' };
+      const token = { access_token: JWT8, refresh_token: 'fake-refresh', token_type: 'bearer', expires_in: 3600, expires_at: 4102444800, user: auth };
+      return { auth, token, session: JSON.stringify(token), editable: false, patches: [], profile: { id: uid8, email: 'test@example.com', full_name: 'Ahmed Hassan', phone: '66123456', whatsapp_number: null, profession: null, region: null, country: 'Tchad', address: null, loyalty_points: 0, banned: false, role: isAdmin ? 'admin' : 'customer', is_admin: isAdmin, is_affiliate: false } };
+    };
+    const HDR8 = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+    const json8 = (route, body, status = 200) => route.fulfill({ status, headers: { ...HDR8, 'content-type': 'application/json' }, body: JSON.stringify(body) });
+
+    // le catalogue du test : de VRAIS articles (lecture seule) avec des dates de vente flash et de promotion fabriquees
+    const catalog = (await get('products?select=*&is_active=eq.true&stock=gt.0&limit=80&order=created_at.desc')).filter((p) => (p.images || [])[0] && Number(p.price) > 0);
+    const uniq = []; const seenNames = new Set();
+    for (const p of catalog) { const key = p.name.replace(/\s+/g, ' ').trim().toLowerCase(); if (!seenNames.has(key)) { seenNames.add(key); uniq.push(p); } }
+    check('le catalogue a assez d\'articles pour le test', uniq.length >= 20, uniq.length);
+    const inMs = (ms) => new Date(Date.now() + ms).toISOString();
+    const withOld = (p, over = {}) => ({ ...p, compare_at_price: Math.round(Number(p.price) * 1.25), is_flash_sale: false, flash_sale_ends_at: null, promo_ends_at: null, ...over });
+    const flashA = withOld(uniq[0], { is_flash_sale: true, flash_sale_ends_at: inMs(5 * 3600_000) });
+    const flashB = withOld(uniq[1], { is_flash_sale: true, flash_sale_ends_at: inMs(2 * 3600_000) });
+    const flashGone = withOld(uniq[2], { is_flash_sale: true, flash_sale_ends_at: inMs(-3600_000) });
+    const promos = [uniq[3], uniq[4], uniq[5]].map((p) => withOld(p, { promo_ends_at: inMs(3 * 86_400_000) }));
+    const promoGone = withOld(uniq[6], { promo_ends_at: inMs(-3600_000) });
+    const others = uniq.slice(7, 20).map((p) => withOld(p));
+    const all8 = [flashA, flashB, flashGone, ...promos, promoGone, ...others];
+    const nm = (p) => p.name.replace(/\s+/g, ' ').trim(); // la page affiche les espaces multiples comme une seule
+    const visit8 = async (rows, opts = {}) => {
+      const v = await newVisitor(phone, opts);
+      await v.page.route(/\/rest\/v1\/products\?/, (route) => (route.request().method() === 'OPTIONS' ? route.fulfill({ status: 204, headers: HDR8 }) : json8(route, rows)));
+      return v;
+    };
+    // pour chaque carte de la page : a-t-elle un ancien prix barre ?
+    const oldPrices = (pg) => pg.evaluate(() => [...document.querySelectorAll('[data-testid^="product-card-"]')].map((c) => ({ slug: c.getAttribute('data-testid').slice('product-card-'.length), old: !!c.querySelector('[data-testid="product-old-price"]'), badge: !!c.querySelector('[data-testid="product-discount-badge"]') })));
+
+    // --- a. accueil : seule la vente flash EN COURS, les promotions en cours, l'ancien prix seulement pour elles
+    const home = await visit8(all8);
+    await home.page.goto(`${BASE}/`, { waitUntil: 'load' });
+    await home.page.getByTestId('home-flash').waitFor({ timeout: 25000 });
+    await home.page.getByTestId('home-promotions').waitFor({ timeout: 25000 });
+    const flashText = await home.page.getByTestId('home-flash').innerText();
+    check('Vente flash de l\'accueil : les 2 articles en cours', flashText.includes(nm(flashA)) && flashText.includes(nm(flashB)), flashText.slice(0, 200));
+    check('Vente flash de l\'accueil : l\'article dont les 24 h sont passees a DISPARU (meme marque « flash » dans la base)', !flashText.includes(nm(flashGone)));
+    check('Vente flash : le compte a rebours est la, avec « Offres limitees dans le temps »', /Offres limitées dans le temps/.test(flashText) && /\bH\b/.test(flashText) && /\bS\b/.test(flashText));
+    const promoText = await home.page.getByTestId('home-promotions').innerText();
+    check('section Promotions : les 3 articles en promotion de Zara', promos.every((p) => promoText.includes(nm(p))), promoText.slice(0, 300));
+    check('section Promotions : une promotion terminee n\'y est plus', !promoText.includes(nm(promoGone)));
+    check('section Promotions : « 🏷️ PROMOTIONS » et « Prix reduits jusqu\'au … »', /🏷️ PROMOTIONS/.test(promoText) && /Prix réduits jusqu’au \d{1,2} \p{L}+/u.test(promoText), promoText.slice(0, 120));
+    check('les articles ne sont pas en double entre Vente flash et Promotions', !promos.some((p) => flashText.includes(nm(p))) && !flashText.includes(nm(promoGone)));
+    await sleep(800);
+    const cards = await oldPrices(home.page);
+    const slugsWithOld = new Set(cards.filter((c) => c.old).map((c) => c.slug));
+    const promoted = [flashA, flashB, ...promos].map((p) => p.slug);
+    const notPromoted = [flashGone, promoGone, ...others].map((p) => p.slug);
+    check('ancien prix barre + « -X % » : les 5 articles en vraie promotion les ont', promoted.every((s) => slugsWithOld.has(s)) && cards.filter((c) => promoted.includes(c.slug)).every((c) => c.old && c.badge), promoted.filter((s) => !slugsWithOld.has(s)));
+    check('AUCUN ancien prix barre ni « -X % » sur les autres articles (meme si la base en garde un)', notPromoted.every((s) => !cards.some((c) => c.slug === s && (c.old || c.badge))), notPromoted.filter((s) => cards.some((c) => c.slug === s && c.old)));
+    const priced = await home.page.evaluate((slug) => document.querySelector(`[data-testid="product-card-${slug}"]`)?.innerText || '', others[0].slug);
+    check('les prix de vente ne changent pas : le prix de l\'article normal est toujours affiche', priced.replace(/[\s  ]/g, '').includes(String(Math.round(Number(others[0].price))).replace(/\B(?=(\d{3})+(?!\d))/g, '')) , priced);
+    await home.page.screenshot({ path: path.join(OUT, '8a-accueil-flash-promos.png') });
+    await home.page.getByTestId('home-flash').scrollIntoViewIfNeeded();
+    await home.page.getByTestId('home-flash').screenshot({ path: path.join(OUT, '8a-vente-flash.png') });
+    await home.page.getByTestId('home-promotions').scrollIntoViewIfNeeded();
+    await home.page.getByTestId('home-promotions').screenshot({ path: path.join(OUT, '8a-promotions.png') });
+
+    // --- b. fiche article : ancien prix seulement pour une promotion
+    await home.page.goto(`${BASE}/produit/${promos[0].slug}`, { waitUntil: 'load' });
+    await home.page.getByText(nm(promos[0]), { exact: false }).first().waitFor({ timeout: 25000 });
+    await sleep(800);
+    // l'ancien prix de LA fiche (pas ceux des cartes « articles similaires » plus bas)
+    const ownOld = (pg) => pg.evaluate(() => [...document.querySelectorAll('[data-testid="product-old-price"]')].filter((e) => !e.closest('[data-testid^="product-card-"]')).length);
+    check('fiche d\'un article en promotion : ancien prix barre affiche', (await ownOld(home.page)) === 1);
+    await home.page.goto(`${BASE}/produit/${others[0].slug}`, { waitUntil: 'load' });
+    await home.page.getByText(nm(others[0]), { exact: false }).first().waitFor({ timeout: 25000 });
+    await sleep(800);
+    check('fiche d\'un article normal : AUCUN ancien prix barre', (await ownOld(home.page)) === 0);
+    check('aucune erreur (accueil et fiches)', home.errs.length === 0, home.errs);
+    await home.ctx.close();
+
+    // --- c. la vente flash qui se termine PENDANT que la page est ouverte disparait toute seule
+    const soon = withOld(uniq[7], { is_flash_sale: true, flash_sale_ends_at: inMs(6000) });
+    const live = await visit8([soon, withOld(uniq[8])]);
+    await live.page.goto(`${BASE}/`, { waitUntil: 'load' });
+    await live.page.getByTestId('home-flash').waitFor({ timeout: 25000 });
+    check('vente flash qui finit dans quelques secondes : visible au depart', (await live.page.getByTestId('home-flash').count()) === 1);
+    await live.page.getByTestId('home-flash').waitFor({ state: 'detached', timeout: 20000 });
+    check('apres les 24 h : la section Vente flash disparait toute seule, sans recharger la page', (await live.page.getByTestId('home-flash').count()) === 0);
+    const gone = await oldPrices(live.page);
+    check('et l\'ancien prix de cet article disparait aussi', gone.filter((c) => c.slug === soon.slug).every((c) => !c.old && !c.badge), gone.filter((c) => c.slug === soon.slug));
+    await live.ctx.close();
+
+    // --- d. sans aucune promotion : ni section Vente flash, ni section Promotions, ni ancien prix
+    const none = await visit8(others);
+    await none.page.goto(`${BASE}/`, { waitUntil: 'load' });
+    await none.page.getByText('Toute la collection').waitFor({ timeout: 25000 });
+    await sleep(1500);
+    const noneCards = await oldPrices(none.page);
+    check('aucune promotion en cours : pas de section Vente flash ni Promotions', (await none.page.getByTestId('home-flash').count()) === 0 && (await none.page.getByTestId('home-promotions').count()) === 0);
+    check('aucune promotion en cours : AUCUN ancien prix barre sur la page', noneCards.length > 0 && noneCards.every((c) => !c.old && !c.badge), noneCards.filter((c) => c.old).length);
+    await none.ctx.close();
+
+    // --- e. Zara (chat) : elle ne parle de promotion que pour les vraies promotions
+    const chat = await visit8(all8, { storage: { albasse_zara_name: 'Fatimé' }, session: { albasse_zara_v1: JSON.stringify({ messages: [{ id: 's1', role: 'assistant', text: 'Bonjour', lang: 'fr' }], step: 'menu', ctx: null, need: null, order: null }) } });
+    await chat.page.goto(`${BASE}/`, { waitUntil: 'load' });
+    await sleep(2500);
+    await chat.page.getByRole('button', { name: /Discuter avec Zara Kings|التحدث مع زارا كينغز/ }).click();
+    await ask(chat.page, 'les promotions', /promotion|remise|réduction/i);
+    await sleep(1500);
+    const chatText = await panelOf(chat.page).innerText();
+    const chatCards = await cardsOf(chat.page).count();
+    check('Zara : « les promotions » ne montre que de vraies promotions (aucun article sans promotion)', chatCards >= 1 && chatCards <= 5 && !others.some((p) => chatText.includes(nm(p))) && !chatText.includes(nm(flashGone)) && !chatText.includes(nm(promoGone)), { chatCards, chatText: chatText.slice(0, 300) });
+    await chat.page.screenshot({ path: path.join(OUT, '8b-zara-promotions.png') });
+    await chat.ctx.close();
+
+    // --- f. administrateur : Zara choisit, l'administrateur valide
+    const mkRow = (i, extra = {}) => ({ id: `0000000${i}-0000-4000-8000-00000000000${i % 10}`.slice(0, 36), name: `Zara test ${String(i).padStart(2, '0')}`, slug: `zara-test-${i}`, image: null, price: 10000, old_price: 12500, stock: 20, category_id: `cat${i % 7}`, likes: i % 5, views: 100 - i * 3, carts: i % 4, sold: i % 3, flash_active: false, promo_active: false, ...extra });
+    const statRows = [
+      ...Array.from({ length: 24 }, (_, i) => mkRow(i + 10)),
+      { ...mkRow(60), name: 'Erreur de saisie', views: 999, carts: 99, price: 2500, old_price: 10000 },
+      { ...mkRow(61), name: 'Sans ancien prix', views: 999, carts: 99, old_price: null },
+      { ...mkRow(62), name: 'Presque epuise', views: 999, carts: 99, stock: 1 },
+      { ...mkRow(63), name: 'Deja en flash', views: 999, carts: 99, flash_active: true },
+      { ...mkRow(64), name: 'Deja en promo', views: 999, carts: 99, promo_active: true },
+    ];
+    const adm = member8(true);
+    const calls = { stats: 0, apply: [], stop: 0 };
+    const fsAuto = { waOrder: true, patches: [], zaraAutoFlash: false, zaraAutoFlashLast: { at: new Date(Date.now() - 3600_000).toISOString(), count: 4, names: ['Zara test 10', 'Zara test 11', 'Zara test 14', 'Zara test 15'] } };
+    const admin = await newVisitor(phone, { storage: { [SK8]: adm.session }, fakeUser: adm, fakeStore: fsAuto });
+    await admin.page.route(/\/rest\/v1\/rpc\/zara_promotion_stats/, (route) => { if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: HDR8 }); calls.stats++; return json8(route, statRows); });
+    await admin.page.route(/\/rest\/v1\/rpc\/zara_apply_promotions/, (route) => { if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: HDR8 }); calls.apply.push(JSON.parse(route.request().postData() || '{}')); return json8(route, { flash: 4, promo: 12, skipped: [] }); });
+    await admin.page.route(/\/rest\/v1\/rpc\/zara_stop_promotions/, (route) => { if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: HDR8 }); calls.stop++; return json8(route, { flash: 1, promo: 1 }); });
+    await admin.page.goto(`${BASE}/admin/promotions`, { waitUntil: 'load' });
+    await admin.page.getByTestId('zara-promo-picker').waitFor({ timeout: 25000 });
+    await admin.page.getByTestId('zara-promo-status').waitFor({ timeout: 15000 });
+    await admin.page.waitForFunction(() => /En ce moment/.test(document.querySelector('[data-testid="zara-promo-status"]')?.textContent || ''), null, { timeout: 15000 });
+    check('admin : « En ce moment : 1 en Vente flash · 1 en Promotion » (les vraies donnees de la base)', /En ce moment : 1 en Vente flash · 1 en Promotion/.test(await admin.page.getByTestId('zara-promo-status').innerText()), await admin.page.getByTestId('zara-promo-status').innerText());
+    const picker = await admin.page.getByTestId('zara-promo-picker').innerText();
+    check('admin : le texte dit que Zara ne modifie JAMAIS un prix, et que rien n\'est publie avant « Valider » pour les choix manuels', /ne modifie JAMAIS le prix d’un article/.test(picker) && /rien n’est publié avant votre « Valider »/.test(picker) && /24 h/.test(picker) && /7 jours/.test(picker), picker.slice(0, 500));
+    // Vente flash AUTOMATIQUE : interrupteur, texte, dernier choix
+    const lastTxt = await admin.page.getByTestId('zara-auto-flash-last').innerText();
+    check('admin : « Dernier choix automatique : … · 4 articles : Zara test 10, Zara test 11, … »', /Dernier choix automatique : .*· 4 articles : Zara test 10, Zara test 11, Zara test 14, Zara test 15/.test(lastTxt), lastTxt);
+    check('admin : l\'interrupteur « Vente flash automatique » est eteint au depart (« Désactivé »)', /Désactivé : Zara ne lance aucune Vente flash toute seule/.test(await admin.page.getByTestId('zara-auto-flash-status').innerText()), await admin.page.getByTestId('zara-auto-flash-status').innerText());
+    check('admin : le texte explique les 4 articles suivants, jamais le meme deux fois de suite, et qu\'on peut couper', /4 articles suivants/.test(await admin.page.getByTestId('zara-auto-flash-help').innerText()) && /jamais le même article\s+deux fois de suite/.test(await admin.page.getByTestId('zara-auto-flash-help').innerText()), await admin.page.getByTestId('zara-auto-flash-help').innerText());
+    await sleep(3000); // l'interrupteur est bloque pendant la toute premiere lecture du reglage
+    await admin.page.getByTestId('zara-auto-flash-switch').click();
+    await admin.page.waitForFunction(() => /Activé : à chaque fin de Vente flash/.test(document.querySelector('[data-testid="zara-auto-flash-status"]')?.textContent || ''), null, { timeout: 8000 });
+    check('admin : on l\'allume, la base recoit zara_auto_flash_enabled = true (et rien d\'autre : aucun prix)', fsAuto.patches.length === 1 && fsAuto.patches[0].zara_auto_flash_enabled === true && Object.keys(fsAuto.patches[0]).join() === 'zara_auto_flash_enabled', fsAuto.patches);
+    await admin.page.getByText(/Zara choisit seule les articles de la Vente flash \(24 h\)/).first().waitFor({ timeout: 8000 });
+    check('admin : message « Zara choisit seule les articles de la Vente flash (24 h)… Elle ne modifie aucun prix »', /Elle ne modifie aucun prix/.test(await admin.page.locator('body').innerText()));
+    check('admin : rien n\'est choisi ni publie avant le toucher', (await admin.page.getByTestId('zara-promo-plan').count()) === 0 && calls.apply.length === 0);
+    await admin.page.getByText('🔎 Zara, choisis les articles').click();
+    await admin.page.getByTestId('zara-promo-plan').waitFor({ timeout: 15000 });
+    const flashList = await admin.page.getByTestId('zara-promo-flash').innerText();
+    const promoList = await admin.page.getByTestId('zara-promo-promo').innerText();
+    const flashItems = await admin.page.getByTestId('zara-promo-flash-item').count();
+    const promoItems = await admin.page.getByTestId('zara-promo-promo-item').count();
+    check('admin : Vente flash = 4 articles, Promotions = 12 articles', flashItems === 4 && promoItems === 12, { flashItems, promoItems });
+    check('admin : les 4 articles les plus demandes en Vente flash (les plus de vues et de paniers)', /Zara test 10/.test(flashList) && /Zara test 11/.test(flashList), flashList.slice(0, 300));
+    check('admin : jamais les articles refuses (remise fausse, sans ancien prix, presque epuise, deja en promotion)', !/Erreur de saisie|Sans ancien prix|Presque epuise|Deja en/.test(flashList + promoList));
+    check('admin : chaque choix dit pourquoi avec de vrais chiffres (vues, paniers, stock, vraie remise)', /👁 \d+ vues? cette semaine/.test(flashList) && /20 en stock/.test(flashList) && /vraie remise −20 %/.test(flashList) && /10 000 FCFA/.test(flashList.replace(/[\s  ]/g, ' ')), flashList.slice(0, 400));
+    const summary = await admin.page.getByTestId('zara-promo-summary').innerText();
+    check('admin : « 29 articles examines · 24 avec une vraie remise… »', /29 articles examinés · 24 avec une vraie remise/.test(summary), summary);
+    check('rien n\'est publie tant que l\'administrateur n\'a pas valide', calls.apply.length === 0);
+    await admin.page.screenshot({ path: path.join(OUT, '8c-admin-zara-choisit.png'), fullPage: true });
+    await admin.page.getByText('✅ Valider et publier').click();
+    await admin.page.getByText(/⚡ 4 en Vente flash · 🏷️ 12 en Promotions/).waitFor({ timeout: 10000 });
+    check('admin : « Valider » publie UNE fois, avec les bons articles, 24 h et 7 jours', calls.apply.length === 1 && calls.apply[0].p_flash.length === 4 && calls.apply[0].p_promo.length === 12 && calls.apply[0].p_flash_hours === 24 && calls.apply[0].p_promo_days === 7, calls.apply);
+    check('admin : aucun article en double entre la Vente flash et les Promotions', new Set([...calls.apply[0].p_flash, ...calls.apply[0].p_promo]).size === 16);
+    check('admin : aucun prix envoye (la publication ne contient que des numeros d\'articles et des durees)', Object.keys(calls.apply[0]).sort().join() === 'p_flash,p_flash_hours,p_promo,p_promo_days');
+    check('admin : apres la publication, la liste disparait et l\'etat est relu', (await admin.page.getByTestId('zara-promo-plan').count()) === 0 && calls.stats >= 3, calls.stats);
+    // arreter : boite de confirmation, « Non » ne fait rien
+    await admin.page.getByTestId('zara-promo-stop').click();
+    await admin.page.getByText('Arrêter la Vente flash et les promotions ?').waitFor({ timeout: 8000 });
+    await admin.page.getByText('Annuler', { exact: true }).click();
+    await sleep(600);
+    check('admin : « Annuler » dans la confirmation : rien n\'est arrete', calls.stop === 0);
+    await admin.page.getByTestId('zara-promo-stop').click();
+    await admin.page.getByText('Oui, arrêter').click();
+    await admin.page.getByText(/Plus de Vente flash ni de promotion sur le site/).waitFor({ timeout: 10000 });
+    check('admin : « Oui, arreter » : un seul arret, message « Les anciens prix restent enregistres »', calls.stop === 1 && (await admin.page.getByText(/anciens prix restent enregistrés/).count()) >= 1, calls.stop);
+    check('aucune erreur (administrateur)', admin.errs.length === 0, admin.errs);
+    await admin.ctx.close();
+
+    // --- g. script SQL pas lance : message clair, rien ne casse
+    const adm2 = member8(true);
+    const noSql = await newVisitor(phone, { storage: { [SK8]: adm2.session }, fakeUser: adm2, fakeStore: { waOrder: true, patches: [] } });
+    await noSql.page.route(/\/rest\/v1\/rpc\/zara_promotion_stats/, (route) => (route.request().method() === 'OPTIONS' ? route.fulfill({ status: 204, headers: HDR8 }) : json8(route, { code: 'PGRST202', message: 'Could not find the function public.zara_promotion_stats(p_days) in the schema cache' }, 404)));
+    await noSql.page.goto(`${BASE}/admin/promotions`, { waitUntil: 'load' });
+    await noSql.page.getByTestId('zara-promo-missing').waitFor({ timeout: 25000 });
+    check('script pas lance : « Lancez d\'abord le script add-zara-promotions.sql dans Supabase »', /add-zara-promotions\.sql/.test(await noSql.page.getByTestId('zara-promo-missing').innerText()));
+    check('script pas lance : pas de bouton « Zara, choisis »', (await noSql.page.getByText('🔎 Zara, choisis les articles').count()) === 0);
+    await sleep(3000); // l'interrupteur est bloque pendant la toute premiere lecture du reglage
+    await noSql.page.getByTestId('zara-auto-flash-switch').click();
+    await noSql.page.getByText('Pas enregistré').first().waitFor({ timeout: 8000 });
+    check('script pas lance : l\'interrupteur automatique dit « Lancez d’abord le script add-zara-promotions.sql » et reste eteint', /Désactivé/.test(await noSql.page.getByTestId('zara-auto-flash-status').innerText()) && (await noSql.page.getByText(/Lancez d’abord le script add-zara-promotions\.sql dans Supabase\./).count()) >= 1);
+    await noSql.ctx.close();
   }
 
   // =============================================== A. CONSEILLERE : UNE QUESTION A LA FOIS (francais) ===============================================
@@ -1499,7 +1705,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const itemA = { id: `${dbA.id}__nc__ns`, product: dbA, quantity: 1, color: null, size: null };
       const cartJson = JSON.stringify({ state: { items: [itemA], updatedAt: Date.now() }, version: 1 });
       const c = await newVisitor(phone, { storage: { [SK]: session, 'albasse-cart': cartJson }, fakeUser: fu });
-      await c.page.route(/\/rest\/v1\/products\?.*select=id%2Cprice|\/rest\/v1\/products\?.*select=id,price/, (route) =>
+      await c.page.route(/\/rest\/v1\/products\?.*(select=id%2Cprice|select=id,price|[?&]id=in\.)/, (route) =>
         route.fulfill({ status: 200, headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' }, body: JSON.stringify([{ id: dbA.id, price: dbA.price, compare_at_price: dbA.compare_at_price, stock: 0, is_active: true }]) })
       );
       await c.page.goto(`${BASE}/`, { waitUntil: 'load' });
@@ -6150,7 +6356,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const db = newDb();
       const c = await orderVisitor(fu, db, { qty: 2 });
       let bump = 0;
-      await c.page.route(/\/rest\/v1\/products\?.*select=id%2Cprice|\/rest\/v1\/products\?.*select=id,price/, (route) =>
+      await c.page.route(/\/rest\/v1\/products\?.*(select=id%2Cprice|select=id,price|[?&]id=in\.)/, (route) =>
         route.fulfill({ status: 200, headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' }, body: JSON.stringify([{ id: realProduct.id, price: price + bump, compare_at_price: realProduct.compare_at_price, stock: realProduct.stock, is_active: true }]) })
       );
       await openOrderChat(c);

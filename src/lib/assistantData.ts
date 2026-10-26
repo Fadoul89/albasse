@@ -6,6 +6,7 @@ import { buildBrowsingOverview, type BrowsingOverview } from './browsingOverview
 import { buildSalesMap, SALES_WINDOW_DAYS, type SalesMap } from './assistantSales';
 import { sortCategories } from './categoryOrder';
 import type { Product } from '../types';
+import { applyPromotionRules, shownOldPrice } from './promotions';
 
 // Donnees publiques lues pour Zara (catalogue, villes, categories, infos de la boutique), gardees
 // 5 minutes en memoire. Lecture seule avec la cle publique : rien n'est ecrit.
@@ -102,7 +103,8 @@ export const getCatalog = cached<CatalogProduct[]>(async () => {
     supabase.from('categories').select('id,name,slug'),
     supabase
       .from('products')
-      .select('id,name,slug,price,compare_at_price,stock,category_id,colors,sizes,description,images,created_at')
+      // « * » : les colonnes de la vente flash et de la promotion (promo_ends_at) n'existent pas avant add-zara-promotions.sql, le catalogue ne doit jamais échouer pour ça
+      .select('*')
       .eq('is_active', true)
       .order('created_at', { ascending: false })
       .limit(1000),
@@ -118,7 +120,8 @@ export const getCatalog = cached<CatalogProduct[]>(async () => {
       name: p.name,
       slug: p.slug,
       price: p.price,
-      compare_at_price: p.compare_at_price,
+      // l'ancien prix seulement pendant une vraie promotion (vente flash ou promotion de Zara en cours) : Zara ne le cite jamais autrement
+      compare_at_price: shownOldPrice({ price: Number(p.price), compare_at_price: p.compare_at_price == null ? null : Number(p.compare_at_price), is_flash_sale: p.is_flash_sale, flash_sale_ends_at: p.flash_sale_ends_at, promo_ends_at: p.promo_ends_at }),
       stock: p.stock,
       category: categories.get(p.category_id)?.name ?? '',
       category_slug: categories.get(p.category_id)?.slug ?? '',
@@ -170,7 +173,7 @@ export async function fetchProductForCart(slug: string): Promise<Product | null>
   if (error) throw error;
   if (!data) return null;
   const p = data as Product;
-  return { ...p, images: p.images ?? [], colors: p.colors ?? [], sizes: p.sizes ?? [], price: Number(p.price), stock: Number(p.stock ?? 0) };
+  return applyPromotionRules({ ...p, images: p.images ?? [], colors: p.colors ?? [], sizes: p.sizes ?? [], price: Number(p.price), stock: Number(p.stock ?? 0) });
 }
 
 // « Vous êtes mon Nᵉ client aujourd'hui » : la fonction `assistant_chat_start` (add-assistant-client-counter.sql) note une
@@ -273,14 +276,16 @@ export interface CartProductStatus {
 // Prix, ancien prix et stock actuels de l'article de la commande commencée.
 export async function fetchCartStatus(ids: string[]): Promise<CartProductStatus[]> {
   const { data, error } = await withTimeout(
-    Promise.resolve(supabase.from('products').select('id,price,compare_at_price,stock,is_active').in('id', ids)),
+    // « * » : les colonnes de promotion n'existent pas avant add-zara-promotions.sql
+    Promise.resolve(supabase.from('products').select('*').in('id', ids)),
     TIMEOUT_MS
   );
   if (error) throw error;
-  return ((data ?? []) as CartProductStatus[]).map((r) => ({
+  return ((data ?? []) as (CartProductStatus & { is_flash_sale?: boolean; flash_sale_ends_at?: string | null; promo_ends_at?: string | null })[]).map((r) => ({
     id: r.id,
     price: Number(r.price),
-    compare_at_price: r.compare_at_price == null ? null : Number(r.compare_at_price),
+    // le même ancien prix que celui montré au client (seulement pendant une vraie promotion) : sinon « le prix a changé » s'afficherait à tort
+    compare_at_price: shownOldPrice({ price: Number(r.price), compare_at_price: r.compare_at_price == null ? null : Number(r.compare_at_price), is_flash_sale: r.is_flash_sale, flash_sale_ends_at: r.flash_sale_ends_at, promo_ends_at: r.promo_ends_at }),
     stock: Number(r.stock ?? 0),
     is_active: !!r.is_active,
   }));

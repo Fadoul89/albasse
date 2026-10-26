@@ -40,7 +40,7 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
 export function AdminProductsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const profile = useAuthStore((s) => s.profile);
-  const { products, isLoading, refresh } = useProducts();
+  const { products, isLoading, refresh } = useProducts({ raw: true });
   const { categories } = useCategories();
   const showToast = useToastStore((s) => s.show);
 

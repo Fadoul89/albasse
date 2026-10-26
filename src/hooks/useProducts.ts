@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { MOCK_PRODUCTS } from '../constants/mockData';
 import type { Product } from '../types';
+import { applyPromotionRules } from '../lib/promotions';
 
-export function useProducts() {
+// raw : l'administrateur voit les articles tels qu'ils sont enregistrés (ancien prix, vente flash) ; le client ne voit que les vraies promotions en cours
+export function useProducts({ raw = false }: { raw?: boolean } = {}) {
   const [products, setProducts] = useState<Product[]>(isSupabaseConfigured ? [] : MOCK_PRODUCTS);
   const [isLoading, setIsLoading] = useState(isSupabaseConfigured);
   const [error, setError] = useState<string | null>(null);
@@ -16,7 +18,8 @@ export function useProducts() {
       setError(err.message);
       setProducts(MOCK_PRODUCTS);
     } else {
-      setProducts((data as Product[]) ?? []);
+      const rows = (data as Product[]) ?? [];
+      setProducts(raw ? rows : rows.map((p) => applyPromotionRules(p)));
     }
     setIsLoading(false);
   };
