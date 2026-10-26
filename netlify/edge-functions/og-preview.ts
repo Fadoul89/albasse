@@ -1,110 +1,89 @@
-// Sert des balises Open Graph propres (titre, description, image) aux robots
-// de reseaux sociaux (TikTok, Facebook, WhatsApp...) quand ils visitent une
-// page produit ou categorie. Les vrais visiteurs recoivent l'application
-// normale (context.next() laisse passer vers le SPA React).
+// Sert aux robots (Google, Bing, réseaux sociaux : TikTok, Facebook, WhatsApp…) une page lisible avec titre, description, photo,
+// données structurées (prix, disponibilité) et liens, pour l'accueil, les pages produit et les pages catégorie.
+// Les vrais visiteurs reçoivent l'application normale (context.next() laisse passer vers le SPA React).
+// Une adresse produit ou catégorie qui n'existe pas (ou plus) répond 404 aux robots : elle sort de l'index de Google.
+// Les textes et les données viennent de ./lib/seo.ts (testé : tests/seo/seo.test.ts).
 import type { Context } from 'https://edge.netlify.com';
+import { categoryPage, homePage, notFoundPage, productPage, type SeoCategory, type SeoProduct } from './lib/seo.ts';
 
 const BOT_REGEX =
-  /facebookexternalhit|Facebot|Twitterbot|TikTok|WhatsApp|LinkedInBot|Slackbot|Discordbot|Pinterest|TelegramBot|Googlebot|bingbot|SkypeUriPreview/i;
+  /facebookexternalhit|Facebot|Twitterbot|TikTok|WhatsApp|LinkedInBot|Slackbot|Discordbot|Pinterest|TelegramBot|Googlebot|Google-InspectionTool|bingbot|BingPreview|DuckDuckBot|YandexBot|Applebot|Baiduspider|SkypeUriPreview/i;
 
-const SITE_NAME = 'Albasse Shopping';
+const HTML_HEADERS = { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=600', vary: 'User-Agent' };
 
-function escapeHtml(value: string): string {
-  return String(value ?? '').replace(/[&<>"']/g, (c) =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string)
-  );
+async function rows<T>(supabaseUrl: string, key: string, query: string): Promise<T[]> {
+  const res = await fetch(`${supabaseUrl}/rest/v1/${query}`, { headers: { apikey: key } });
+  if (!res.ok) return [];
+  const data = await res.json().catch(() => []);
+  return Array.isArray(data) ? (data as T[]) : [];
 }
 
-function renderHtml(opts: {
-  title: string;
-  description: string;
-  image: string;
-  url: string;
-  type: string;
-  extraMeta?: string;
-}): string {
-  return `<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="utf-8" />
-<title>${escapeHtml(opts.title)}</title>
-<meta name="description" content="${escapeHtml(opts.description)}" />
-<link rel="canonical" href="${opts.url}" />
-<meta property="og:site_name" content="${SITE_NAME}" />
-<meta property="og:type" content="${opts.type}" />
-<meta property="og:title" content="${escapeHtml(opts.title)}" />
-<meta property="og:description" content="${escapeHtml(opts.description)}" />
-<meta property="og:image" content="${opts.image}" />
-<meta property="og:url" content="${opts.url}" />
-<meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="${escapeHtml(opts.title)}" />
-<meta name="twitter:description" content="${escapeHtml(opts.description)}" />
-<meta name="twitter:image" content="${opts.image}" />
-${opts.extraMeta ?? ''}
-</head>
-<body>
-<h1>${escapeHtml(opts.title)}</h1>
-<p>${escapeHtml(opts.description)}</p>
-<img src="${opts.image}" alt="${escapeHtml(opts.title)}" />
-</body>
-</html>`;
-}
-
-export default async (request: Request, context: Context) => {
+async function serve(request: Request, context: Context): Promise<Response> {
   const userAgent = request.headers.get('user-agent') || '';
-  if (!BOT_REGEX.test(userAgent)) {
-    return context.next();
-  }
+  // visiteur normal : exactement la page d'avant, rien n'est modifié
+  if (!BOT_REGEX.test(userAgent)) return context.next();
 
   const supabaseUrl = Deno.env.get('EXPO_PUBLIC_SUPABASE_URL');
   const supabaseKey = Deno.env.get('EXPO_PUBLIC_SUPABASE_ANON_KEY');
   if (!supabaseUrl || !supabaseKey) return context.next();
 
   const url = new URL(request.url);
-  const headers = { apikey: supabaseKey };
+  const notFound = () => new Response(notFoundPage(url.toString().split('?')[0]), { status: 404, headers: HTML_HEADERS });
 
-  if (url.pathname.startsWith('/produit/')) {
-    const slug = url.pathname.replace('/produit/', '').replace(/\/$/, '');
-    const res = await fetch(
-      `${supabaseUrl}/rest/v1/products?slug=eq.${encodeURIComponent(slug)}&select=name,description,price,images`,
-      { headers }
-    );
-    const rows = await res.json().catch(() => []);
-    const product = Array.isArray(rows) ? rows[0] : null;
-    if (!product) return context.next();
+  try {
+    // accueil
+    if (url.pathname === '/' || url.pathname === '') {
+      const [categories, products] = await Promise.all([
+        rows<SeoCategory>(supabaseUrl, supabaseKey, 'categories?select=name,slug,image_url&order=sort_order.asc'),
+        rows<SeoProduct>(supabaseUrl, supabaseKey, 'products?is_active=eq.true&select=name,slug,price,images,stock&order=created_at.desc&limit=24'),
+      ]);
+      if (categories.length === 0 && products.length === 0) return context.next();
+      return new Response(homePage(categories, products), { headers: HTML_HEADERS });
+    }
 
-    const price = Number(product.price ?? 0).toLocaleString('fr-FR');
-    const html = renderHtml({
-      title: `${product.name} — ${SITE_NAME}`,
-      description: `${product.description ?? ''} — ${price} FCFA`.slice(0, 200),
-      image: product.images?.[0] ?? `${url.origin}/favicon.png`,
-      url: url.toString(),
-      type: 'product',
-      extraMeta: `<meta property="product:price:amount" content="${product.price}" />
-<meta property="product:price:currency" content="XAF" />`,
-    });
-    return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8' } });
-  }
+    // fiche produit
+    if (url.pathname.startsWith('/produit/')) {
+      const slug = decodeURIComponent(url.pathname.replace('/produit/', '').replace(/\/$/, ''));
+      const found = await rows<SeoProduct & { categories?: SeoCategory | null }>(
+        supabaseUrl,
+        supabaseKey,
+        `products?slug=eq.${encodeURIComponent(slug)}&select=name,slug,description,price,images,stock,categories(name,slug)&limit=1`
+      );
+      const product = found[0];
+      if (!product) return notFound();
+      return new Response(productPage(product, product.categories ?? null), { headers: HTML_HEADERS });
+    }
 
-  if (url.pathname.startsWith('/categorie/')) {
-    const slug = url.pathname.replace('/categorie/', '').replace(/\/$/, '');
-    const res = await fetch(
-      `${supabaseUrl}/rest/v1/categories?slug=eq.${encodeURIComponent(slug)}&select=name,image_url`,
-      { headers }
-    );
-    const rows = await res.json().catch(() => []);
-    const category = Array.isArray(rows) ? rows[0] : null;
-    if (!category) return context.next();
-
-    const html = renderHtml({
-      title: `${category.name} — ${SITE_NAME}`,
-      description: `Découvrez notre collection ${category.name} sur ${SITE_NAME}.`,
-      image: category.image_url ?? `${url.origin}/favicon.png`,
-      url: url.toString(),
-      type: 'website',
-    });
-    return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8' } });
+    // catégorie
+    if (url.pathname.startsWith('/categorie/')) {
+      const slug = decodeURIComponent(url.pathname.replace('/categorie/', '').replace(/\/$/, ''));
+      const found = await rows<SeoCategory & { id: string }>(
+        supabaseUrl,
+        supabaseKey,
+        `categories?slug=eq.${encodeURIComponent(slug)}&select=id,name,slug,image_url&limit=1`
+      );
+      const category = found[0];
+      if (!category) return notFound();
+      const products = await rows<SeoProduct>(
+        supabaseUrl,
+        supabaseKey,
+        `products?category_id=eq.${encodeURIComponent(category.id)}&is_active=eq.true&select=name,slug,price,images,stock&order=created_at.desc&limit=200`
+      );
+      return new Response(categoryPage(category, products), { headers: HTML_HEADERS });
+    }
+  } catch {
+    // base injoignable : le robot reçoit la page normale plutôt qu'une erreur
+    return context.next();
   }
 
   return context.next();
+}
+
+// filet de sécurité : au moindre problème imprévu, tout le monde reçoit la page normale du site (jamais une erreur)
+export default async (request: Request, context: Context): Promise<Response> => {
+  try {
+    return await serve(request, context);
+  } catch {
+    return context.next();
+  }
 };
