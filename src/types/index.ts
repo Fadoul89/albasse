@@ -340,6 +340,8 @@ export interface StoreSettings {
   // e-mails publicitaires aux clients absents depuis 7 jours (absent tant que add-inactive-promo-emails.sql n'est pas lancé : éteints)
   inactive_emails_enabled?: boolean;
   inactive_emails_daily_limit?: number;
+  // publicités de Zara à l'écran (accueil + fenêtre de promotion) ; absent tant que add-zara-ads.sql n'est pas lancé : éteintes
+  zara_ads_enabled?: boolean;
   // ligne facultative en bas des factures (NIF, RCCM…) ; absente tant que add-order-numbers-invoices.sql n'est pas lancé
   invoice_legal_line?: string | null;
   left_ad_items: AdItem[];

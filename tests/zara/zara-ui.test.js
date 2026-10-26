@@ -13,7 +13,7 @@ const fs = require('fs');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const dist = process.argv[2] || '../../dist';
 const port = process.argv[3] || '4333';
-const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI123456TOFBCDE').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI1234567TOFBCDE').toUpperCase();
 // saison fraiche (blousons et manteaux) : le bouton du menu de Zara n'existe que jusqu'au 31 decembre 2026 a 23h59 (N'Djamena)
 const COLD_ON = Date.now() < Date.parse('2027-01-01T00:00:00+01:00');
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
@@ -45,7 +45,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   // rank : rang du jour renvoye par la fonction de la base (null : fonction pas installee). fakeUser : compte simule (token : reponse a une connexion par mot de passe ; delay : lenteur du profil en ms). fakeOrders : { list: [...], patches: [] } = fausse table des commandes.
   // zaraInstall : par defaut, le visiteur a deja repondu « Plus tard » a l'installation (Zara ne la propose pas) ; null = vrai nouveau
   // visiteur, pour les parties qui testent l'installation
-  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, fakeSales = null, fakeCallbacks = null, fakePushes = null, fakeStore = null, fakeCats = null, fakeOnline = null, fakeRecent = null, fakeUnsub = null, initScripts = [], zaraInstall = 'dismissed', zaraPush = 'later', installAfterSignUp = '1', pushPerm = null, pushAnswer = 'granted', fakeAi = null, autoOpen = false } = {}) {
+  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, fakeSales = null, fakeCallbacks = null, fakePushes = null, fakeStore = null, fakeCats = null, fakeOnline = null, fakeRecent = null, fakeUnsub = null, initScripts = [], zaraInstall = 'dismissed', zaraPush = 'later', installAfterSignUp = '1', pushPerm = null, pushAnswer = 'granted', fakeAi = null, autoOpen = false, fakePromos = null } = {}) {
     // Zara s'ouvre seule sur l'Accueil apres 8 s : par defaut c'est deja « fait » pour ce visiteur (les autres tests gardent leur deroulement) ; autoOpen: true = vrai nouveau visiteur
     if (!autoOpen) session = { albasse_assistant_autoopen_seen: '1', ...session };
     const ctx = await b.newContext(opts);
@@ -288,6 +288,9 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
               if (wants('order_emails_enabled')) r.order_emails_enabled = fakeStore.orderEmails === true;
               if (wants('inactive_emails_enabled')) r.inactive_emails_enabled = fakeStore.inactiveEmails === true;
               if (fakeStore.legalLine !== undefined && wants('invoice_legal_line')) r.invoice_legal_line = fakeStore.legalLine;
+              // publicites de Zara : fakeStore.zaraAds undefined = colonne absente (script add-zara-ads.sql pas lance), sinon true / false
+              if (fakeStore.zaraAds === undefined) delete r.zara_ads_enabled;
+              else if (wants('zara_ads_enabled')) r.zara_ads_enabled = fakeStore.zaraAds;
             }
             if (fs.accountRequired === 'missing') delete r.account_required;
             else if (wants('account_required')) r.account_required = fs.accountRequired === true;
@@ -309,16 +312,18 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         if (fakeStore && u.pathname === '/rest/v1/store_settings' && m === 'PATCH') {
           const body = JSON.parse(req.postData() || '{}');
           (fakeStore.patches = fakeStore.patches || []).push(body);
-          const missing = ('whatsapp_order_enabled' in body && fakeStore.waOrder === undefined && 'whatsapp_order_enabled') || ('account_required' in body && fakeStore.accountRequired === 'missing' && 'account_required');
+          const missing = ('zara_ads_enabled' in body && fakeStore.zaraAds === undefined && 'zara_ads_enabled') || ('whatsapp_order_enabled' in body && fakeStore.waOrder === undefined && 'whatsapp_order_enabled') || ('account_required' in body && fakeStore.accountRequired === 'missing' && 'account_required');
           if (missing) return json(route, { code: 'PGRST204', message: `Could not find the '${missing}' column of 'store_settings' in the schema cache` }, 400);
           if ('whatsapp_order_enabled' in body) fakeStore.waOrder = body.whatsapp_order_enabled;
           if ('account_required' in body) fakeStore.accountRequired = body.account_required;
           if ('order_emails_enabled' in body) fakeStore.orderEmails = body.order_emails_enabled;
           if ('inactive_emails_enabled' in body) fakeStore.inactiveEmails = body.inactive_emails_enabled;
+          if ('zara_ads_enabled' in body) fakeStore.zaraAds = body.zara_ads_enabled;
           return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } });
         }
         // les promotions publiees en vrai sur le site (fenetre « offre du jour ») ne doivent pas couvrir les pages pendant les tests
-        if (u.pathname === '/rest/v1/smart_promotions' && m === 'GET') return json(route, []);
+        // fakePromos = une promotion de test (fenetre « offre du jour ») ; sinon aucune
+        if (u.pathname === '/rest/v1/smart_promotions' && m === 'GET') return json(route, fakePromos || []);
         // notifications push programmees (page « Promotions intelligentes ») : fakePushes.rows = la liste ; missing = table absente (script SQL pas lance) ;
         // posts = programmations recues ; patches = annulations / « envoyer maintenant » (avec le filtre de statut)
         if (fakePushes && u.pathname === '/rest/v1/scheduled_pushes') {
@@ -587,6 +592,131 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     await small.page.screenshot({ path: path.join(OUT, '6c-horloge-320.png') });
     await small.ctx.close();
     await v.ctx.close();
+  }
+
+  // =============================================== 7. ACCUEIL : PUBLICITES DE ZARA (FAITS VRAIS SEULEMENT) ===============================================
+  if (PARTS.includes('7')) {
+    console.log("\n== 7. accueil : publicites de Zara (vrais chiffres seulement, article rare pour les metiers haut places)");
+    const uid7 = '11111111-1111-4111-8111-111111111111';
+    const JWT7 = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMTExMTExMS0xMTExLTQxMTEtODExMS0xMTExMTExMTExMTEiLCJleHAiOjQxMDI0NDQ4MDAsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.c2ln';
+    const SK7 = 'sb-xtitsmmccpkelxfjyqyh-auth-token';
+    const memberWith = (profession, isAdmin = false) => {
+      const auth = { id: uid7, aud: 'authenticated', role: 'authenticated', email: 'test@example.com', app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' };
+      const token = { access_token: JWT7, refresh_token: 'fake-refresh', token_type: 'bearer', expires_in: 3600, expires_at: 4102444800, user: auth };
+      return { auth, token, session: JSON.stringify(token), editable: false, patches: [], profile: { id: uid7, email: 'test@example.com', full_name: 'Ahmed Hassan', phone: '66123456', whatsapp_number: null, profession, region: null, country: 'Tchad', address: null, loyalty_points: 0, banned: false, role: isAdmin ? 'admin' : 'customer', is_admin: isAdmin, is_affiliate: false } };
+    };
+    const home7 = async (extra = {}) => {
+      const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Fatimé' }, ...extra });
+      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      return v;
+    };
+    const adText = async (pg) => ((await pg.getByTestId('zara-ad-line').textContent()) || '').trim();
+    const waitAd = async (pg) => { await pg.getByTestId('zara-ad').waitFor({ timeout: 25000 }); await sleep(900); };
+
+    const live = await get('products?select=id,name,slug,price,stock,images&is_active=eq.true&stock=gt.0&limit=1000');
+    const withPhoto = live.filter((p) => (p.images || [])[0] && Number(p.price) > 0);
+    const rare = withPhoto.filter((p) => p.stock <= 5);
+    const abundant = withPhoto.find((p) => p.stock > 5);
+    console.log('info  articles a vrai petit stock :', rare.length, '| article abondant du test :', abundant && abundant.name.trim());
+    check('le catalogue a des articles a vrai petit stock (stock 5 ou moins) et un article abondant', rare.length >= 2 && !!abundant);
+
+    // a. interrupteur absent / colonne absente : aucune publicite
+    const off = await home7();
+    await sleep(4500);
+    check('colonne absente (script SQL pas lance) : aucune publicite de Zara sur l’accueil', (await off.page.getByTestId('zara-ad').count()) === 0);
+    await off.ctx.close();
+    const offFalse = await home7({ fakeStore: { zaraAds: false } });
+    await sleep(4500);
+    check('interrupteur eteint : aucune publicite de Zara', (await offFalse.page.getByTestId('zara-ad').count()) === 0);
+    await offFalse.ctx.close();
+
+    // b. interrupteur allume, visiteur ordinaire, aucune commande en base : « Plus que N en stock », jamais « article rare » ni « beaucoup »
+    const guest = await home7({ fakeStore: { zaraAds: true } });
+    await waitAd(guest.page);
+    const gl = await adText(guest.page);
+    check('visiteur : « Plus que N en stock. » (vrai stock), jamais « Article rare » ni « Beaucoup de clients »', /^Plus (que \d|qu'un seul) en stock\.$/.test(gl), gl);
+    const gname = ((await guest.page.getByTestId('zara-ad-name').textContent()) || '').trim();
+    check('la publicite montre un VRAI article du catalogue a petit stock, avec son prix', rare.some((p) => p.name.trim() === gname), gname);
+    const gbox = await guest.page.getByTestId('zara-ad').boundingBox();
+    const gcats = await guest.page.getByTestId('home-categories').boundingBox();
+    check('la carte de Zara est juste sous la ligne des categories, dans la largeur du telephone', !!gbox && !!gcats && gbox.y >= gcats.y && gbox.x >= 0 && gbox.x + gbox.width <= 390, { gbox, gcats });
+    await guest.page.screenshot({ path: path.join(OUT, '7a-pub-zara-visiteur.png') });
+    await guest.page.getByTestId('zara-ad-open').click();
+    await guest.page.waitForURL(/\/produit\//, { timeout: 15000 });
+    check('un toucher sur la carte ouvre la fiche de l’article', /\/produit\//.test(guest.page.url()), guest.page.url());
+    await guest.ctx.close();
+
+    // c. client haut place (metier du compte) : « Article rare : il n'en reste que N » (vrai stock)
+    const dir = memberWith('Directeur');
+    const boss = await home7({ fakeStore: { zaraAds: true }, storage: { [SK7]: dir.session, albasse_zara_name: 'Fatimé' }, fakeUser: dir });
+    await waitAd(boss.page);
+    const bl = await adText(boss.page);
+    check('metier « Directeur » : « Article rare : il n’en reste que N. » (vrai stock)', /^Article rare : il n'en reste (que \d|qu'un seul)\.$/.test(bl), bl);
+    const bname = ((await boss.page.getByTestId('zara-ad-name').textContent()) || '').trim();
+    check('client haut place : un VRAI article a petit stock du catalogue', rare.some((p) => p.name.trim() === bname), bname);
+    await boss.page.screenshot({ path: path.join(OUT, '7b-pub-zara-directeur.png') });
+    await boss.ctx.close();
+
+    // d. etudiant : le meme fait, dit simplement
+    const stu = memberWith('Étudiant');
+    const student = await home7({ fakeStore: { zaraAds: true }, storage: { [SK7]: stu.session, albasse_zara_name: 'Fatimé' }, fakeUser: stu });
+    await waitAd(student.page);
+    const sl = await adText(student.page);
+    check('metier « Étudiant » : « Plus que N en stock. » (jamais « Article rare »)', /^Plus (que \d|qu'un seul) en stock\.$/.test(sl), sl);
+    await student.ctx.close();
+
+    // e. de vraies commandes (3 ou plus) : « Beaucoup de clients ont acheté », avec le vrai chiffre, et seulement pour cet article
+    const sold = await home7({ fakeStore: { zaraAds: true }, fakeSales: { rows: [{ product_id: abundant.id, orders_count: 8 }, { product_id: rare[0].id, orders_count: 1 }] } });
+    await waitAd(sold.page);
+    const al = await adText(sold.page);
+    const aname = ((await sold.page.getByTestId('zara-ad-name').textContent()) || '').trim();
+    check('8 vraies commandes : « Beaucoup de clients ont acheté cet article : 8 commandes ces 7 derniers jours. »', /^Beaucoup de clients ont acheté cet article : 8 commandes ces 7 derniers jours\./.test(al) && aname === abundant.name.trim(), { al, aname });
+    check('l’article le plus commande passe en premier (1 seule commande : pas de chiffre pour l’autre)', !/1 commande|1 clients/.test(al), al);
+    await sold.page.screenshot({ path: path.join(OUT, '7c-pub-zara-commandes.png') });
+    await sold.ctx.close();
+
+    // f. fenetre de promotion : la phrase de Zara sous le message quand l'offre concerne un article
+    const promo = { id: '00000000-0000-4000-8000-0000000000aa', name: 'Test', category_id: null, product_id: rare[0].id, gift: null, min_purchase: 0, start_date: '2020-01-01', end_date: '2099-12-31', end_time: '23:59:59', max_beneficiaries: null, claimed_count: 0, message: 'Offre du jour pour vous', image_url: null, button_text: 'PROFITER DE L’OFFRE', is_active: true, created_at: '2026-10-01T00:00:00Z' };
+    const withPromo = await home7({ fakeStore: { zaraAds: true }, fakePromos: [promo] });
+    await withPromo.page.getByTestId('promo-zara-line').waitFor({ timeout: 25000 });
+    const pl = ((await withPromo.page.getByTestId('promo-zara-line').textContent()) || '').trim();
+    check('fenetre de promotion : « Zara : Plus que N en stock. » sous le message de l’offre', /^💬 Zara : Plus (que \d|qu'un seul) en stock\.$/.test(pl), pl);
+    await withPromo.page.screenshot({ path: path.join(OUT, '7d-promo-zara.png') });
+    await withPromo.ctx.close();
+    const promoOff = await home7({ fakeStore: { zaraAds: false }, fakePromos: [promo] });
+    await sleep(5000);
+    check('interrupteur eteint : la fenetre de promotion n’a aucune phrase de Zara', (await promoOff.page.getByTestId('promo-zara-line').count()) === 0 && /Offre du jour pour vous/.test(await promoOff.page.locator('body').innerText()));
+    await promoOff.ctx.close();
+
+    // g. l'interrupteur de l'admin (page « Promotions intelligentes ») : la base recoit zara_ads_enabled ; colonne absente : il faut lancer le script
+    const adm = memberWith(null, true);
+    const fs7 = { zaraAds: false, waOrder: true, patches: [] };
+    const admin = await newVisitor(phone, { storage: { [SK7]: adm.session }, fakeUser: adm, fakeStore: fs7 });
+    await admin.page.goto(`http://localhost:${port}/admin/promotions`, { waitUntil: 'load' });
+    await admin.page.getByTestId('zara-ads-toggle').waitFor({ timeout: 25000 });
+    check('admin : « Zara gère les publicités » eteint au depart (« Désactivé »)', /Désactivé/.test(await admin.page.getByTestId('zara-ads-status').innerText()), await admin.page.getByTestId('zara-ads-status').innerText());
+    check('admin : le texte explique les faits vrais (3 commandes, stock 5, metier haut place)', /faits vrais/.test(await admin.page.locator('body').innerText()) && /3 ou plus en 7 jours/.test(await admin.page.locator('body').innerText()) && /Article rare/.test(await admin.page.locator('body').innerText()));
+    await sleep(3000); // l'interrupteur est bloque pendant la toute premiere lecture du reglage
+    await admin.page.getByTestId('zara-ads-switch').click();
+    await admin.page.getByText(/Sur l’accueil et dans les promotions, Zara met en avant/).waitFor({ timeout: 8000 });
+    check('admin : on l’allume, la base recoit zara_ads_enabled = true', (fs7.patches || []).some((b) => b.zara_ads_enabled === true), fs7.patches);
+    await admin.page.waitForFunction(() => /Activé/.test(document.querySelector('[data-testid="zara-ads-status"]')?.textContent || ''), null, { timeout: 8000 });
+    check('admin : « Activé » affiché apres relecture', true);
+    await admin.page.screenshot({ path: path.join(OUT, '7e-admin-zara-pubs.png') });
+    await admin.page.getByTestId('zara-ads-switch').click();
+    await admin.page.getByText('Publicités de Zara coupées', { exact: false }).waitFor({ timeout: 8000 });
+    check('admin : on l’eteint, la base recoit zara_ads_enabled = false', (fs7.patches || []).some((b) => b.zara_ads_enabled === false), fs7.patches);
+    await admin.ctx.close();
+    const adm2 = memberWith(null, true);
+    const noCol = await newVisitor(phone, { storage: { [SK7]: adm2.session }, fakeUser: adm2, fakeStore: { waOrder: true, patches: [] } });
+    await noCol.page.goto(`http://localhost:${port}/admin/promotions`, { waitUntil: 'load' });
+    await noCol.page.getByTestId('zara-ads-toggle').waitFor({ timeout: 25000 });
+    await sleep(3000); // le reglage se lit d'abord : l'interrupteur est bloque pendant la toute premiere lecture
+    await noCol.page.getByTestId('zara-ads-switch').click();
+    await noCol.page.getByText(/Lancez d’abord le script add-zara-ads\.sql/).waitFor({ timeout: 8000 });
+    check('admin : colonne absente (script pas lance) : message « Lancez d’abord le script add-zara-ads.sql »', true);
+    check('admin : l’interrupteur revient sur « Désactivé » apres l’echec', /Désactivé/.test(await noCol.page.getByTestId('zara-ads-status').innerText()));
+    await noCol.ctx.close();
   }
 
   // =============================================== A. CONSEILLERE : UNE QUESTION A LA FOIS (francais) ===============================================

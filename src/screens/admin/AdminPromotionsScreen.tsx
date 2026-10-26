@@ -28,6 +28,7 @@ import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { DateField } from '../../components/DateField';
 import { TimeField } from '../../components/TimeField';
 import { ScheduledPushes } from '../../components/ScheduledPushes';
+import { StoreSettingToggle } from '../../components/StoreSettingToggle';
 import type { SmartPromotion, AdItem } from '../../types';
 
 type TargetType = 'category' | 'product' | 'none';
@@ -314,6 +315,13 @@ export function AdminPromotionsScreen() {
         contentContainerStyle={{ padding: spacing.md, paddingBottom: 60 }}
         ListHeaderComponent={
           <View style={styles.form}>
+            <StoreSettingToggle setting="zaraAds" />
+            <Text style={[styles.helperText, { marginBottom: spacing.md }]}>
+              Zara met en avant vos articles sur l’accueil et dans les promotions. Elle ne dit que des faits vrais : « Beaucoup de clients ont acheté » seulement avec de
+              vraies commandes (3 ou plus en 7 jours), « Article rare » seulement avec un vrai petit stock (5 au plus). Les clients haut placés (directeur, ingénieur,
+              médecin…, selon le métier écrit dans leur compte) lisent d’abord « Article rare » quand c’est vrai.
+            </Text>
+
             <ScheduledPushes products={products} />
 
             <View style={styles.voiceoverBox}>

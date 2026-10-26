@@ -17,6 +17,7 @@ import { LanguageSwitcher } from '../components/LanguageSwitcher';
 import { SideAdBanner } from '../components/SideAdBanner';
 import { ChadFlag } from '../components/ChadFlag';
 import { CityClock } from '../components/CityClock';
+import { ZaraAdCard } from '../components/ZaraAdCard';
 import { WebPushBanner } from '../components/WebPushBanner';
 import { fetchOnlineCount, onlineLabel } from '../lib/onlineCount';
 import { coldSeasonActive, coldSeasonPicks } from '../lib/coldSeason';
@@ -162,6 +163,9 @@ export function HomeScreen() {
           initialNumToRender={50}
         />
       </View>
+
+      {/* publicité de Zara (si l'admin lui confie les publicités) : un vrai article, des faits vrais seulement */}
+      <ZaraAdCard products={products} />
 
       {showMobileAds && (
         // téléphone : chaque bande de publicité prend toute la largeur, plus haute (les photos se voient en grand)
