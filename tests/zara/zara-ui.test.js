@@ -1705,7 +1705,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const itemA = { id: `${dbA.id}__nc__ns`, product: dbA, quantity: 1, color: null, size: null };
       const cartJson = JSON.stringify({ state: { items: [itemA], updatedAt: Date.now() }, version: 1 });
       const c = await newVisitor(phone, { storage: { [SK]: session, 'albasse-cart': cartJson }, fakeUser: fu });
-      await c.page.route(/\/rest\/v1\/products\?.*select=id%2Cprice|\/rest\/v1\/products\?.*select=id,price/, (route) =>
+      await c.page.route(/\/rest\/v1\/products\?.*(select=id%2Cprice|select=id,price|[?&]id=in\.)/, (route) =>
         route.fulfill({ status: 200, headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' }, body: JSON.stringify([{ id: dbA.id, price: dbA.price, compare_at_price: dbA.compare_at_price, stock: 0, is_active: true }]) })
       );
       await c.page.goto(`${BASE}/`, { waitUntil: 'load' });
@@ -6356,7 +6356,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const db = newDb();
       const c = await orderVisitor(fu, db, { qty: 2 });
       let bump = 0;
-      await c.page.route(/\/rest\/v1\/products\?.*select=id%2Cprice|\/rest\/v1\/products\?.*select=id,price/, (route) =>
+      await c.page.route(/\/rest\/v1\/products\?.*(select=id%2Cprice|select=id,price|[?&]id=in\.)/, (route) =>
         route.fulfill({ status: 200, headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' }, body: JSON.stringify([{ id: realProduct.id, price: price + bump, compare_at_price: realProduct.compare_at_price, stock: realProduct.stock, is_active: true }]) })
       );
       await openOrderChat(c);
