@@ -14,11 +14,25 @@
 ## Journal
 Table `telegram_key_events` (réservée au serveur) : à chaque clé envoyée au bot, une ligne avec l'heure, la longueur du message et le résultat (`saved`, `refused`, `same`, `not-saved`, `ignored`, `error`) ; `no-key-in-text` = long message sans clé reconnaissable. **Jamais la clé ni le texte.** Lecture : `select * from telegram_key_events order by at desc;`
 
+## Ce qui s'est vraiment passé le 26 octobre 2026 (à retenir)
+- **Quand la clé est révoquée dans BotFather, Telegram supprime aussi le lien (webhook) du bot.** Les messages envoyés au bot n'arrivent alors plus au site : la méthode « envoyer la nouvelle clé au bot » ne peut donc pas marcher juste après un « Revoke ». Il faut d'abord ranger la nouvelle clé par SQL (voir ci-dessous), puis **remettre le lien** avec la nouvelle clé (`setWebhook` : adresse de la fonction `telegram-webhook` + mot de passe `telegram_webhook_secret` du coffre-fort).
+- **Chaque `/revoke` annule la clé d'avant** : copier le tout dernier message de BotFather.
+- Une clé mal collée (mot « COLLEZ_ICI » resté, espaces, ancienne clé) coupe les alertes tant qu'elle est dans le coffre-fort : vérifier juste après (`getMe` avec la clé du coffre-fort).
+
+## Changer la clé, pas à pas (méthode sûre)
+1. BotFather : `/revoke` (une seule fois), puis copier le **dernier** message.
+2. Supabase › SQL Editor, coller les 2 lignes avec le message copié entre les deux (le message entier de BotFather est accepté, la clé est retrouvée toute seule) :
+```sql
+select public.set_telegram_bot_token($k$
+(coller ici)
+$k$);
+```
+3. Vérifier que Telegram accepte la clé (`getMe`), **remettre le lien** (`setWebhook`), puis tester une alerte (exemple de facture : `order-invoice` action `selftest`).
+
 ## Si quelque chose ne va pas
-- Pas de « ✅ » après quelques secondes : la clé envoyée n'était pas la nouvelle (fausse, ou déjà révoquée). Le bot ne peut pas répondre tant qu'il n'a pas la bonne clé. Recommencer en copiant le **dernier** message de BotFather, puis effacer à la main le message envoyé.
+- Pas de « ✅ » après quelques secondes : la clé envoyée n'était pas la nouvelle (fausse, ou déjà révoquée), ou le lien du bot a été supprimé par Telegram (voir plus haut). Le journal `telegram_key_events` dit si le message est arrivé. Utiliser la méthode sûre ci-dessus.
 - « ⚠️ C'est la même clé… » : la clé envoyée est l'ancienne ; le bouton « Revoke current token » n'a pas été touché.
 - Pendant le changement (entre « Revoke » et la confirmation), les alertes Telegram (commande, facture, rapport du lundi) sont coupées quelques instants.
-- Secours en SQL : `select public.set_telegram_bot_token('<clé>');` (rôle serveur ou éditeur SQL Supabase).
 
 ## Fichiers
 | Élément | Fichier |

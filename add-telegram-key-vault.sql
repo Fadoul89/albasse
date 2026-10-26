@@ -32,11 +32,19 @@ set search_path = public
 as $$
 declare
   v_token text := regexp_replace(coalesce(p_token, ''), '\s', '', 'g');
+  v_found text[];
   v_id uuid;
   v_old text;
 begin
+  -- la clé telle quelle (espaces et retours à la ligne ignorés) ; sinon la clé contenue dans le texte collé
+  -- (message de BotFather entier), à condition qu'il n'y en ait qu'une
   if v_token !~ '^[0-9]{6,12}:[A-Za-z0-9_-]{30,}$' then
-    raise exception 'clé Telegram invalide';
+    select array_agg(distinct m[1]) into v_found
+    from regexp_matches(coalesce(p_token, ''), '(?<![A-Za-z0-9_-])([0-9]{6,12}:[A-Za-z0-9_-]{30,})(?![A-Za-z0-9_-])', 'g') as m;
+    if v_found is null or array_length(v_found, 1) <> 1 then
+      raise exception 'clé Telegram introuvable ou ambiguë';
+    end if;
+    v_token := v_found[1];
   end if;
 
   select id, decrypted_secret into v_id, v_old
