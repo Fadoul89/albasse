@@ -18,20 +18,10 @@ async function rows<T>(supabaseUrl: string, key: string, query: string): Promise
   return Array.isArray(data) ? (data as T[]) : [];
 }
 
-// la page normale (pour les vrais visiteurs) : on précise seulement que le contenu dépend du navigateur (consigne de Google)
-async function passThrough(context: Context): Promise<Response> {
-  const res = await context.next();
-  try {
-    res.headers.append('vary', 'User-Agent');
-  } catch {
-    // en-têtes non modifiables : la page part telle quelle
-  }
-  return res;
-}
-
-export default async (request: Request, context: Context) => {
+async function serve(request: Request, context: Context): Promise<Response> {
   const userAgent = request.headers.get('user-agent') || '';
-  if (!BOT_REGEX.test(userAgent)) return passThrough(context);
+  // visiteur normal : exactement la page d'avant, rien n'est modifié
+  if (!BOT_REGEX.test(userAgent)) return context.next();
 
   const supabaseUrl = Deno.env.get('EXPO_PUBLIC_SUPABASE_URL');
   const supabaseKey = Deno.env.get('EXPO_PUBLIC_SUPABASE_ANON_KEY');
@@ -87,4 +77,13 @@ export default async (request: Request, context: Context) => {
   }
 
   return context.next();
+}
+
+// filet de sécurité : au moindre problème imprévu, tout le monde reçoit la page normale du site (jamais une erreur)
+export default async (request: Request, context: Context): Promise<Response> => {
+  try {
+    return await serve(request, context);
+  } catch {
+    return context.next();
+  }
 };

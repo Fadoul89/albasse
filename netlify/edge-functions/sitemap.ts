@@ -11,7 +11,7 @@ async function rows<T>(supabaseUrl: string, key: string, query: string): Promise
   return Array.isArray(data) ? (data as T[]) : null;
 }
 
-export default async (request: Request, context: Context) => {
+async function serve(request: Request, context: Context): Promise<Response> {
   const url = new URL(request.url);
 
   if (url.pathname === '/robots.txt') {
@@ -32,6 +32,15 @@ export default async (request: Request, context: Context) => {
     return new Response(buildSitemapXml(categories, products), {
       headers: { 'content-type': 'application/xml; charset=utf-8', 'cache-control': 'public, max-age=3600' },
     });
+  } catch {
+    return context.next();
+  }
+}
+
+// filet de sécurité : au moindre problème imprévu, le fichier fabriqué à la mise en ligne est servi
+export default async (request: Request, context: Context): Promise<Response> => {
+  try {
+    return await serve(request, context);
   } catch {
     return context.next();
   }

@@ -115,7 +115,7 @@ const ldBlocks = (html: string): any[] => [...html.matchAll(/<script type="appli
   {
     const { res, state } = await ask(ogPreview, '/produit/montre-keep-moving', CHROME);
     check('visiteur normal : l\'application normale (context.next)', state.next === 1 && (await res.text()) === '<html>application</html>');
-    check('visiteur normal : en-tête Vary: User-Agent', /user-agent/i.test(res.headers.get('vary') ?? ''), res.headers.get('vary'));
+    check('visiteur normal : réponse non modifiée (aucun en-tête ajouté)', res.headers.get('vary') === null && calls.length === 0, { vary: res.headers.get('vary'), appels: calls.length });
   }
 
   // accueil
@@ -176,6 +176,16 @@ const ldBlocks = (html: string): any[] => [...html.matchAll(/<script type="appli
   {
     const { res } = await ask(ogPreview, '/categorie/inconnue');
     check('catégorie inconnue : 404', res.status === 404);
+  }
+
+  // filet de sécurité : une erreur imprévue (ici l'environnement qui plante) renvoie la page normale
+  {
+    const saved = (globalThis as any).Deno;
+    (globalThis as any).Deno = { env: { get: () => { throw new Error('boom'); } } };
+    const a = await ask(ogPreview, '/', GOOGLEBOT);
+    const b = await ask(sitemap, '/sitemap.xml', GOOGLEBOT);
+    check('erreur imprévue : la page normale est servie (accueil et plan du site), jamais une erreur', a.state.next === 1 && a.res.status === 200 && b.state.next === 1 && b.res.status === 200, { a: a.state.next, b: b.state.next });
+    (globalThis as any).Deno = saved;
   }
 
   // base injoignable : jamais d'erreur pour le robot

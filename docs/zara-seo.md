@@ -29,6 +29,11 @@ Lancer le test : `node --import ./tests/zara/register.mjs tests/seo/seo.test.ts`
 ## Robots reconnus
 Googlebot, Google-InspectionTool (test d'adresse de Search Console), Bing, DuckDuckGo, Yandex, Apple, Baidu, et les aperçus Facebook, WhatsApp, TikTok, Telegram, LinkedIn, Slack, Discord, Pinterest, Twitter.
 
+## Sécurité
+- Les visiteurs normaux reçoivent **exactement la même page qu'avant** (aucun en-tête ajouté, aucune requête à la base).
+- Les deux fonctions ont un **filet de sécurité** : au moindre problème imprévu (base coupée, erreur), tout le monde reçoit la page normale du site, jamais une erreur. Pour le plan du site, c'est le fichier fabriqué à la mise en ligne.
+- **Pour tout annuler** : retirer les blocs `/` et `/sitemap.xml` et `/robots.txt` de `netlify.toml` (ou annuler la publication de ce changement sur GitHub) : le site redevient comme avant.
+
 ## À savoir
 - **Compte obligatoire à l'entrée** (réglage « Clients » de l'administration) : un visiteur qui arrive depuis Google doit d'abord se connecter ou créer un compte avant de voir le produit. Google voit la fiche, mais le visiteur est freiné : c'est un choix de la boutique, non modifié ici. Mesurable plus tard avec Google Search Console.
 - Le SEO agit en **semaines**, pas en jours : Google doit revenir lire les pages.
