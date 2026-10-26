@@ -13,6 +13,7 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { GoldButton } from '../components/GoldButton';
 import { createOrder } from '../lib/orders';
 import { initiatePayment } from '../lib/payments';
+import { paymentInitiatedText } from '../lib/payments/initiatedText';
 import { CityPicker } from '../components/CityPicker';
 import { GiftWrapOption } from '../components/GiftWrapOption';
 import { ScheduledDeliveryPicker } from '../components/ScheduledDeliveryPicker';
@@ -178,7 +179,7 @@ export function CheckoutScreen() {
           ? `Envoyez ${formatXAF(grandTotal)} au ${paymentInfo.number} (${methodLabel}).`
           : `Notre équipe vous contactera au ${phone} pour finaliser le paiement ${methodLabel}.`;
       } else {
-        instructions = `Paiement ${methodLabel} initié. ${payment.message}`;
+        instructions = paymentInitiatedText(methodLabel, payment.message);
       }
 
       clearCart();
