@@ -13,6 +13,9 @@ const fs = require('fs');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const dist = process.argv[2] || '../../dist';
 const port = process.argv[3] || '4333';
+// BASE_URL=https://www.albasseshopping.com : teste le VRAI site en ligne (les commandes et comptes restent simules, rien n'est enregistre)
+const BASE = (process.env.BASE_URL || `http://localhost:${port}`).replace(/\/$/, '');
+const BASE_HOST = new URL(BASE).hostname;
 const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI1234567TOFBCDE').toUpperCase();
 // saison fraiche (blousons et manteaux) : le bouton du menu de Zara n'existe que jusqu'au 31 decembre 2026 a 23h59 (N'Djamena)
 const COLD_ON = Date.now() < Date.parse('2027-01-01T00:00:00+01:00');
@@ -111,7 +114,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const req = route.request();
       const u = new URL(req.url());
       const m = req.method();
-      if (u.hostname === 'localhost') return route.continue();
+      if (u.hostname === 'localhost' || u.hostname === BASE_HOST) return route.continue();
       // WhatsApp : la page s'ouvre (vide) pour qu'on puisse lire l'adresse du lien ; rien d'autre ne sort vers internet
       if (u.hostname === 'wa.me') return route.fulfill({ status: 200, contentType: 'text/html', body: 'wa' });
       if (u.hostname.endsWith('.supabase.co')) {
@@ -517,7 +520,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const { page } = v;
     // 26 octobre 2026, 05:15 UTC = 06:15 a N'Djamena (le temps avance normalement a partir de la)
     await v.ctx.clock.install({ time: new Date('2026-10-26T05:15:00Z') });
-    await page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+    await page.goto(`${BASE}/`, { waitUntil: 'load' });
     await page.waitForSelector('[data-testid="city-clock"]', { timeout: 20000 });
     const read = async () => ({
       time: ((await page.getByTestId('city-clock').innerText()).match(/\d\d\s*:\s*\d\d/) || [''])[0].replace(/\s/g, ''),
@@ -532,10 +535,10 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     check('horloge : au-dessus de la ligne des categories', !!box && !!cats && box.y + box.height <= cats.y + 1, { box, cats });
     check('horloge : visible en entier dans la largeur du telephone (390)', !!box && box.x >= 0 && box.x + box.width <= 390, box);
     const pillBox = await page.getByTestId('city-clock').locator('[role="timer"]').boundingBox();
-    check('horloge : bandeau fin (entre 34 et 44 px de haut)', !!pillBox && pillBox.height >= 34 && pillBox.height <= 44, pillBox);
+    check('horloge : bandeau tres fin (entre 26 et 34 px de haut)', !!pillBox && pillBox.height >= 26 && pillBox.height <= 34, pillBox);
     // la largeur de l'horloge = celle du cadre SERVICE QUALITE GARANTIE (elle ne le depasse jamais), centree comme lui
     const frameBox = await page.getByTestId('home-tagline').boundingBox();
-    check('horloge : exactement la largeur du cadre SERVICE QUALITE GARANTIE (a 2 px pres), meme position', !!pillBox && !!frameBox && Math.abs(pillBox.width - frameBox.width) <= 2 && Math.abs(pillBox.x - frameBox.x) <= 2, { pillBox, frameBox });
+    check('horloge : plus etroite que le cadre SERVICE QUALITE GARANTIE (80 a 100 % de sa largeur) et centree comme lui', !!pillBox && !!frameBox && pillBox.width <= frameBox.width + 2 && pillBox.width >= frameBox.width * 0.8 && Math.abs((pillBox.x + pillBox.width / 2) - (frameBox.x + frameBox.width / 2)) <= 3, { pillBox, frameBox });
     // chaque ville : le nom tient en entier dans sa place, a droite de l'heure, sans etre coupe ni depasser le bandeau
     const fits = async (pg, label, widthPx) => {
       const pill = await pg.getByTestId('city-clock').locator('[role="timer"]').boundingBox();
@@ -547,9 +550,9 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       return okFit ? null : `${label} : ${JSON.stringify({ pill, frame, time, slot, cut })}`;
     };
     const cityInfo = await page.getByTestId('city-clock-city').evaluate((el) => { const c = getComputedStyle(el); return { size: parseFloat(c.fontSize), upper: c.textTransform === 'uppercase', color: c.color, family: c.fontFamily }; });
-    check("horloge : le nom de la ville en lettres claires (majuscules, jaune, 14 px ou plus, meme ecriture que le cadre)", cityInfo.size >= 14 && cityInfo.upper && /254,\s*203,\s*0/.test(cityInfo.color) && /Manrope/i.test(cityInfo.family), cityInfo);
+    check("horloge : le nom de la ville en lettres claires (majuscules, jaune, 12 px ou plus, meme ecriture que le cadre)", cityInfo.size >= 12 && cityInfo.upper && /254,\s*203,\s*0/.test(cityInfo.color) && /Manrope/i.test(cityInfo.family), cityInfo);
     const digitsSize = await page.getByTestId('city-clock-time').evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
-    check('heure bien lisible (chiffres >= 18 px)', digitsSize >= 18, digitsSize);
+    check('heure bien lisible (chiffres >= 14 px)', digitsSize >= 14, digitsSize);
     const logo = await page.getByText('ALBASSE', { exact: true }).evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
     check('logo ALBASSE inchange (34 px)', logo === 34, logo);
     await sleep(1000);
@@ -575,7 +578,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     // un telephone mal regle (fuseau de Los Angeles) : l'heure affichee reste celle du Tchad
     const w = await newVisitor({ ...phone, timezoneId: 'America/Los_Angeles' }, { storage: { albasse_zara_name: 'Fatimé' } });
     await w.ctx.clock.install({ time: new Date('2026-10-26T05:15:00Z') });
-    await w.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+    await w.page.goto(`${BASE}/`, { waitUntil: 'load' });
     await w.page.waitForSelector('[data-testid="city-clock"]', { timeout: 20000 });
     const wt = ((await w.page.getByTestId('city-clock').innerText()).match(/\d\d\s*:\s*\d\d/) || [''])[0].replace(/\s/g, '');
     check("telephone au fuseau de Los Angeles : l'heure reste 06:15 (heure du Tchad)", wt === '06:15', wt);
@@ -584,7 +587,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     // mouvement automatique, en temps reel (sans fausse horloge) : a la 10e seconde l'ancien nom (qui sort) et le nouveau (qui arrive) sont ensemble
     // dans la place un court instant, puis il ne reste que le nouveau
     const live = await newVisitor(phone, { storage: { albasse_zara_name: 'Fatimé' } });
-    await live.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+    await live.page.goto(`${BASE}/`, { waitUntil: 'load' });
     await live.page.waitForSelector('[data-testid="city-clock-slot"]', { timeout: 20000 });
     const slid = await live.page.evaluate(() => new Promise((resolve) => {
       const slot = document.querySelector('[data-testid="city-clock-slot"]');
@@ -609,7 +612,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     // un petit telephone (320 px) : meme les noms les plus longs (N'Djamena, Amdjarass) tiennent dans le bandeau
     const small = await newVisitor({ ...phone, viewport: { width: 320, height: 640 } }, { storage: { albasse_zara_name: 'Fatimé' } });
     await small.ctx.clock.install({ time: new Date('2026-10-26T05:15:00Z') });
-    await small.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+    await small.page.goto(`${BASE}/`, { waitUntil: 'load' });
     await small.page.waitForSelector('[data-testid="city-clock"]', { timeout: 20000 });
     await sleep(800);
     const smallMisfit = [await fits(small.page, "N'Djamena", 320)];
@@ -638,7 +641,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     };
     const home7 = async (extra = {}) => {
       const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Fatimé' }, ...extra });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       return v;
     };
     const adText = async (pg) => ((await pg.getByTestId('zara-ad-line').textContent()) || '').trim();
@@ -723,7 +726,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const adm = memberWith(null, true);
     const fs7 = { zaraAds: false, waOrder: true, patches: [] };
     const admin = await newVisitor(phone, { storage: { [SK7]: adm.session }, fakeUser: adm, fakeStore: fs7 });
-    await admin.page.goto(`http://localhost:${port}/admin/promotions`, { waitUntil: 'load' });
+    await admin.page.goto(`${BASE}/admin/promotions`, { waitUntil: 'load' });
     await admin.page.getByTestId('zara-ads-toggle').waitFor({ timeout: 25000 });
     check('admin : « Zara gère les publicités » eteint au depart (« Désactivé »)', /Désactivé/.test(await admin.page.getByTestId('zara-ads-status').innerText()), await admin.page.getByTestId('zara-ads-status').innerText());
     check('admin : le texte explique les faits vrais (3 commandes, stock 5, metier haut place)', /faits vrais/.test(await admin.page.locator('body').innerText()) && /3 ou plus en 7 jours/.test(await admin.page.locator('body').innerText()) && /Article rare/.test(await admin.page.locator('body').innerText()));
@@ -740,7 +743,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     await admin.ctx.close();
     const adm2 = memberWith(null, true);
     const noCol = await newVisitor(phone, { storage: { [SK7]: adm2.session }, fakeUser: adm2, fakeStore: { waOrder: true, patches: [] } });
-    await noCol.page.goto(`http://localhost:${port}/admin/promotions`, { waitUntil: 'load' });
+    await noCol.page.goto(`${BASE}/admin/promotions`, { waitUntil: 'load' });
     await noCol.page.getByTestId('zara-ads-toggle').waitFor({ timeout: 25000 });
     await sleep(3000); // le reglage se lit d'abord : l'interrupteur est bloque pendant la toute premiere lecture
     await noCol.page.getByTestId('zara-ads-switch').click();
@@ -755,7 +758,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     console.log('== A. conseillere : une question a la fois (telephone 390 x 800, francais)');
     const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Fatimé' } });
     const { page } = v;
-    await page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+    await page.goto(`${BASE}/`, { waitUntil: 'load' });
     await sleep(2500);
     await page.getByRole('button', { name: FAB_NAME }).click();
     await waitText(page, WELCOME_FR('Fatimé'));
@@ -909,7 +912,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     {
       const v = await newVisitor(phone, { lang: null });
       const { page } = v;
-      await page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await page.getByRole('button', { name: FAB_NAME }).click();
       await waitText(page, /Choisissez votre langue \/ اختر لغتك/);
@@ -1015,7 +1018,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     // --- L7. premiere visite : il ecrit au lieu de toucher un bouton
     {
       const a = await newVisitor(phone, { lang: null });
-      await a.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await a.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await a.page.getByRole('button', { name: FAB_NAME }).click();
       await waitText(a.page, /Choisissez votre langue/);
@@ -1024,7 +1027,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('premiere visite : il ecrit « مرحبا » -> Zara passe a l\'arabe et repond', (await a.page.evaluate(() => localStorage.getItem('albasse_zara_lang'))) === 'ar');
       await a.ctx.close();
       const f = await newVisitor(phone, { lang: null });
-      await f.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await f.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await f.page.getByRole('button', { name: FAB_NAME }).click();
       await waitText(f.page, /Choisissez votre langue/);
@@ -1036,8 +1039,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
 
     // --- L8. site traduit en arabe (cookie de Google) : pas de question de langue
     {
-      const g = await newVisitor(phone, { lang: null, cookies: [{ name: 'googtrans', value: '/fr/ar', url: `http://localhost:${port}` }] });
-      await g.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      const g = await newVisitor(phone, { lang: null, cookies: [{ name: 'googtrans', value: '/fr/ar', url: `${BASE}` }] });
+      await g.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await g.page.getByRole('button', { name: /التحدث مع زارا كينغز|Discuter avec Zara Kings/ }).click();
       await waitText(g.page, /مرحباً! 😍👋 أهلاً بك في Albasse Shopping! يسعدني استقبالك!/);
@@ -1050,13 +1053,13 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     // en francais, toucher la bulle ouvre Zara directement sur l'installation
     {
       const r = await newVisitor(phone, { lang: 'ar', storage: { albasse_zara_name: 'علي' }, zaraInstall: null });
-      await r.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await r.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(7500);
       const ar = await r.page.getByText(/📲 علي، ثبّت تطبيق Albasse: العروض أولاً ومتابعة طلباتك!/).count();
       check('telephone sans l application : la bulle invite a installer, en arabe, avec le prenom', ar === 1, ar);
       await r.ctx.close();
       const f = await newVisitor(phone, { lang: 'fr', storage: { albasse_zara_name: 'Moussa' }, zaraInstall: null });
-      await f.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await f.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await f.page.getByText(/📲 Moussa, installez l'application Albasse/).waitFor({ timeout: 15000 });
       await f.page.getByTestId('assistant-teaser').click();
       await waitText(f.page, /✅ Oui, déjà installée/);
@@ -1066,7 +1069,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     // --- L9. visiteur arabe qui revient : prenom et langue retenus, bulle de bienvenue en arabe
     {
       const r = await newVisitor(phone, { lang: 'ar', storage: { albasse_zara_name: 'علي' } });
-      await r.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await r.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(7500);
       const teaser = await r.page.getByText(/مرحبا علي! أنا زارا كينغز، مساعدة التسويق في Albasse Shopping\. 😊/).count();
       check('visiteur arabe qui revient : la bulle de bienvenue du bouton est en arabe, avec son prenom', teaser === 1, teaser);
@@ -1081,7 +1084,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     // --- L9b. Zara prend la parole la premiere : sur l'Accueil, 8 secondes apres l'arrivee, elle ouvre toute seule la conversation (une fois par visite)
     {
       const v = await newVisitor(phone, { lang: 'fr', autoOpen: true, rank: 5 });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(6500);
       check('avant 8 secondes : rien ne s\'ouvre, et la petite bulle ne passe pas juste avant', (await panelOf(v.page).count()) === 0 && (await v.page.getByTestId('assistant-teaser').count()) === 0);
       await waitText(v.page, /Bienvenue chez Albasse Shopping/, 12000);
@@ -1098,7 +1101,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
 
       // hors Accueil : pas d'ouverture automatique, la petite bulle reste comme avant
       const o = await newVisitor(phone, { lang: 'fr', autoOpen: true });
-      await o.page.goto(`http://localhost:${port}/contact`, { waitUntil: 'load' });
+      await o.page.goto(`${BASE}/contact`, { waitUntil: 'load' });
       await sleep(9500);
       check('page Contact : Zara ne s\'ouvre pas seule', (await panelOf(o.page).count()) === 0);
       check('page Contact : la petite bulle apparait comme avant', (await o.page.getByTestId('assistant-teaser').count()) === 1);
@@ -1106,7 +1109,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
 
       // le visiteur qui touche le bouton avant les 8 secondes : une seule ouverture, une seule conversation comptee
       const t = await newVisitor(phone, { lang: 'fr', autoOpen: true, rank: 7 });
-      await t.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await t.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await t.page.getByRole('button', { name: FAB_NAME }).click();
       await waitText(t.page, /Bienvenue chez Albasse Shopping/);
@@ -1121,7 +1124,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
           createOscillator() { return { frequency: { setValueAtTime() {} }, connect() {}, start() { window.__ding.started++; }, stop() {} }; }
           close() { window.__ding.closed++; return Promise.resolve(); } };`;
       const s1 = await newVisitor(phone, { lang: 'fr', autoOpen: true, initScripts: [fakeAudio('running')] });
-      await s1.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await s1.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(6500);
       const before = await s1.page.evaluate(() => window.__ding);
       check('avant l\'ouverture automatique : aucun son', before.created === 0 && before.started === 0, before);
@@ -1130,7 +1133,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('telephone qui autorise le son : un petit « ding » de deux notes quand Zara s\'ouvre', played.created === 1 && played.started === 2, played);
       await s1.ctx.close();
       const s2 = await newVisitor(phone, { lang: 'fr', autoOpen: true, initScripts: [fakeAudio('suspended')] });
-      await s2.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await s2.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await waitText(s2.page, /Bienvenue chez Albasse Shopping/, 20000);
       const muted = await s2.page.evaluate(() => window.__ding);
       check('telephone qui refuse le son (visiteur n\'a rien touche) : Zara s\'ouvre en silence, sans erreur', (await panelOf(s2.page).count()) === 1 && muted.started === 0 && muted.closed === 1 && s2.errs.length === 0, { muted, errs: s2.errs });
@@ -1140,7 +1143,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     // --- L9c. un mot mal ecrit : « Vouliez-vous dire… ? » dans la barre de recherche et dans le chat de Zara
     {
       const v = await newVisitor(phone, { lang: 'fr', storage: { albasse_zara_name: 'Ali' } });
-      await v.page.goto(`http://localhost:${port}/recherche`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/recherche`, { waitUntil: 'load' });
       const box = v.page.getByPlaceholder('Rechercher un produit…');
       await box.waitFor({ timeout: 25000 });
       await box.fill('sandalles');
@@ -1175,7 +1178,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     // --- L10. en-tete : tout tient a l'ecran en 390 et 360 de large, en francais et en arabe ; ordinateur
     for (const [w, lg] of [[390, 'fr'], [390, 'ar'], [360, 'fr'], [360, 'ar']]) {
       const h = await newVisitor({ ...devices['Pixel 7'], viewport: { width: w, height: 780 } }, { lang: lg, storage: { albasse_zara_name: 'Ali' } });
-      await h.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await h.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await h.page.getByRole('button', { name: /Discuter avec Zara Kings|التحدث مع زارا كينغز/ }).click();
       await h.page.getByRole('button', { name: /Recommencer la conversation|ابدأ المحادثة من جديد/ }).waitFor({ timeout: 25000 });
@@ -1199,7 +1202,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     }
     {
       const d = await newVisitor({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 }, { storage: { albasse_zara_name: 'Ali' } });
-      await d.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await d.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await d.page.getByRole('button', { name: FAB_NAME }).click();
       await waitText(d.page, /Créez votre compte gratuit(?:, Ali)?/);
@@ -1271,7 +1274,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       }
     };
 
-    await page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+    await page.goto(`${BASE}/`, { waitUntil: 'load' });
     await sleep(3000);
     await page.getByRole('button', { name: FAB_NAME }).click();
     await waitText(page, 'Que souhaitez-vous découvrir aujourd’hui ? 🛍️');
@@ -1378,7 +1381,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
 
     // --- le site : plus de page panier, l'onglet « Commandes »
     await page.getByRole('button', { name: 'Fermer' }).click();
-    await page.goto(`http://localhost:${port}/panier`, { waitUntil: 'load' });
+    await page.goto(`${BASE}/panier`, { waitUntil: 'load' });
     await sleep(3000);
     check('ancien lien /panier : la page « Mes commandes » s\'ouvre', (await page.getByText('Mes commandes', { exact: true }).count()) >= 1 && !(await page.evaluate(() => document.body.innerText)).includes('Votre panier'));
     // (toutes les ecritures sont bloquees par le test ; la page « Mes commandes » demande seulement le marquage des vieilles commandes)
@@ -1391,7 +1394,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const item = { id: `${dbA.id}__nc__ns`, product: dbA, quantity: 1, color: null, size: null };
       const cartJson = JSON.stringify({ state: { items: [item], updatedAt: Date.now() }, version: 1 });
       const g = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali', 'albasse-cart': cartJson } });
-      await g.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await g.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await g.page.getByRole('button', { name: FAB_NAME }).click();
       await waitText(g.page, new RegExp(`Votre commande n’est pas terminée : « ${A.name.trim()} »`));
@@ -1411,7 +1414,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const stale = { id: `${dbA.id}__nc__ns`, product: { ...dbA, price: Number(dbA.price) - 1000 }, quantity: 2, color: null, size: null };
       const cartJson = JSON.stringify({ state: { items: [stale], updatedAt: Date.now() }, version: 1 });
       const c = await newVisitor(phone, { storage: { [SK]: session, 'albasse-cart': cartJson }, fakeUser: fu });
-      await c.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await c.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(3000);
       await c.page.getByRole('button', { name: FAB_NAME }).click();
       await waitText(c.page, WELCOME_FR('Ahmed'));
@@ -1437,7 +1440,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await c.page.route(/\/rest\/v1\/products\?.*select=id%2Cprice|\/rest\/v1\/products\?.*select=id,price/, (route) =>
         route.fulfill({ status: 200, headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' }, body: JSON.stringify([{ id: dbA.id, price: dbA.price, compare_at_price: dbA.compare_at_price, stock: 0, is_active: true }]) })
       );
-      await c.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await c.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(3000);
       await c.page.getByRole('button', { name: FAB_NAME }).click();
       await waitText(c.page, 'Que souhaitez-vous découvrir aujourd’hui ? 🛍️');
@@ -1455,7 +1458,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     // iPhone (Safari) : aide pas a pas, tutoriel
     {
       const v = await newVisitor(iphone, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' } });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await v.page.getByRole('button', { name: FAB_NAME }).click();
       await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?/);
@@ -1471,7 +1474,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.ctx.close();
       // iPhone mais pas Safari : il faut ouvrir Safari
       const w = await newVisitor({ ...iphone, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/120.0.0.0 Mobile/15E148 Safari/604.1' }, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' } });
-      await w.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await w.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await w.page.getByRole('button', { name: FAB_NAME }).click();
       await waitText(w.page, /Créez votre compte gratuit(?:, Ali)?/);
@@ -1486,7 +1489,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         window.__fakePromptCalls = 0;
         window.__pwaInstallPrompt__ = { prompt: async () => { window.__fakePromptCalls++; }, userChoice: Promise.resolve({ outcome: 'accepted' }) };
       });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await v.page.getByRole('button', { name: FAB_NAME }).click();
       await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?/);
@@ -1503,7 +1506,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await d.ctx.addInitScript(() => {
         window.__pwaInstallPrompt__ = { prompt: async () => {}, userChoice: Promise.resolve({ outcome: 'dismissed' }) };
       });
-      await d.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await d.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await d.page.getByRole('button', { name: FAB_NAME }).click();
       await waitText(d.page, /Créez votre compte gratuit(?:, Ali)?/);
@@ -1520,7 +1523,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const p = all.find((x) => (x.images || [])[0] && /^[A-Za-zÀ-ÿ]{4,14}$/.test(x.name.trim()) && !BAD.test(x.name) && all.filter((y) => y.name.trim() === x.name.trim()).length === 1 && (x.sizes || []).length === 0 && (x.colors || []).length <= 1);
       const v = await newVisitor(phone, { zaraInstall: 'asked', storage: { albasse_zara_name: 'Ali' } });
       await v.ctx.addInitScript(() => { window.__pwaInstallPrompt__ = { prompt: async () => {}, userChoice: Promise.resolve({ outcome: 'accepted' }) }; });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await v.page.getByRole('button', { name: FAB_NAME }).click();
       await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?/);
@@ -1544,7 +1547,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         window.__fakePromptCalls = 0;
         window.__pwaInstallPrompt__ = { prompt: async () => { window.__fakePromptCalls++; }, userChoice: Promise.resolve({ outcome: 'dismissed' }) };
       });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await v.page.getByRole('button', { name: FAB_NAME }).click();
       await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?/);
@@ -1578,7 +1581,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         window.__fakePromptCalls = 0;
         window.__pwaInstallPrompt__ = { prompt: async () => { window.__fakePromptCalls++; }, userChoice: Promise.resolve({ outcome: 'accepted' }) };
       });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await v.page.getByRole('button', { name: /التحدث مع زارا كينغز/ }).click();
       await waitText(v.page, /أنشئ حسابك المجاني|إنشاء حسابي/);
@@ -1593,7 +1596,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     // iPhone : bouton « Ajouter a l'ecran d'accueil » dans le menu -> les etapes ; proposition apres le premier message
     {
       const v = await newVisitor(iphone, { zaraInstall: 'asked', storage: { albasse_zara_name: 'Ali' } });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await v.page.getByRole('button', { name: FAB_NAME }).click();
       await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?/);
@@ -1608,7 +1611,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     }
     {
       const v = await newVisitor(iphone, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' } });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await v.page.getByRole('button', { name: FAB_NAME }).click();
       await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?/);
@@ -1625,7 +1628,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     {
       const v = await newVisitor(phone, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' } });
       await v.ctx.addInitScript(() => { window.__pwaInstallPrompt__ = { prompt: async () => {}, userChoice: Promise.resolve({ outcome: 'accepted' }) }; });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await v.page.getByRole('button', { name: FAB_NAME }).click();
       await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?/);
@@ -1650,7 +1653,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     // iPhone : « Voir comment installer » envoie les etapes ET la photo pas a pas (4 images du tutoriel) ; la photo s'ouvre en grand ; elle reste apres un rechargement
     {
       const v = await newVisitor(iphone, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' } });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await v.page.getByRole('button', { name: FAB_NAME }).click();
       await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?/);
@@ -1689,7 +1692,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     // iPhone en arabe : les etapes en arabe + la meme photo
     {
       const v = await newVisitor(iphone, { zaraInstall: null, lang: 'ar', storage: { albasse_zara_name: 'علي' } });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await v.page.getByRole('button', { name: /التحدث مع زارا كينغز/ }).click();
       await waitText(v.page, /أنشئ حسابك المجاني|إنشاء حسابي/);
@@ -1704,7 +1707,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     // Visiteur tout neuf (iPhone, ni langue ni prenom retenus) : choisir la langue et « Passer » ne comptent pas ; la question vient apres 2 vrais messages
     {
       const v = await newVisitor(iphone, { zaraInstall: null, lang: null });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await v.page.getByRole('button', { name: FAB_NAME }).click();
       await waitText(v.page, /Choisissez votre langue/);
@@ -1734,7 +1737,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     // Android sans installation en un toucher : sous les articles proposes, le bouton « Voir comment installer » (question deja posee ailleurs)
     {
       const w = await newVisitor(phone, { zaraInstall: 'asked', storage: { albasse_zara_name: 'Ali' } });
-      await w.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await w.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await w.page.keyboard.press('Escape');
       await w.page.getByRole('button', { name: FAB_NAME }).click();
@@ -1747,7 +1750,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     // Android sans installation en un toucher (Chrome pas encore pret, autre navigateur) : Zara propose quand meme, avec les etapes
     {
       const v = await newVisitor(phone, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' } });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await v.page.keyboard.press('Escape');
       await v.page.getByRole('button', { name: FAB_NAME }).click();
@@ -1786,7 +1789,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         }, true);
       };
       const v = await newVisitor({ ...phone, userAgent: ua }, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' }, initScripts: [catchIntents] });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await v.page.keyboard.press('Escape');
       await v.page.getByRole('button', { name: FAB_NAME }).click();
@@ -1807,7 +1810,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     // deja installee sur ce telephone, visite dans Chrome (souvenir sur l'appareil) : aucun bouton « Installer », ni chez Zara ni sur le site
     {
       const v = await newVisitor(phone, { zaraInstall: null, storage: { albasse_zara_name: 'Ali', albasse_app_installed: '1' } });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       check('deja installee : pas de bandeau « Installer » du site', (await v.page.getByText("Albasse Shopping, l'app").count()) === 0);
       await v.page.keyboard.press('Escape');
@@ -1829,7 +1832,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     // une installation acceptee autrefois (suivi des installations du site) compte aussi
     {
       const v = await newVisitor(phone, { zaraInstall: null, storage: { albasse_zara_name: 'Ali', albasse_shortcut_install_tracked: 'abc-123' } });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await v.page.keyboard.press('Escape');
       await v.page.getByRole('button', { name: FAB_NAME }).click();
@@ -1842,7 +1845,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     {
       const v = await newVisitor(phone, { zaraInstall: null, storage: { albasse_zara_name: 'Ali', albasse_app_installed: '1' } });
       await v.ctx.addInitScript(() => { window.__pwaInstallPrompt__ = { prompt: async () => {}, userChoice: Promise.resolve({ outcome: 'accepted' }) }; });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await v.page.keyboard.press('Escape');
       await v.page.getByRole('button', { name: FAB_NAME }).click();
@@ -1865,7 +1868,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         window.matchMedia = (q) => (/display-mode:\s*standalone/.test(q) ? { matches: true, media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} } : mm(q));
         window.__pwaInstallPrompt__ = { prompt: async () => {}, userChoice: Promise.resolve({ outcome: 'accepted' }) };
       });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await v.page.getByRole('button', { name: FAB_NAME }).click();
       await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?/);
@@ -1877,7 +1880,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('deja installe : ni bouton « Installer » dans le menu, ni proposition apres plusieurs messages', (await panelOf(v.page).getByText(/Avez-vous déjà installé l’application Albasse Shopping/).count()) === 0 && (await chipLabels(v.page)).every((l) => !/Installer|Voir comment installer|Oui, déjà installée/.test(l)), await chipLabels(v.page));
       await v.ctx.close();
       const d = await newVisitor({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 }, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' } });
-      await d.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await d.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await d.page.getByRole('button', { name: FAB_NAME }).click();
       await waitText(d.page, /Créez votre compte gratuit(?:, Ali)?/);
@@ -1909,7 +1912,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const fu = memberOf('Ahmed Hassan');
       const c = await newVisitor(phone, { lang: null, storage: loggedIn(fu), fakeUser: fu });
       const t0 = Date.now();
-      await c.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await c.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await openFab(c.page);
       await sleep(1500);
@@ -1940,7 +1943,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     {
       const fu = memberOf('Ahmed Hassan');
       const c = await newVisitor(phone, { lang: null, storage: loggedIn(fu), fakeUser: fu });
-      await c.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await c.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await openFab(c.page);
       await waitText(c.page, /Salut Ahmed ! 😍👋/);
@@ -1960,7 +1963,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     {
       const fu = memberOf('Ahmed Hassan');
       const c = await newVisitor(phone, { lang: 'fr', storage: loggedIn(fu), fakeUser: fu });
-      await c.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await c.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await openFab(c.page);
       await waitText(c.page, MEMBER_FR);
@@ -1983,7 +1986,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     {
       const fu = memberOf('Mr MAHAMAT ABDERAMAN');
       const c = await newVisitor(phone, { lang: 'fr', storage: loggedIn(fu), fakeUser: fu });
-      await c.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await c.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await openFab(c.page);
       await waitText(c.page, WELCOME_FR('Mahamat'));
@@ -1995,7 +1998,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     {
       const fu = memberOf('Ahmed Hassan', { delay: 2500 });
       const c = await newVisitor(phone, { lang: 'fr', storage: loggedIn(fu), fakeUser: fu });
-      await c.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await c.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await openFab(c.page);
       await waitText(c.page, MEMBER_FR);
       check('compte lent a charger : Zara salue Ahmed, elle ne demande pas le prenom', !!fu.servedAt && (await countOf(c.page, /Comment puis-je vous appeler/)) === 0 && (await countOf(c.page, /Salut Ahmed/)) === 1);
@@ -2006,7 +2009,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     {
       const fu = memberOf('Ahmed Hassan');
       const c = await newVisitor(phone, { lang: 'fr', fakeUser: fu }); // aucune session gardee : il arrive comme un visiteur
-      await c.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await c.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await openFab(c.page);
       await waitText(c.page, /Comment puis-je vous appeler \? Si vous avez déjà un compte, connectez-vous : je vous reconnaîtrai 😊/);
@@ -2039,7 +2042,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     {
       const fu = memberOf('Fatimé Ali');
       const d = await newVisitor({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 }, { lang: 'fr', fakeUser: fu });
-      await d.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await d.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await openFab(d.page);
       await waitText(d.page, /Comment puis-je vous appeler \? Si vous avez déjà un compte/);
@@ -2059,7 +2062,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     {
       const SAMPLE = 'Salut Moussa ! 😍👋 Bienvenue chez Albasse Shopping ! Vous êtes mon 3ᵉ client aujourd’hui, ça me fait plaisir de vous accueillir ! 🥰🛍️\n🇹🇩 Nous sommes une plateforme 100 % TCHADIENNE !\n' + INVITE_FR;
       const v = await newVisitor(phone, { lang: 'fr', storage: { albasse_zara_name: 'Moussa' }, rank: 3 });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await openFab(v.page);
       await waitText(v.page, /Vous êtes mon 3ᵉ client aujourd’hui/);
@@ -2071,7 +2074,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.page.screenshot({ path: path.join(OUT, 'M7-vrai-rang.png') });
       // meme appareil, nouvel onglet, meme jour : meme rang, pas de nouveau comptage
       const tab = await v.ctx.newPage();
-      await tab.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await tab.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await openFab(tab);
       await waitText(tab, /Vous êtes mon 3ᵉ client aujourd’hui/);
@@ -2081,7 +2084,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
 
       // un autre jour : nouvelle demande, nouveau rang (4)
       const y = await newVisitor(phone, { lang: 'fr', storage: { albasse_zara_name: 'Moussa', albasse_zara_rank: JSON.stringify({ day: '2020-01-01', n: 99 }) }, rank: 4 });
-      await y.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await y.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await openFab(y.page);
       await waitText(y.page, /Vous êtes mon 4ᵉ client aujourd’hui/);
@@ -2090,7 +2093,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
 
       // 1er client du jour : « 1ᵉʳ »
       const f = await newVisitor(phone, { lang: 'fr', storage: { albasse_zara_name: 'Moussa' }, rank: 1 });
-      await f.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await f.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await openFab(f.page);
       await waitText(f.page, /Vous êtes mon 1ᵉʳ client aujourd’hui/);
@@ -2099,7 +2102,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
 
       // en arabe
       const a = await newVisitor(phone, { lang: 'ar', storage: { albasse_zara_name: 'علي' }, rank: 3 });
-      await a.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await a.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await openFab(a.page);
       await waitText(a.page, /أنت رقم 3 بين عملائي اليوم، ويسعدني استقبالك!/);
@@ -2109,7 +2112,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       // fonction absente (pas encore installee) ou reponse bizarre : AUCUN nombre n'est dit
       for (const [label, rankValue] of [['fonction pas installee', null], ['reponse incorrecte (texte)', 'abc'], ['reponse incorrecte (zero)', 0], ['reponse incorrecte (negatif)', -5]]) {
         const n = await newVisitor(phone, { lang: 'fr', storage: { albasse_zara_name: 'Moussa' }, rank: rankValue });
-        await n.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+        await n.page.goto(`${BASE}/`, { waitUntil: 'load' });
         await sleep(2500);
         await openFab(n.page);
         await waitText(n.page, WELCOME_FR('Moussa'));
@@ -2122,7 +2125,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     for (const [lg, expected] of [['fr', /Salut Ahmed ! 😍👋 Zara Kings est à votre service 🛍️/], ['ar', /مرحباً Ahmed! 😍👋 زارا كينغز في خدمتك 🛍️/]]) {
       const fu = memberOf('Ahmed Hassan');
       const c = await newVisitor(phone, { lang: lg, storage: loggedIn(fu), fakeUser: fu });
-      await c.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await c.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(7500);
       const tooEarly = await c.page.getByText(expected).count();
       await sleep(5000);
@@ -2135,7 +2138,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     for (const [lg, askRe, niceRe, typed, skipLabel] of [['fr', /Je vois que vous êtes connecté\(e\)/, /Enchantée Fadoul/, 'Fadoul', 'Passer'], ['ar', /أرى أنك مسجّل الدخول/, /سعدت بمعرفتك يا Fadoul/, 'Fadoul', null]]) {
       const fu = memberOf(null);
       const c = await newVisitor(phone, { lang: lg, storage: loggedIn(fu), fakeUser: fu });
-      await c.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await c.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await openFab(c.page);
       await waitText(c.page, askRe);
@@ -2155,7 +2158,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     {
       const fu = memberOf(null);
       const c = await newVisitor(phone, { lang: 'fr', storage: { ...loggedIn(fu), albasse_zara_name: 'Fadoul' }, fakeUser: fu });
-      await c.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await c.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await openFab(c.page);
       await waitText(c.page, WELCOME_FR('Fadoul'));
@@ -2178,7 +2181,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     };
     const openAccount = async (fu) => {
       const c = await newVisitor(phone, { lang: 'fr', storage: { 'sb-xtitsmmccpkelxfjyqyh-auth-token': fu.session }, fakeUser: fu });
-      await c.page.goto(`http://localhost:${port}/compte`, { waitUntil: 'load' });
+      await c.page.goto(`${BASE}/compte`, { waitUntil: 'load' });
       await c.page.getByTestId('profile-edit-open').waitFor({ timeout: 25000 });
       return c;
     };
@@ -2347,7 +2350,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     };
     const SESSION_KEY = 'sb-xtitsmmccpkelxfjyqyh-auth-token';
     const openChat = async (v, name = /Discuter avec Zara Kings|التحدث مع زارا كينغز/) => {
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await v.page.getByRole('button', { name }).click();
     };
@@ -2435,7 +2438,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await a.ctx.close();
 
       const b = await newVisitor(phone, { zaraInstall: null, storage: { albasse_zara_name: 'Ali' } });
-      await b.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await b.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(3000);
       await b.page.evaluate(() => window.dispatchEvent(new Event('appinstalled')));
       await sleep(800);
@@ -2469,7 +2472,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     // --- S4. comptes : « Creer mon compte » touche chez Zara, puis premiere connexion du nouveau compte = « grace a Zara »
     {
       const login = async (c) => {
-        await c.page.goto(`http://localhost:${port}/connexion`, { waitUntil: 'load' });
+        await c.page.goto(`${BASE}/connexion`, { waitUntil: 'load' });
         await c.page.getByTestId('login-identifier').fill('test@example.com');
         await c.page.getByPlaceholder('Mot de passe').fill('motdepasse-test');
         await c.page.getByText('Se connecter', { exact: true }).first().click();
@@ -2530,7 +2533,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const openStats = async (fakeStats, admin = true) => {
         const fu = accountOf({ is_admin: admin, full_name: 'Admin Albasse' });
         const c = await newVisitor(phone, { lang: 'fr', storage: { [SESSION_KEY]: fu.session }, fakeUser: fu, fakeStats });
-        await c.page.goto(`http://localhost:${port}/admin/statistiques-zara`, { waitUntil: 'load' });
+        await c.page.goto(`${BASE}/admin/statistiques-zara`, { waitUntil: 'load' });
         return c;
       };
 
@@ -2622,7 +2625,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       {
         const fu = accountOf({ is_admin: true, full_name: 'Admin Albasse' });
         const c = await newVisitor(phone, { lang: 'fr', storage: { [SESSION_KEY]: fu.session }, fakeUser: fu, fakeStats: { replies: [{ body: STATS }] } });
-        await c.page.goto(`http://localhost:${port}/compte`, { waitUntil: 'load' });
+        await c.page.goto(`${BASE}/compte`, { waitUntil: 'load' });
         await c.page.getByText('Espace Admin', { exact: true }).waitFor({ timeout: 25000 });
         await c.page.getByText('Espace Admin', { exact: true }).click();
         await c.page.getByText('Statistiques de Zara', { exact: true }).click();
@@ -2637,7 +2640,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   // =============================================== U. INTELLIGENCE COMMERCIALE : SUIVI DE NAVIGATION ===============================================
   if (PARTS.includes('U')) {
     console.log('\n== U. suivi de navigation pour Zara : temps ACTIF, variantes, panier, recherches, consentement, envoi fiable');
-    const base = `http://localhost:${port}`;
+    const base = `${BASE}`;
     const PK = 'albasse_browsing_profile_v1';
     const OK = 'albasse_browsing_outbox_v1';
     const readProfile = (pg) => pg.evaluate((k) => JSON.parse(localStorage.getItem(k) || 'null'), PK);
@@ -2983,7 +2986,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   // =============================================== V. ZARA INTELLIGENTE : SUGGESTIONS DISCRETES, HISTORIQUE, CHOIX DU SUIVI ===============================================
   if (PARTS.includes('V')) {
     console.log('\n== V. Zara suggere sans insister (vrais articles), dit la verite sur ce qu\'elle sait, respecte le refus du suivi');
-    const base = `http://localhost:${port}`;
+    const base = `${BASE}`;
     const PK = 'albasse_browsing_profile_v1';
     const CK = 'albasse_tracking_choice';
     const readProfile = (pg) => pg.evaluate((k) => JSON.parse(localStorage.getItem(k) || 'null'), PK);
@@ -3189,7 +3192,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   // =============================================== W. ADMIN : TABLEAU DE SUIVI DE NAVIGATION ===============================================
   if (PARTS.includes('W')) {
     console.log('\n== W. page administrateur « Suivi de navigation » (fausse base : aucune vraie donnee)');
-    const base = `http://localhost:${port}`;
+    const base = `${BASE}`;
     const uid = '22222222-2222-4222-8222-222222222222';
     const JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyMjIyMjIyMi0yMjIyLTQyMjItODIyMi0yMjIyMjIyMjIyMjIiLCJleHAiOjQxMDI0NDQ4MDAsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.c2ln';
     const accountOf = ({ is_admin = true } = {}) => {
@@ -3314,7 +3317,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   // =============================================== X. MOMENTS FORTS ET ACHATS EN GROS ===============================================
   if (PARTS.includes('X')) {
     console.log('\n== X. moments forts (Tabaski, Ramadan, mariage, fete des meres, Black Friday, Saint-Valentin) et achats en gros vers WhatsApp');
-    const base = `http://localhost:${port}`;
+    const base = `${BASE}`;
     const visitor = (extra = {}) => newVisitor(phone, { lang: extra.lang || 'fr', storage: { albasse_zara_name: 'Ali' }, initScripts: extra.initScripts || [] });
     const openZara = async (v) => {
       await v.page.goto(`${base}/`, { waitUntil: 'load' });
@@ -3566,7 +3569,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   // =============================================== Y. CONCLURE LA VENTE, PREUVES VRAIES, PACKS ===============================================
   if (PARTS.includes('Y')) {
     console.log('\n== Y. conclure la vente (« je reflechis »), preuves VRAIES (ventes reelles, stock), plus de pack (une commande = un article)');
-    const base = `http://localhost:${port}`;
+    const base = `${BASE}`;
     const visitor = (extra = {}) => newVisitor(phone, { lang: extra.lang || 'fr', storage: { albasse_zara_name: 'Ali' }, fakeSales: extra.fakeSales || null, fakeCallbacks: extra.fakeCallbacks || null });
     const openZara = async (v) => {
       await v.page.goto(`${base}/`, { waitUntil: 'load' });
@@ -3686,7 +3689,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   // =============================================== Z. RAPPEL WHATSAPP (chat + page admin) ===============================================
   if (PARTS.includes('Z')) {
     console.log('\n== Z. « Me rappeler sur WhatsApp » : prenom, numero, accord, demande envoyee a l\'equipe ; page admin « Rappels WhatsApp »');
-    const base = `http://localhost:${port}`;
+    const base = `${BASE}`;
     // Les jours proposes par Zara, recalcules ici a part du code de l'application (heure du Tchad = UTC+1) : 5 jours ouvrables,
     // « aujourd'hui » seulement avant 15 h, jamais un dimanche. (Une horloge figee bloque les animations de la page : on prend l'heure reelle.)
     const DAY_FR = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
@@ -3970,7 +3973,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const openAdmin = async (fp, admin = true) => {
       const fu = accountOf({ is_admin: admin });
       const c = await newVisitor(phone, { lang: 'fr', storage: { [SK]: fu.session }, fakeUser: fu, fakePushes: fp });
-      await c.page.goto(`http://localhost:${port}/admin/promotions`, { waitUntil: 'load' });
+      await c.page.goto(`${BASE}/admin/promotions`, { waitUntil: 'load' });
       return c;
     };
     const section = (c) => c.page.getByTestId('scheduled-pushes');
@@ -4069,7 +4072,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     {
       const tag = '3d2f2e1122f825b4';
       const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
-      await v.page.goto(`http://localhost:${port}/produit/${prod.slug}?push=${tag}`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/produit/${prod.slug}?push=${tag}`, { waitUntil: 'load' });
       await sleep(3500);
       check('toucher d\'une notification : le clic est compte (la marque est envoyee a la base)', v.pushClicks.length === 1 && v.pushClicks[0].p_hash === tag, v.pushClicks);
       check('la fiche de l\'article s\'affiche normalement', new URL(v.page.url()).pathname === `/produit/${prod.slug}`);
@@ -4079,7 +4082,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await sleep(6500);
       check('la marque quitte l\'adresse apres quelques secondes (lien propre si le client le partage)', !/push=/.test(v.page.url()), v.page.url());
       const w = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
-      await w.page.goto(`http://localhost:${port}/produit/${prod.slug}?push=pas-une-marque`, { waitUntil: 'load' });
+      await w.page.goto(`${BASE}/produit/${prod.slug}?push=pas-une-marque`, { waitUntil: 'load' });
       await sleep(3000);
       check('marque mal formee ou absente : rien n\'est envoye', w.pushClicks.length === 0, w.pushClicks);
       check('aucune erreur (clic de notification)', v.errs.length === 0 && w.errs.length === 0, [...v.errs, ...w.errs]);
@@ -4108,7 +4111,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const prod = (await get('products?select=slug,name&is_active=eq.true&stock=gt.0&order=created_at.desc&limit=1'))[0];
     const waBtn = (pg) => pg.getByTestId('product-wa-order');
     const openProduct = async (pg) => {
-      await pg.goto(`http://localhost:${port}/produit/${prod.slug}`, { waitUntil: 'load' });
+      await pg.goto(`${BASE}/produit/${prod.slug}`, { waitUntil: 'load' });
       await pg.getByText('Commander', { exact: true }).first().waitFor({ timeout: 25000 });
       await sleep(1500);
     };
@@ -4131,7 +4134,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     {
       const fs = { waOrder: false, delay: 4000 };
       const v = await newVisitor(phone, { fakeStore: fs });
-      await v.page.goto(`http://localhost:${port}/produit/${prod.slug}`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/produit/${prod.slug}`, { waitUntil: 'load' });
       let seen = 0;
       for (let i = 0; i < 12; i++) {
         seen += await waBtn(v.page).count();
@@ -4144,7 +4147,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const openAdmin = async (fs, admin = true) => {
       const fu = accountOf({ is_admin: admin });
       const c = await newVisitor(phone, { lang: 'fr', storage: { [SK]: fu.session }, fakeUser: fu, fakeStore: fs });
-      await c.page.goto(`http://localhost:${port}/admin/produits`, { waitUntil: 'load' });
+      await c.page.goto(`${BASE}/admin/produits`, { waitUntil: 'load' });
       return c;
     };
     // l'admin desactive puis reactive
@@ -4160,7 +4163,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('desactiver : « Désactivé » en rouge et un message', /Désactivé/.test(await statusText(c.page)), await statusText(c.page));
       await openProduct(c.page);
       check('desactive : la fiche produit n\'a plus le bouton', (await waBtn(c.page).count()) === 0, fs.gets.map((g) => g.waOrder));
-      await c.page.goto(`http://localhost:${port}/admin/produits`, { waitUntil: 'load' });
+      await c.page.goto(`${BASE}/admin/produits`, { waitUntil: 'load' });
       await c.page.getByTestId('wa-order-toggle').waitFor({ timeout: 25000 });
       await sleep(1500);
       check('retour sur la page Produits : toujours « Désactivé »', /Désactivé/.test(await statusText(c.page)), await statusText(c.page));
@@ -4208,7 +4211,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         calls.push(JSON.parse(route.request().postData() || '{}'));
         return route.fulfill({ status: 200, headers: { ...hdr, 'content-type': 'application/json' }, body: JSON.stringify(answers[Math.min(calls.length - 1, answers.length - 1)]) });
       });
-      await v.page.goto(`http://localhost:${port}/admin/assistant-marketing`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/admin/assistant-marketing`, { waitUntil: 'load' });
       await v.page.getByTestId('marketing-email-test').waitFor({ timeout: 25000 });
       await v.page.getByTestId('marketing-email-test').click();
       await v.page.getByText(/BREVO_API_KEY/).waitFor({ timeout: 8000 });
@@ -4282,7 +4285,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const TOK = '11111111-1111-4111-8111-111111111111';
       const open = async (url, fu) => {
         const v = await newVisitor(phone, { fakeStore: { waOrder: true, accountRequired: true }, fakeUnsub: fu });
-        await v.page.goto(`http://localhost:${port}${url}`, { waitUntil: 'load' });
+        await v.page.goto(`${BASE}${url}`, { waitUntil: 'load' });
         await v.page.getByTestId('unsubscribe-screen').waitFor({ timeout: 30000 });
         return v;
       };
@@ -4319,7 +4322,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     // 1) compte obligatoire : le visiteur voit le mur, sans Zara ni bandeaux
     {
       const v = await newVisitor(phone, { fakeStore: { waOrder: true, accountRequired: true } });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await waitWall(v.page);
       await sleep(1500);
       const txt = await wall(v.page).innerText();
@@ -4341,11 +4344,11 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('plus de liens « Confidentialité » ni « Contact » sur l\'ecran d\'entree', !/Confidentialité/.test(txt) && !/Contact/.test(txt), txt);
       check('page en francais (lang="fr") : Chrome ne la traduit plus (« ALBASSE SHOPPING » reste tel quel)', (await v.page.evaluate(() => document.documentElement.lang)) === 'fr');
       check('pas de bouton de Zara derriere le mur', (await fabCount(v.page)) === 0);
-      await v.page.goto(`http://localhost:${port}/produit/${prod.slug}`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/produit/${prod.slug}`, { waitUntil: 'load' });
       await waitWall(v.page);
       check('une fiche produit ouverte depuis un lien : couverte aussi', (await wall(v.page).count()) === 1);
       for (const [path, what] of [['/confidentialite', 'confidentialite'], ['/contact', 'contact'], ['/connexion', 'connexion']]) {
-        await v.page.goto(`http://localhost:${port}${path}`, { waitUntil: 'load' });
+        await v.page.goto(`${BASE}${path}`, { waitUntil: 'load' });
         await sleep(3500);
         check(`page ${what} : ouverte sans compte`, (await wall(v.page).count()) === 0);
       }
@@ -4355,7 +4358,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     // 2) reglage coupe, ou script SQL pas lance : site ouvert comme avant
     for (const [accountRequired, what] of [[false, 'desactive'], ['missing', 'script pas lance']]) {
       const v = await newVisitor(phone, { fakeStore: { waOrder: true, accountRequired } });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(5000);
       check(`reglage ${what} : pas de mur, Zara est la`, (await wall(v.page).count()) === 0 && (await fabCount(v.page)) > 0);
       await v.ctx.close();
@@ -4363,7 +4366,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     // 3) robot de Google : il voit le site (articles trouves sur Google)
     {
       const v = await newVisitor({ ...phone, userAgent: 'Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)' }, { fakeStore: { waOrder: true, accountRequired: true } });
-      await v.page.goto(`http://localhost:${port}/produit/${prod.slug}`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/produit/${prod.slug}`, { waitUntil: 'load' });
       await v.page.getByText('Commander', { exact: true }).first().waitFor({ timeout: 25000 });
       await sleep(3000);
       check('robot de Google : pas de mur sur la fiche produit', (await wall(v.page).count()) === 0);
@@ -4373,7 +4376,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     {
       const fu = accountOf({ filled: true });
       const v = await newVisitor(phone, { storage: { [SK]: fu.session }, fakeUser: fu, fakeStore: { waOrder: true, accountRequired: true } });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       let seen = 0;
       for (let i = 0; i < 16; i++) {
         seen += await wall(v.page).count();
@@ -4396,7 +4399,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     {
       const fu = accountOf();
       const v = await newVisitor(phone, { fakeUser: fu, fakeStore: { waOrder: true, accountRequired: true } });
-      await v.page.goto(`http://localhost:${port}/produit/${prod.slug}`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/produit/${prod.slug}`, { waitUntil: 'load' });
       await waitWall(v.page);
       await sleep(1000);
       await v.page.getByTestId('register-phone').waitFor({ timeout: 15000 });
@@ -4432,7 +4435,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('apres l\'inscription : Zara est de retour', (await fabCount(v.page)) > 0);
       check('aucune erreur (inscription)', v.errs.length === 0, v.errs);
       // Mon compte : l'adresse tiree du numero ne s'affiche jamais
-      await v.page.goto(`http://localhost:${port}/compte`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/compte`, { waitUntil: 'load' });
       await sleep(4000);
       check('Mon compte : l\'adresse « @tel.albasseshopping.com » n\'est jamais montree', !/tel\.albasseshopping\.com/.test(await v.page.locator('body').innerText()));
       await v.ctx.close();
@@ -4441,7 +4444,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     {
       const fu = accountOf();
       const v = await newVisitor(phone, { fakeUser: fu, fakeStore: { waOrder: true, accountRequired: true }, installAfterSignUp: null });
-      await v.page.goto(`http://localhost:${port}/produit/${prod.slug}`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/produit/${prod.slug}`, { waitUntil: 'load' });
       await waitWall(v.page);
       await register(v);
       await v.page.getByText('Bienvenue ✓').waitFor({ timeout: 15000 });
@@ -4460,7 +4463,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     {
       const fu = accountOf();
       const v = await newVisitor(phone, { fakeUser: fu, fakeStore: { waOrder: true, accountRequired: true } });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await waitWall(v.page);
       await sleep(1000);
       await register(v, { phoneNo: '+235 66 12 34 56', email: 'ali@example.com' });
@@ -4475,7 +4478,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     {
       const fu = { ...accountOf(), signupError: 'exists' };
       const v = await newVisitor(phone, { fakeUser: fu, fakeStore: { waOrder: true, accountRequired: true } });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await waitWall(v.page);
       await sleep(1000);
       await register(v);
@@ -4487,7 +4490,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     for (const [typed, expected, what] of [['66 12 34 56', LOGIN_EMAIL, 'numero'], ['00235 66123456', LOGIN_EMAIL, 'numero avec 00235'], ['Awa@Example.com', 'awa@example.com', 'e-mail (ancien compte)']]) {
       const fu = accountOf({ email: expected, filled: true });
       const v = await newVisitor(phone, { fakeUser: fu, fakeStore: { waOrder: true, accountRequired: true } });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await waitWall(v.page);
       await sleep(1000);
       await wall(v.page).getByText('J’ai déjà un compte', { exact: true }).click();
@@ -4507,7 +4510,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     {
       const fu = accountOf({ filled: true });
       const v = await newVisitor(phone, { fakeUser: fu, fakeStore: { waOrder: true, accountRequired: true }, storage: { albasse_login_id: '66 12 34 56' } });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await waitWall(v.page);
       await sleep(1000);
       await wall(v.page).getByText('J’ai déjà un compte', { exact: true }).click();
@@ -4525,7 +4528,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('decoche : la page rechargee (meme onglet) reste connectee', (await wall(v.page).count()) === 0);
       // navigateur ferme puis rouvert = nouvel onglet sans la marque de l'onglet
       const p2 = await v.ctx.newPage();
-      await p2.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await p2.goto(`${BASE}/`, { waitUntil: 'load' });
       await waitWall(p2);
       const st2 = await p2.evaluate(() => ({ only: localStorage.getItem('albasse_session_only'), tab: sessionStorage.getItem('albasse_session_tab'), keys: Object.keys(localStorage).filter((k) => /auth-token/.test(k)) }));
       // (la case n'est pas verifiee ici : le decor du test remet le numero garde a chaque nouvelle page)
@@ -4535,7 +4538,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     {
       const fu = { ...accountOf({ filled: true }), loginError: true };
       const v = await newVisitor(phone, { fakeUser: fu, fakeStore: { waOrder: true, accountRequired: true } });
-      await v.page.goto(`http://localhost:${port}/connexion`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/connexion`, { waitUntil: 'load' });
       await v.page.getByTestId('login-identifier').waitFor({ timeout: 15000 });
       await sleep(600);
       await v.page.getByTestId('login-identifier').locator('visible=true').fill('66 12 34 56');
@@ -4544,7 +4547,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.page.getByText('Numéro (ou e-mail) ou mot de passe incorrect.').waitFor({ timeout: 10000 });
       check('mauvais mot de passe : « Numero (ou e-mail) ou mot de passe incorrect »', true);
       // « J'ai oublié mon mot de passe » (sur l'ecran d'entree) puis aide sur WhatsApp avec le numero
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await waitWall(v.page);
       await sleep(800);
       await wall(v.page).getByText('J’ai déjà un compte', { exact: true }).click();
@@ -4570,7 +4573,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const fu = accountOf({ email: 'admin@example.com', is_admin: true, filled: true });
       const fs = { waOrder: true, accountRequired: true, patches: [] };
       const v = await newVisitor(phone, { storage: { [SK]: fu.session }, fakeUser: fu, fakeStore: fs });
-      await v.page.goto(`http://localhost:${port}/admin/clients`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/admin/clients`, { waitUntil: 'load' });
       await v.page.getByTestId('account-required-toggle').waitFor({ timeout: 25000 });
       await sleep(1500);
       const st = async () => (await v.page.getByTestId('account-required-status').innerText()).trim();
@@ -4583,7 +4586,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('remettre : la base recoit account_required = true', fs.patches.length === 2 && fs.patches[1].account_required === true, fs.patches);
       await v.ctx.close();
       const v2 = await newVisitor(phone, { fakeStore: fs });
-      await v2.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v2.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await waitWall(v2.page);
       check('remis : un nouveau visiteur voit de nouveau le mur', (await wall(v2.page).count()) === 1);
       await v2.ctx.close();
@@ -4602,7 +4605,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const QUESTION = 'Vous avez une montre étanche pour nager ?';
     {
       const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' }, fakeAi: () => ({ ok: true, text: `Bonne idée Ali ! Voici ${prod.name} 😊`, productIds: [prod.id, 'id-inconnu'] }) });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await openZara(v);
       await ask(v.page, QUESTION, /Bonne idée Ali ! Voici/, 30000);
       const call = v.aiCalls[0] || {};
@@ -4624,7 +4627,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     }
     {
       const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await openZara(v);
       const n = (await panelOf(v.page).innerText()).length;
       await typeIn(v.page, QUESTION);
@@ -4654,7 +4657,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     // installe, notifications jamais demandees : la bulle, puis Zara propose, le client active
     {
       const v = await newVisitor(phone, { zaraPush: null, pushPerm: 'default', pushAnswer: 'granted', storage: installed });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await v.page.getByText(/activez les notifications pour ne rater aucune promo/).waitFor({ timeout: 15000 });
       check('bulle de Zara : « 🔔 Ali, activez les notifications pour ne rater aucune promo ! »', (await v.page.getByText('🔔 Ali, activez les notifications pour ne rater aucune promo !').count()) === 1);
       await openZara(v);
@@ -4674,7 +4677,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     // « Plus tard » : pas de rappel ni de bulle pendant 3 jours, mais le bouton reste dans le menu
     {
       const v = await newVisitor(phone, { zaraPush: null, pushPerm: 'default', storage: installed });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2000);
       await openZara(v);
       await waitText(v.page, ASK);
@@ -4682,13 +4685,13 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await waitText(v.page, /Je vous le rappellerai plus tard/);
       check('« Plus tard » : note pour 3 jours', (await pushRecord(v.page))?.outcome === 'later');
       const p2 = await v.ctx.newPage();
-      await p2.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await p2.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(7000);
       check('« Plus tard » : la bulle ne parle plus des notifications', (await p2.getByText(/activez les notifications/).count()) === 0);
       await p2.close();
       await v.ctx.close();
       const w = await newVisitor(phone, { zaraPush: 'later', pushPerm: 'default', storage: installed });
-      await w.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await w.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2000);
       await openZara(w);
       await sleep(3000);
@@ -4701,7 +4704,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     // le client refuse dans la question du telephone : les etapes pour debloquer ; il la ferme sans repondre : « je vous le rappellerai »
     for (const [answer, re, what] of [['denied', /Restez appuyé sur l’icône Albasse Shopping/, 'refuse'], ['default', /n’ont pas été autorisées/, 'ferme sans repondre']]) {
       const v = await newVisitor(phone, { zaraPush: null, pushPerm: 'default', pushAnswer: answer, storage: installed });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2000);
       await openZara(v);
       await waitText(v.page, ASK);
@@ -4713,7 +4716,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     // deja bloquees : Zara donne les etapes d'elle-meme (une fois par semaine), sans bouton « Activer »
     {
       const v = await newVisitor(phone, { zaraPush: null, pushPerm: 'denied', storage: installed });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2000);
       await openZara(v);
       await waitText(v.page, /sont bloquées sur ce téléphone/);
@@ -4723,7 +4726,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     // pas installe, ou deja active : rien
     for (const [opts, what] of [[{ pushPerm: 'default', storage: { albasse_zara_name: 'Ali' } }, 'pas installe'], [{ pushPerm: 'granted', storage: installed }, 'deja active']]) {
       const v = await newVisitor(phone, { zaraPush: null, ...opts });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(7000);
       const bubble = await v.page.getByText(/activez les notifications/).count();
       await openZara(v);
@@ -4734,7 +4737,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     // autorisation deja donnee mais abonnement perdu : le site se reabonne tout seul, sans rien demander
     {
       const v = await newVisitor(phone, { zaraPush: null, pushPerm: 'granted', storage: { albasse_zara_name: 'Ali' } });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(5000);
       check('abonnement perdu : reabonnement automatique, sans question', v.pushSubs.length === 1 && (await v.page.evaluate(() => window.__pushAsked || 0)) === 0, v.pushSubs);
       await v.ctx.close();
@@ -4742,7 +4745,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     // en arabe
     {
       const v = await newVisitor(phone, { lang: 'ar', zaraPush: null, pushPerm: 'default', storage: { ...installed, albasse_zara_name: 'علي' } });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await v.page.getByText('🔔 علي، فعّل الإشعارات حتى لا تفوتك أي عروض!').waitFor({ timeout: 15000 });
       check('arabe : la bulle « 🔔 علي، فعّل الإشعارات حتى لا تفوتك أي عروض! »', true);
       await v.page.keyboard.press('Escape');
@@ -4764,7 +4767,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     };
     const SK = 'sb-xtitsmmccpkelxfjyqyh-auth-token';
     const openHome = async (v) => {
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await v.page.getByTestId('home-categories').waitFor({ timeout: 30000 });
       await sleep(2500);
     };
@@ -4847,7 +4850,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.ctx.close();
     }
     {
-      const v = await newVisitor(phone, { lang: null, fakeOnline: { n: 2 }, cookies: [{ name: 'googtrans', value: '/fr/ar', url: `http://localhost:${port}` }] });
+      const v = await newVisitor(phone, { lang: null, fakeOnline: { n: 2 }, cookies: [{ name: 'googtrans', value: '/fr/ar', url: `${BASE}` }] });
       await openHome(v);
       check('site traduit en arabe : seulement le bouton « 🇫🇷 FR »', (await v.page.getByTestId('lang-fr').count()) === 1 && (await v.page.getByTestId('lang-ar').count()) === 0);
       await v.ctx.close();
@@ -4868,7 +4871,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const fc = { order: {}, patches: [] };
       const fu = adminAccount();
       const v = await newVisitor(phone, { storage: { [SK]: fu.session }, fakeUser: fu, fakeCats: fc });
-      await v.page.goto(`http://localhost:${port}/admin/categories`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/admin/categories`, { waitUntil: 'load' });
       await v.page.getByTestId(`category-row-${cats[0]}`).waitFor({ timeout: 30000 });
       await sleep(1000);
       const start = await rowsOf(v.page);
@@ -4896,7 +4899,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const fc = { missing: true, patches: [] };
       const fu = adminAccount();
       const v = await newVisitor(phone, { storage: { [SK]: fu.session }, fakeUser: fu, fakeCats: fc });
-      await v.page.goto(`http://localhost:${port}/admin/categories`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/admin/categories`, { waitUntil: 'load' });
       await v.page.getByTestId(`category-row-${cats[0]}`).waitFor({ timeout: 30000 });
       await sleep(1000);
       await v.page.getByTestId(`category-up-${cats[1]}`).click();
@@ -4940,7 +4943,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       }, true);
     };
     const openProduct = async (v) => {
-      await v.page.goto(`http://localhost:${port}/produit/${prod.slug}`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/produit/${prod.slug}`, { waitUntil: 'load' });
       await sleep(2500);
       await v.page.keyboard.press('Escape');
       await v.page.getByText('📘 Facebook').first().waitFor({ timeout: 15000 });
@@ -5016,7 +5019,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     console.log('\n== Q. categorie touchee dans le chat : ses articles s\'affichent dans le chat (bouton « + »), Zara reste ouverte');
     {
       const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await v.page.keyboard.press('Escape');
       await v.page.getByRole('button', { name: FAB_NAME }).click();
@@ -5062,7 +5065,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const oldLabels = async (p) => (await panelOf(p).getByTestId('assistant-chip-old').allInnerTexts()).map((t) => t.trim());
     {
       const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
-      await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await v.page.keyboard.press('Escape');
       await v.page.getByRole('button', { name: FAB_NAME }).click();
@@ -5098,7 +5101,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
 
   if (PARTS.includes('H')) {
     console.log('\n== H. bouton de Zara : au milieu de l\'ecran (un peu plus haut qu\'avant), vibration et lumiere, bulle au-dessus, moins d\'animations respecte');
-    const base = `http://localhost:${port}`;
+    const base = `${BASE}`;
     const open = async (v) => {
       await v.page.goto(`${base}/`, { waitUntil: 'load' });
       await v.page.getByTestId('assistant-fab').waitFor({ timeout: 25000 });
@@ -5343,7 +5346,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   // =============================================== G. PSYCHOLOGIE COMMERCIALE ET VENTE EMOTIONNELLE ===============================================
   if (PARTS.includes('G')) {
     console.log('\n== G. psychologie commerciale : metier (ton seulement), style dit par le client, trois gammes de prix, comparer, hesitation, fidelite, regles ethiques');
-    const base = `http://localhost:${port}`;
+    const base = `${BASE}`;
     const uid = '11111111-1111-4111-8111-111111111111';
     const JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMTExMTExMS0xMTExLTQxMTEtODExMS0xMTExMTExMTExMTEiLCJleHAiOjQxMDI0NDQ4MDAsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.c2ln';
     const memberOf = (fullName, extra = {}) => {
@@ -5599,7 +5602,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const replies = (p) => p.evaluate(() => JSON.parse(sessionStorage.getItem('albasse_zara_v1') || '{"messages":[]}').messages.filter((m) => m.role === 'assistant').map((m) => m.text));
     const lastMatching = (p, re) => panelOf(p).getByText(re).last().innerText();
     const openZara = async (p, name) => {
-      await p.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await p.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await p.getByRole('button', { name: /Discuter avec Zara Kings|التحدث مع زارا كينغز/ }).click();
       await waitText(p, name === 'ar' ? /أنشئ حسابك المجاني(?:، علي)?/ : /Créez votre compte gratuit(?:, Ali)?/);
@@ -5743,7 +5746,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const orderVisitor = (fu, db, { qty = 1, lg = 'fr' } = {}) =>
       newVisitor(phone, { lang: lg, storage: { 'sb-xtitsmmccpkelxfjyqyh-auth-token': fu.session, 'albasse-cart': cartOf(qty) }, session: seedOf(lg), fakeUser: fu, fakeOrders: db });
     const openOrderChat = async (c) => {
-      await c.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await c.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await c.page.getByRole('button', { name: /Discuter avec Zara Kings|التحدث مع زارا كينغز/ }).click();
     };
@@ -6224,7 +6227,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       {
         // visiteur sans compte : aucun grade, aucun nombre, il est invite a se connecter
         const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' }, session: seedOf('fr') });
-        await v.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+        await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
         await sleep(2500);
         await v.page.getByRole('button', { name: FAB_NAME }).click();
         await ask(v.page, 'quel est mon grade ?', /Pour connaître votre grade et vos points de fidélité, connectez-vous à votre compte sur albasseshopping\.com/);
@@ -6254,7 +6257,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     console.log('\n== B. contexte : fiche produit et commande commencee');
     {
       const c = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
-      await c.page.goto(`http://localhost:${port}/produit/rolex`, { waitUntil: 'load' });
+      await c.page.goto(`${BASE}/produit/rolex`, { waitUntil: 'load' });
       await sleep(3500);
       await c.page.getByRole('button', { name: FAB_NAME }).click();
       await waitText(c.page, WELCOME_FR('Ali'));
@@ -6271,7 +6274,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const item = { id: `${realProduct.id}__nc__ns`, product: realProduct, quantity: 2, color: null, size: null };
       const cart = JSON.stringify({ state: { items: [item], updatedAt: Date.now() }, version: 1 });
       const c = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali', 'albasse-cart': cart } });
-      await c.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await c.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(3000);
       await c.page.getByRole('button', { name: FAB_NAME }).click();
       await waitText(c.page, /🛍️ Votre commande n’est pas terminée : « Rolex » pour 25\s?000 FCFA/);
@@ -6311,7 +6314,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     // --- chat d'un client connecte
     {
       const c = await newVisitor(phone, { storage, fakeUser: fu });
-      await c.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await c.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(3500);
       await c.page.getByRole('button', { name: FAB_NAME }).click();
       await waitText(c.page, WELCOME_FR('Aminata'));
@@ -6328,7 +6331,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     {
       const c = await newVisitor(phone, { storage, fakeUser: fu });
       const { page } = c;
-      await page.goto(`http://localhost:${port}/commande`, { waitUntil: 'load' });
+      await page.goto(`${BASE}/commande`, { waitUntil: 'load' });
       await sleep(3500);
       const cod = page.getByRole('radio', { name: /Paiement à la livraison/ });
       const airtel = page.getByRole('radio', { name: /Airtel Money/ });
@@ -6394,7 +6397,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       };
       const open = async (fakeOrders) => {
         const c = await newVisitor(phone, { storage, fakeUser: fu, fakeOrders });
-        await c.page.goto(`http://localhost:${port}/commande`, { waitUntil: 'load' });
+        await c.page.goto(`${BASE}/commande`, { waitUntil: 'load' });
         await sleep(3500);
         return c;
       };
@@ -6526,7 +6529,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         {
           const c = await newVisitor(phone, { storage, fakeUser: fu, fakeOrders: { list: [S, N], patches: [] } });
           const { page } = c;
-          await page.goto(`http://localhost:${port}/mes-commandes`, { waitUntil: 'load' });
+          await page.goto(`${BASE}/mes-commandes`, { waitUntil: 'load' });
           await page.getByText('Commande #abababab').waitFor({ timeout: 15000 });
           await sleep(500);
           check('Mes commandes : la livraison programmee est ecrite sur la commande concernee seulement', (await page.getByTestId('order-scheduled').count()) === 1 && /📅 Livraison programmée : .* à \d+h\d{2}/.test(await page.getByTestId('order-scheduled').innerText()));
@@ -6540,7 +6543,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
           const fa = mk(true);
           const c = await newVisitor(phone, { storage: { 'sb-xtitsmmccpkelxfjyqyh-auth-token': sessionFor(fa) }, fakeUser: fa, fakeOrders: { list: [S, N], patches: [] } });
           const { page } = c;
-          await page.goto(`http://localhost:${port}/admin/commandes`, { waitUntil: 'load' });
+          await page.goto(`${BASE}/admin/commandes`, { waitUntil: 'load' });
           await page.getByText('#abababab').waitFor({ timeout: 15000 });
           await sleep(500);
           const badge = await page.getByTestId('admin-order-scheduled').innerText();
@@ -6562,7 +6565,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const fakeOrders = { list: [A, B, C, D], patches: [] };
       const c = await newVisitor(phone, { storage, fakeUser: fu, fakeOrders });
       const { page } = c;
-      await page.goto(`http://localhost:${port}/mes-commandes`, { waitUntil: 'load' });
+      await page.goto(`${BASE}/mes-commandes`, { waitUntil: 'load' });
       await page.getByText('Commande #aaaaaaaa').waitFor({ timeout: 15000 });
       await sleep(800);
       check('Mes commandes : image cadeau « Ajouter » sur la commande en attente sans emballage (une seule)', (await page.getByTestId('order-gift-add').count()) === 1);
@@ -6608,7 +6611,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const A = mkOrder('eeeeeeee-0000-4000-8000-000000000005', 'pending', true, 14500, [oi('Sag a main', 12500, 1)]);
       const B = mkOrder('ffffffff-0000-4000-8000-000000000006', 'pending', false, 9000, [oi('Montre', 9000, 1)]);
       const c = await newVisitor(phone, { storage: { 'sb-xtitsmmccpkelxfjyqyh-auth-token': sessionFor(fa) }, fakeUser: fa, fakeOrders: { list: [A, B], patches: [] } });
-      await c.page.goto(`http://localhost:${port}/admin/commandes`, { waitUntil: 'load' });
+      await c.page.goto(`${BASE}/admin/commandes`, { waitUntil: 'load' });
       await c.page.getByText('#eeeeeeee').waitFor({ timeout: 15000 });
       await sleep(600);
       check('admin : « À emballer » sur la commande avec emballage cadeau seulement', (await c.page.getByText(/🎁 À emballer : emballage cadeau/).count()) === 1);
@@ -6628,7 +6631,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         const fakeOrders = { list: [E1, E2], patches: [] };
         const c = await newVisitor(phone, { storage, fakeUser: fu, fakeOrders, fakeStore: { legalLine: 'NIF : 123456 · RCCM : TD-NDJ-2026' } });
         const { page } = c;
-        await page.goto(`http://localhost:${port}/mes-commandes`, { waitUntil: 'load' });
+        await page.goto(`${BASE}/mes-commandes`, { waitUntil: 'load' });
         await page.getByText('Commande N° 12').waitFor({ timeout: 15000 });
         check('Mes commandes : le numero de commande remplace les lettres au hasard (N° 12 et N° 13)', (await page.getByText('Commande N° 13').count()) === 1 && (await page.getByText(/Commande #/).count()) === 0);
         check('Mes commandes : un bouton « Voir la facture » par commande', (await page.getByTestId('order-invoice').count()) === 2);
@@ -6656,13 +6659,13 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         await page.pdf({ path: path.join(OUT, 'C7-facture.pdf'), format: 'A4' });
         check('facture : le PDF imprime est fabrique (fichier non vide)', fs.statSync(path.join(OUT, 'C7-facture.pdf')).size > 5000);
         // commande annulee, commande inconnue, adresse abimee
-        await page.goto(`http://localhost:${port}/facture/${E2.id}`, { waitUntil: 'load' });
+        await page.goto(`${BASE}/facture/${E2.id}`, { waitUntil: 'load' });
         await page.getByTestId('invoice-paper').waitFor({ timeout: 15000 });
         check('facture d\'une commande annulee : bandeau « COMMANDE ANNULEE »', (await page.getByTestId('invoice-cancelled').count()) === 1);
-        await page.goto(`http://localhost:${port}/facture/99999999-aaaa-4000-8000-000000000099`, { waitUntil: 'load' });
+        await page.goto(`${BASE}/facture/99999999-aaaa-4000-8000-000000000099`, { waitUntil: 'load' });
         await page.getByTestId('invoice-missing').waitFor({ timeout: 15000 });
         check('facture d\'une commande inconnue (ou d\'un autre client) : « Facture introuvable »', /Facture introuvable/.test(await page.getByTestId('invoice-screen').innerText()));
-        await page.goto(`http://localhost:${port}/facture/pas-une-commande`, { waitUntil: 'load' });
+        await page.goto(`${BASE}/facture/pas-une-commande`, { waitUntil: 'load' });
         await page.getByTestId('invoice-missing').waitFor({ timeout: 15000 });
         check('facture : adresse abimee : « Facture introuvable »', true);
         check('aucune ecriture reelle (numero et facture)', c.writes.every((w) => !/\/orders/.test(w)), c.writes);
@@ -6682,7 +6685,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         const c = await newVisitor(phone, { storage: { 'sb-xtitsmmccpkelxfjyqyh-auth-token': sessionFor(fa) }, fakeUser: fa, fakeOrders: { list, patches: [] } });
         const { page } = c;
         const shown = async () => (await page.getByTestId('admin-order-number').allInnerTexts()).map((s) => s.trim()).join('|');
-        await page.goto(`http://localhost:${port}/admin/commandes`, { waitUntil: 'load' });
+        await page.goto(`${BASE}/admin/commandes`, { waitUntil: 'load' });
         await page.getByTestId('orders-search').waitFor({ timeout: 25000 });
         await page.getByText('N° 4', { exact: true }).waitFor({ timeout: 15000 });
         check('admin : chaque commande a son numero (N° 4, 3, 2, 1) au lieu des lettres au hasard', (await shown()) === 'N° 4|N° 3|N° 2|N° 1', await shown());
@@ -6733,7 +6736,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         const fa = mk(true);
         const c = await newVisitor(phone, { storage: { 'sb-xtitsmmccpkelxfjyqyh-auth-token': sessionFor(fa) }, fakeUser: fa, fakeStore: { waOrder: true } });
         const { page } = c;
-        await page.goto(`http://localhost:${port}/admin/tableau-de-bord`, { waitUntil: 'load' });
+        await page.goto(`${BASE}/admin/tableau-de-bord`, { waitUntil: 'load' });
         await page.getByTestId('admin-menu').waitFor({ timeout: 25000 });
         const groupOf = async (key) => (await page.getByTestId(`admin-menu-group-${key}`).innerText()).replace(/\s+/g, ' ');
         const g = { reports: await groupOf('reports'), customers: await groupOf('customers'), marketing: await groupOf('marketing'), shop: await groupOf('shop'), settings: await groupOf('settings') };
@@ -6825,7 +6828,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
           }
           return reply(route, { ok: false, reason: 'bad_request' }, 400);
         });
-        await page.goto(`http://localhost:${port}/admin/zara-marketing`, { waitUntil: 'load' });
+        await page.goto(`${BASE}/admin/zara-marketing`, { waitUntil: 'load' });
         await page.getByTestId('mkai-mode').waitFor({ timeout: 25000 });
         const txt = async (id) => (await page.getByTestId(id).innerText()).replace(/\s+/g, ' ');
         check('Zara Marketing : au départ « Éteint », les 3 contrôles « pas fait »', /Éteint/.test(await txt('mkai-mode')) && (await Promise.all(['brevo', 'simulation', 'test'].map((k) => txt(`mkai-gate-${k}-status`)))).every((t) => /pas fait/.test(t)));
@@ -6916,7 +6919,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         const hdr = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
         await page.route('**/rest/v1/marketing_*', (route) => (route.request().method() === 'OPTIONS' ? route.fulfill({ status: 204, headers: hdr }) : route.fulfill({ status: 404, headers: { ...hdr, 'content-type': 'application/json' }, body: JSON.stringify({ code: 'PGRST205', message: "Could not find the table 'public.marketing_ai_settings' in the schema cache" }) })));
         await page.route('**/functions/v1/brevo-email', (route) => (route.request().method() === 'OPTIONS' ? route.fulfill({ status: 204, headers: hdr }) : route.fulfill({ status: 200, headers: { ...hdr, 'content-type': 'application/json' }, body: JSON.stringify({ ok: false, reason: 'sql_missing' }) })));
-        await page.goto(`http://localhost:${port}/admin/zara-marketing`, { waitUntil: 'load' });
+        await page.goto(`${BASE}/admin/zara-marketing`, { waitUntil: 'load' });
         await page.getByTestId('mkai-sql-missing').waitFor({ timeout: 25000 });
         check('script SQL pas lancé : message clair, aucun bouton d’envoi ni d’activation', /add-marketing-intelligence\.sql/.test(await page.getByTestId('mkai-sql-missing').innerText()) && (await page.getByTestId('mkai-mode-live').count()) === 0 && (await page.getByTestId('mkai-approve').count()) === 0);
         await c.ctx.close();
@@ -6927,7 +6930,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         const fs2 = { waOrder: true };
         const c = await newVisitor(phone, { storage: { 'sb-xtitsmmccpkelxfjyqyh-auth-token': sessionFor(fa) }, fakeUser: fa, fakeStore: fs2 });
         const { page } = c;
-        await page.goto(`http://localhost:${port}/admin/parametres/contact`, { waitUntil: 'load' });
+        await page.goto(`${BASE}/admin/parametres/contact`, { waitUntil: 'load' });
         await page.getByTestId('settings-legal-line').waitFor({ timeout: 25000 });
         await page.getByText('Enregistrer', { exact: true }).click();
         await page.getByText('Enregistré ✓').waitFor({ timeout: 8000 });
@@ -6946,7 +6949,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   if (PARTS.includes('D')) {
     console.log('\n== D. panne : les villes ne se chargent pas');
     const f = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' }, blockPath: '/rest/v1/cities' });
-    await f.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+    await f.page.goto(`${BASE}/`, { waitUntil: 'load' });
     await sleep(2500);
     await f.page.getByRole('button', { name: FAB_NAME }).click();
     await waitText(f.page, /Créez votre compte gratuit(?:, Ali)?/);
@@ -6976,7 +6979,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         Object.defineProperty(window, 'visualViewport', { value: vv, configurable: true });
         window.__vv = vv;
       });
-      await k.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await k.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       const fabHome = await k.page.getByRole('button', { name: FAB_NAME }).boundingBox();
       await k.page.getByRole('button', { name: FAB_NAME }).click();
@@ -6992,7 +6995,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await sleep(300);
       await k.page.getByRole('button', { name: 'Fermer' }).click();
       await sleep(300);
-      await k.page.goto(`http://localhost:${port}/produit/rolex`, { waitUntil: 'load' });
+      await k.page.goto(`${BASE}/produit/rolex`, { waitUntil: 'load' });
       await sleep(3500);
       const fabProduct = await k.page.getByRole('button', { name: FAB_NAME }).boundingBox();
       const vpK = k.page.viewportSize();
@@ -7002,14 +7005,14 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     }
     {
       const a = await newVisitor({ ...devices['Pixel 7'], viewport: { width: 390, height: 800 } });
-      await a.page.goto(`http://localhost:${port}/admin/tableau-de-bord`, { waitUntil: 'load' });
+      await a.page.goto(`${BASE}/admin/tableau-de-bord`, { waitUntil: 'load' });
       await sleep(6500);
       check('le bouton de Zara est cache sur les pages d\'administration', (await a.page.getByRole('button', { name: FAB_NAME }).count()) === 0);
       await a.ctx.close();
     }
     {
       const d = await newVisitor({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 }, { storage: { albasse_zara_name: 'Ali' } });
-      await d.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+      await d.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await d.page.getByRole('button', { name: FAB_NAME }).click();
       await waitText(d.page, /Créez votre compte gratuit(?:, Ali)?/);

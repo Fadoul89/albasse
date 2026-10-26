@@ -7,8 +7,8 @@ const CHAD_YELLOW = '#FECB00';
 const SLIDE = 36; // de combien les noms glissent (en px) quand la ville change
 const MAX_LETTERS = Math.max(...CLOCK_CITIES.map((c) => c.length));
 
-// Heure locale au Tchad, sous le cadre « SERVICE QUALITÉ GARANTIE » et exactement de sa largeur (`width`, mesurée sur le cadre) :
-// 🕒 06:15 H | 📍 N'DJAMENA. Toutes les 10 secondes, le nom de la ville glisse tout seul vers la suivante (N'Djamena d'abord).
+// Heure locale au Tchad, sous le cadre « SERVICE QUALITÉ GARANTIE », un peu plus étroite que lui (90 % de sa largeur `width`, mesurée sur le cadre) :
+// 06:15 H | 📍 N'DJAMENA. Toutes les 10 secondes, le nom de la ville glisse tout seul vers la suivante (N'Djamena d'abord).
 // Même écriture que le cadre (Manrope gras, majuscules). L'heure vient de lib/cityClock (UTC+1, jamais l'heure du téléphone du client).
 export function CityClock({ width }: { width?: number }) {
   const [index, setIndex] = useState(0);
@@ -61,17 +61,15 @@ export function CityClock({ width }: { width?: number }) {
   const colonOpacity = colon.interpolate({ inputRange: [0, 1], outputRange: [0.25, 1] });
 
   // taille des lettres : le plus long nom (9 lettres) doit tenir dans la place à droite de l'heure
-  const citySize = slotWidth > 0 ? Math.max(11, Math.min(16, Math.floor(slotWidth / (MAX_LETTERS * 0.78)))) : 15;
+  const citySize = slotWidth > 0 ? Math.max(11, Math.min(14, Math.floor(slotWidth / (MAX_LETTERS * 0.78)))) : 13;
   const cityStyle = [styles.city, { fontSize: citySize }];
   const slideIn = { opacity: swap, transform: [{ translateX: swap.interpolate({ inputRange: [0, 1], outputRange: [SLIDE, 0] }) }] };
   const slideOut = { opacity: swap.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }), transform: [{ translateX: swap.interpolate({ inputRange: [0, 1], outputRange: [0, -SLIDE] }) }] };
-  const pillWidth = width && width > 0 ? width : 255;
-  const showIcon = pillWidth >= 230;
+  const pillWidth = width && width > 0 ? Math.round(width * 0.9) : 230;
 
   return (
     <View style={styles.outer} testID="city-clock">
       <View style={[styles.pill, { width: pillWidth }]} accessible accessibilityRole="timer" accessibilityLabel={`Heure locale : ${clockSentence(index, now)}`}>
-        {showIcon && <Text style={styles.icon}>🕒</Text>}
         <View style={styles.timeRow}>
           <Text style={styles.digits} testID="city-clock-time">
             {hh}
@@ -103,28 +101,27 @@ export function CityClock({ width }: { width?: number }) {
 const styles = StyleSheet.create({
   outer: { alignSelf: 'stretch', alignItems: 'center', marginTop: 8 },
   pill: {
-    height: 38,
+    height: 30,
     maxWidth: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     borderWidth: 1.5,
     borderColor: colors.gold,
     borderRadius: radius.md,
     backgroundColor: colors.panel,
     overflow: 'hidden',
   },
-  icon: { fontSize: 13 },
   timeRow: { flexDirection: 'row', alignItems: 'baseline', flexShrink: 0 },
-  digits: { fontFamily: fonts.bodyBold, fontSize: 18, lineHeight: 22, letterSpacing: 0.5, color: colors.cream, fontVariant: ['tabular-nums'] },
+  digits: { fontFamily: fonts.bodyBold, fontSize: 15, lineHeight: 18, letterSpacing: 0.5, color: colors.cream, fontVariant: ['tabular-nums'] },
   colon: { color: CHAD_YELLOW, marginHorizontal: 1 },
-  hour: { fontFamily: fonts.bodyBold, fontSize: 12, color: CHAD_YELLOW },
-  sep: { width: 1, height: 18, backgroundColor: 'rgba(199, 154, 62, 0.6)' },
-  pin: { fontSize: 12 },
+  hour: { fontFamily: fonts.bodyBold, fontSize: 10, color: CHAD_YELLOW },
+  sep: { width: 1, height: 14, backgroundColor: 'rgba(199, 154, 62, 0.6)' },
+  pin: { fontSize: 10 },
   // le nom de la ville : une place à droite de l'heure, découpée pour que les noms glissent sans déborder
-  slot: { flex: 1, minWidth: 0, height: 22, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
+  slot: { flex: 1, minWidth: 0, height: 18, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
   layer: { position: 'absolute' },
   city: {
     fontFamily: fonts.bodyBold,
