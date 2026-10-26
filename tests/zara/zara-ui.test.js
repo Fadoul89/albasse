@@ -13,7 +13,7 @@ const fs = require('fs');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const dist = process.argv[2] || '../../dist';
 const port = process.argv[3] || '4333';
-const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI12345TOFBCDE').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI123456TOFBCDE').toUpperCase();
 // saison fraiche (blousons et manteaux) : le bouton du menu de Zara n'existe que jusqu'au 31 decembre 2026 a 23h59 (N'Djamena)
 const COLD_ON = Date.now() < Date.parse('2027-01-01T00:00:00+01:00');
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
@@ -504,6 +504,56 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   const realProduct = (await get('products?select=*&is_active=eq.true&stock=gt.0&slug=eq.rolex&limit=1'))[0];
   const storeRow = (await get('store_settings?select=hours,address,city,phone&limit=1'))[0] || {};
   console.log('info  produit promo :', promoRow && promoRow.name, '| produit a stock bas :', lowStock && `${lowStock.name} (${lowStock.stock})`, '| horaires boutique :', storeRow.hours);
+
+  // =============================================== 6. ACCUEIL : HORLOGE DES VILLES DU TCHAD ===============================================
+  if (PARTS.includes('6')) {
+    console.log("== 6. accueil : heure locale des villes (telephone 390 x 800), une ville toutes les 10 s");
+    const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Fatimé' } });
+    const { page } = v;
+    // 26 octobre 2026, 05:15 UTC = 06:15 a N'Djamena (le temps avance normalement a partir de la)
+    await v.ctx.clock.install({ time: new Date('2026-10-26T05:15:00Z') });
+    await page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+    await page.waitForSelector('[data-testid="city-clock"]', { timeout: 20000 });
+    const read = async () => ({
+      time: ((await page.getByTestId('city-clock').innerText()).match(/\d\d\s*:\s*\d\d/) || [''])[0].replace(/\s/g, ''),
+      city: (await page.getByTestId('city-clock-city').innerText()).trim(),
+    });
+    const first = await read();
+    check("horloge : « 06:15 H a N'Djamena » au depart", first.time === '06:15' && first.city === "N'Djamena", first);
+    const box = await page.getByTestId('city-clock').boundingBox();
+    const tag = await page.getByText('GARANTIE', { exact: true }).boundingBox();
+    check('horloge : placee sous le cadre SERVICE QUALITE GARANTIE', !!box && !!tag && box.y > tag.y + tag.height, { box, tag });
+    const cats = await page.getByTestId('home-categories').boundingBox();
+    check('horloge : au-dessus de la ligne des categories', !!box && !!cats && box.y + box.height <= cats.y + 1, { box, cats });
+    check('horloge : visible en entier dans la largeur du telephone (390)', !!box && box.x >= 0 && box.x + box.width <= 390, box);
+    check('horloge : assez grande pour bien se voir (>= 150 px de haut, chiffres >= 40 px)', !!box && box.height >= 150, box);
+    const digitsSize = await page.getByTestId('city-clock-time').evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+    check('heure en gros chiffres (>= 40 px)', digitsSize >= 40, digitsSize);
+    await page.screenshot({ path: path.join(OUT, '6a-horloge-ndjamena.png') });
+
+    const seen = [first.city];
+    for (let i = 0; i < 8; i++) {
+      await page.clock.runFor(10000);
+      await sleep(250);
+      seen.push((await read()).city);
+    }
+    check("rotation : N'Djamena, Abeche, Moundou, Moussoro, Ati, Mongo, Sarh, Amdjarass, puis de nouveau N'Djamena", seen.join('|') === "N'Djamena|Abéché|Moundou|Moussoro|Ati|Mongo|Sarh|Amdjarass|N'Djamena", seen);
+    await page.clock.runFor(60000);
+    await sleep(250);
+    const later = await read();
+    check('apres 80 s + 60 s : 06:17 (les minutes avancent)', later.time === '06:17', later);
+    await page.screenshot({ path: path.join(OUT, '6b-horloge-ensuite.png') });
+
+    // un telephone mal regle (fuseau de Los Angeles) : l'heure affichee reste celle du Tchad
+    const w = await newVisitor({ ...phone, timezoneId: 'America/Los_Angeles' }, { storage: { albasse_zara_name: 'Fatimé' } });
+    await w.ctx.clock.install({ time: new Date('2026-10-26T05:15:00Z') });
+    await w.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+    await w.page.waitForSelector('[data-testid="city-clock"]', { timeout: 20000 });
+    const wt = ((await w.page.getByTestId('city-clock').innerText()).match(/\d\d\s*:\s*\d\d/) || [''])[0].replace(/\s/g, '');
+    check("telephone au fuseau de Los Angeles : l'heure reste 06:15 (heure du Tchad)", wt === '06:15', wt);
+    await w.ctx.close();
+    await v.ctx.close();
+  }
 
   // =============================================== A. CONSEILLERE : UNE QUESTION A LA FOIS (francais) ===============================================
   if (PARTS.includes('A')) {

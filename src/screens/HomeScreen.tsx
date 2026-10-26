@@ -16,6 +16,7 @@ import { CustomerNotificationBell } from '../components/CustomerNotificationBell
 import { LanguageSwitcher } from '../components/LanguageSwitcher';
 import { SideAdBanner } from '../components/SideAdBanner';
 import { ChadFlag } from '../components/ChadFlag';
+import { CityClock } from '../components/CityClock';
 import { WebPushBanner } from '../components/WebPushBanner';
 import { fetchOnlineCount, onlineLabel } from '../lib/onlineCount';
 import { coldSeasonActive, coldSeasonPicks } from '../lib/coldSeason';
@@ -146,6 +147,8 @@ export function HomeScreen() {
             </Animated.Text>
           </View>
         </View>
+        {/* heure locale des villes du Tchad, une ville toutes les 10 secondes (demande du patron) */}
+        <CityClock />
       </LinearGradient>
 
       {/* une seule ligne qui défile, sans titre « Catégories » (demande du patron) */}
