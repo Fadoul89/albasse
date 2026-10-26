@@ -29,6 +29,7 @@ import { DateField } from '../../components/DateField';
 import { TimeField } from '../../components/TimeField';
 import { ScheduledPushes } from '../../components/ScheduledPushes';
 import { StoreSettingToggle } from '../../components/StoreSettingToggle';
+import { ZaraAdsDelay } from '../../components/ZaraAdsDelay';
 import type { SmartPromotion, AdItem } from '../../types';
 
 type TargetType = 'category' | 'product' | 'none';
@@ -316,8 +317,9 @@ export function AdminPromotionsScreen() {
         ListHeaderComponent={
           <View style={styles.form}>
             <StoreSettingToggle setting="zaraAds" />
+            <ZaraAdsDelay />
             <Text style={[styles.helperText, { marginBottom: spacing.md }]}>
-              Zara met en avant vos articles sur l’accueil et dans les promotions. Elle ne dit que des faits vrais : « Beaucoup de clients ont acheté » seulement avec de
+              Zara met en avant vos articles sur l’accueil et dans les promotions : vous l’activez ou la désactivez quand vous voulez avec l’interrupteur ci-dessus, et vous choisissez après combien de secondes la publicité s’affiche. Elle ne dit que des faits vrais : « Beaucoup de clients ont acheté » seulement avec de
               vraies commandes (3 ou plus en 7 jours), « Article rare » seulement avec un vrai petit stock (5 au plus). Les clients haut placés (directeur, ingénieur,
               médecin…, selon le métier écrit dans leur compte) lisent d’abord « Article rare » quand c’est vrai.
             </Text>

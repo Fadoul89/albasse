@@ -1,6 +1,6 @@
 // Publicités de Zara (src/lib/zaraAds.ts) : des faits VRAIS seulement (vraies commandes, vrai petit stock), jamais de phrase inventée.
 // Lancer : node --import ./tests/zara/register.mjs tests/email/zara-ads.test.ts
-import { MANY_SALES, adFacts, adLine, isSeniorProfession, pickAds, productAdLine, type AdView } from '../../src/lib/zaraAds.ts';
+import { MANY_SALES, ZARA_ADS_DELAY_CHOICES, ZARA_ADS_DELAY_DEFAULT, adFacts, adLine, isSeniorProfession, pickAds, productAdLine, zaraAdsDelayLabel, zaraAdsDelaySeconds, type AdView } from '../../src/lib/zaraAds.ts';
 import { FORBIDDEN_CLAIMS } from '../../src/lib/assistantPersona.ts';
 import { buildSalesMap } from '../../src/lib/assistantSales.ts';
 
@@ -82,5 +82,12 @@ const s1 = pickAds(catalog, view, noSales, { senior: false, limit: 3, seed: 1 })
 check('la graine fait tourner les choix (autre ordre) sans jamais sortir des articles vrais', s0 !== s1 && [...s1].every((id) => 'abg'.includes(id)), { s0, s1 });
 check('même graine : même résultat (stable)', pickAds(catalog, view, noSales, { limit: 3, seed: 5 }).map((a) => a.item.id).join('') === pickAds(catalog, view, noSales, { limit: 3, seed: 5 }).map((a) => a.item.id).join(''));
 check('graine négative ou énorme : pas d’erreur', pickAds(catalog, view, noSales, { limit: 3, seed: -7 }).length === 3 && pickAds(catalog, view, noSales, { limit: 3, seed: 10 ** 12 }).length === 3);
+
+// --- le delai d'affichage choisi par l'admin ---
+check('delai : colonne absente, vide ou bizarre → 5 secondes', [undefined, null, '', 'abc', NaN, {}].every((v) => zaraAdsDelaySeconds(v) === ZARA_ADS_DELAY_DEFAULT) && ZARA_ADS_DELAY_DEFAULT === 5);
+check('delai : 0 reste 0 (tout de suite), 10 reste 10, « 30 » (texte) donne 30', zaraAdsDelaySeconds(0) === 0 && zaraAdsDelaySeconds(10) === 10 && zaraAdsDelaySeconds('30') === 30);
+check('delai : borne entre 0 et 120 (négatif → 0, 9999 → 120), arrondi (2,6 → 3)', zaraAdsDelaySeconds(-5) === 0 && zaraAdsDelaySeconds(9999) === 120 && zaraAdsDelaySeconds(2.6) === 3);
+check('delai : les choix proposés à l’admin : tout de suite, 3, 5, 10, 15, 30, 60 s', ZARA_ADS_DELAY_CHOICES.join(',') === '0,3,5,10,15,30,60' && ZARA_ADS_DELAY_CHOICES.every((n) => zaraAdsDelaySeconds(n) === n));
+check('delai : textes « Tout de suite » et « 10 s »', zaraAdsDelayLabel(0) === 'Tout de suite' && zaraAdsDelayLabel(10) === '10 s');
 
 console.log(process.exitCode ? '\nDES ECHECS' : `\nTOUT EST BON (${ok} contrôles)`);

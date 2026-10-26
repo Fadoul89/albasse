@@ -2,8 +2,10 @@
 
 Le patron peut laisser Zara gérer les publicités affichées aux clients (accueil + fenêtre de promotion).
 
-## Où l'allumer
-Admin → **Promotions intelligentes** → interrupteur « 🤖 Zara gère les publicités à l'écran ».
+## Où l'allumer, l'éteindre, régler le délai
+Admin → **Promotions intelligentes** :
+- interrupteur « 🤖 Zara gère les publicités à l'écran » : activer / désactiver à la main, quand on veut ;
+- « ⏱️ La publicité s'affiche après… » : tout de suite, 3, 5, 10, 15, 30 ou 60 secondes après l'ouverture de l'accueil (5 s par défaut). Le même délai ouvre la fenêtre de promotion quand Zara gère les publicités (script `add-zara-ads-delay.sql`, une colonne).
 Éteint par défaut. Il faut d'abord lancer `add-zara-ads.sql` dans Supabase (une colonne ajoutée à `store_settings`).
 Tant que le script n'est pas lancé, ou que l'interrupteur est éteint, le site est exactement comme avant.
 

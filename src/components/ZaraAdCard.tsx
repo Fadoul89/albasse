@@ -9,7 +9,7 @@ import { useStoreSettings } from '../hooks/useStoreSettings';
 import { useAuthStore } from '../store/authStore';
 import { getProductSales } from '../lib/assistantData';
 import type { SalesMap } from '../lib/assistantSales';
-import { isSeniorProfession, pickAds } from '../lib/zaraAds';
+import { isSeniorProfession, pickAds, zaraAdsDelaySeconds } from '../lib/zaraAds';
 import { colors, fonts, radius, spacing } from '../theme';
 
 const AVATAR = require('../../assets/assistante-avatar.jpg');
@@ -23,9 +23,17 @@ const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
 // Sans fait vrai à dire, la carte reste cachée.
 export function ZaraAdCard({ products }: { products: Product[] }) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { settings } = useStoreSettings();
+  const { settings, isLoading } = useStoreSettings();
   const profession = useAuthStore((s) => s.profile?.profession);
   const enabled = settings.zara_ads_enabled === true;
+  const delaySeconds = zaraAdsDelaySeconds(settings.zara_ads_delay_seconds);
+  // la publicité apparaît après le délai choisi par l'admin (compté dès l'ouverture de l'accueil)
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    if (!enabled || isLoading) return;
+    const id = setTimeout(() => setReady(true), delaySeconds * 1000);
+    return () => clearTimeout(id);
+  }, [enabled, isLoading, delaySeconds]);
 
   const [sales, setSales] = useState<SalesMap | null>(null);
   const [index, setIndex] = useState(0);
@@ -61,7 +69,7 @@ export function ZaraAdCard({ products }: { products: Product[] }) {
     Animated.timing(fade, { toValue: 1, duration: 450, easing: Easing.out(Easing.quad), useNativeDriver: false }).start();
   }, [index, ads.length]);
 
-  if (ads.length === 0) return null;
+  if (!ready || ads.length === 0) return null;
   const ad = ads[index % ads.length];
   const p = ad.item;
 
