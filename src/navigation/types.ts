@@ -29,6 +29,7 @@ export type RootStackParamList = {
   AdminAbandonedCarts: undefined;
   AdminNotifications: undefined;
   AdminPromotions: undefined;
+  AdminZaraSeo: undefined;
   AdminStoreSettings: undefined;
   Contact: undefined;
   CustomerNotifications: undefined;

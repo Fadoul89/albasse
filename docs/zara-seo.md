@@ -37,8 +37,39 @@ Googlebot, Google-InspectionTool (test d'adresse de Search Console), Bing, DuckD
 ## À savoir
 - **Compte obligatoire à l'entrée** (réglage « Clients » de l'administration) : un visiteur qui arrive depuis Google doit d'abord se connecter ou créer un compte avant de voir le produit. Google voit la fiche, mais le visiteur est freiné : c'est un choix de la boutique, non modifié ici. Mesurable plus tard avec Google Search Console.
 - Le SEO agit en **semaines**, pas en jours : Google doit revenir lire les pages.
-- **Google Search Console** (gratuit) n'est pas encore connecté : c'est la prochaine étape utile pour voir les vraies recherches. Ajouter le site, ajouter l'adresse du plan `https://www.albasseshopping.com/sitemap.xml`.
+- **Google Search Console** : propriété `https://www.albasseshopping.com/` **validée le 26 octobre 2026** par le fichier `public/google80a7957df67d5261.html` (**à ne jamais supprimer** : Google le revérifie pour garder le statut de propriétaire). Envoyer `sitemap.xml` dans le menu « Sitemaps ». Les premières statistiques arrivent en 2 à 3 jours.
 
-## Étapes suivantes (non commencées)
-- Étape 2 : Zara propose titre et description des fiches sans description (50) ou trop courtes (95), l'administrateur valide avant publication.
+## Étape 2 : « Zara SEO » (descriptions des articles) — prête, pas encore en ligne
+Admin › **🔎 Zara SEO (Google)** (`/admin/zara-seo`). Environ 145 fiches sont sans description ou trop courtes (moins de 60 caractères).
+
+**Comment ça marche**
+1. L'écran affiche le bilan : articles en vente, sans description, trop courtes, correctes + les noms d'articles en double (à renommer par la boutique : Zara ne change jamais un nom).
+2. Le bouton « Zara, prépare 8 descriptions » envoie 8 fiches à la fonction `zara-seo` (réservée aux administrateurs). Zara regarde la photo (Claude, vision) et **propose** un texte. Rien n'est écrit dans la base à cette étape.
+3. L'administrateur lit, corrige si besoin, décoche les fiches qu'il ne veut pas, puis « Valider et publier ». Seulement alors la base reçoit les descriptions.
+4. « Remettre l'ancienne » (liste « déjà écrites par Zara ») restaure l'ancienne description de l'article, à tout moment.
+
+**Règles de Zara** (`supabase/functions/zara-seo/rules.ts`, testées) : 60 à 320 caractères ; ni prix, ni FCFA, ni promotion, ni livraison, ni stock, ni « original / authentique / garanti », ni « meilleur / n° 1 », ni avis ou étoiles, ni emoji, ni balises. Une proposition qui rompt une règle est remplacée par un texte « faits connus » (nom, catégorie, couleurs, tailles). Si la photo ne peut pas être lue, même repli : jamais de description inventée.
+
+**Sécurité**
+- La fonction `zara-seo` vérifie la connexion (JWT) **et** `profiles.is_admin`, puis ne fait que **lire** les articles.
+- La publication passe par `zara_apply_seo` (script `add-zara-seo.sql`) : contrôle `is_admin()` dans la base, texte de 40 à 600 caractères, sans `<` ni `>`. Les visiteurs et les clients n'ont pas le droit de l'appeler.
+- La toute première description d'origine est gardée dans `products.description_before_zara` (jamais écrasée par une 2ᵉ modification) ; `zara_undo_seo` la remet.
+- Aucune nouvelle table (donc aucun `grant` de table à ajouter).
+- Coût : environ 8 appels de vision par lot (quelques centimes). Le secret `ANTHROPIC_API_KEY` existe déjà (utilisé par `zara-ai`).
+
+**Fichiers**
+| Élément | Fichier |
+| --- | --- |
+| Règles et choix du texte (testés) | `supabase/functions/zara-seo/rules.ts` |
+| Fonction serveur (propose, n'écrit rien) | `supabase/functions/zara-seo/index.ts` |
+| Colonnes + `zara_apply_seo` + `zara_undo_seo` | `add-zara-seo.sql` |
+| Calculs de l'écran (purs) | `src/lib/zaraSeoCore.ts` |
+| Appels fonction et base | `src/lib/zaraSeo.ts` |
+| Écran | `src/components/ZaraSeoPanel.tsx`, `src/screens/admin/AdminZaraSeoScreen.tsx` |
+| Tests | `tests/seo/zara-seo.test.ts` (63), `tests/sql/run-zara-seo.sh` (base locale), partie 9 de `tests/zara/zara-ui.test.js` (22, navigateur) |
+
+**Mise en service** (après accord du patron) : lancer `add-zara-seo.sql` dans Supabase › SQL Editor ; déployer la fonction `zara-seo` (JWT obligatoire) ; publier le site ; ouvrir Admin › Zara SEO.
+**Pour tout annuler** : `update products set description = coalesce(description_before_zara, ''), description_before_zara = null, description_zara_at = null where description_zara_at is not null;` (aussi en commentaire dans le script).
+
+## Étape suivante (non commencée)
 - Étape 3 : rapport SEO dans le rapport du lundi (mots cherchés sans résultat, fiches à améliorer), Google Search Console.

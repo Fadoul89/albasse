@@ -27,6 +27,7 @@ type AdminRoute = Extract<
   | 'AdminPaymentSettings'
   | 'AdminCustomers'
   | 'AdminPromotions'
+  | 'AdminZaraSeo'
   | 'AdminSourcePerformance'
   | 'AdminZaraStats'
   | 'AdminMarketing'
@@ -51,6 +52,7 @@ const ADMIN_MENU_ITEMS: { icon: string; label: string; route: AdminRoute }[] = [
   { icon: '💳', label: 'Paiement', route: 'AdminPaymentSettings' },
   { icon: '👥', label: 'Clients', route: 'AdminCustomers' },
   { icon: '🎁', label: 'Promotions intelligentes', route: 'AdminPromotions' },
+  { icon: '🔎', label: 'Zara SEO (Google)', route: 'AdminZaraSeo' },
   { icon: '📡', label: 'Performance par source', route: 'AdminSourcePerformance' },
   { icon: '💬', label: 'Statistiques de Zara', route: 'AdminZaraStats' },
   { icon: '✍️', label: 'Assistant marketing', route: 'AdminMarketing' },
