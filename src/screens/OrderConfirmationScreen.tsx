@@ -7,6 +7,7 @@ import type { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing } from '../theme';
 import { GoldButton } from '../components/GoldButton';
 import { DELIVERY_HOURS, GIFT_WRAP_FEE, ORDER_VALIDITY_HOURS } from '../constants/shopRules';
+import { formatSlot } from '../lib/scheduledDelivery';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
 
@@ -15,7 +16,7 @@ interface Props {
 }
 
 export function OrderConfirmationScreen({ route }: Props) {
-  const { orderId, total, instructions, giftWrap } = route.params;
+  const { orderId, total, instructions, giftWrap, scheduledFor } = route.params;
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   return (
@@ -33,6 +34,9 @@ export function OrderConfirmationScreen({ route }: Props) {
         </View>
 
         {giftWrap ? <Text style={styles.gift}>{`🎁 Emballage cadeau inclus (${formatXAF(GIFT_WRAP_FEE)})`}</Text> : null}
+        {scheduledFor ? (
+          <Text style={styles.gift} testID="confirm-scheduled">{`📅 Livraison programmée : ${formatSlot(scheduledFor)}`}</Text>
+        ) : null}
 
         {instructions ? (
           <View style={styles.instructionsBox}>

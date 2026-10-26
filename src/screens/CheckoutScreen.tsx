@@ -15,6 +15,8 @@ import { createOrder } from '../lib/orders';
 import { initiatePayment } from '../lib/payments';
 import { CityPicker } from '../components/CityPicker';
 import { GiftWrapOption } from '../components/GiftWrapOption';
+import { ScheduledDeliveryPicker } from '../components/ScheduledDeliveryPicker';
+import { formatSlot, slotProblem, slotToIso } from '../lib/scheduledDelivery';
 import { trackTikTokEvent } from '../lib/tiktokPixel';
 import type { PaymentMethod, City } from '../types';
 import { isHomeCity } from '../lib/deliveryRules';
@@ -81,6 +83,18 @@ export function CheckoutScreen() {
     if (!cashOnDeliveryAllowed && method === 'cash_on_delivery') setMethod('airtel_money');
   }, [cashOnDeliveryAllowed, method]);
 
+  // Livraison programmée : à N'Djamena le client peut choisir un jour et une heure de rendez-vous. La livraison normale n'est pas affichée dans la liste :
+  // sans jour ni heure choisis, la commande est prise comme une livraison normale. Dans les autres villes : rien ne change.
+  const [slotDay, setSlotDay] = useState<string | null>(null);
+  const [slotTime, setSlotTime] = useState<string | null>(null);
+  const scheduledAllowed = isHomeCity(city);
+  useEffect(() => {
+    if (!scheduledAllowed) {
+      setSlotDay(null);
+      setSlotTime(null);
+    }
+  }, [scheduledAllowed]);
+
   const paymentInfo =
     method === 'airtel_money'
       ? { number: paymentSettings?.airtel_number, url: paymentSettings?.airtel_payment_url }
@@ -112,6 +126,18 @@ export function CheckoutScreen() {
       return;
     }
 
+    // rendez-vous de la livraison programmée : revérifié au moment de confirmer (l'heure a pu passer)
+    // un jour sans heure (ou l'inverse) est refusé ; ni jour ni heure : livraison normale
+    const wantsSlot = scheduledAllowed && (!!slotDay || !!slotTime);
+    if (wantsSlot) {
+      const problem = slotProblem(slotDay, slotTime, Date.now());
+      if (problem) {
+        showToast(problem, { title: 'Livraison programmée', type: 'error' });
+        return;
+      }
+    }
+    const scheduledFor = wantsSlot && slotDay && slotTime ? slotToIso(slotDay, slotTime) : null;
+
     setSubmitting(true);
     try {
       const { order, error } = await createOrder({
@@ -125,6 +151,7 @@ export function CheckoutScreen() {
         shippingCity: city,
         giftWrap,
         loyaltyDiscount: discount,
+        ...(scheduledFor ? { deliveryType: 'scheduled' as const, scheduledFor } : {}),
       });
 
       if (error || !order) {
@@ -155,7 +182,7 @@ export function CheckoutScreen() {
       }
 
       clearCart();
-      navigation.navigate('OrderConfirmation', { orderId: order.id, total: grandTotal, instructions, giftWrap });
+      navigation.navigate('OrderConfirmation', { orderId: order.id, total: grandTotal, instructions, giftWrap, ...(scheduledFor ? { scheduledFor } : {}) });
     } catch (e) {
       console.error('Exception création commande:', e);
       showToast(e instanceof Error ? e.message : String(e), { title: 'Erreur inattendue', type: 'error' });
@@ -256,6 +283,22 @@ export function CheckoutScreen() {
           }}
           showDeliveryInfo
         />
+
+        {scheduledAllowed ? (
+          <>
+            <Text style={styles.sectionTitle}>Livraison programmée</Text>
+            <ScheduledDeliveryPicker
+              day={slotDay}
+              time={slotTime}
+              onDay={(d) => {
+                // toucher une 2e fois le jour choisi annule le rendez-vous
+                setSlotDay(d === slotDay ? null : d);
+                setSlotTime(null);
+              }}
+              onTime={setSlotTime}
+            />
+          </>
+        ) : null}
 
         <Text style={styles.sectionTitle}>Paiement</Text>
         {PAYMENT_OPTIONS.map((opt) => {

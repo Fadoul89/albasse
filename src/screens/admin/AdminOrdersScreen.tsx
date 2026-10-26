@@ -14,12 +14,11 @@ import { formatOrderDate, getOrderDay } from '../../lib/formatDuration';
 import { useToastStore } from '../../store/toastStore';
 import { filterOrders, orderNumberLabel, ordersToCsv, type PeriodFilter } from '../../lib/invoice';
 import { countsAsSale, salesTotal } from '../../lib/salesRules';
+import { flagDeadlineIso, formatSlot, waitsForAppointment } from '../../lib/scheduledDelivery';
+import { SCHEDULED_DELIVERY } from '../../constants/shopRules';
 import type { Order, OrderStatus } from '../../types';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
-const FLAG_DEADLINE_MS = 48 * 60 * 60 * 1000;
-const getFlagDeadline = (createdAt: string) =>
-  new Date(new Date(createdAt).getTime() + FLAG_DEADLINE_MS).toISOString();
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
   pending: 'En attente',
@@ -225,6 +224,11 @@ export function AdminOrdersScreen() {
             </View>
             <Text style={styles.customer}>{item.shipping_name} · {item.shipping_phone}</Text>
             <Text style={styles.address}>{item.shipping_address}, {item.shipping_city}</Text>
+            {item.delivery_type === 'scheduled' && item.scheduled_for ? (
+              <Text style={styles.giftBadge} testID="admin-order-scheduled">
+                {`📅 Livraison programmée : ${formatSlot(item.scheduled_for)} · Zara vous prévient sur Telegram ${SCHEDULED_DELIVERY.reminderMinutes} min avant`}
+              </Text>
+            ) : null}
             {item.gift_wrap && <Text style={styles.giftBadge}>🎁 À emballer : emballage cadeau (2 000 FCFA inclus dans le total)</Text>}
             {!!item.loyalty_discount && (
               <Text style={styles.giftBadge}>{`⭐ Remise fidélité −10 % : −${item.loyalty_discount.toLocaleString('fr-FR')} FCFA (déjà déduite du total)`}</Text>
@@ -304,9 +308,11 @@ export function AdminOrdersScreen() {
             {item.status === 'pending' && !item.is_flagged_fake && (
               <View style={styles.deadlineBox}>
                 <Text style={styles.deadlineLabel}>
-                  Signalement automatique comme fausse commande dans :
+                  {waitsForAppointment(item)
+                    ? 'Livraison programmée : signalement automatique comme fausse commande 48 h après le rendez-vous, dans :'
+                    : 'Signalement automatique comme fausse commande dans :'}
                 </Text>
-                <CountdownTimer endsAt={getFlagDeadline(item.created_at)} />
+                <CountdownTimer endsAt={flagDeadlineIso(item)} />
               </View>
             )}
           </View>

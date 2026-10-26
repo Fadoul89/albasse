@@ -13,7 +13,9 @@ const fs = require('fs');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const dist = process.argv[2] || '../../dist';
 const port = process.argv[3] || '4333';
-const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI123457TOFBCDE').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI1234567TOFBCDE').toUpperCase();
+// saison fraiche (blousons et manteaux) : le bouton du menu de Zara n'existe que jusqu'au 31 decembre 2026 a 23h59 (N'Djamena)
+const COLD_ON = Date.now() < Date.parse('2027-01-01T00:00:00+01:00');
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
 fs.mkdirSync(OUT, { recursive: true });
 const KEY = process.env.SUPABASE_ANON_KEY;
@@ -508,6 +510,121 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   const storeRow = (await get('store_settings?select=hours,address,city,phone&limit=1'))[0] || {};
   console.log('info  produit promo :', promoRow && promoRow.name, '| produit a stock bas :', lowStock && `${lowStock.name} (${lowStock.stock})`, '| horaires boutique :', storeRow.hours);
 
+  // =============================================== 6. ACCUEIL : HORLOGE DES VILLES DU TCHAD ===============================================
+  if (PARTS.includes('6')) {
+    console.log("== 6. accueil : heure locale des villes (telephone 390 x 800), une ville toutes les 10 s");
+    const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Fatimé' } });
+    const { page } = v;
+    // 26 octobre 2026, 05:15 UTC = 06:15 a N'Djamena (le temps avance normalement a partir de la)
+    await v.ctx.clock.install({ time: new Date('2026-10-26T05:15:00Z') });
+    await page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+    await page.waitForSelector('[data-testid="city-clock"]', { timeout: 20000 });
+    const read = async () => ({
+      time: ((await page.getByTestId('city-clock').innerText()).match(/\d\d\s*:\s*\d\d/) || [''])[0].replace(/\s/g, ''),
+      city: ((await page.getByTestId('city-clock-city').textContent()) || '').trim(),
+    });
+    const first = await read();
+    check("horloge : « 06:15 H a N'Djamena » au depart", first.time === '06:15' && first.city === "N'Djamena", first);
+    const box = await page.getByTestId('city-clock').boundingBox();
+    const tag = await page.getByText('GARANTIE', { exact: true }).boundingBox();
+    check('horloge : placee sous le cadre SERVICE QUALITE GARANTIE', !!box && !!tag && box.y > tag.y + tag.height, { box, tag });
+    const cats = await page.getByTestId('home-categories').boundingBox();
+    check('horloge : au-dessus de la ligne des categories', !!box && !!cats && box.y + box.height <= cats.y + 1, { box, cats });
+    check('horloge : visible en entier dans la largeur du telephone (390)', !!box && box.x >= 0 && box.x + box.width <= 390, box);
+    const pillBox = await page.getByTestId('city-clock').locator('[role="timer"]').boundingBox();
+    check('horloge : bandeau fin (entre 34 et 44 px de haut)', !!pillBox && pillBox.height >= 34 && pillBox.height <= 44, pillBox);
+    // la largeur de l'horloge = celle du cadre SERVICE QUALITE GARANTIE (elle ne le depasse jamais), centree comme lui
+    const frameBox = await page.getByTestId('home-tagline').boundingBox();
+    check('horloge : exactement la largeur du cadre SERVICE QUALITE GARANTIE (a 2 px pres), meme position', !!pillBox && !!frameBox && Math.abs(pillBox.width - frameBox.width) <= 2 && Math.abs(pillBox.x - frameBox.x) <= 2, { pillBox, frameBox });
+    // chaque ville : le nom tient en entier dans sa place, a droite de l'heure, sans etre coupe ni depasser le bandeau
+    const fits = async (pg, label, widthPx) => {
+      const pill = await pg.getByTestId('city-clock').locator('[role="timer"]').boundingBox();
+      const frame = await pg.getByTestId('home-tagline').boundingBox();
+      const time = await pg.getByTestId('city-clock-time').boundingBox();
+      const slot = await pg.getByTestId('city-clock-slot').boundingBox();
+      const cut = await pg.getByTestId('city-clock-city').evaluate((el) => el.scrollWidth > el.clientWidth + 1);
+      const okFit = !!pill && !!frame && !!time && !!slot && !cut && pill.width <= frame.width + 2 && slot.x >= time.x + time.width && slot.x + slot.width <= pill.x + pill.width && pill.x >= 0 && pill.x + pill.width <= widthPx;
+      return okFit ? null : `${label} : ${JSON.stringify({ pill, frame, time, slot, cut })}`;
+    };
+    const cityInfo = await page.getByTestId('city-clock-city').evaluate((el) => { const c = getComputedStyle(el); return { size: parseFloat(c.fontSize), upper: c.textTransform === 'uppercase', color: c.color, family: c.fontFamily }; });
+    check("horloge : le nom de la ville en lettres claires (majuscules, jaune, 14 px ou plus, meme ecriture que le cadre)", cityInfo.size >= 14 && cityInfo.upper && /254,\s*203,\s*0/.test(cityInfo.color) && /Manrope/i.test(cityInfo.family), cityInfo);
+    const digitsSize = await page.getByTestId('city-clock-time').evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+    check('heure bien lisible (chiffres >= 18 px)', digitsSize >= 18, digitsSize);
+    const logo = await page.getByText('ALBASSE', { exact: true }).evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+    check('logo ALBASSE inchange (34 px)', logo === 34, logo);
+    await sleep(1000);
+    await page.screenshot({ path: path.join(OUT, '6a-horloge-ndjamena.png') });
+
+    const seen = [first.city];
+    const misfit = [await fits(page, "N'Djamena", 390)];
+    for (let i = 0; i < 8; i++) {
+      await page.clock.runFor(10000);
+      await sleep(1000); // le nom glisse pendant 0,6 s
+      const c = (await read()).city;
+      seen.push(c);
+      misfit.push(await fits(page, c, 390));
+    }
+    check('horloge : les 8 villes tiennent dans le bandeau, sans depasser le cadre (390 px)', misfit.every((m) => m === null), misfit.filter(Boolean));
+    check("rotation : N'Djamena, Abeche, Moundou, Moussoro, Ati, Mongo, Sarh, Amdjarass, puis de nouveau N'Djamena", seen.join('|') === "N'Djamena|Abéché|Moundou|Moussoro|Ati|Mongo|Sarh|Amdjarass|N'Djamena", seen);
+    await page.clock.runFor(60000);
+    await sleep(1000);
+    const later = await read();
+    check('apres 80 s + 60 s : 06:17 (les minutes avancent)', later.time === '06:17', later);
+    await page.screenshot({ path: path.join(OUT, '6b-horloge-ensuite.png') });
+
+    // un telephone mal regle (fuseau de Los Angeles) : l'heure affichee reste celle du Tchad
+    const w = await newVisitor({ ...phone, timezoneId: 'America/Los_Angeles' }, { storage: { albasse_zara_name: 'Fatimé' } });
+    await w.ctx.clock.install({ time: new Date('2026-10-26T05:15:00Z') });
+    await w.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+    await w.page.waitForSelector('[data-testid="city-clock"]', { timeout: 20000 });
+    const wt = ((await w.page.getByTestId('city-clock').innerText()).match(/\d\d\s*:\s*\d\d/) || [''])[0].replace(/\s/g, '');
+    check("telephone au fuseau de Los Angeles : l'heure reste 06:15 (heure du Tchad)", wt === '06:15', wt);
+    await w.ctx.close();
+
+    // mouvement automatique, en temps reel (sans fausse horloge) : a la 10e seconde l'ancien nom (qui sort) et le nouveau (qui arrive) sont ensemble
+    // dans la place un court instant, puis il ne reste que le nouveau
+    const live = await newVisitor(phone, { storage: { albasse_zara_name: 'Fatimé' } });
+    await live.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+    await live.page.waitForSelector('[data-testid="city-clock-slot"]', { timeout: 20000 });
+    const slid = await live.page.evaluate(() => new Promise((resolve) => {
+      const slot = document.querySelector('[data-testid="city-clock-slot"]');
+      const t0 = performance.now();
+      let both = false;
+      let moved = false;
+      const tick = () => {
+        const txt = slot.textContent || '';
+        if (/N'Djamena/i.test(txt) && /Abéché/i.test(txt)) {
+          both = true;
+          const xs = Array.from(slot.querySelectorAll('[dir]')).map((e) => e.getBoundingClientRect().x);
+          if (new Set(xs.map((x) => Math.round(x))).size > 1) moved = true;
+        }
+        if (performance.now() - t0 > 14000) resolve({ both, moved, final: (slot.textContent || '').trim() });
+        else requestAnimationFrame(tick);
+      };
+      tick();
+    }));
+    check("horloge : le nom glisse tout seul a la 10e seconde (N'Djamena sort pendant qu'Abeche arrive), puis il ne reste qu'Abeche", slid.both && slid.final === 'Abéché', slid);
+    await live.ctx.close();
+
+    // un petit telephone (320 px) : meme les noms les plus longs (N'Djamena, Amdjarass) tiennent dans le bandeau
+    const small = await newVisitor({ ...phone, viewport: { width: 320, height: 640 } }, { storage: { albasse_zara_name: 'Fatimé' } });
+    await small.ctx.clock.install({ time: new Date('2026-10-26T05:15:00Z') });
+    await small.page.goto(`http://localhost:${port}/`, { waitUntil: 'load' });
+    await small.page.waitForSelector('[data-testid="city-clock"]', { timeout: 20000 });
+    await sleep(800);
+    const smallMisfit = [await fits(small.page, "N'Djamena", 320)];
+    for (let i = 0; i < 7; i++) {
+      await small.page.clock.runFor(10000);
+      await sleep(1000);
+      smallMisfit.push(await fits(small.page, ((await small.page.getByTestId('city-clock-city').textContent()) || '').trim(), 320));
+    }
+    check('horloge : les 8 villes tiennent aussi sur un petit telephone (320 px), sans depasser le cadre', smallMisfit.every((m) => m === null), smallMisfit.filter(Boolean));
+    await sleep(900);
+    await small.page.screenshot({ path: path.join(OUT, '6c-horloge-320.png') });
+    await small.ctx.close();
+    await v.ctx.close();
+  }
+
   // =============================================== 7. ACCUEIL : PUBLICITES DE ZARA (FAITS VRAIS SEULEMENT) ===============================================
   if (PARTS.includes('7')) {
     console.log("\n== 7. accueil : publicites de Zara (vrais chiffres seulement, article rare pour les metiers haut places)");
@@ -645,7 +762,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     await waitText(page, /À savoir avant de commander/);
     await waitText(page, /Créez votre compte gratuit(?:, Fatimé)?/);
     const menu = await chipLabels(page);
-    check('menu du visiteur : compte, connexion, promotions, nouveautes, conseil, categories, livraison, WhatsApp, langue', menu.join('|') === '👤 Créer mon compte|Me connecter|🔥 Promotions|🆕 Nouveautés|🎯 Conseil|🛍️ Catégories|🚚 Livraison et paiement|💬 WhatsApp|🌐 العربية', menu);
+    check('menu du visiteur : compte, connexion, promotions, nouveautes, conseil, categories, livraison, WhatsApp, langue', menu.join('|') === `👤 Créer mon compte|Me connecter|🔥 Promotions|🆕 Nouveautés|${COLD_ON ? '🧥 Blousons & manteaux|' : ''}🎯 Conseil|🛍️ Catégories|🚚 Livraison et paiement|💬 WhatsApp|🌐 العربية`, menu);
     await page.screenshot({ path: path.join(OUT, 'A1-accueil.png') });
 
     // 1. la phrase du test du patron : un cadeau pour son mari -> des questions AVANT de montrer des articles
@@ -817,7 +934,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check("informations importantes en arabe : livraison 8:30-16:00, paiement a la livraison seulement a N'Djamena, 48 heures", /8:30/.test(infoAr) && /16:00/.test(infoAr) && /فقط في إنجامينا/.test(infoAr) && /48 ساعة/.test(infoAr), infoAr);
       await waitText(page, /أنشئ حسابك المجاني(?:، فاطمة)?/);
       const menuAr = await chipLabels(page);
-      check('menu en arabe : compte, connexion, offres, nouveautes, conseil, categories, livraison, WhatsApp, Francais', menuAr.join('|') === '👤 إنشاء حسابي|تسجيل الدخول|🔥 العروض|🆕 الجديد|🎯 نصيحة|🛍️ الفئات|🚚 التوصيل والدفع|💬 واتساب|🌐 Français', menuAr);
+      check('menu en arabe : compte, connexion, offres, nouveautes, conseil, categories, livraison, WhatsApp, Francais', menuAr.join('|') === `👤 إنشاء حسابي|تسجيل الدخول|🔥 العروض|🆕 الجديد|${COLD_ON ? '🧥 جاكيتات ومعاطف|' : ''}🎯 نصيحة|🛍️ الفئات|🚚 التوصيل والدفع|💬 واتساب|🌐 Français`, menuAr);
       await page.screenshot({ path: path.join(OUT, 'L2-menu-arabe.png') });
 
       // --- L2. cadeau en arabe : questions une par une
@@ -3206,6 +3323,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?|أنشئ حسابك|حسابك/, 25000);
     };
     const sayAskX = (pg, text, re) => ask(pg, text, re, 20000);
+    const numReSimple = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '[\\s\u00a0\u202f]?');
     const prodsAll = await get('products?select=id,name,price,compare_at_price,stock&limit=1000');
 
     // --- X1. moments forts en francais : un mot adapte, puis Zara continue (un visiteur neuf pour chaque sujet)
@@ -3320,6 +3438,128 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await sleep(1500);
       check('le 15 decembre 2026 (aucun moment fort proche) : Zara n\'en parle pas', (await panelOf(w.page).getByText(/Black Friday|Saint-Valentin|Tabaski|Ramadan/).count()) === 0);
       await w.ctx.close();
+    }
+
+    // --- X8. saison fraiche : blousons et manteaux mis en avant jusqu'a fin decembre (accueil, menu et reponses de Zara), seulement les VRAIS articles
+    {
+      const COAT = /\b(blousons?|manteaux?|vestes?|doudounes?|parkas?|perfectos?|coupe[- ]?vents?|pardessus|trenchs?)\b/i;
+      const RACK = /porte[- ]?manteaux?/i;
+      const live = await get('products?select=name,price,compare_at_price,stock,images&is_active=eq.true&limit=1000');
+      const coats = live.filter((p) => COAT.test(p.name) && !RACK.test(p.name) && Number(p.stock) > 0 && Number(p.price) > 0 && (p.images || []).length > 0);
+      const pct = (p) => (Number(p.compare_at_price) > Number(p.price) ? Math.round((1 - Number(p.price) / Number(p.compare_at_price)) * 100) : 0);
+      const shown = [...coats].sort((a, b) => pct(b) - pct(a) || Number(b.stock) - Number(a.stock) || a.name.localeCompare(b.name)).slice(0, 4);
+      const minPrice = Math.min(...shown.map((p) => Number(p.price)));
+      const maxPct = Math.max(0, ...shown.map(pct));
+      console.log('info  saison fraiche : articles reels', shown.map((p) => `${p.name.trim()} (${p.price}${pct(p) ? `, -${pct(p)} %` : ''})`).join(' | '), '| porte-manteaux ecartes :', live.filter((p) => RACK.test(p.name)).length);
+      check('la boutique a de vrais blousons ou manteaux a montrer (sinon ce test ne prouve rien)', shown.length >= 1, shown.length);
+      const nameOf = async (c) => ((await c.getAttribute('aria-label')) || '').replace(/^Voir le produit ›\s*/, '').trim();
+
+      // l'accueil : la bande « Saison fraiche »
+      {
+        const v = await visitor();
+        await v.page.goto(`${base}/`, { waitUntil: 'load' });
+        const strip = v.page.getByTestId('home-cold-season');
+        await strip.waitFor({ timeout: 25000 });
+        await sleep(800);
+        const txt = await strip.innerText();
+        check('accueil : bande « SAISON FRAICHE — Blousons et manteaux »', /SAISON FRAÎCHE/.test(txt) && /Blousons et manteaux/.test(txt), txt.slice(0, 80));
+        check('accueil : les vrais blousons et manteaux y sont, et AUCUN porte-manteau', shown.every((p) => txt.toLowerCase().includes(p.name.trim().toLowerCase().slice(0, 14))) && !RACK.test(txt), txt);
+        check('accueil : aucune vente flash ni urgence annoncee dans cette bande', !/flash|dernier|limité|jusqu.au/i.test(txt), txt);
+        await strip.scrollIntoViewIfNeeded();
+        await v.page.screenshot({ path: path.join(OUT, 'X8-accueil-saison-fraiche.png') });
+        check('aucune erreur (accueil saison fraiche)', v.errs.length === 0, v.errs);
+        await v.ctx.close();
+      }
+
+      // Zara : une ligne a l'ouverture, un bouton dans le menu, les vrais modeles
+      {
+        const v = await visitor();
+        await openZara(v);
+        const all = await panelOf(v.page).innerText();
+        check('Zara a l\'ouverture : « La saison fraiche arrive », une seule fois, avant les infos importantes', (all.match(/La saison fraîche arrive/g) || []).length === 1 && all.indexOf('La saison fraîche arrive') < all.indexOf('À savoir avant de commander'), all.slice(0, 300));
+        check('le menu a le bouton « 🧥 Blousons & manteaux »', (await chipLabels(v.page)).includes('🧥 Blousons & manteaux'), await chipLabels(v.page));
+        const before = await cardsOf(v.page).count();
+        await tap(v.page, '🧥 Blousons & manteaux', /Nos blousons et manteaux/);
+        await sleep(2500);
+        const added = await newCards(v.page, before);
+        const names = await Promise.all(added.map(nameOf));
+        const intro = await panelOf(v.page).getByText(/Nos blousons et manteaux/).last().innerText();
+        check('le bouton montre les vrais modeles (les memes que l\'accueil), jamais un porte-manteau', names.length === shown.length && names.every((n) => COAT.test(n) && !RACK.test(n)) && shown.every((p) => names.some((n) => n.trim().toLowerCase() === p.name.trim().toLowerCase())), { names, expected: shown.map((p) => p.name) });
+        check('premiere carte = la plus grande remise reelle', names[0] && names[0].trim().toLowerCase() === shown[0].name.trim().toLowerCase(), names);
+        check(`les chiffres dits sont ceux des articles montres : ${shown.length} modele(s), a partir de ${minPrice} FCFA${maxPct >= 5 ? `, jusqu'a -${maxPct} %` : ', pas de remise annoncee'}`, new RegExp(`${shown.length} modèle`).test(intro) && new RegExp(`à partir de ${numReSimple(minPrice)} FCFA`).test(intro) && (maxPct >= 5 ? new RegExp(`jusqu’à -${maxPct} % sur l’ancien prix`).test(intro) : !/%/.test(intro)), intro);
+        check('aucune fausse urgence : ni « vente flash » ni « dernier » ni date limite', !/flash|dernier|plus que|limité|jusqu.au/i.test(intro), intro);
+        await v.page.screenshot({ path: path.join(OUT, 'X8-zara-blousons-manteaux.png') });
+        // « Mon budget » juste apres : la question du budget, puis des blousons et manteaux (jamais un porte-manteau ni un autre article)
+        await tap(v.page, '💰 Mon budget', /Quel est votre budget/);
+        const budgetChips = await chipLabels(v.page);
+        check('« Mon budget » apres les blousons et manteaux : Zara pose la question du budget (elle ne recommence pas une conversation)', budgetChips.length >= 3, budgetChips);
+        const nBefore = await cardsOf(v.page).count();
+        const anyBudget = budgetChips.find((l) => /pas de budget|peu importe|tout/i.test(l)) || budgetChips[budgetChips.length - 1];
+        await chip(v.page, anyBudget).first().click();
+        await sleep(3000);
+        const budgetNames = await Promise.all((await newCards(v.page, nBefore)).map(nameOf));
+        check('le budget choisi : seulement des blousons et manteaux (jamais de porte-manteau)', budgetNames.length >= 1 && budgetNames.every((n) => COAT.test(n) && !RACK.test(n)) && v.errs.length === 0, { budgetNames, errs: v.errs });
+        // le client ecrit
+        const b2 = await cardsOf(v.page).count();
+        await sayAskX(v.page, 'je cherche un manteau', /Nos blousons et manteaux/);
+        await sleep(2000);
+        check('« je cherche un manteau » : les memes vrais modeles', (await newCards(v.page, b2)).length === shown.length);
+        const b3 = await cardsOf(v.page).count();
+        await sayAskX(v.page, 'il fait froid', /Nos blousons et manteaux/);
+        await sleep(1500);
+        check('« il fait froid » : Zara montre aussi les blousons et manteaux', (await newCards(v.page, b3)).length === shown.length);
+        // un porte-manteau n'est pas un manteau : recherche normale, jamais la saison fraiche
+        const nIntro = await panelOf(v.page).getByText(/Nos blousons et manteaux/).count();
+        await sayAskX(v.page, 'porte-manteau', /./);
+        await sleep(2500);
+        check('« porte-manteau » : recherche normale (pas de reponse « Nos blousons et manteaux »)', (await panelOf(v.page).getByText(/Nos blousons et manteaux/).count()) === nIntro);
+        // avec un budget ecrit : la recherche normale (qui sait filtrer par budget) s'en charge
+        await sayAskX(v.page, 'manteau 30000', /./);
+        await sleep(2500);
+        check('« manteau 30000 » (un budget) : recherche normale avec le budget, pas la reponse de la saison fraiche', (await panelOf(v.page).getByText(/Nos blousons et manteaux/).count()) === nIntro);
+        check('aucune erreur (Zara saison fraiche)', v.errs.length === 0, v.errs);
+        await v.ctx.close();
+      }
+
+      // en arabe
+      {
+        const v = await newVisitor(phone, { lang: 'ar', storage: { albasse_zara_name: 'Ali' } });
+        await v.page.goto(`${base}/`, { waitUntil: 'load' });
+        await sleep(2500);
+        await v.page.getByTestId('assistant-fab').click();
+        await waitText(v.page, /موسم البرد يقترب/, 25000);
+        await waitText(v.page, /أنشئ حسابك|حسابك/, 25000);
+        check('arabe : la ligne d\'ouverture et le bouton « 🧥 جاكيتات ومعاطف »', (await chipLabels(v.page)).includes('🧥 جاكيتات ومعاطف'), await chipLabels(v.page));
+        const before = await cardsOf(v.page).count();
+        await tap(v.page, '🧥 جاكيتات ومعاطف', /جاكيتاتنا ومعاطفنا/);
+        await sleep(2500);
+        check('arabe : les vrais modeles s\'affichent', (await newCards(v.page, before)).length === shown.length);
+        const intro = await panelOf(v.page).getByText(/جاكيتاتنا ومعاطفنا/).last().innerText();
+        check('arabe : les chiffres sont ceux des articles montres', new RegExp(`ابتداء من ${numReSimple(minPrice)} FCFA`).test(intro) && (maxPct >= 5 ? new RegExp(`حتى -${maxPct} % عن السعر القديم`).test(intro) : !/%/.test(intro)), intro);
+        check('aucune erreur (saison fraiche en arabe)', v.errs.length === 0, v.errs);
+        await v.ctx.close();
+      }
+
+      // apres le 31 decembre 2026 : plus rien (ni bande, ni ligne, ni bouton) ; « manteau » = recherche normale
+      {
+        const v = await visitor();
+        await v.ctx.clock.install({ time: new Date('2027-01-05T09:00:00Z') }); // l'heure avance normalement a partir de cette date (Zara a besoin que le temps passe pour repondre)
+        await openZara(v);
+        await sleep(3000); // les articles de l'accueil sont charges : la bande aurait deja du apparaitre
+        check('apres le 31 decembre : plus de bande « Saison fraiche » sur l\'accueil', (await v.page.getByTestId('home-cold-season').count()) === 0 && (await v.page.getByText('Toute la collection').count()) === 1);
+        check('apres le 31 decembre : ni ligne d\'ouverture ni bouton dans le menu', (await panelOf(v.page).getByText(/La saison fraîche arrive/).count()) === 0 && !(await chipLabels(v.page)).includes('🧥 Blousons & manteaux'), await chipLabels(v.page));
+        // (ecrire « manteau » apres cette date n'est pas testable ici : avec une fausse horloge Zara ne repond plus ; la regle « coldSeasonActive = faux apres le 31 decembre » est testee dans tests/email/cold-season.test.ts)
+        await v.ctx.close();
+      }
+      // le 31 decembre 2026 a 23h59 a N'Djamena : encore en cours
+      {
+        const v = await visitor();
+        await v.ctx.clock.setFixedTime(new Date('2026-12-31T22:59:00Z'));
+        await v.page.goto(`${base}/`, { waitUntil: 'load' });
+        await v.page.getByTestId('home-cold-season').waitFor({ timeout: 25000 });
+        check('le 31 decembre a 23h59 (N\'Djamena) : la bande est encore la', true);
+        await v.ctx.close();
+      }
     }
   }
 
@@ -5518,6 +5758,11 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         await sleep(200);
       }
     };
+    // a N'Djamena Zara propose un rendez-vous de livraison (facultatif) : « Passer » = livraison normale, puis la question du paiement
+    const tapHomeSkip = async (p) => {
+      await tapExact(p, homeCity.name, /Voulez-vous choisir le jour et l’heure/);
+      await tapExact(p, 'Passer', /Comment souhaitez-vous payer/);
+    };
     const cartCount = (p) => p.evaluate(() => (JSON.parse(localStorage.getItem('albasse-cart') || '{"state":{"items":[]}}').state.items || []).length);
     const realErrs = (c) => c.errs.filter((e) => !/Erreur création commande/.test(e));
 
@@ -5589,6 +5834,10 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await typeIn(c.page, 'Farcha, face à la pharmacie');
       await waitText(c.page, /Dans quelle ville doit-on vous livrer/);
       await typeIn(c.page, homeCity.name);
+      await waitText(c.page, /Voulez-vous choisir le jour et l’heure/);
+      const slotChips = await chipLabels(c.page);
+      check('a N\'Djamena : Zara propose les jours, « Passer » et annuler ; la livraison normale n\'est pas dans la liste', slotChips.length >= 9 && slotChips[slotChips.length - 2] === 'Passer' && slotChips[slotChips.length - 1] === 'Annuler la commande' && !slotChips.some((l) => /normale/i.test(l)), slotChips);
+      await typeIn(c.page, 'passer');
       await waitText(c.page, /Comment souhaitez-vous payer/);
       check('a N\'Djamena : paiement a la livraison propose en plus d\'Airtel Money et Moov Money', (await chipLabels(c.page)).join('|') === '💵 À la livraison|📱 Airtel Money|📲 Moov Money|Annuler la commande', await chipLabels(c.page));
       await typeIn(c.page, 'je paie à la livraison');
@@ -5602,7 +5851,107 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const b = db.created[0];
       const done = await panelOf(c.page).getByText(/a bien été enregistrée/).last().innerText();
       check('enregistre : paiement a la livraison, sans emballage, bon total ; confirmation sans numero Mobile Money', db.created.length === 1 && b.payment_method === 'cash_on_delivery' && !('gift_wrap' in b) && b.total === price + homeFee && /Vous payez en espèces directement à la livraison/.test(done) && !/Envoyez|Payez ici/.test(done) && !/Emballage cadeau inclus/.test(done) && /réglez dans ce délai|valable 48 h/.test(done) && new RegExp(`vous rapportera ${Math.floor((price + homeFee) / 5000)} points? une fois livrée`).test(done), { total: b.total, done });
+      check('« Passer » : la commande est prise comme une livraison normale (aucun champ de rendez-vous)', !('delivery_type' in b) && !('scheduled_for' in b), b);
+      check('recapitulatif sans rendez-vous : aucune ligne « Livraison programmee »', !/Livraison programmée/.test(recap), recap);
       check('aucune erreur (paiement a la livraison)', c.errs.length === 0, c.errs);
+      await c.ctx.close();
+    }
+
+    // --- O2b. N'Djamena : le client choisit un rendez-vous de livraison (jour puis heure) dans le chat
+    {
+      const fu = mkMember('Ahmed Hassan');
+      const db = newDb();
+      const c = await orderVisitor(fu, db, { qty: 1 });
+      await openOrderChat(c);
+      await ask(c.page, 'je veux commander', /Quelle est votre adresse de livraison/);
+      await typeIn(c.page, 'Farcha, face à la pharmacie');
+      await waitText(c.page, /Dans quelle ville doit-on vous livrer/);
+      await tapExact(c.page, homeCity.name, /Voulez-vous choisir le jour et l’heure/);
+      const dayChips = await chipLabels(c.page);
+      check('jours proposes : « Aujourd\'hui » ou « Demain » en premier, 7 ou 8 jours, puis « Passer » et annuler', /^(Aujourd'hui|Demain)$/.test(dayChips[0]) && dayChips.length >= 9 && dayChips.length <= 10 && dayChips[dayChips.length - 2] === 'Passer', dayChips);
+      await tapExact(c.page, dayChips[1], /Quelle heure pour/);
+      const timeChips = await chipLabels(c.page);
+      check('heures proposees : 15 heures de 8h30 a 15h30, « Autre jour » et annuler', timeChips.length === 17 && timeChips[0] === '8h30' && timeChips[14] === '15h30' && timeChips[15] === '↩️ Autre jour' && timeChips[16] === 'Annuler la commande', timeChips);
+      await c.page.screenshot({ path: path.join(OUT, 'O2b-heures.png') });
+      await tapExact(c.page, '↩️ Autre jour', /Voulez-vous choisir le jour et l’heure/);
+      check('« Autre jour » : Zara repose la question du jour', (await chipLabels(c.page)).join('|') === dayChips.join('|'));
+      await tapExact(c.page, dayChips[1], /Quelle heure pour/);
+      await tapExact(c.page, '10h00', /Comment souhaitez-vous payer/);
+      await tapExact(c.page, '💵 À la livraison', /Souhaitez-vous l’emballage cadeau/);
+      await tapExact(c.page, 'Non, merci', /Récapitulatif de votre commande/);
+      const recap = await panelOf(c.page).getByText(/Récapitulatif de votre commande/).last().innerText();
+      check('recapitulatif : « Livraison programmee : … a 10h00 »', /📅 Livraison programmée : .* à 10h00/.test(recap), recap);
+      check('recapitulatif : boutons Confirmer / Modifier / Annuler, rien d\'enregistre', (await chipLabels(c.page)).join('|') === '✅ Confirmer la commande|✏️ Modifier|Annuler la commande' && db.attempts.length === 0);
+      await c.page.screenshot({ path: path.join(OUT, 'O2b-recapitulatif.png') });
+      await tapExact(c.page, '✅ Confirmer la commande', /a bien été enregistrée/);
+      const b = db.created[0];
+      check('enregistre : « scheduled » et l\'heure exacte (10h00 a N\'Djamena = 09:00 UTC), entre 2 h et 8 jours apres maintenant', db.created.length === 1 && b.delivery_type === 'scheduled' && /^\d{4}-\d{2}-\d{2}T09:00:00\.000Z$/.test(b.scheduled_for) && Date.parse(b.scheduled_for) - Date.now() > 2 * 3600_000 && Date.parse(b.scheduled_for) - Date.now() < 8 * 86_400_000 && b.shipping_city === homeCity.name && b.payment_method === 'cash_on_delivery', b);
+      const done = await panelOf(c.page).getByText(/a bien été enregistrée/).last().innerText();
+      check('confirmation : rappelle le rendez-vous', /📅 Livraison programmée : .* à 10h00/.test(done), done);
+      check('aucune erreur (rendez-vous dans le chat)', c.errs.length === 0, c.errs);
+      await c.ctx.close();
+    }
+
+    // --- O2c. en ecrivant le jour et l'heure ; modifier le rendez-vous ; « Passer » apres coup
+    {
+      const fu = mkMember('Ahmed Hassan');
+      const db = newDb();
+      const c = await orderVisitor(fu, db, { qty: 1 });
+      await openOrderChat(c);
+      await ask(c.page, 'je veux commander', /Quelle est votre adresse de livraison/);
+      await typeIn(c.page, 'Farcha, face à la pharmacie');
+      await waitText(c.page, /Dans quelle ville doit-on vous livrer/);
+      await typeIn(c.page, homeCity.name);
+      await waitText(c.page, /Voulez-vous choisir le jour et l’heure/);
+      await typeIn(c.page, 'bof');
+      await waitText(c.page, /Touchez un des boutons ci-dessous/);
+      await sleep(1500);
+      check('un texte qui n\'est pas un jour : Zara repose la question du jour', (await panelOf(c.page).getByText(/Voulez-vous choisir le jour et l’heure/).count()) === 2);
+      await typeIn(c.page, 'demain');
+      await waitText(c.page, /Quelle heure pour/);
+      await typeIn(c.page, '14h20');
+      await waitText(c.page, /Touchez un des boutons ci-dessous/);
+      await typeIn(c.page, 'à 14h30');
+      await waitText(c.page, /Comment souhaitez-vous payer/);
+      await tapExact(c.page, '💵 À la livraison', /Souhaitez-vous l’emballage cadeau/);
+      await tapExact(c.page, 'Non, merci', /Récapitulatif de votre commande/);
+      let recap = await panelOf(c.page).getByText(/Récapitulatif de votre commande/).last().innerText();
+      check('« demain » puis « à 14h30 » ecrits : le recapitulatif dit « demain a 14h30 »', /📅 Livraison programmée : demain à 14h30/.test(recap), recap);
+      await tapExact(c.page, '✏️ Modifier', /Que voulez-vous modifier/);
+      check('« Modifier » propose « Rendez-vous » (ville de la boutique)', (await chipLabels(c.page)).includes('📅 Rendez-vous'), await chipLabels(c.page));
+      await tapExact(c.page, '📅 Rendez-vous', /Voulez-vous choisir le jour et l’heure/);
+      await tapExact(c.page, 'Passer', /Récapitulatif de votre commande/);
+      recap = await panelOf(c.page).getByText(/Récapitulatif de votre commande/).last().innerText();
+      check('« Passer » apres coup : le rendez-vous disparait du recapitulatif', !/Livraison programmée/.test(recap), recap);
+      await tapExact(c.page, '✅ Confirmer la commande', /a bien été enregistrée/);
+      check('enregistre sans rendez-vous', db.created.length === 1 && !('delivery_type' in db.created[0]) && !('scheduled_for' in db.created[0]), db.created[0]);
+      check('aucune erreur (rendez-vous ecrit)', c.errs.length === 0, c.errs);
+      await c.ctx.close();
+    }
+
+    // --- O2d. rendez-vous choisi puis ville changee : le rendez-vous disparait (il n'existe qu'a N'Djamena)
+    {
+      const fu = mkMember('Ahmed Hassan');
+      const db = newDb();
+      const c = await orderVisitor(fu, db, { qty: 1 });
+      await openOrderChat(c);
+      await ask(c.page, 'je veux commander', /Quelle est votre adresse de livraison/);
+      await typeIn(c.page, 'Farcha, face à la pharmacie');
+      await waitText(c.page, /Dans quelle ville doit-on vous livrer/);
+      await tapExact(c.page, homeCity.name, /Voulez-vous choisir le jour et l’heure/);
+      await typeIn(c.page, 'demain');
+      await waitText(c.page, /Quelle heure pour/);
+      await typeIn(c.page, 'midi');
+      await waitText(c.page, /Comment souhaitez-vous payer/);
+      await tapExact(c.page, '📱 Airtel Money', /Souhaitez-vous l’emballage cadeau/);
+      await tapExact(c.page, 'Non, merci', /Récapitulatif de votre commande/);
+      await tapExact(c.page, '✏️ Modifier', /Que voulez-vous modifier/);
+      await tapExact(c.page, '🏙️ Ville', /Dans quelle ville doit-on vous livrer/);
+      await tapExact(c.page, farCity.name, /Récapitulatif de votre commande/);
+      const recap = await panelOf(c.page).getByText(/Récapitulatif de votre commande/).last().innerText();
+      check('ville changee : plus de rendez-vous dans le recapitulatif', !/Livraison programmée/.test(recap) && new RegExp(`Livraison à ${esc(farCity.name)}`).test(recap), recap);
+      await tapExact(c.page, '✅ Confirmer la commande', /a bien été enregistrée/);
+      check('enregistre hors N\'Djamena sans rendez-vous', db.created.length === 1 && !('delivery_type' in db.created[0]) && !('scheduled_for' in db.created[0]) && db.created[0].shipping_city === farCity.name, db.created[0]);
       await c.ctx.close();
     }
 
@@ -5625,13 +5974,13 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('une question au milieu de la commande : Zara repond, puis repose la question en cours (la commande reste ouverte)', (await panelOf(c.page).getByText(/Quelle est votre adresse de livraison/).count()) === addressAsks + 1 && (await c.page.evaluate(() => JSON.parse(sessionStorage.getItem('albasse_zara_v1')).step)) === 'co_address');
       await typeIn(c.page, 'Quartier Moursal');
       await waitText(c.page, /Dans quelle ville doit-on vous livrer/);
-      await tapExact(c.page, homeCity.name, /Comment souhaitez-vous payer/);
+      await tapHomeSkip(c.page);
       await tapExact(c.page, '💵 À la livraison', /Souhaitez-vous l’emballage cadeau/);
       await tapExact(c.page, 'Non, merci', /Récapitulatif de votre commande/);
       const recap1 = await panelOf(c.page).getByText(/Récapitulatif de votre commande/).last().innerText();
       check('le telephone « +235 66 12 34 56 » est enregistre en 8 chiffres : 66123456', /📞 66123456/.test(recap1), recap1);
       await tapExact(c.page, '✏️ Modifier', /Que voulez-vous modifier/);
-      check('modifier : nom, telephone, adresse, ville, paiement, emballage', (await chipLabels(c.page)).join('|') === '👤 Nom|📞 Téléphone|📍 Adresse|🏙️ Ville|💳 Paiement|🎁 Emballage|Annuler la commande', await chipLabels(c.page));
+      check('modifier (a N\'Djamena) : nom, telephone, adresse, ville, rendez-vous, paiement, emballage', (await chipLabels(c.page)).join('|') === '👤 Nom|📞 Téléphone|📍 Adresse|🏙️ Ville|📅 Rendez-vous|💳 Paiement|🎁 Emballage|Annuler la commande', await chipLabels(c.page));
       await tapExact(c.page, '📍 Adresse', /Quelle est votre adresse de livraison/);
       await typeIn(c.page, 'Quartier Chagoua, rue 5');
       await waitText(c.page, /📍 Quartier Chagoua, rue 5, /);
@@ -5652,7 +6001,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await openOrderChat(c);
       await ask(c.page, 'je veux commander', /Quelle est votre adresse de livraison/);
       await typeIn(c.page, 'Quartier Farcha');
-      await tapExact(c.page, homeCity.name, /Comment souhaitez-vous payer/);
+      await tapHomeSkip(c.page);
       await tapExact(c.page, '💵 À la livraison', /Souhaitez-vous l’emballage cadeau/);
       await tapExact(c.page, 'Non, merci', /Récapitulatif de votre commande/);
       await tapExact(c.page, '✅ Confirmer la commande', /Je n’ai pas pu enregistrer votre commande/);
@@ -5675,7 +6024,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await openOrderChat(c);
       await ask(c.page, 'je veux commander', /Quelle est votre adresse de livraison/);
       await typeIn(c.page, 'Quartier Farcha');
-      await tapExact(c.page, homeCity.name, /Comment souhaitez-vous payer/);
+      await tapHomeSkip(c.page);
       await tapExact(c.page, '📲 Moov Money', /Souhaitez-vous l’emballage cadeau/);
       await tapExact(c.page, 'Non, merci', /Récapitulatif de votre commande/);
       await tapExact(c.page, '✅ Confirmer la commande', /Je n’ai pas pu enregistrer votre commande/);
@@ -5696,7 +6045,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await openOrderChat(c);
       await ask(c.page, 'je veux commander', /Quelle est votre adresse de livraison/);
       await typeIn(c.page, 'Quartier Farcha');
-      await tapExact(c.page, homeCity.name, /Comment souhaitez-vous payer/);
+      await tapHomeSkip(c.page);
       await tapExact(c.page, '💵 À la livraison', /Souhaitez-vous l’emballage cadeau/);
       await tapExact(c.page, 'Non, merci', /Récapitulatif de votre commande/);
       await tapExact(c.page, '✅ Confirmer la commande', /Je n’ai pas pu enregistrer votre commande/);
@@ -5718,7 +6067,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await openOrderChat(c);
       await ask(c.page, 'je veux commander', /Quelle est votre adresse de livraison/);
       await typeIn(c.page, 'Quartier Farcha');
-      await tapExact(c.page, homeCity.name, /Comment souhaitez-vous payer/);
+      await tapHomeSkip(c.page);
       await tapExact(c.page, '💵 À la livraison', /Souhaitez-vous l’emballage cadeau/);
       await tapExact(c.page, 'Non, merci', /Récapitulatif de votre commande/);
       bump = 500;
@@ -5761,6 +6110,38 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await c.ctx.close();
     }
 
+    // --- O8b. arabe : rendez-vous de livraison a N'Djamena (jours et heures en arabe, recapitulatif de droite a gauche)
+    {
+      const fu = mkMember('Ahmed Hassan');
+      const db = newDb();
+      const c = await orderVisitor(fu, db, { qty: 1 });
+      await openOrderChat(c);
+      await ask(c.page, 'je veux commander', /Quelle est votre adresse de livraison/);
+      await c.page.getByTestId('assistant-lang').click();
+      await waitText(c.page, /ما عنوان التوصيل؟/);
+      await typeIn(c.page, 'حي فرشا قرب الصيدلية');
+      await waitText(c.page, /في أي مدينة يجب أن نوصّل إليك؟/);
+      await tapExact(c.page, homeCity.name, /هل تريد اختيار يوم وساعة التوصيل في إنجامينا/);
+      const dayChips = await chipLabels(c.page);
+      check('arabe : jours (اليوم أو غداً en premier), « تخطي » et annuler', /^(اليوم|غداً)$/.test(dayChips[0]) && dayChips[dayChips.length - 2] === 'تخطي' && dayChips[dayChips.length - 1] === 'إلغاء الطلب', dayChips);
+      await tapExact(c.page, dayChips[1], /في أي ساعة/);
+      const timeChips = await chipLabels(c.page);
+      check('arabe : 15 heures de 8:30 a 15:30, « يوم آخر » et annuler', timeChips.length === 17 && timeChips[0] === '8:30' && timeChips[14] === '15:30' && timeChips[15] === '↩️ يوم آخر', timeChips);
+      await tapExact(c.page, '10:00', /كيف تريد الدفع؟/);
+      await tapExact(c.page, (await chipLabels(c.page))[0], /هل تريد تغليف الهدية؟/);
+      await tapExact(c.page, 'لا، شكراً', /ملخص طلبك/);
+      const recap = await panelOf(c.page).getByText(/ملخص طلبك/).last().innerText();
+      check('recapitulatif arabe : « 📅 توصيل بموعد محدد : … الساعة 10:00 »', /📅 توصيل بموعد محدد: .* الساعة 10:00/.test(recap), recap);
+      await c.page.screenshot({ path: path.join(OUT, 'O8b-arabe-rendez-vous.png') });
+      await tapExact(c.page, '✅ تأكيد الطلب', /تم تسجيل طلبك رقم #/);
+      const b = db.created[0];
+      check('arabe : enregistre « scheduled » a 10:00 (09:00 UTC)', db.created.length === 1 && b.delivery_type === 'scheduled' && /T09:00:00\.000Z$/.test(b.scheduled_for), b);
+      const done = await panelOf(c.page).getByText(/تم تسجيل طلبك رقم #/).last().innerText();
+      check('confirmation arabe : rappelle le rendez-vous', /📅 توصيل بموعد محدد: .* الساعة 10:00/.test(done), done);
+      check('aucune erreur (rendez-vous en arabe)', c.errs.length === 0, c.errs);
+      await c.ctx.close();
+    }
+
     // --- O9. statistiques de Zara : la colonne n'existe pas encore dans la base (script pas applique) -> la commande est enregistree quand meme, sans l'appareil
     {
       const fu = mkMember('Ahmed Hassan');
@@ -5772,6 +6153,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await typeIn(c.page, 'Farcha, face à la pharmacie');
       await waitText(c.page, /Dans quelle ville doit-on vous livrer/);
       await typeIn(c.page, homeCity.name);
+      await waitText(c.page, /Voulez-vous choisir le jour et l’heure/);
+      await typeIn(c.page, 'passer');
       await waitText(c.page, /Comment souhaitez-vous payer/);
       await typeIn(c.page, 'je paie à la livraison');
       await waitText(c.page, /Souhaitez-vous l’emballage cadeau/);
@@ -5997,6 +6380,177 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('aucune ecriture reelle depuis la page de commande', c.writes.every((w) => !/\/orders/.test(w)), c.writes);
       check('aucune erreur (page de commande)', c.errs.length === 0, c.errs);
       await c.ctx.close();
+    }
+
+    // --- livraison programmee (clients de N'Djamena) : choix du jour et de l'heure, enregistrement, affichage
+    {
+      const cityPick = async (page, name) => {
+        const input = page.getByPlaceholder('📍 Rechercher une ville...');
+        await input.click();
+        await input.fill(name);
+        await sleep(300);
+        await page.getByText(name, { exact: true }).first().click();
+        await sleep(500);
+      };
+      const open = async (fakeOrders) => {
+        const c = await newVisitor(phone, { storage, fakeUser: fu, fakeOrders });
+        await c.page.goto(`http://localhost:${port}/commande`, { waitUntil: 'load' });
+        await sleep(3500);
+        return c;
+      };
+      const confirmBtn = (page) => page.getByText('Confirmer la commande', { exact: true });
+
+      // le choix n'existe que pour N'Djamena
+      {
+        const c = await open({ list: [], patches: [] });
+        const { page } = c;
+        check('livraison programmee : pas de choix tant que la ville n\'est pas choisie', (await page.getByTestId('delivery-picker').count()) === 0);
+        await cityPick(page, 'Moundou');
+        check('livraison programmee : pas de choix pour Moundou', (await page.getByTestId('delivery-picker').count()) === 0);
+        await cityPick(page, "N'Djamena");
+        check("livraison programmee : N'Djamena montre le choix du jour et de l'heure tout de suite, SANS « Livraison normale » dans la liste", (await page.getByTestId('delivery-picker').count()) === 1 && (await page.getByTestId('delivery-schedule-box').count()) === 1 && (await page.getByText('Livraison programmée', { exact: true }).count()) >= 1 && (await page.getByText(/Livraison normale/).count()) === 0 && (await page.getByTestId('delivery-standard').count()) === 0);
+        check('livraison programmee : aucun rendez-vous choisi au depart', (await page.getByTestId('sched-summary').count()) === 0);
+        const dayIds = await page.locator('[data-testid^="sched-day-"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')));
+        check('programmee : 7 ou 8 jours proposes, a partir d\'aujourd\'hui ou de demain', dayIds.length >= 7 && dayIds.length <= 8, dayIds);
+        const firstLabel = (await page.locator('[data-testid^="sched-day-"]').first().innerText()).trim();
+        check('programmee : le premier jour est « Aujourd\'hui » ou « Demain »', /^(Aujourd'hui|Demain)$/.test(firstLabel), firstLabel);
+        check('programmee : tant que le jour n\'est pas choisi, « Choisissez d\'abord le jour »', (await page.getByText('Choisissez d’abord le jour.').count()) === 1 && (await page.locator('[data-testid^="sched-time-"]').count()) === 0);
+        await page.locator('[data-testid^="sched-day-"]').nth(1).click();
+        await sleep(300);
+        check('programmee : 15 heures proposees (8h30 a 15h30)', (await page.locator('[data-testid^="sched-time-"]').count()) === 15 && (await page.getByTestId('sched-time-08:30').count()) === 1 && (await page.getByTestId('sched-time-15:30').count()) === 1 && (await page.getByTestId('sched-time-16:00').count()) === 0);
+        check('programmee : pas encore de rendez-vous annonce', (await page.getByTestId('sched-summary').count()) === 0);
+        await page.screenshot({ path: path.join(OUT, 'C7-livraison-programmee.png'), fullPage: true });
+        // changer de ville : le choix disparait et la livraison redevient normale
+        await cityPick(page, 'Sarh');
+        check('programmee : changer pour Sarh retire le choix', (await page.getByTestId('delivery-picker').count()) === 0);
+        await cityPick(page, "N'Djamena");
+        check('programmee : retour a N\'Djamena = aucun rendez-vous (le choix precedent est oublie) et aucun jour choisi', (await page.getByTestId('sched-summary').count()) === 0 && (await page.locator('[data-testid^="sched-time-"]').count()) === 0);
+        check('aucune erreur (choix de livraison)', c.errs.length === 0, c.errs);
+        await c.ctx.close();
+      }
+
+      // commande avec rendez-vous
+      {
+        const db = { list: [], patches: [] };
+        const c = await open(db);
+        const { page } = c;
+        await page.getByPlaceholder('Adresse (quartier, rue)').fill('Farcha, rue 12');
+        await cityPick(page, "N'Djamena");
+        await page.getByRole('radio', { name: /Paiement à la livraison/ }).click();
+        const dayEl = page.locator('[data-testid^="sched-day-"]').nth(1);
+        const dayKey = (await dayEl.getAttribute('data-testid')).replace('sched-day-', '');
+        await dayEl.click();
+        await confirmBtn(page).click();
+        await page.getByText(/Choisissez le jour et l.heure du rendez-vous/).first().waitFor({ timeout: 5000 });
+        check('un jour choisi sans l\'heure : message et RIEN n\'est enregistre', (db.attempts ?? []).length === 0);
+        await page.getByTestId('sched-time-10:00').click();
+        await sleep(300);
+        const summary = await page.getByTestId('sched-summary').innerText();
+        check('rendez-vous annonce : « Rendez-vous : … a 10h00 »', /Rendez-vous : .* à 10h00/.test(summary), summary);
+        await page.screenshot({ path: path.join(OUT, 'C8-rendez-vous-choisi.png'), fullPage: true });
+        await confirmBtn(page).click();
+        await page.getByTestId('confirm-scheduled').waitFor({ timeout: 15000 });
+        const sent = (db.created ?? [])[0];
+        check('la commande envoyee a la base porte le type « scheduled » et l\'heure exacte (10h00 a N\'Djamena = 09:00 UTC)', sent && sent.delivery_type === 'scheduled' && sent.scheduled_for === `${dayKey}T09:00:00.000Z`, sent);
+        check('la commande garde sa ville, son paiement et son total (livraison de N\'Djamena gratuite)', sent && sent.shipping_city === "N'Djamena" && sent.payment_method === 'cash_on_delivery' && Number(sent.total) === Number(realProduct.price), { sent, price: realProduct.price });
+        check('une seule commande enregistree', (db.created ?? []).length === 1);
+        const conf = await page.getByTestId('confirm-scheduled').innerText();
+        check('confirmation : « Livraison programmee : … a 10h00 »', /Livraison programmée : .* à 10h00/.test(conf), conf);
+        await page.screenshot({ path: path.join(OUT, 'C9-confirmation-programmee.png') });
+        check('aucune erreur (commande programmee)', c.errs.length === 0, c.errs);
+        await c.ctx.close();
+      }
+
+      // commande normale a N'Djamena : exactement comme avant (aucun champ de livraison programmee)
+      {
+        const db = { list: [], patches: [] };
+        const c = await open(db);
+        const { page } = c;
+        await page.getByPlaceholder('Adresse (quartier, rue)').fill('Farcha, rue 12');
+        await cityPick(page, "N'Djamena");
+        await page.getByRole('radio', { name: /Paiement à la livraison/ }).click();
+        await confirmBtn(page).click();
+        await page.getByText('Merci d\'avoir acheté avec ALBASSE SHOPPING !').waitFor({ timeout: 15000 });
+        const sent = (db.created ?? [])[0];
+        check('commande normale : ni delivery_type ni scheduled_for envoyes', sent && !('delivery_type' in sent) && !('scheduled_for' in sent), sent);
+        check('confirmation d\'une commande normale : pas de ligne « Livraison programmee »', (await page.getByTestId('confirm-scheduled').count()) === 0);
+        await c.ctx.close();
+      }
+
+      // choisir « programmee » puis changer de ville avant de confirmer : la commande part en livraison normale
+      {
+        const db = { list: [], patches: [] };
+        const c = await open(db);
+        const { page } = c;
+        await page.getByPlaceholder('Adresse (quartier, rue)').fill('Quartier Nord');
+        await cityPick(page, "N'Djamena");
+        await page.locator('[data-testid^="sched-day-"]').nth(1).click();
+        await page.getByTestId('sched-time-11:30').click();
+        await cityPick(page, 'Sarh');
+        await confirmBtn(page).click();
+        await page.getByText('Merci d\'avoir acheté avec ALBASSE SHOPPING !').waitFor({ timeout: 15000 });
+        const sent = (db.created ?? [])[0];
+        check('programmee puis autre ville : la commande part sans rendez-vous', sent && sent.shipping_city === 'Sarh' && !('delivery_type' in sent) && !('scheduled_for' in sent), sent);
+        await c.ctx.close();
+      }
+
+      // la base ne connait pas encore la livraison programmee (script SQL pas lance) : le rendez-vous n'est JAMAIS perdu en silence
+      {
+        const db = { list: [], patches: [], rejectColumn: 'delivery_type' };
+        const c = await open(db);
+        const { page } = c;
+        await page.getByPlaceholder('Adresse (quartier, rue)').fill('Farcha, rue 12');
+        await cityPick(page, "N'Djamena");
+        await page.getByRole('radio', { name: /Paiement à la livraison/ }).click();
+        const dayEl2 = page.locator('[data-testid^="sched-day-"]').nth(1);
+        await dayEl2.click();
+        await page.getByTestId('sched-time-14:00').click();
+        await confirmBtn(page).click();
+        await page.getByText(/La livraison programmée n.est pas encore disponible/).first().waitFor({ timeout: 8000 });
+        check('script SQL pas lance : message clair, aucune commande enregistree sans son rendez-vous', (db.created ?? []).length === 0 && (db.attempts ?? []).length === 1);
+        // le client touche une 2e fois le jour choisi : plus de rendez-vous, la commande est prise comme une livraison normale
+        await dayEl2.click();
+        await sleep(300);
+        check('toucher une 2e fois le jour choisi annule le rendez-vous (plus d\'heures ni de resume)', (await page.getByTestId('sched-summary').count()) === 0 && (await page.locator('[data-testid^="sched-time-"]').count()) === 0);
+        await confirmBtn(page).click();
+        await page.getByText('Merci d\'avoir acheté avec ALBASSE SHOPPING !').waitFor({ timeout: 15000 });
+        check('puis sans rendez-vous : la commande est enregistree en livraison normale', (db.created ?? []).length === 1 && !('delivery_type' in db.created[0]));
+        await c.ctx.close();
+      }
+
+      // Mes commandes (client) et page d'administration
+      {
+        const when = new Date(Date.now() + 2 * 86_400_000).toISOString();
+        const S = { ...mkOrder('abababab-0000-4000-8000-0000000000a1', 'pending', false, 5000, [oi('Montre', 5000, 1)]), payment_method: 'cash_on_delivery', shipping_city: "N'Djamena", delivery_type: 'scheduled', scheduled_for: when };
+        const N = { ...mkOrder('cdcdcdcd-0000-4000-8000-0000000000a2', 'pending', false, 9000, [oi('Lunettes', 9000, 1)]), payment_method: 'cash_on_delivery', shipping_city: "N'Djamena" };
+        {
+          const c = await newVisitor(phone, { storage, fakeUser: fu, fakeOrders: { list: [S, N], patches: [] } });
+          const { page } = c;
+          await page.goto(`http://localhost:${port}/mes-commandes`, { waitUntil: 'load' });
+          await page.getByText('Commande #abababab').waitFor({ timeout: 15000 });
+          await sleep(500);
+          check('Mes commandes : la livraison programmee est ecrite sur la commande concernee seulement', (await page.getByTestId('order-scheduled').count()) === 1 && /📅 Livraison programmée : .* à \d+h\d{2}/.test(await page.getByTestId('order-scheduled').innerText()));
+          check('Mes commandes : la commande programmee attend son rendez-vous (pas de signalement apres 48 h de commande)', (await page.getByText(/attend votre rendez-vous/).count()) === 1 && (await page.getByText(/Merci de confirmer sous 48h/).count()) === 1);
+          await page.getByTestId('order-scheduled').scrollIntoViewIfNeeded();
+          await page.screenshot({ path: path.join(OUT, 'C10-mes-commandes-programmee.png') });
+          check('aucune erreur (Mes commandes programmee)', c.errs.length === 0, c.errs);
+          await c.ctx.close();
+        }
+        {
+          const fa = mk(true);
+          const c = await newVisitor(phone, { storage: { 'sb-xtitsmmccpkelxfjyqyh-auth-token': sessionFor(fa) }, fakeUser: fa, fakeOrders: { list: [S, N], patches: [] } });
+          const { page } = c;
+          await page.goto(`http://localhost:${port}/admin/commandes`, { waitUntil: 'load' });
+          await page.getByText('#abababab').waitFor({ timeout: 15000 });
+          await sleep(500);
+          const badge = await page.getByTestId('admin-order-scheduled').innerText();
+          check('admin : badge « Livraison programmee » avec l\'heure et le rappel Telegram de 10 minutes, sur une seule commande', (await page.getByTestId('admin-order-scheduled').count()) === 1 && /📅 Livraison programmée : .* à \d+h\d{2}/.test(badge) && /Telegram 10 min avant/.test(badge), badge);
+          check('admin : le signalement automatique de la commande programmee part du rendez-vous', (await page.getByText(/48 h après le rendez-vous/).count()) === 1);
+          await page.screenshot({ path: path.join(OUT, 'C11-admin-programmee.png') });
+          check('aucune erreur (admin programmee)', c.errs.length === 0, c.errs);
+          await c.ctx.close();
+        }
+      }
     }
 
     // --- Mes commandes : image cadeau a cote de chaque commande en attente

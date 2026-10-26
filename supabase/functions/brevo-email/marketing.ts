@@ -305,7 +305,7 @@ export function frequencyExclusion(history: SentRecord[], orders: ClientOrder[],
   return null;
 }
 
-const hasArabic = (t: string) => /[؀-ۿ]/.test(t);
+const hasArabic = (t: string) => /[\u0600-\u06ff]/.test(t);
 // la langue n'est pas enregistrée dans les comptes : elle vient du profil e-mail si elle y est, sinon de l'écriture du nom, sinon le français
 export const langOf = (c: Client): Lang => c.lang ?? (hasArabic(String(c.fullName ?? "")) ? "ar" : "fr");
 
@@ -324,7 +324,7 @@ export const FAMILY_PATTERNS: [Family, RegExp][] = [
   ["sacs", /\bsacs?\b|bagage/],
   ["lunettes", /lunette/],
 ];
-const plain = (t: string) => t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+const plain = (t: string) => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 export function familyOf(categoryName: string): Family | null {
   const n = plain(categoryName);
   return FAMILY_PATTERNS.find(([, re]) => re.test(n))?.[0] ?? null;

@@ -4,7 +4,7 @@ import { trackTikTokEvent } from './tiktokPixel';
 import { currentDevice } from './assistantAttribution';
 import { isMissingColumn } from './dbErrors';
 import { trackCartEvent } from './browsingTracker';
-import type { CartItem, Order, OrderItem, PaymentMethod } from '../types';
+import type { CartItem, DeliveryType, Order, OrderItem, PaymentMethod } from '../types';
 
 export interface CreateOrderInput {
   userId: string | null;
@@ -18,6 +18,9 @@ export interface CreateOrderInput {
   giftWrap?: boolean;
   // Remise fidélité (FCFA) déjà déduite de total : notée sur la commande pour l'équipe.
   loyaltyDiscount?: number;
+  // Livraison programmée (clients de N'Djamena) : rendez-vous choisi, en heure ISO (UTC). Sans cela, livraison normale : rien ne change.
+  deliveryType?: DeliveryType;
+  scheduledFor?: string | null;
   // Numéro de commande choisi à l'avance : si on réessaie après une coupure de réseau, la même commande n'est pas enregistrée deux fois.
   id?: string;
   // Commande passée par Zara dans le chat : la commande note l'appareil du client (statistiques de Zara).
@@ -43,6 +46,7 @@ export async function createOrder(input: CreateOrderInput): Promise<{ order: Ord
     size: i.size,
   }));
 
+  const scheduled = input.deliveryType === 'scheduled' && !!input.scheduledFor;
   const sessionId = await getCurrentSessionId(input.userId);
   const contents = orderItems.map((i) => ({ content_id: i.product_id, quantity: i.quantity }));
   const contentIds = orderItems.map((i) => i.product_id);
@@ -64,6 +68,7 @@ export async function createOrder(input: CreateOrderInput): Promise<{ order: Ord
     is_flagged_fake: false,
     gift_wrap: !!input.giftWrap,
     ...(input.loyaltyDiscount ? { loyalty_discount: input.loyaltyDiscount } : {}),
+    ...(scheduled ? { delivery_type: 'scheduled' as const, scheduled_for: input.scheduledFor } : {}),
     created_at: new Date().toISOString(),
   };
 
@@ -92,6 +97,8 @@ export async function createOrder(input: CreateOrderInput): Promise<{ order: Ord
     // le champ n'est envoye que si le service est choisi : les commandes normales ne changent pas
     ...(order.gift_wrap ? { gift_wrap: true } : {}),
     ...(order.loyalty_discount ? { loyalty_discount: order.loyalty_discount } : {}),
+    // les champs ne sont envoyés que pour une livraison programmée : les commandes normales ne changent pas
+    ...(scheduled ? { delivery_type: 'scheduled', scheduled_for: input.scheduledFor } : {}),
   };
   let payload: Record<string, unknown> = input.viaAssistant ? { ...row, assistant_device: currentDevice() } : row;
   let { error } = await supabase.from('orders').insert(payload);
@@ -103,6 +110,12 @@ export async function createOrder(input: CreateOrderInput): Promise<{ order: Ord
     const { [missing]: _dropped, ...rest } = payload;
     payload = rest;
     ({ error } = await supabase.from('orders').insert(payload));
+  }
+
+  // Le rendez-vous ne doit JAMAIS être perdu en silence : si la base ne connaît pas encore la livraison programmée, la commande est refusée
+  // avec une explication claire (le client retire le rendez-vous et commande), au lieu d'être enregistrée sans son rendez-vous.
+  if (error && scheduled && (isMissingColumn(error, 'delivery_type') || isMissingColumn(error, 'scheduled_for'))) {
+    return { order: null, error: "La livraison programmée n'est pas encore disponible. Retirez le rendez-vous (touchez une 2e fois le jour choisi) pour commander." };
   }
 
   // Numéro déjà enregistré par un essai précédent (réponse perdue) : la commande existe bien, on ne la refait pas.

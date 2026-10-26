@@ -16,9 +16,11 @@ import { CustomerNotificationBell } from '../components/CustomerNotificationBell
 import { LanguageSwitcher } from '../components/LanguageSwitcher';
 import { SideAdBanner } from '../components/SideAdBanner';
 import { ChadFlag } from '../components/ChadFlag';
+import { CityClock } from '../components/CityClock';
 import { ZaraAdCard } from '../components/ZaraAdCard';
 import { WebPushBanner } from '../components/WebPushBanner';
 import { fetchOnlineCount, onlineLabel } from '../lib/onlineCount';
+import { coldSeasonActive, coldSeasonPicks } from '../lib/coldSeason';
 
 const ONLINE_REFRESH_MS = 30000;
 
@@ -43,6 +45,11 @@ export function HomeScreen() {
 
   const flashSale = products.filter((p) => p.is_flash_sale);
   const flashEndsAt = flashSale[0]?.flash_sale_ends_at;
+  // saison fraîche (jusqu'à fin décembre) : les vrais blousons et manteaux en vente, la plus grande remise réelle d'abord (jamais un porte-manteau)
+  const coldPicks = coldSeasonActive() ? coldSeasonPicks(products, (p) => ({ name: p.name, price: p.price, compareAt: p.compare_at_price, stock: p.stock, hasImage: !!p.images?.[0] }), 6) : [];
+
+  // largeur du cadre « SERVICE QUALITÉ GARANTIE » : l'horloge a exactement la même (elle ne le dépasse jamais)
+  const [tagWidth, setTagWidth] = useState(0);
 
   const glow = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -116,7 +123,7 @@ export function HomeScreen() {
       >
         <Text style={styles.brand}>ALBASSE</Text>
         <Text style={styles.brandSub}>SHOPPING</Text>
-        <View style={styles.taglineFrame}>
+        <View style={styles.taglineFrame} testID="home-tagline" onLayout={(e) => setTagWidth(e.nativeEvent.layout.width)}>
           <View style={styles.taglineRow}>
             <Animated.Text
               style={[
@@ -144,6 +151,8 @@ export function HomeScreen() {
             </Animated.Text>
           </View>
         </View>
+        {/* heure locale des villes du Tchad, une ville toutes les 10 secondes, de la largeur du cadre ci-dessus (demande du patron) */}
+        <CityClock width={tagWidth} />
       </LinearGradient>
 
       {/* une seule ligne qui défile, sans titre « Catégories » (demande du patron) */}
@@ -214,9 +223,30 @@ export function HomeScreen() {
         </View>
       )}
 
-      {/* juste sous la vente flash : les cartes ont déjà leur marge en bas */}
+      {coldPicks.length > 0 && (
+        <View style={styles.coldSection} testID="home-cold-season">
+          <View style={styles.coldHeader}>
+            <Text style={styles.coldBadge}>🧥 SAISON FRAÎCHE</Text>
+            <Text style={styles.coldSubtitle}>Blousons et manteaux</Text>
+          </View>
+          <FlatList
+            data={coldPicks}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={{ paddingHorizontal: spacing.md }}
+            renderItem={({ item }) => (
+              <View style={{ marginRight: spacing.md }}>
+                <ProductCard product={item} />
+              </View>
+            )}
+          />
+        </View>
+      )}
+
+      {/* juste sous les cartes (vente flash, saison fraîche) : elles ont déjà leur marge en bas */}
       <Pressable
-        style={[styles.travelBanner, flashSale.length > 0 && flashEndsAt ? styles.travelAfterFlash : null]}
+        style={[styles.travelBanner, (flashSale.length > 0 && flashEndsAt) || coldPicks.length > 0 ? styles.travelAfterFlash : null]}
         onPress={() => navigation.navigate('Travel')}
       >
         <Text style={styles.travelIcon}>✈️</Text>
@@ -359,6 +389,10 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   flashSubtitle: { fontFamily: fonts.body, fontSize: 12, color: colors.creamFaint, marginTop: 6 },
+  coldSection: { marginTop: spacing.lg },
+  coldHeader: { paddingHorizontal: spacing.md, marginBottom: spacing.md },
+  coldBadge: { fontFamily: fonts.displayBold, fontSize: 17, color: colors.goldLight, letterSpacing: 1 },
+  coldSubtitle: { fontFamily: fonts.body, fontSize: 12, color: colors.creamFaint, marginTop: 4 },
   collectionSection: { marginTop: spacing.md, paddingHorizontal: spacing.md },
   // les catégories remontent juste sous le bandeau ALBASSE SHOPPING
   categoriesSection: { marginTop: spacing.md, paddingHorizontal: spacing.md },

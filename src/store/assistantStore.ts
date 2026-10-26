@@ -33,6 +33,7 @@ import {
 import { hasArabic, type Lang, type PayMethodKey, type Who } from '../lib/assistantLang';
 import { categoryLabel, fcfa, texts, withName as applyName, type Texts } from '../lib/assistantText';
 import { isArabicPage } from '../lib/googleTranslate';
+import { dayFromText as slotDayFromText, dayOptions, formatSlot, slotProblem, slotToIso, slotsOfDay, timeFromText, timeLabel } from '../lib/scheduledDelivery';
 import {
   ANY_BUDGET,
   aboutReply,
@@ -78,6 +79,7 @@ import { pushReminderNow, recordPushReminder } from '../lib/pushReminder';
 import { getWebPushIssue, isWebPushBlocked, PUSH_PERMISSION_NOT_GRANTED, subscribeToWebPush } from '../lib/webPushSubscription';
 import { trackShortcutInstallIfNeeded } from '../lib/appInstallTracking';
 import { occasionOf, stripOccasion, upcomingOccasion, type OccasionKey } from '../lib/assistantOccasions';
+import { coldSeasonActive, coldSeasonFacts, coldSeasonPicks, wantsColdSeason, type ColdView } from '../lib/coldSeason';
 import { buildVocabulary, suggestWords } from '../lib/spellSuggest';
 import { availability, familyPicks, isFamily, moreInCategory, perfumesInStock, planSuggestion, similarProducts, type PlannedChip } from '../lib/assistantInterest';
 import * as bi from '../lib/browsingInsights';
@@ -145,6 +147,8 @@ export interface ChatAction {
     | 'orderCity'
     | 'orderPay'
     | 'orderGift'
+    | 'orderDay'
+    | 'orderTime'
     | 'orderConfirm'
     | 'orderEdit'
     | 'orderCancel'
@@ -193,6 +197,8 @@ export type Step =
   | 'co_phone'
   | 'co_address'
   | 'co_city'
+  | 'co_day'
+  | 'co_time'
   | 'co_pay'
   | 'co_gift'
   | 'co_confirm'
@@ -213,6 +219,9 @@ export interface OrderDraft {
   giftWrap: boolean | null;
   // remise fidélité (−10 % à la 7ᵉ commande, une fois) ; absente dans une commande commencée avant cette règle : pas de remise
   loyalty?: LoyaltyStatus;
+  // livraison programmée (clients de N'Djamena) : rendez-vous choisi (jour + heure) ; skip : le client a passé la question = livraison normale.
+  // Sans valeur : la question n'a pas encore été posée.
+  slot?: { day: string | null; time: string | null; skip?: boolean } | null;
 }
 
 interface AssistantState {
@@ -262,7 +271,7 @@ const RANK_KEY = 'albasse_zara_rank';
 const GREETING_WAIT_MS = 10000;
 let connectedAt: number | null = null;
 const MAX_SAVED = 40;
-const STEPS: Step[] = ['ask_lang', 'ask_name', 'menu', 'ask_city', 'ask_who', 'ask_type', 'ask_budget', 'co_name', 'co_phone', 'co_address', 'co_city', 'co_pay', 'co_gift', 'co_confirm'];
+const STEPS: Step[] = ['ask_lang', 'ask_name', 'menu', 'ask_city', 'ask_who', 'ask_type', 'ask_budget', 'co_name', 'co_phone', 'co_address', 'co_city', 'co_day', 'co_time', 'co_pay', 'co_gift', 'co_confirm'];
 const CTX_KINDS = ['query', 'category', 'gift', 'who', 'promo', 'new'];
 
 interface Saved {
@@ -471,6 +480,9 @@ const ORDINALS: [RegExp, number][] = [
 // Ce que disent les boutons « Comparer » et « 3 gammes de prix » : ils parlent des articles affichés à ce moment-là.
 const COMPARE_SAY: Record<Lang, string> = { fr: 'comparer ces articles', ar: 'قارن بين هذه المنتجات' };
 const RANGES_SAY: Record<Lang, string> = { fr: 'trois gammes de prix', ar: 'ثلاثة خيارات بأسعار مختلفة' };
+// le bouton « Blousons & manteaux » du menu envoie ces mots (reconnus par coldSeason.ts)
+const COLD_SAY: Record<Lang, string> = { fr: 'blousons et manteaux', ar: 'جاكيتات ومعاطف' };
+const COLD_QUERY: Record<Lang, string> = { fr: 'blouson manteau', ar: 'جاكيت معطف' };
 
 // Les boutons des anciens messages qui restent touchables : ceux qui mènent quelque part (promotions, catégories, un article précis,
 // la commande en cours, compte, WhatsApp, menu, installer). L'ancien « Voir mon panier » part : il n'y a plus de panier. Les réponses à une question passée (taille, jour, budget, pour qui, confirmer...) partent.
@@ -595,7 +607,10 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     const c = T().chip;
     const actions: ChatAction[] = [];
     if (isGuest()) actions.push({ label: c.createAccount, kind: 'register', highlight: true }, { label: c.login, kind: 'login' });
-    actions.push(sayBtn(c.promotions, 'promotions'), sayBtn(c.news, 'nouveautés'), sayBtn(c.advice, 'conseil'), sayBtn(c.categories, 'catégories'), sayBtn(c.delivery, 'livraison'));
+    actions.push(sayBtn(c.promotions, 'promotions'), sayBtn(c.news, 'nouveautés'));
+    // saison fraîche (jusqu'à fin décembre) : blousons et manteaux à un toucher
+    if (coldSeasonActive(Date.now())) actions.push(sayBtn(c.coldSeason, COLD_SAY[get().lang]));
+    actions.push(sayBtn(c.advice, 'conseil'), sayBtn(c.categories, 'catégories'), sayBtn(c.delivery, 'livraison'));
     if (useCartStore.getState().items.length > 0) actions.push({ label: c.checkout, kind: 'checkout', highlight: true });
     if (!isGuest()) actions.push({ label: c.orders, kind: 'orders' }, sayBtn(c.points, T().loyalty.mineQuery));
     const install = installMenuChip();
@@ -652,6 +667,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     // un moment fort approche (Tabaski, Ramadan, Black Friday...) : un seul mot, une fois par conversation
     const occasion = upcomingOccasion(Date.now());
     if (occasion) await say(T().occasion[occasion]);
+    else if (coldSeasonActive(Date.now())) await say(T().season.cold); // saison fraîche : blousons et manteaux (jusqu'à fin décembre)
     await say(T().info);
     if (isGuest()) await accountInvitation();
     else await showMenu(T().menuIntro);
@@ -838,6 +854,25 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       } else {
         await say(T().noPromo, { actions: [sayBtn(T().chip.news, 'nouveautés'), menuBtn()] });
       }
+    } catch {
+      await dataError();
+    }
+  }
+
+  // Saison fraîche : les vrais blousons et manteaux de la boutique (jamais un porte-manteau), la plus grande remise réelle d'abord.
+  // Les chiffres dits (nombre de modèles, prix de départ, remise) sont calculés sur les articles montrés.
+  const coldView = (p: CatalogProduct): ColdView => ({ name: p.name, price: p.price, compareAt: p.compareAt ?? null, stock: p.stock, hasImage: !!p.image });
+  async function coldSeasonReply() {
+    try {
+      const catalog = await getCatalog();
+      const picks = coldSeasonPicks(catalog, coldView, 4);
+      if (picks.length === 0) {
+        await say(T().season.coldNone, { actions: [sayBtn(T().chip.promotions, 'promotions'), sayBtn(T().chip.categories, 'catégories'), menuBtn(), wa()] });
+        return;
+      }
+      const facts = coldSeasonFacts(picks, coldView);
+      // le contexte « blousons manteaux » : « Mon budget », les gammes de prix et la comparaison restent sur les blousons et manteaux (searchCatalog écarte les porte-manteaux)
+      await showProducts(withName(T().season.coldIntro(facts.count, fcfa(facts.minPrice), facts.maxPct)), picks, { kind: 'query', query: COLD_QUERY[get().lang] }, catalog);
     } catch {
       await dataError();
     }
@@ -1529,6 +1564,17 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       await askOrderCity();
       return;
     }
+    // N'Djamena : rendez-vous de livraison (facultatif, « Passer » = livraison normale) avant le paiement
+    if (isHomeCity(d.city.name) && !d.slot?.skip) {
+      if (!d.slot?.day) {
+        await askSlotDay();
+        return;
+      }
+      if (!d.slot.time) {
+        await askSlotTime();
+        return;
+      }
+    }
     if (!d.method) {
       await askPayment();
       return;
@@ -1554,6 +1600,66 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       // N'Djamena seulement : il peut écrire sa ville
     }
     await say(T().checkout.askCity, { fast: true, actions: [...popular.map((name) => ({ label: name, kind: 'orderCity' as const, payload: name })), cancelOrderChip()] });
+  }
+
+  // --- rendez-vous de livraison (N'Djamena) : le jour, puis l'heure ; « Passer » = livraison normale
+  async function askSlotDay() {
+    setStep('co_day');
+    const days = dayOptions(Date.now(), get().lang);
+    await say(T().checkout.askDay, {
+      fast: true,
+      actions: [...days.map((x) => ({ label: x.label, kind: 'orderDay' as const, payload: x.key })), { label: T().chip.skipSlot, kind: 'orderDay' as const, payload: 'skip' }, cancelOrderChip()],
+    });
+  }
+
+  async function askSlotTime() {
+    const day = get().order?.slot?.day;
+    if (!day) {
+      await askSlotDay();
+      return;
+    }
+    const lang = get().lang;
+    const free = slotsOfDay(day, Date.now()).filter((x) => x.available);
+    if (free.length === 0) {
+      // les heures du jour choisi sont passées : on repart du jour
+      patchOrder({ slot: null });
+      await say(T().checkout.slotLost, { fast: true });
+      await askSlotDay();
+      return;
+    }
+    setStep('co_time');
+    const dayLabel = dayOptions(Date.now(), lang).find((x) => x.key === day)?.label ?? day;
+    await say(T().checkout.askTime(dayLabel), {
+      fast: true,
+      actions: [...free.map((x) => ({ label: timeLabel(x.time, lang), kind: 'orderTime' as const, payload: x.time })), { label: T().chip.otherDay, kind: 'orderEdit' as const, payload: 'slot' }, cancelOrderChip()],
+    });
+  }
+
+  async function chooseSlotDay(key: string) {
+    if (key === 'skip') {
+      patchOrder({ slot: { day: null, time: null, skip: true } });
+      await nextCheckoutStep();
+      return;
+    }
+    if (!dayOptions(Date.now()).some((x) => x.key === key)) {
+      await say(T().checkout.pickButton, { fast: true });
+      await askSlotDay();
+      return;
+    }
+    patchOrder({ slot: { day: key, time: null } });
+    await nextCheckoutStep();
+  }
+
+  async function chooseSlotTime(time: string) {
+    const day = get().order?.slot?.day ?? null;
+    if (slotProblem(day, time, Date.now())) {
+      patchOrder({ slot: null }); // le rendez-vous n'est plus possible : on repart du jour
+      await say(T().checkout.slotLost, { fast: true });
+      await nextCheckoutStep();
+      return;
+    }
+    patchOrder({ slot: { day, time } });
+    await nextCheckoutStep();
   }
 
   async function askPayment() {
@@ -1585,11 +1691,18 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       patchOrder({ city: { name: text.slice(0, 40), fee: null, agency: null } }); // villes indisponibles : l'équipe confirmera les frais
     }
     const d = get().order;
+    if (d?.city && !isHomeCity(d.city.name)) patchOrder({ slot: null });
     if (d?.city && d.method === 'cash_on_delivery' && !isHomeCity(d.city.name)) {
       patchOrder({ method: null });
       await say(T().checkout.codOnlyHome, { fast: true });
     }
     await nextCheckoutStep();
+  }
+
+  // « mardi 27/10 à 10h00 » : le rendez-vous choisi, ou null (livraison normale)
+  function slotLabelOf(d: OrderDraft): string | null {
+    const iso = d.city && isHomeCity(d.city.name) && d.slot?.day && d.slot.time ? slotToIso(d.slot.day, d.slot.time) : null;
+    return iso ? formatSlot(iso, Date.now(), get().lang) : null;
   }
 
   async function showRecap() {
@@ -1603,6 +1716,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         lines: items.map((i) => ({ name: shortName(i.product.name), variant: variantText(i.size, i.color), qty: i.quantity, subtotal: i.product.price * i.quantity })),
         city: d.city.name,
         fee: d.city.fee,
+        slot: slotLabelOf(d),
         gift: d.giftWrap,
         discount,
         total,
@@ -1656,6 +1770,15 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       await askPayment();
       return;
     }
+    // le rendez-vous est revérifié au moment d'enregistrer (l'heure a pu passer pendant la conversation)
+    const wantsSlot = isHomeCity(d.city.name) && !!d.slot?.day && !!d.slot.time;
+    if (wantsSlot && slotProblem(d.slot?.day ?? null, d.slot?.time ?? null, Date.now())) {
+      patchOrder({ slot: null });
+      await say(c.slotLost, { fast: true });
+      await nextCheckoutStep();
+      return;
+    }
+    const scheduledFor = wantsSlot && d.slot?.day && d.slot.time ? slotToIso(d.slot.day, d.slot.time) : null;
     const { items, total, discount } = orderTotals(d);
     const label = c.methodLabel(d.method);
     let created: Awaited<ReturnType<typeof createOrder>>;
@@ -1672,6 +1795,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         shippingCity: d.city.name,
         giftWrap: d.giftWrap,
         loyaltyDiscount: discount,
+        ...(scheduledFor ? { deliveryType: 'scheduled' as const, scheduledFor } : {}),
         viaAssistant: true, // la commande note l'appareil : statistiques de Zara
       });
     } catch (e) {
@@ -1707,6 +1831,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     const home = isHomeCity(d.city.name);
     const lines = [c.placed(firstNameOfFullName(d.name) ?? d.name, created.order.id.slice(0, 8)), c.totalToPay(total), instructions];
     if (d.giftWrap) lines.push(c.giftIncluded);
+    if (scheduledFor) lines.push(c.slotLine(formatSlot(scheduledFor, Date.now(), get().lang)));
     const points = Math.floor(total / LOYALTY_FCFA_PER_POINT); // la base ajoute floor(total / 5000) points quand la commande est livrée
     if (points >= 1) lines.push(T().loyalty.orderPoints(points));
     lines.push(T().serviceNote(home));
@@ -1760,6 +1885,25 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       case 'co_city':
         await setOrderCity(text);
         return true;
+      case 'co_day': {
+        const key = slotDayFromText(text, Date.now());
+        if (key) await chooseSlotDay(key);
+        else if (yesNo(text) === 'no' || /passer|sans rendez|normal|plus tard|تخط|بدون/.test(normalize(text))) await chooseSlotDay('skip');
+        else {
+          await say(c.pickButton, { fast: true });
+          await askSlotDay();
+        }
+        return true;
+      }
+      case 'co_time': {
+        const time = timeFromText(text);
+        if (time) await chooseSlotTime(time);
+        else {
+          await say(c.pickButton, { fast: true });
+          await askSlotTime();
+        }
+        return true;
+      }
       case 'co_pay': {
         const method = paymentFrom(text);
         if (!method) {
@@ -1814,6 +1958,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         { label: chips.editPhone, kind: 'orderEdit', payload: 'phone' },
         { label: chips.editAddress, kind: 'orderEdit', payload: 'address' },
         { label: chips.editCity, kind: 'orderEdit', payload: 'city' },
+        ...(get().order?.city && isHomeCity(get().order!.city!.name) ? [{ label: chips.editSlot, kind: 'orderEdit' as const, payload: 'slot' }] : []),
         { label: chips.editPay, kind: 'orderEdit', payload: 'method' },
         { label: chips.editGift, kind: 'orderEdit', payload: 'giftWrap' },
         cancelOrderChip(),
@@ -2543,6 +2688,11 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       await occasionReply(occasion, text);
       return;
     }
+    // saison fraîche (jusqu'à fin décembre) : « manteau », « blouson », « il fait froid »… -> les vrais modèles ; avec un budget écrit, la recherche normale s'en charge
+    if (intent === 'search' && coldSeasonActive(Date.now()) && wantsColdSeason(text) && parseBudget(text) === null) {
+      await coldSeasonReply();
+      return;
+    }
     // psychologie commerciale : le client parle de son métier (valorisé, jamais déduit en budget) ou de ce qu'il aime
     const job = jobFrom(text);
     if (job) {
@@ -2958,6 +3108,16 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         if (get().order) await setOrderCity(action.payload ?? action.label);
         else await say(T().checkout.resumeLost, { fast: true, actions: [checkoutChip(), menuBtn()] });
         return;
+      case 'orderDay':
+        userSays(action.label);
+        if (get().order) await chooseSlotDay(action.payload ?? '');
+        else await say(T().checkout.resumeLost, { fast: true, actions: [checkoutChip(), menuBtn()] });
+        return;
+      case 'orderTime':
+        userSays(action.label);
+        if (get().order) await chooseSlotTime(action.payload ?? '');
+        else await say(T().checkout.resumeLost, { fast: true, actions: [checkoutChip(), menuBtn()] });
+        return;
       case 'orderPay':
         userSays(action.label);
         if (get().order) await choosePayment((action.payload as PayMethodKey) ?? 'airtel_money');
@@ -2985,7 +3145,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
           return;
         }
         const field = action.payload;
-        if (field === 'name' || field === 'phone' || field === 'address' || field === 'city' || field === 'method' || field === 'giftWrap') {
+        if (field === 'name' || field === 'phone' || field === 'address' || field === 'city' || field === 'method' || field === 'giftWrap' || field === 'slot') {
           patchOrder({ [field]: null } as Partial<OrderDraft>);
           await nextCheckoutStep();
         } else await editChooser();
