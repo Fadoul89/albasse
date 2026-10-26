@@ -247,6 +247,17 @@ const ldBlocks = (html: string): any[] => [...html.matchAll(/<script type="appli
     check('index.html : PAS de canonical (la page sert toutes les adresses)', !/rel="canonical"/.test(html));
   }
 
+  // Google Search Console : le fichier de validation est un vrai fichier du site (public/), au contenu exact demandé par Google
+  {
+    const { readdirSync } = await import('node:fs');
+    const files = readdirSync(new URL('../../public/', import.meta.url)).filter((f) => /^google[0-9a-f]{16}\.html$/.test(f));
+    check('Search Console : un fichier de validation google<16 caractères>.html dans public/', files.length >= 1, files);
+    for (const f of files) {
+      const content = readFileSync(new URL(`../../public/${f}`, import.meta.url), 'utf8').trim();
+      check(`Search Console : ${f} contient exactement « google-site-verification: ${f} »`, content === `google-site-verification: ${f}`, content);
+    }
+  }
+
   // la configuration Netlify branche bien les fonctions
   {
     const toml = readFileSync(new URL('../../netlify.toml', import.meta.url), 'utf8');
