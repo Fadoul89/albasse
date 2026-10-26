@@ -61,21 +61,22 @@ export function CityClock() {
           <Text style={styles.label}>HEURE LOCALE</Text>
         </View>
 
-        <Animated.View style={[styles.timeRow, appear]}>
-          <Text style={styles.digits} testID="city-clock-time">
-            {hh}
-          </Text>
-          <Animated.Text style={[styles.digits, styles.colon, { opacity: colonOpacity }]}>:</Animated.Text>
-          <Text style={styles.digits}>{mm}</Text>
-          <Text style={styles.hour}> H</Text>
-        </Animated.View>
-
-        <Animated.View style={[styles.cityRow, appear]}>
-          <Text style={styles.at}>à</Text>
-          <Text style={styles.pin}>📍</Text>
-          <Text style={styles.city} testID="city-clock-city" numberOfLines={1}>
-            {CLOCK_CITIES[index]}
-          </Text>
+        <Animated.View style={[styles.mainRow, appear]}>
+          <View style={styles.timeRow}>
+            <Text style={styles.digits} testID="city-clock-time">
+              {hh}
+            </Text>
+            <Animated.Text style={[styles.digits, styles.colon, { opacity: colonOpacity }]}>:</Animated.Text>
+            <Text style={styles.digits}>{mm}</Text>
+            <Text style={styles.hour}> H</Text>
+          </View>
+          <View style={styles.cityRow}>
+            <Text style={styles.at}>à</Text>
+            <Text style={styles.pin}>📍</Text>
+            <Text style={styles.city} testID="city-clock-city" numberOfLines={1}>
+              {CLOCK_CITIES[index]}
+            </Text>
+          </View>
         </Animated.View>
 
         <View style={styles.track}>
@@ -93,45 +94,46 @@ export function CityClock() {
 }
 
 const styles = StyleSheet.create({
-  outer: { alignSelf: 'stretch', alignItems: 'center', paddingHorizontal: spacing.md, marginTop: spacing.md },
+  outer: { alignSelf: 'stretch', alignItems: 'center', paddingHorizontal: spacing.md, marginTop: 10 },
   card: {
     width: '100%',
     maxWidth: 360,
     alignItems: 'center',
     borderWidth: 1.5,
     borderColor: colors.gold,
-    borderRadius: radius.lg,
+    borderRadius: radius.md,
     backgroundColor: colors.panel,
-    paddingTop: spacing.sm + 4,
-    paddingBottom: spacing.md,
-    paddingHorizontal: spacing.md,
+    paddingTop: 6,
+    paddingBottom: 8,
+    paddingHorizontal: spacing.sm + 4,
     shadowColor: colors.gold,
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
     shadowOffset: { width: 0, height: 0 },
-    elevation: 6,
+    elevation: 4,
   },
-  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  labelIcon: { fontSize: 14 },
-  label: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.goldLight, letterSpacing: 3 },
-  timeRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', marginTop: 4 },
-  digits: { fontFamily: fonts.displayBold, fontSize: 52, lineHeight: 60, color: colors.cream, fontVariant: ['tabular-nums'] },
-  colon: { color: CHAD_YELLOW, marginHorizontal: 2 },
-  hour: { fontFamily: fonts.displayBold, fontSize: 26, color: CHAD_YELLOW },
-  cityRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, maxWidth: '100%' },
-  at: { fontFamily: fonts.displayItalic, fontSize: 18, color: colors.creamMuted },
-  pin: { fontSize: 18 },
-  city: { fontFamily: fonts.displayBold, fontSize: 26, color: colors.goldLight, flexShrink: 1 },
+  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  labelIcon: { fontSize: 11 },
+  label: { fontFamily: fonts.bodyBold, fontSize: 10, color: colors.goldLight, letterSpacing: 3 },
+  mainRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, alignSelf: 'stretch', marginTop: 2 },
+  timeRow: { flexDirection: 'row', alignItems: 'baseline' },
+  digits: { fontFamily: fonts.displayBold, fontSize: 34, lineHeight: 40, color: colors.cream, fontVariant: ['tabular-nums'] },
+  colon: { color: CHAD_YELLOW, marginHorizontal: 1 },
+  hour: { fontFamily: fonts.displayBold, fontSize: 18, color: CHAD_YELLOW },
+  cityRow: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 },
+  at: { fontFamily: fonts.displayItalic, fontSize: 14, color: colors.creamMuted },
+  pin: { fontSize: 14 },
+  city: { fontFamily: fonts.displayBold, fontSize: 19, color: colors.goldLight, flexShrink: 1 },
   track: {
     alignSelf: 'stretch',
-    height: 4,
+    height: 3,
     borderRadius: 2,
     backgroundColor: 'rgba(244, 239, 228, 0.15)',
     overflow: 'hidden',
-    marginTop: spacing.sm + 4,
+    marginTop: 6,
   },
-  fill: { height: 4, borderRadius: 2, backgroundColor: CHAD_YELLOW },
-  dots: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.sm },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(244, 239, 228, 0.25)' },
-  dotActive: { width: 18, backgroundColor: CHAD_YELLOW },
+  fill: { height: 3, borderRadius: 2, backgroundColor: CHAD_YELLOW },
+  dots: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6 },
+  dot: { width: 5, height: 5, borderRadius: 3, backgroundColor: 'rgba(244, 239, 228, 0.25)' },
+  dotActive: { width: 14, backgroundColor: CHAD_YELLOW },
 });

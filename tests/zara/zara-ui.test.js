@@ -526,9 +526,11 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const cats = await page.getByTestId('home-categories').boundingBox();
     check('horloge : au-dessus de la ligne des categories', !!box && !!cats && box.y + box.height <= cats.y + 1, { box, cats });
     check('horloge : visible en entier dans la largeur du telephone (390)', !!box && box.x >= 0 && box.x + box.width <= 390, box);
-    check('horloge : assez grande pour bien se voir (>= 150 px de haut, chiffres >= 40 px)', !!box && box.height >= 150, box);
+    check('horloge : compacte (entre 80 et 115 px de haut)', !!box && box.height >= 80 && box.height <= 115, box);
     const digitsSize = await page.getByTestId('city-clock-time').evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
-    check('heure en gros chiffres (>= 40 px)', digitsSize >= 40, digitsSize);
+    check('heure bien lisible (chiffres >= 30 px)', digitsSize >= 30, digitsSize);
+    const logo = await page.getByText('ALBASSE', { exact: true }).evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+    check('logo ALBASSE inchange (34 px)', logo === 34, logo);
     await page.screenshot({ path: path.join(OUT, '6a-horloge-ndjamena.png') });
 
     const seen = [first.city];
