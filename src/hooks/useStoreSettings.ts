@@ -24,6 +24,9 @@ const FALLBACK: StoreSettings = {
 // Derniers réglages lus : la page suivante les a tout de suite (sans attendre la base).
 let lastSettings: StoreSettings | null = null;
 
+// Pour le code qui n'est pas un composant (le chat de Zara) : les derniers réglages lus, ou null s'ils ne sont pas encore lus.
+export const getLastStoreSettings = (): StoreSettings | null => lastSettings;
+
 export function useStoreSettings() {
   const [settings, setSettings] = useState<StoreSettings>(lastSettings ?? FALLBACK);
   const [isLoading, setIsLoading] = useState(isSupabaseConfigured && !lastSettings);

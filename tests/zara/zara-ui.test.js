@@ -1117,6 +1117,33 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await g.ctx.close();
     }
 
+    // --- d. « Compte obligatoire » ACTIVE : l'option n'existe pas, comme avant (page de commande, fiche et Zara demandent un compte).
+    //        Le mur d'entree couvre tout visiteur : on utilise l'agent d'un robot de Google (que le mur laisse passer) pour atteindre les pages.
+    {
+      const fu = account0();
+      const fo = { list: [], patches: [], created: [] };
+      const bot = { ...phone, userAgent: 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)' };
+      const g = await newVisitor(bot, { storage: { 'albasse-cart': cartOf(prod0), albasse_zara_name: 'Ali' }, fakeUser: fu, fakeOrders: fo, fakeStore: { waOrder: true, accountRequired: true, patches: [] } });
+      await g.page.goto(`${BASE}/commande`, { waitUntil: 'load' });
+      await g.page.waitForURL(/\/connexion/, { timeout: 25000 });
+      check('compte obligatoire active : la page de commande renvoie vers la connexion (pas de formulaire prenom / nom / e-mail)', (await g.page.getByTestId('checkout-first-name').count()) === 0 && fo.created.length === 0 && !(fu.signups || []).length, g.page.url());
+      await g.page.goto(`${BASE}/produit/${prod0.slug}`, { waitUntil: 'load' });
+      await g.page.getByText('Commander', { exact: true }).locator('visible=true').first().waitFor({ timeout: 25000 });
+      await g.page.getByText('Commander', { exact: true }).locator('visible=true').first().click();
+      await g.page.waitForURL(/\/connexion/, { timeout: 15000 });
+      check('compte obligatoire active : « Commander » sur la fiche renvoie vers la connexion, comme avant', /\/connexion/.test(g.page.url()), g.page.url());
+      check('compte obligatoire active : aucun compte cree, aucune commande', fo.created.length === 0 && !(fu.signups || []).length);
+      // Zara : sans compte et compte obligatoire, elle demande un compte (et ne propose pas la commande sans compte)
+      await g.page.goto(`${BASE}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await g.page.getByRole('button', { name: FAB_NAME }).click();
+      await waitText(g.page, /Votre commande n’est pas terminée/);
+      await chip(g.page, 'Terminer ma commande').click();
+      await waitText(g.page, /créez votre compte ou connectez-vous/);
+      check('compte obligatoire active : Zara demande de creer un compte / se connecter (pas « Pas besoin de compte »)', (await chipLabels(g.page)).join('|') === '👤 Créer mon compte|Me connecter|🏠 Menu' && (await panelOf(g.page).getByText(/Pas besoin de compte pour commander/).count()) === 0, await chipLabels(g.page));
+      await g.ctx.close();
+    }
+
     // --- c. client deja connecte : rien ne change (« Nom complet », pas de formulaire de compte, pas de code a la confirmation)
     {
       const fu = account0({ full_name: 'Ahmed Hassan', phone: '66123456', email: 'ahmed@example.com' });

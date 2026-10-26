@@ -2,6 +2,7 @@
 // Lancer : node --import ./tests/zara/register.mjs tests/email/guest-account.test.ts
 import { CHAD_PHONE_REGEX, generateTempPassword, guestFullName, guestInfoProblem, isWeakCode, prettyChadPhone } from '../../src/lib/guestAccount.ts';
 import { phoneLoginEmail } from '../../src/lib/phoneAuth.ts';
+import { guestOrderAllowed } from '../../src/lib/accountWall.ts';
 
 let ok = 0;
 const check = (label: string, cond: unknown, detail?: unknown) => {
@@ -56,5 +57,10 @@ const stubborn = generateTempPassword(() => {
 check('un tirage faible est refait', stubborn === '730264' && calls === 3, { stubborn, calls });
 check('zéros de tête conservés (code 004829)', generateTempPassword(() => 4829) === '004829');
 check('toujours au moins 6 caractères (minimum du système)', codes.every((c) => c.length >= 6));
+
+// ---- « Compte obligatoire » : la commande sans compte n'existe que s'il est désactivé
+check('compte obligatoire désactivé (false) : commander sans compte autorisé', guestOrderAllowed(false) === true);
+check('compte obligatoire activé (true) : commander sans compte interdit', guestOrderAllowed(true) === false);
+check('réglage pas encore lu ou absent : même règle que le mur d\'entrée (autorisé)', guestOrderAllowed(undefined) === true && guestOrderAllowed(null) === true);
 
 console.log(`\n${ok} vérifications réussies${process.exitCode ? ' — AVEC DES ÉCHECS' : ''}`);

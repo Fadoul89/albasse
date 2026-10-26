@@ -24,3 +24,7 @@ export function mustSignUp(input: {
 
 // L'écran « Créez votre compte » couvre la page, sauf sur les pages ouvertes sans compte.
 export const wallCovers = (routeName: string | null | undefined) => !routeName || !WALL_FREE_ROUTES.includes(routeName);
+
+// Commander sans compte (le compte est créé à la confirmation) : possible seulement quand « Compte obligatoire » est désactivé (Admin › Clients).
+// Même règle que le mur d'entrée : seul un réglage à « oui » (true) oblige à avoir un compte.
+export const guestOrderAllowed = (accountRequired: boolean | null | undefined): boolean => accountRequired !== true;

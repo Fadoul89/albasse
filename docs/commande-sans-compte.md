@@ -2,6 +2,8 @@
 
 Depuis que « Compte obligatoire » est désactivé (Admin › Clients), n'importe qui peut regarder le site. Ce changement permet aussi de **commander sans avoir créé de compte avant**.
 
+**Cette option n'existe QUE quand « Compte obligatoire » est désactivé.** Si le patron le réactive : plus de commande sans compte, tout redevient comme avant (le mur d'entrée demande un compte ; la page de commande, la fiche article et Zara renvoient vers la connexion / création de compte). La règle est dans `guestOrderAllowed` (`src/lib/accountWall.ts`) et suit le même réglage que le mur d'entrée (`store_settings.account_required`).
+
 ## Ce que voit le visiteur
 1. Fiche article → **Commander** → page de commande (plus de renvoi vers la connexion).
 2. La page demande : **prénom, nom, téléphone, e-mail**, adresse, ville, paiement (comme avant pour le reste).
@@ -27,16 +29,18 @@ Le code est fabriqué dans `src/lib/guestAccount.ts` (`generateTempPassword`) : 
 - **Numéro déjà inscrit** : rien n'est créé, la commande n'est pas mise sur le compte d'une autre personne ; le visiteur voit « Vous avez déjà un compte avec ce numéro » et arrive sur la page de connexion.
 - **Commande qui échoue après la création du compte** (réseau coupé) : le compte existe et le visiteur est connecté ; il retouche « Confirmer » (son nom est déjà rempli) et le même code s'affiche sur la confirmation.
 - **Messages publicitaires** : le compte automatique ne s'abonne PAS aux notifications ni aux e-mails promotionnels (le client n'a rien coché). Il peut les activer dans son profil.
+- **« Compte obligatoire » réactivé** : l'option disparaît (voir plus haut) ; testé aussi avec l'agent d'un robot de Google, que le mur laisse passer.
 - **Client déjà connecté** : rien ne change.
 
 ## Fichiers
 | Élément | Fichier |
 | --- | --- |
 | Contrôle des champs, code de 6 chiffres | `src/lib/guestAccount.ts` |
+| Règle « seulement si le compte n'est pas obligatoire » | `src/lib/accountWall.ts` (`guestOrderAllowed`), `src/hooks/useStoreSettings.ts` |
 | Page de commande (visiteur / client) | `src/screens/CheckoutScreen.tsx` |
 | Code montré à la confirmation | `src/screens/OrderConfirmationScreen.tsx` |
 | Fiche article (« Commander » sans renvoi) | `src/screens/ProductScreen.tsx` |
 | Zara : « Pas besoin de compte » (français et arabe) | `src/store/assistantStore.ts`, `src/lib/assistantText.ts` |
-| Tests | `tests/email/guest-account.test.ts` (38), partie 0 de `tests/zara/zara-ui.test.js` (navigateur) |
+| Tests | `tests/email/guest-account.test.ts` (41), partie 0 de `tests/zara/zara-ui.test.js` (navigateur) |
 
 Aucun script SQL à lancer : aucune table ni colonne nouvelle.

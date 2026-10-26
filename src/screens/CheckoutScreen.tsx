@@ -21,6 +21,8 @@ import { formatSlot, slotProblem, slotToIso } from '../lib/scheduledDelivery';
 import { trackTikTokEvent } from '../lib/tiktokPixel';
 import type { PaymentMethod, City } from '../types';
 import { isHomeCity } from '../lib/deliveryRules';
+import { useStoreSettings } from '../hooks/useStoreSettings';
+import { guestOrderAllowed } from '../lib/accountWall';
 import { CHAD_PHONE_REGEX, generateTempPassword, guestFullName, guestInfoProblem, type NewAccountNotice } from '../lib/guestAccount';
 import { fetchLoyaltyStatus, loyaltyDiscount, ordersBeforeDiscount, type LoyaltyStatus } from '../lib/loyaltyDiscount';
 import { DELIVERY_HOURS, GIFT_WRAP_FEE, HOME_CITY, ORDER_VALIDITY_HOURS } from '../constants/shopRules';
@@ -43,6 +45,12 @@ export function CheckoutScreen() {
   const item = items[0] ?? null;
   const profile = useAuthStore((s) => s.profile);
   const signUp = useAuthStore((s) => s.signUp);
+  // commander sans compte : seulement si « Compte obligatoire » est désactivé (sinon, comme avant : connexion ou création de compte d'abord)
+  const { settings: storeSettings, isLoading: settingsLoading } = useStoreSettings();
+  const guestAllowed = guestOrderAllowed(storeSettings.account_required);
+  useEffect(() => {
+    if (!profile && !settingsLoading && !guestAllowed) navigation.replace('Login');
+  }, [profile, settingsLoading, guestAllowed]);
 
   useEffect(() => {
     trackTikTokEvent('InitiateCheckout', {
@@ -106,6 +114,10 @@ export function CheckoutScreen() {
       : null;
 
   const handleSubmit = async () => {
+    if (isGuest && !guestAllowed) {
+      navigation.replace('Login');
+      return;
+    }
     const shippingName = isGuest ? guestFullName({ firstName, lastName }) : name;
     if (isGuest) {
       const problem = guestInfoProblem({ firstName, lastName, phone, email });
@@ -229,6 +241,8 @@ export function CheckoutScreen() {
       setSubmitting(false);
     }
   };
+
+  if (isGuest && (settingsLoading || !guestAllowed)) return null; // on attend de savoir si le compte est obligatoire (sinon : retour à la connexion)
 
   if (!item) {
     return (
