@@ -51,6 +51,8 @@ begin
 end;
 $$;
 
+revoke all on function public.expire_new_pushes_when_off() from public, anon, authenticated;
+
 drop trigger if exists on_push_new_products_off on public.store_settings;
 create trigger on_push_new_products_off
   after update of push_new_products_enabled on public.store_settings
