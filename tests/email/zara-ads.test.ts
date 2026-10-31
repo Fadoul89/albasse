@@ -3,6 +3,7 @@
 import { MANY_SALES, ZARA_ADS_DELAY_CHOICES, ZARA_ADS_DELAY_DEFAULT, adFacts, adLine, isSeniorProfession, pickAds, productAdLine, zaraAdsDelayLabel, zaraAdsDelaySeconds, type AdView } from '../../src/lib/zaraAds.ts';
 import { FORBIDDEN_CLAIMS } from '../../src/lib/assistantPersona.ts';
 import { buildSalesMap } from '../../src/lib/assistantSales.ts';
+import { ZARA_AD_TO_CHAT_MS, zaraChatOpensAt } from '../../src/store/zaraAdSignal.ts';
 
 let ok = 0;
 const check = (label: string, cond: unknown, detail?: unknown) => {
@@ -98,4 +99,11 @@ check('delai : borne entre 0 et 120 (négatif → 0, 9999 → 120), arrondi (2,6
 check('delai : les choix proposés à l’admin : tout de suite, 3, 5, 10, 15, 30, 60 s', ZARA_ADS_DELAY_CHOICES.join(',') === '0,3,5,10,15,30,60' && ZARA_ADS_DELAY_CHOICES.every((n) => zaraAdsDelaySeconds(n) === n));
 check('delai : textes « Tout de suite » et « 10 s »', zaraAdsDelayLabel(0) === 'Tout de suite' && zaraAdsDelayLabel(10) === '10 s');
 
+// --- Zara ouvre son chat APRES la publicité : l'heure d'ouverture ---
+const T0 = 1_000_000;
+check('chat : sans publicité à montrer, il s\'ouvre à l\'heure habituelle (8 s après l\'arrivée)', zaraChatOpensAt(T0, 8000, null) === T0 + 8000);
+check('chat : carte à 5 s → le chat attend 10 s de plus (15 s), pas 8 s', ZARA_AD_TO_CHAT_MS === 10000 && zaraChatOpensAt(T0, 8000, T0 + 5000) === T0 + 15000);
+check('chat : carte tout de suite (0 s) → 10 s, mais jamais avant l\'heure habituelle de 8 s → 10 s', zaraChatOpensAt(T0, 8000, T0) === T0 + 10000);
+check('chat : carte à 30 s (réglage actuel) → le chat s\'ouvre à 40 s', zaraChatOpensAt(T0, 8000, T0 + 30000) === T0 + 40000);
+check('chat : jamais plus tôt que l\'heure habituelle (carte « passée » il y a longtemps → 8 s)', zaraChatOpensAt(T0, 8000, T0 - 60000) === T0 + 8000);
 console.log(process.exitCode ? '\nDES ECHECS' : `\nTOUT EST BON (${ok} contrôles)`);

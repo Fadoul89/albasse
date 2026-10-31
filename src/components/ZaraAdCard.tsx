@@ -8,6 +8,7 @@ import { getProductSales } from '../lib/assistantData';
 import type { SalesMap } from '../lib/assistantSales';
 import { isSeniorProfession, pickAds, zaraAdsDelaySeconds } from '../lib/zaraAds';
 import { useAssistantStore } from '../store/assistantStore';
+import { useZaraAdSignal } from '../store/zaraAdSignal';
 import { colors, fonts, radius, spacing } from '../theme';
 
 const AVATAR = require('../../assets/assistante-avatar.jpg');
@@ -26,8 +27,10 @@ export function ZaraAdCard({ products }: { products: Product[] }) {
   const delaySeconds = zaraAdsDelaySeconds(settings.zara_ads_delay_seconds);
   // la publicité apparaît après le délai choisi par l'admin (compté dès l'ouverture de l'accueil)
   const [ready, setReady] = useState(false);
+  const startedAt = useRef<number | null>(null);
   useEffect(() => {
     if (!enabled || isLoading) return;
+    startedAt.current = Date.now();
     const id = setTimeout(() => setReady(true), delaySeconds * 1000);
     return () => clearTimeout(id);
   }, [enabled, isLoading, delaySeconds]);
@@ -54,6 +57,13 @@ export function ZaraAdCard({ products }: { products: Product[] }) {
         : [],
     [enabled, sales, products, senior, seed]
   );
+
+  // Zara sait quand la carte va apparaître : elle n'ouvre pas son chat avant que la carte ait eu le temps de se montrer
+  useEffect(() => {
+    if (!enabled || ads.length === 0 || startedAt.current === null) return;
+    useZaraAdSignal.getState().announce(startedAt.current + delaySeconds * 1000);
+    return () => useZaraAdSignal.getState().clear();
+  }, [enabled, ads.length, delaySeconds, isLoading]);
 
   useEffect(() => {
     if (ads.length <= 1) return;
