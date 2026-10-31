@@ -38,6 +38,15 @@
         flex: 1;
       }
     </style>
+    <!-- Photos des articles protégées : pas d'aperçu / glisser-déposer / menu « Enregistrer l'image » (seulement les photos rangées dans « product-images » :
+         articles, catégories, pubs des côtés ; pas les photos de profil, le logo, Zara…). Les textes restent sélectionnables. -->
+    <style id="photo-protection">
+      img[src*="/public/product-images/"] {
+        -webkit-touch-callout: none;
+        -webkit-user-drag: none;
+        user-drag: none;
+      }
+    </style>
   </head>
 
   <body>
@@ -47,6 +56,23 @@
     </noscript>
     <!-- The root element for your Expo app. -->
     <div id="root"></div>
+    <script>
+      // Photos des articles protégées : ni clic droit ni appui long (menu « Enregistrer l'image », « Rechercher avec Google Lens »), ni glisser-déposer.
+      // Seulement les photos rangées dans « product-images » (articles, catégories, pubs des côtés). Cela décourage la copie ; une capture d'écran reste
+      // toujours possible. Google voit toujours les images (aucun effet sur le référencement).
+      (function () {
+        var ARTICLE_PHOTO = /\/public\/product-images\//;
+        function isArticlePhoto(t) {
+          if (!t || t.nodeType !== 1) return false;
+          var img = t.closest ? t.closest('img') : null;
+          if (img && ARTICLE_PHOTO.test(img.currentSrc || img.src || '')) return true;
+          // photo affichée en « background-image » : seulement l'élément touché lui-même
+          return ARTICLE_PHOTO.test(window.getComputedStyle(t).backgroundImage || '');
+        }
+        document.addEventListener('contextmenu', function (e) { if (isArticlePhoto(e.target)) e.preventDefault(); }, true);
+        document.addEventListener('dragstart', function (e) { if (isArticlePhoto(e.target)) e.preventDefault(); }, true);
+      })();
+    </script>
     <script>
       // Capture l'evenement Chrome avant que le bundle React soit charge.
       window.addEventListener('beforeinstallprompt', function(e) {

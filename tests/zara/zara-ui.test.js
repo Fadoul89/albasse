@@ -16,7 +16,7 @@ const port = process.argv[3] || '4333';
 // BASE_URL=https://www.albasseshopping.com : teste le VRAI site en ligne (les commandes et comptes restent simules, rien n'est enregistre)
 const BASE = (process.env.BASE_URL || `http://localhost:${port}`).replace(/\/$/, '');
 const BASE_HOST = new URL(BASE).hostname;
-const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI0123456789TOFBCDE+^~').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI0123456789TOFBCDE+=^~').toUpperCase();
 // saison fraiche (blousons et manteaux) : le bouton du menu de Zara n'existe que jusqu'au 31 decembre 2026 a 23h59 (N'Djamena)
 const COLD_ON = Date.now() < Date.parse('2027-01-01T00:00:00+01:00');
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
@@ -5211,6 +5211,69 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('client non administrateur : « Accès réservé aux administrateurs », aucune ligne client', (await v.page.getByText('Accès réservé aux administrateurs').count()) >= 1 && (await v.page.getByTestId('admin-customer-row').count()) === 0);
       await v.ctx.close();
     }
+  }
+
+  if (PARTS.includes('=')) {
+    console.log("\n== = photos des articles protegees : pas de menu « Enregistrer l'image » (clic droit, appui long) ni de glisser-deposer ; le reste du site reste normal");
+    const prodP = (await get('products?select=slug,name&is_active=eq.true&stock=gt.0&order=created_at.desc&limit=1'))[0];
+    const v = await newVisitor(phone, {});
+    await v.page.goto(`${BASE}/produit/${prodP.slug}`, { waitUntil: 'load' });
+    await v.page.getByText('Commander', { exact: true }).first().waitFor({ timeout: 25000 });
+    await sleep(2500);
+    // un evenement « clic droit / appui long » ou « glisser » envoye sur l'element ; vrai = le navigateur n'ouvrira pas son menu
+    const blocked = (selector, type) =>
+      v.page.evaluate(({ selector, type }) => {
+        const el = [...document.querySelectorAll(selector)].find((e) => e.getBoundingClientRect().width > 20) || document.querySelector(selector);
+        if (!el) return null;
+        const ev = type === 'dragstart' ? new Event('dragstart', { bubbles: true, cancelable: true }) : new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+        el.dispatchEvent(ev);
+        return ev.defaultPrevented;
+      }, { selector, type });
+    const ART = 'img[src*="/public/product-images/"]';
+    const OTHER = 'img:not([src*="/public/product-images/"])';
+    const nArt = await v.page.locator(ART).count();
+    const nOther = await v.page.locator(OTHER).count();
+    check('la fiche article affiche des photos d\'articles (rangees dans product-images)', nArt > 0, { nArt, nOther });
+    check('clic droit / appui long sur une photo d\'article : menu bloque', (await blocked(ART, 'contextmenu')) === true);
+    check('glisser une photo d\'article : bloque', (await blocked(ART, 'dragstart')) === true);
+    check('les photos d\'articles ne sont plus « glissables » (CSS : -webkit-user-drag et -webkit-touch-callout)', await v.page.evaluate((sel) => {
+      const cs = getComputedStyle(document.querySelector(sel));
+      return cs.getPropertyValue('-webkit-touch-callout') === 'none' || cs.getPropertyValue('-webkit-user-drag') === 'none';
+    }, ART));
+    if (nOther > 0) {
+      check('les autres images du site (logo, Zara, profil...) ne sont PAS bloquees : menu possible', (await blocked(OTHER, 'contextmenu')) === false && (await blocked(OTHER, 'dragstart')) === false);
+    } else {
+      check('(pas d\'autre image sur cette page : rien a verifier)', true);
+    }
+    check('clic droit sur du texte : le menu du navigateur reste possible (copier, coller)', (await v.page.evaluate(() => {
+      const el = [...document.querySelectorAll('div,span')].find((e) => e.children.length === 0 && /Commander/.test(e.textContent || ''));
+      const ev = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+      el.dispatchEvent(ev);
+      return ev.defaultPrevented;
+    })) === false);
+    // toutes les photos d'articles de l'accueil et d'une categorie (balises <img> ET images de fond) : le menu est bloque sur chacune
+    const catP = (await get('categories?select=slug&limit=1'))[0];
+    for (const [label, url] of [['accueil', `${BASE}/`], ['categorie', `${BASE}/categorie/${catP.slug}`]]) {
+      await v.page.goto(url, { waitUntil: 'load' });
+      await sleep(4500);
+      const res = await v.page.evaluate(() => {
+        const RE = /\/public\/product-images\//;
+        const all = [...document.querySelectorAll('*')].filter((e) => {
+          const bg = getComputedStyle(e).backgroundImage || '';
+          return (e.tagName === 'IMG' && RE.test(e.currentSrc || e.src || '')) || RE.test(bg);
+        });
+        const open = all.filter((e) => {
+          const ev = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+          e.dispatchEvent(ev);
+          return !ev.defaultPrevented;
+        });
+        return { total: all.length, ouvertes: open.length };
+      });
+      check(`${label} : ${res.total} photo(s) d'articles trouvee(s), aucune ne laisse ouvrir le menu « Enregistrer »`, res.total > 0 && res.ouvertes === 0, res);
+    }
+    await v.page.screenshot({ path: path.join(OUT, '=a-photos-protegees.png') });
+    check('aucune erreur (photos protegees)', v.errs.length === 0, v.errs);
+    await v.ctx.close();
   }
 
   if (PARTS.includes('1')) {
