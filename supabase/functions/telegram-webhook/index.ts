@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { extractBotKey, processNewKey, type KeyDeps } from "./key.ts";
+import { LINKED_TEXT, NOT_LINKED_TEXT, RESUMED_TEXT, STOPPED_TEXT, parseClientCommand } from "./commands.ts";
 
 // Aucun secret n'est écrit dans ce fichier : la clé du bot Telegram et le mot de passe du lien (webhook) sont lus dans le coffre-fort Supabase
 // par le serveur (fonctions zara_report_credentials et telegram_webhook_secret, réservées à service_role).
@@ -47,6 +48,30 @@ async function sendMessage(chatId: number, text: string) {
     return;
   }
   await telegram(token, "sendMessage", { chat_id: chatId, text });
+}
+
+// « STOP » / « REPRENDRE » écrit par un client : plus de messages publicitaires / de nouveau (les administrateurs ne sont pas concernés).
+// Le même Telegram peut être lié à plusieurs comptes d'une même personne : la demande vaut pour tous.
+async function handleClientCommand(chatId: number, command: "stop" | "resume") {
+  const { data: profiles } = await supabase.from("profiles").select("id,is_admin").eq("telegram_chat_id", chatId);
+  if (!profiles || profiles.length === 0) {
+    await sendMessage(chatId, NOT_LINKED_TEXT);
+    return;
+  }
+  const clients = profiles.filter((p) => !p.is_admin);
+  if (clients.length === 0) return;
+  const now = new Date().toISOString();
+  const patch =
+    command === "stop"
+      ? { stopped_at: now, stop_reason: "STOP", updated_at: now }
+      : { promos_ok: true, consented_at: now, stopped_at: null, stop_reason: null, updated_at: now };
+  const { error } = await supabase.from("telegram_prefs").upsert(clients.map((p) => ({ user_id: p.id, ...patch })), { onConflict: "user_id" });
+  if (error) {
+    console.error("préférences Telegram", error.code ?? "erreur");
+    await sendMessage(chatId, "Un petit souci est arrivé. Réessayez dans un moment, s'il vous plaît.");
+    return;
+  }
+  await sendMessage(chatId, command === "stop" ? STOPPED_TEXT : RESUMED_TEXT);
 }
 
 const keyDeps: KeyDeps = {
@@ -110,6 +135,12 @@ Deno.serve(async (req: Request) => {
     await logEvent("no-key-in-text", false);
   }
 
+  const command = message?.chat?.type === "private" ? parseClientCommand(text) : null;
+  if (command && chatId) {
+    await handleClientCommand(chatId, command);
+    return new Response("ok");
+  }
+
   if (text && chatId && text.startsWith("/start")) {
     const parts = text.trim().split(/\s+/);
     const payload = parts[1];
@@ -123,10 +154,13 @@ Deno.serve(async (req: Request) => {
         .maybeSingle();
 
       if (!error && data) {
-        await sendMessage(
-          chatId,
-          "✅ Votre compte Albasse Shopping est maintenant lié à Telegram.\nVous recevrez ici les messages de la boutique."
-        );
+        // lier son Telegram = accepter les nouveautés et les offres (le message ci-dessous le dit, avec le mot STOP) ; relier après un STOP les reprend
+        const now = new Date().toISOString();
+        const { error: prefsError } = await supabase
+          .from("telegram_prefs")
+          .upsert({ user_id: data.id, promos_ok: true, consented_at: now, stopped_at: null, stop_reason: null, updated_at: now }, { onConflict: "user_id" });
+        if (prefsError) console.error("préférences Telegram", prefsError.code ?? "erreur");
+        await sendMessage(chatId, LINKED_TEXT);
       } else {
         await sendMessage(
           chatId,

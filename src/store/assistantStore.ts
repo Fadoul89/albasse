@@ -107,6 +107,7 @@ import { navigationRef } from '../navigation/navigationRef';
 import { guestOrderAllowed } from '../lib/accountWall';
 import { getLastStoreSettings } from '../hooks/useStoreSettings';
 import { useAuthStore } from './authStore';
+import { telegramLinkUrl } from '../lib/telegramLink';
 import { useCartStore } from './cartStore';
 import { useInstallGuideStore } from './installGuideStore';
 
@@ -1883,11 +1884,13 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     if (points >= 1) lines.push(T().loyalty.orderPoints(points));
     lines.push(T().serviceNote(home));
     lines.push(c.invoiceReady);
+    const telegramChip = telegramOfferChip();
+    if (telegramChip) lines.push(T().telegram.tip);
     useCartStore.getState().clear();
     setOrder(null);
     setStep('menu');
     // la facture PDF de cette commande (la fonction serveur ne la donne qu'au compte qui a passé la commande)
-    const after: ChatAction[] = [{ label: T().chip.invoice, kind: 'invoice', payload: created.order.id, highlight: true }, { label: T().chip.orders, kind: 'orders' }, menuBtn()];
+    const after: ChatAction[] = [{ label: T().chip.invoice, kind: 'invoice', payload: created.order.id, highlight: true }, { label: T().chip.orders, kind: 'orders' }, ...(telegramChip ? [{ ...telegramChip, highlight: false }] : []), menuBtn()];
     await say(lines.join('\n'), { actions: after });
     // le bon moment pour proposer l'application (une seule fois) : suivre sa commande en un toucher
     await maybeOfferInstall(after);
@@ -2242,6 +2245,29 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     // « Avez-vous déjà installé l'application ? » : installer (en un toucher ou les étapes), « Oui, déjà installée », « Plus tard »
     const [install, later] = installChips(!oneTapInstall());
     await say(T().install.ask, { actions: [...extra, install, { label: T().chip.alreadyInstalled, kind: 'installYes' }, later] });
+  }
+
+  // Lier Telegram : proposé seulement à un client connecté qui ne l'a pas encore fait (lier = recevoir les nouveautés et les offres, STOP pour arrêter)
+  function telegramOfferChip(): ChatAction | null {
+    const profile = useAuthStore.getState().profile;
+    if (!profile || profile.telegram_chat_id) return null;
+    return { label: T().telegram.chip, kind: 'link', payload: telegramLinkUrl(profile.id), highlight: true };
+  }
+
+  // Le client écrit « Telegram » : Zara explique et donne le bouton ; sans compte, il faut d'abord un compte ; déjà lié : elle le dit.
+  async function telegramReply() {
+    const t = T();
+    const profile = useAuthStore.getState().profile;
+    if (!profile) {
+      await say(t.telegram.needLogin, { actions: [{ label: t.chip.createAccount, kind: 'register', highlight: true }, { label: t.chip.login, kind: 'login' }, menuBtn()] });
+      return;
+    }
+    const chip = telegramOfferChip();
+    if (!chip) {
+      await say(t.telegram.already, { actions: afterAnswerActions() });
+      return;
+    }
+    await say(t.telegram.offer, { actions: [chip, menuBtn()] });
   }
 
   // Le visiteur le demande lui-même (« comment installer l'application ? ») : réponse tout de suite.
@@ -2873,6 +2899,9 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         await askCity(cities);
         return;
       }
+      case 'telegram':
+        await telegramReply();
+        return;
       case 'install':
         await installReply();
         return;

@@ -76,6 +76,7 @@ export interface Texts {
   fabLabel: string;
   openLabel: string;
   card: { see: string; soldOut: string; last: string; only(n: number): string; addLabel(name: string): string; order: string };
+  telegram: { chip: string; offer: string; already: string; needLogin: string; tip: string };
   langSwitched: string;
   chip: {
     skip: string;
@@ -480,6 +481,13 @@ const FR: Texts = {
   fabLabel: `Discuter avec ${ASSISTANT_NAME}, l'${ASSISTANT_ROLE}`,
   openLabel: `Ouvrir la discussion avec ${ASSISTANT_NAME}`,
   card: { see: 'Voir le produit ›', soldOut: 'Épuisé', last: 'Dernier en stock', only: (n) => `Plus que ${n} en stock`, addLabel: (name) => `Commander : ${name}`, order: 'Commander' },
+  telegram: {
+    chip: '✈️ Lier mon Telegram',
+    offer: 'Avec Telegram, je vous préviens des nouveautés et des ventes flash directement sur votre téléphone ✈️ C’est gratuit : touchez le bouton, puis « Démarrer ». Vous arrêtez quand vous voulez en écrivant STOP.',
+    already: 'Votre Telegram est déjà lié ✅ Vous recevez ici nos nouveautés et nos offres. Écrivez STOP au bot quand vous voulez arrêter.',
+    needLogin: 'Pour lier Telegram, il faut d’abord un compte : créez-le en 1 minute, puis redemandez-moi ✈️',
+    tip: '✈️ Astuce : liez votre Telegram pour être prévenu des nouveautés et des ventes flash (bouton ci-dessous).',
+  },
   langSwitched: 'Très bien, on continue en français 😊',
   chip: {
     skip: 'Passer',
@@ -1055,6 +1063,13 @@ const AR: Texts = {
   fabLabel: 'التحدث مع زارا كينغز، مساعدة التسويق',
   openLabel: 'فتح المحادثة مع زارا كينغز',
   card: { see: 'عرض المنتج ›', soldOut: 'نفد', last: 'آخر قطعة', only: (n) => `بقي ${n} فقط`, addLabel: (name) => `اطلب: ${name}`, order: 'اطلب' },
+  telegram: {
+    chip: '✈️ ربط تيليجرام',
+    offer: 'عبر تيليجرام أُعلمك بالجديد وبالعروض السريعة مباشرة على هاتفك ✈️ الخدمة مجانية: اضغط على الزر ثم «ابدأ». يمكنك الإيقاف في أي وقت بكتابة «توقف».',
+    already: 'تيليجرام مربوط بحسابك ✅ ستصلك هنا المنتجات الجديدة والعروض. اكتب «توقف» للبوت متى شئت للإيقاف.',
+    needLogin: 'لربط تيليجرام يجب أن يكون لديك حساب أولاً: أنشئه في دقيقة ثم اطلب مني ذلك مجدداً ✈️',
+    tip: '✈️ نصيحة: اربط تيليجرام لتصلك المنتجات الجديدة والعروض السريعة (الزر أدناه).',
+  },
   langSwitched: 'حسنا، نكمل بالعربية 😊',
   chip: {
     skip: 'تخطي',

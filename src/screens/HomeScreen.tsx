@@ -84,6 +84,8 @@ export function HomeScreen() {
     ).start();
   }, []);
   const blinkOpacity = blink.interpolate({ inputRange: [0, 1], outputRange: [0.35, 1] });
+  // la pastille rouge « LIVE » clignote doucement (le mot reste lisible)
+  const liveOpacity = blink.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] });
 
   // vrai nombre de personnes en ligne (lib/onlineCount), relu toutes les 30 s ; caché tant que la base ne répond pas
   const [onlineCount, setOnlineCount] = useState<number | null>(null);
@@ -111,8 +113,10 @@ export function HomeScreen() {
         </View>
         {onlineCount !== null && (
           <View style={styles.visitorsPill} testID="home-online">
-            <Animated.View style={[styles.liveDot, { opacity: blinkOpacity }]} />
-            <Text style={styles.visitorsText}>{onlineLabel(onlineCount)}</Text>
+            <Animated.View style={[styles.liveTag, { opacity: liveOpacity }]} testID="home-live-tag">
+              <Text style={styles.liveTagText}>LIVE</Text>
+            </Animated.View>
+            <Text style={styles.visitorsText} testID="home-online-text">{onlineLabel(onlineCount)}</Text>
           </View>
         )}
         <View style={[styles.topBarSide, styles.topBarSideRight]}>
@@ -331,12 +335,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
   },
-  liveDot: {
-    width: 7,
-    height: 7,
+  liveTag: {
+    backgroundColor: '#ff2d2d',
     borderRadius: 4,
-    backgroundColor: '#3ddc6f',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
   },
+  liveTagText: { color: '#ffffff', fontFamily: fonts.bodyBold, fontSize: 8.5, letterSpacing: 1 },
   visitorsText: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 10.5 },
   independenceBanner: {
     flexDirection: 'row',
