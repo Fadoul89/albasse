@@ -16,7 +16,7 @@ const port = process.argv[3] || '4333';
 // BASE_URL=https://www.albasseshopping.com : teste le VRAI site en ligne (les commandes et comptes restent simules, rien n'est enregistre)
 const BASE = (process.env.BASE_URL || `http://localhost:${port}`).replace(/\/$/, '');
 const BASE_HOST = new URL(BASE).hostname;
-const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI0123456789TOFBCDE+=^~%').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI0123456789TOFBCDE+=^~%&').toUpperCase();
 // saison fraiche (blousons et manteaux) : le bouton du menu de Zara n'existe que jusqu'au 31 decembre 2026 a 23h59 (N'Djamena)
 const COLD_ON = Date.now() < Date.parse('2027-01-01T00:00:00+01:00');
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
@@ -8829,6 +8829,190 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const { v } = await openAdminG({ customers, route: `clients/${customers[0].id}` });
       await v.page.getByText('Identité').first().waitFor({ timeout: 25000 });
       check('fiche d\'un client dont la base n\'a pas la colonne : pas de section genre', (await v.page.getByTestId('admin-gender-section').count()) === 0);
+      await v.ctx.close();
+    }
+  }
+
+  // ---------------------------------------------------------------------------------------------------------------------------
+  // & Vrais chiffres des visites (add-visit-stats.sql) : tableau de bord et Admin › Clients lisent les comptes exacts de la base
+  // ---------------------------------------------------------------------------------------------------------------------------
+  if (PARTS.includes('&')) {
+    console.log('\n== & Vrais chiffres des visites : tableau de bord (visiteurs, vraies visites, qualite par source/campagne), Admin › Clients (visites exactes, pages de 1000) (fausse base)');
+    const SKV = 'sb-xtitsmmccpkelxfjyqyh-auth-token';
+    const HDRV = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*', 'access-control-expose-headers': 'content-range' };
+    const jsonV = (route, body, status = 200) => route.fulfill({ status, headers: { 'content-type': 'application/json', ...HDRV }, body: JSON.stringify(body) });
+    const UID_V = '66666666-6666-4666-8666-666666666666';
+    const JWTV = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2NjY2NjY2Ni02NjY2LTQ2NjYtODY2Ni02NjY2NjY2NjY2NjYiLCJleHAiOjQxMDI0NDQ4MDAsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.c2ln';
+    const adminV = () => {
+      const auth = { id: UID_V, aud: 'authenticated', role: 'authenticated', email: 'admin@gmail.com', app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' };
+      const token = { access_token: JWTV, refresh_token: 'fake-refresh', token_type: 'bearer', expires_in: 3600, expires_at: 4102444800, user: auth };
+      return { auth, token, session: JSON.stringify(token), editable: true, patches: [], profile: { id: UID_V, email: 'admin@gmail.com', full_name: 'Admin Albasse', phone: '66123456', whatsapp_number: null, profession: null, region: null, country: 'Tchad', address: null, loyalty_points: 0, banned: false, role: 'admin', is_admin: true, is_affiliate: false, created_at: '2026-10-20T10:00:00Z', last_login_at: '2026-10-30T10:00:00Z' } };
+    };
+    const PROD_V = 'cccccccc-0000-4000-8000-000000000001';
+    const productV = { id: PROD_V, category_id: 'dddddddd-0000-4000-8000-000000000001', name: 'Baskets Test Chunky', slug: 'baskets-test', description: '', price: 22500, compare_at_price: null, images: [], colors: [], sizes: [], stock: 10, is_flash_sale: false, flash_sale_ends_at: null, notify_on_publish: false, is_active: true, affiliate_commission_rate: null, rating: 0, review_count: 0, created_at: '2026-10-01T00:00:00Z' };
+    const todayOverview = {
+      sessions: 1839, visitors: 1618, real_sessions: 140, real_visitors: 120,
+      by_source: [
+        { source: 'Publicité / campagne', sessions: 1671, visitors: 1503, real_sessions: 1, real_visitors: 1, product_views: 3, cart_adds: 0, orders: 0, revenue: 0 },
+        { source: 'Accès direct', sessions: 117, visitors: 88, real_sessions: 100, real_visitors: 60, product_views: 400, cart_adds: 20, orders: 0, revenue: 0 },
+      ],
+      by_campaign: [{ source: 'Publicité / campagne', medium: 'paid', campaign: '120253099938360325', sessions: 415, real_sessions: 0 }],
+      top_viewed: [{ product_id: PROD_V, views: 300 }],
+    };
+    const windowOverview = {
+      sessions: 16383, visitors: 14000, real_sessions: 900, real_visitors: 700,
+      by_source: [
+        { source: 'Publicité / campagne', sessions: 15000, visitors: 13000, real_sessions: 10, real_visitors: 9, product_views: 8000, cart_adds: 200, orders: 0, revenue: 0 },
+        { source: 'Accès direct', sessions: 1383, visitors: 1000, real_sessions: 890, real_visitors: 690, product_views: 805, cart_adds: 104, orders: 3, revenue: 60000 },
+      ],
+      by_campaign: [],
+      top_viewed: [{ product_id: PROD_V, views: 4321 }],
+    };
+    // rpc : { today, window } = résultats de admin_visit_overview ; null = « le script SQL n'est pas lancé » (la base répond que la fonction n'existe pas)
+    const openDashV = async ({ rpc = true, legacySessions = [], legacyViews = [] } = {}) => {
+      const fu = adminV();
+      const seen = { calls: [], paths: [], viewsUrl: '' };
+      const v = await newVisitor(phone, { lang: 'fr', storage: { [SKV]: fu.session }, fakeUser: fu, fakeStore: { waOrder: true, accountRequired: false, patches: [] } });
+      await v.page.route(/\/rest\/v1\//, (rt) => {
+        const req = rt.request();
+        const u = new URL(req.url());
+        if (req.method() === 'OPTIONS') return rt.fallback();
+        const t = u.pathname.replace('/rest/v1/', '');
+        if (req.method() === 'GET' || req.method() === 'HEAD') seen.paths.push(t); // seules les LECTURES comptent (le site enregistre aussi sa propre visite)
+        if (t === 'rpc/admin_visit_overview') {
+          const body = JSON.parse(req.postData() || '{}');
+          seen.calls.push(body);
+          if (!rpc) return jsonV(rt, { code: 'PGRST202', message: 'Could not find the function public.admin_visit_overview', details: null, hint: null }, 404);
+          const days = (Date.now() - Date.parse(body.p_since)) / 86400000;
+          return jsonV(rt, days > 5 ? windowOverview : todayOverview);
+        }
+        if (t === 'products') return jsonV(rt, [productV]);
+        if (t === 'visitor_sessions') return jsonV(rt, legacySessions);
+        if (t === 'product_views') { seen.viewsUrl = req.url(); return jsonV(rt, legacyViews); }
+        if (t === 'profiles' && u.searchParams.get('id')) return rt.fallback(); // le profil de l'administrateur : fourni par la fausse connexion
+        if (['orders', 'cart_events', 'app_download_clicks', 'app_installs', 'profiles'].includes(t)) return jsonV(rt, []);
+        return rt.fallback();
+      });
+      await v.page.goto(`${BASE}/admin/tableau-de-bord`, { waitUntil: 'load' });
+      await v.page.getByTestId('dashboard-visitors').waitFor({ timeout: 30000 });
+      return { v, seen };
+    };
+    const txtV = (page, id) => page.getByTestId(id).innerText();
+
+    // ---------- 1. le script SQL est lancé : les comptes exacts de la base
+    {
+      const { v, seen } = await openDashV({ rpc: true });
+      check('tableau de bord : « Visiteurs aujourd\'hui » = 1618 (le vrai nombre, plus bloqué à 900)', /1618/.test(await txtV(v.page, 'dashboard-visitors')), await txtV(v.page, 'dashboard-visitors'));
+      check('carte « Vraies visites aujourd\'hui » = 120', /120/.test(await txtV(v.page, 'dashboard-real-visits')) && /Vraies visites/.test(await txtV(v.page, 'dashboard-real-visits')));
+      const help = await txtV(v.page, 'dashboard-real-help');
+      check('explication : 20 secondes, 2 pages, connecté ; « 120 sur 1618 (7 %) »', /20 secondes/.test(help) && /2 pages/.test(help) && /connectée/.test(help) && /120 sur 1618 \(7 %\)/.test(help), help);
+      const ads = await txtV(v.page, 'dashboard-quality-Publicité / campagne');
+      check('qualité : la pub a 1503 visiteurs, 1 seul vrai, écrit « <1 % » (jamais « 0 % » quand il y en a un)', /1503/.test(ads) && /\b1\b/.test(ads) && /<1 %/.test(ads) && !/\b0 %/.test(ads), ads);
+      const direct = await txtV(v.page, 'dashboard-quality-Accès direct');
+      check('qualité : accès direct 88 visiteurs, 60 vrais, 68 %', /88/.test(direct) && /60/.test(direct) && /68 %/.test(direct), direct);
+      const camp = await txtV(v.page, 'dashboard-campaign-120253099938360325');
+      check('campagne Meta : le numéro 120253099938360325 (celui du Gestionnaire Meta), 415 visites, 0 vraie, 0 %', /120253099938360325/.test(camp) && !/paid/.test(camp) && /415/.test(camp) && /0 %/.test(camp), camp);
+      const body = await v.page.locator('body').innerText();
+      check('articles les plus consultés : « Baskets Test Chunky », 4321 vue(s) (comptés par la base sur 30 jours)', /Baskets Test Chunky/.test(body) && /4321 vue\(s\)/.test(body));
+      check('performance par source : 15000 visites pour la pub, 1383 en accès direct (exacts), 3 commandes', /15000/.test(body) && /1383/.test(body));
+      check('2 demandes de comptes (aujourd\'hui et 30 jours), aucune ancienne lecture ligne par ligne', seen.calls.length === 2 && !seen.paths.includes('visitor_sessions') && !seen.paths.includes('product_views') && !seen.paths.includes('cart_events'), { calls: seen.calls, paths: seen.paths });
+      check('la demande « aujourd\'hui » part de minuit, celle des 30 jours de bien avant', seen.calls.some((c) => (Date.now() - Date.parse(c.p_since)) / 3600000 < 25) && seen.calls.some((c) => (Date.now() - Date.parse(c.p_since)) / 86400000 > 25), seen.calls);
+      await v.page.screenshot({ path: path.join(OUT, '&1-tableau-de-bord-vraies-visites.png'), fullPage: true });
+      check('aucune erreur (tableau de bord avec comptes exacts)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+
+    // ---------- 2. le script SQL n'est pas encore lancé : l'ancien calcul reste, sans « vraies visites », et sans colonne inexistante
+    {
+      const sessions = [
+        { id: 's1', started_at: '2026-10-31T08:00:00Z', referrer_source: 'Accès direct', visitor_id: 'v1' },
+        { id: 's2', started_at: '2026-10-31T09:00:00Z', referrer_source: 'Accès direct', visitor_id: 'v1' },
+        { id: 's3', started_at: '2026-10-31T09:30:00Z', referrer_source: 'Facebook', visitor_id: 'v2' },
+      ];
+      const views = [{ product_id: PROD_V, session_id: 's1', viewed_at: '2026-10-31T08:01:00Z' }, { product_id: PROD_V, session_id: 's3', viewed_at: '2026-10-31T09:31:00Z' }];
+      const { v, seen } = await openDashV({ rpc: false, legacySessions: sessions, legacyViews: views });
+      check('sans le script SQL : « Visiteurs aujourd\'hui » = 2 (ancien calcul : v1 et v2)', /\b2\b/.test(await txtV(v.page, 'dashboard-visitors')), await txtV(v.page, 'dashboard-visitors'));
+      check('sans le script SQL : pas de carte « Vraies visites », pas de section qualité', (await v.page.getByTestId('dashboard-real-visits').count()) === 0 && (await v.page.getByTestId('dashboard-real-help').count()) === 0 && (await v.page.getByText('Qualité des visites').count()) === 0);
+      const body = await v.page.locator('body').innerText();
+      check('sans le script SQL : les articles les plus consultés s\'affichent (2 vues) — la lecture utilise la vraie colonne « viewed_at »', /Baskets Test Chunky/.test(body) && /2 vue\(s\)/.test(body) && /viewed_at/.test(seen.viewsUrl) && !/created_at/.test(seen.viewsUrl), seen.viewsUrl);
+      check('sans le script SQL : aucune erreur, la page reste complète', v.errs.length === 0 && /Performance par source/.test(body), v.errs);
+      await v.ctx.close();
+    }
+
+    // ---------- 3. Admin › Clients : visites exactes par client, listes lues page par page
+    const mkCustV = (n, name) => ({ id: `aaaaaaaa-0000-4000-8000-${String(n).padStart(12, '0')}`, email: `${name.toLowerCase()}${n}@gmail.com`, full_name: name, phone: `66${String(n).padStart(6, '0')}`, whatsapp_number: null, profession: null, region: "N'Djamena", country: 'Tchad', address: null, loyalty_points: 0, banned: false, role: 'customer', is_admin: false, is_affiliate: false, created_at: '2026-10-20T10:00:00Z', last_login_at: '2026-10-30T10:00:00Z', login_count: 2, fake_order_count: 0 });
+    const openClientsV = async ({ customers, activity = null, legacy = null }) => {
+      const fu = adminV();
+      const seen = { paths: [], profileRanges: [], rpcs: 0 };
+      const v = await newVisitor(phone, { lang: 'fr', storage: { [SKV]: fu.session }, fakeUser: fu, fakeStore: { waOrder: true, accountRequired: false, patches: [] } });
+      await v.page.route(/\/rest\/v1\//, (rt) => {
+        const req = rt.request();
+        const u = new URL(req.url());
+        if (req.method() === 'OPTIONS') return rt.fallback();
+        const t = u.pathname.replace('/rest/v1/', '');
+        if (req.method() === 'GET' || req.method() === 'HEAD') seen.paths.push(t);
+        if (t === 'profiles' && !u.searchParams.get('id') && u.searchParams.get('is_admin') === 'eq.false') {
+          // « .range(0, 999) » devient offset=0 & limit=1000 ; comme la vraie base : au plus 1000 lignes par demande, même si on en demande plus
+          const offset = Number(u.searchParams.get('offset') || 0);
+          const limit = Math.min(Number(u.searchParams.get('limit') || 1000), 1000);
+          seen.profileRanges.push(`${offset}+${limit}`);
+          return jsonV(rt, customers.slice(offset, offset + limit));
+        }
+        if (t === 'orders') return jsonV(rt, []);
+        if (t === 'rpc/admin_customer_activity') {
+          seen.rpcs++;
+          if (!activity) return jsonV(rt, { code: 'PGRST202', message: 'Could not find the function public.admin_customer_activity', details: null, hint: null }, 404);
+          return jsonV(rt, activity);
+        }
+        if (t === 'visitor_sessions') return jsonV(rt, legacy ? legacy.sessions : []);
+        if (t === 'product_views') return jsonV(rt, legacy ? legacy.views : []);
+        if (t === 'cart_events') return jsonV(rt, legacy ? legacy.carts : []);
+        if (['customer_sanctions', 'favorites'].includes(t)) return jsonV(rt, []);
+        return rt.fallback();
+      });
+      await v.page.goto(`${BASE}/admin/clients`, { waitUntil: 'load' });
+      await v.page.getByTestId('admin-customer-row').first().waitFor({ timeout: 30000 });
+      return { v, seen };
+    };
+    {
+      // Amina : 4 visites, 2 h 40 min en tout ; Idriss : aucune visite mais 5 articles vus
+      const customers = [mkCustV(1, 'Amina'), mkCustV(2, 'Idriss')];
+      const activity = [
+        { user_id: customers[0].id, sessions: 4, duration_seconds: 9600, last_seen_at: '2026-10-31T10:00:00Z', top_source: 'Facebook', views: 12, cart_adds: 3 },
+        { user_id: customers[1].id, sessions: 0, duration_seconds: 0, last_seen_at: null, top_source: null, views: 5, cart_adds: 0 },
+      ];
+      const { v, seen } = await openClientsV({ customers, activity });
+      const rows = await v.page.getByTestId('admin-customer-row').allInnerTexts();
+      const amina = rows.find((r) => /Amina/.test(r)) || '';
+      const idriss = rows.find((r) => /Idriss/.test(r)) || '';
+      check('Admin › Clients : Amina affiche 2 h 40 min (compté par la base)', /2 h 40 min/.test(amina), amina);
+      check('Admin › Clients : Idriss (aucune visite) affiche 0 s', /0 s/.test(idriss), idriss);
+      check('comptes exacts : une demande, aucune ancienne lecture ligne par ligne des visites', seen.rpcs === 1 && !seen.paths.includes('visitor_sessions') && !seen.paths.includes('product_views') && !seen.paths.includes('cart_events'), seen.paths);
+      check('la liste des clients est demandée page par page (depuis 0, 1000 lignes)', seen.profileRanges[0] === '0+1000', seen.profileRanges);
+      check('aucune erreur (Admin › Clients avec comptes exacts)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+    {
+      // le script SQL n'est pas lancé : l'ancienne lecture prend le relais
+      const customers = [mkCustV(1, 'Amina')];
+      const legacy = {
+        sessions: [{ id: 's1', user_id: customers[0].id, duration_seconds: 1200, last_seen_at: '2026-10-31T10:00:00Z', referrer_source: 'Facebook' }, { id: 's2', user_id: customers[0].id, duration_seconds: 600, last_seen_at: '2026-10-30T10:00:00Z', referrer_source: 'Facebook' }],
+        views: [{ user_id: customers[0].id }],
+        carts: [],
+      };
+      const { v, seen } = await openClientsV({ customers, activity: null, legacy });
+      const row = (await v.page.getByTestId('admin-customer-row').allInnerTexts())[0] || '';
+      check('sans le script SQL : Admin › Clients garde l\'ancien calcul (30 min)', /30 min/.test(row) && seen.paths.includes('visitor_sessions'), { row, paths: seen.paths });
+      check('sans le script SQL : aucune erreur', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+    {
+      // plus de 1 000 clients : lus en deux pages, personne n'est perdu
+      const customers = Array.from({ length: 1200 }, (_, i) => mkCustV(i + 1, `Client${i + 1}`));
+      const { v, seen } = await openClientsV({ customers, activity: [] });
+      const stats = await v.page.locator('body').innerText();
+      check('1 200 clients : deux demandes (depuis 0, puis depuis 1000)', seen.profileRanges.length === 2 && seen.profileRanges[0] === '0+1000' && seen.profileRanges[1] === '1000+1000', seen.profileRanges);
+      check('1 200 clients : les 1 200 sont comptés (pas bloqué à 1 000)', /1200/.test(stats), stats.slice(0, 400));
       await v.ctx.close();
     }
   }
