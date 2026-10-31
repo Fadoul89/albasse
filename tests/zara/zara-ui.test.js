@@ -313,6 +313,9 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
                 if (wants('zara_auto_flash_enabled')) r.zara_auto_flash_enabled = fakeStore.zaraAutoFlash;
                 if (wants('zara_auto_flash_last')) r.zara_auto_flash_last = fakeStore.zaraAutoFlashLast || null;
               }
+              // notification automatique des nouveaux articles : fakeStore.pushNewProducts undefined = colonne absente (script add-push-new-products-switch.sql pas lance), sinon true / false
+              if (fakeStore.pushNewProducts === undefined) delete r.push_new_products_enabled;
+              else if (wants('push_new_products_enabled')) r.push_new_products_enabled = fakeStore.pushNewProducts;
             }
             if (fs.accountRequired === 'missing') delete r.account_required;
             else if (wants('account_required')) r.account_required = fs.accountRequired === true;
@@ -334,7 +337,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         if (fakeStore && u.pathname === '/rest/v1/store_settings' && m === 'PATCH') {
           const body = JSON.parse(req.postData() || '{}');
           (fakeStore.patches = fakeStore.patches || []).push(body);
-          const missing = ('telegram_absent_enabled' in body && fakeStore.telegramAbsent === undefined && 'telegram_absent_enabled') || ('zara_auto_flash_enabled' in body && fakeStore.zaraAutoFlash === undefined && 'zara_auto_flash_enabled') || ('zara_ads_delay_seconds' in body && fakeStore.zaraDelay === undefined && 'zara_ads_delay_seconds') || ('zara_ads_enabled' in body && fakeStore.zaraAds === undefined && 'zara_ads_enabled') || ('whatsapp_order_enabled' in body && fakeStore.waOrder === undefined && 'whatsapp_order_enabled') || ('account_required' in body && fakeStore.accountRequired === 'missing' && 'account_required');
+          const missing = ('telegram_absent_enabled' in body && fakeStore.telegramAbsent === undefined && 'telegram_absent_enabled') || ('zara_auto_flash_enabled' in body && fakeStore.zaraAutoFlash === undefined && 'zara_auto_flash_enabled') || ('zara_ads_delay_seconds' in body && fakeStore.zaraDelay === undefined && 'zara_ads_delay_seconds') || ('zara_ads_enabled' in body && fakeStore.zaraAds === undefined && 'zara_ads_enabled') || ('whatsapp_order_enabled' in body && fakeStore.waOrder === undefined && 'whatsapp_order_enabled') || ('account_required' in body && fakeStore.accountRequired === 'missing' && 'account_required') || ('push_new_products_enabled' in body && fakeStore.pushNewProducts === undefined && 'push_new_products_enabled');
           if (missing) return json(route, { code: 'PGRST204', message: `Could not find the '${missing}' column of 'store_settings' in the schema cache` }, 400);
           if ('whatsapp_order_enabled' in body) fakeStore.waOrder = body.whatsapp_order_enabled;
           if ('account_required' in body) fakeStore.accountRequired = body.account_required;
@@ -344,6 +347,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
           if ('zara_ads_enabled' in body) fakeStore.zaraAds = body.zara_ads_enabled;
           if ('zara_ads_delay_seconds' in body) fakeStore.zaraDelay = body.zara_ads_delay_seconds;
           if ('zara_auto_flash_enabled' in body) fakeStore.zaraAutoFlash = body.zara_auto_flash_enabled;
+          if ('push_new_products_enabled' in body) fakeStore.pushNewProducts = body.push_new_products_enabled;
           return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } });
         }
         // les promotions publiees en vrai sur le site (fenetre « offre du jour ») ne doivent pas couvrir les pages pendant les tests
@@ -4639,6 +4643,39 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('aucune erreur (table absente)', c.errs.length === 0, c.errs);
       await c.ctx.close();
     }
+    // interrupteur « Notification automatique des nouveaux articles » : ETEINT au depart, on le rallume puis on le recoupe
+    {
+      const fu = accountOf();
+      const fs2 = { waOrder: true, patches: [], pushNewProducts: false };
+      const c = await newVisitor(phone, { lang: 'fr', storage: { [SK]: fu.session }, fakeUser: fu, fakePushes: { rows: rowsOf(), products, posts: [], patches: [] }, fakeStore: fs2 });
+      await c.page.goto(`${BASE}/admin/promotions`, { waitUntil: 'load' });
+      await c.page.getByTestId('push-new-products-toggle').waitFor({ timeout: 25000 });
+      await sleep(1500);
+      const st = () => c.page.getByTestId('push-new-products-status').innerText();
+      check('nouveaux articles : l\'interrupteur est dans la section des notifications, ETEINT au depart', (await section(c).getByTestId('push-new-products-toggle').count()) === 1 && /Désactivé : publier un article n’envoie aucune notification/.test(await st()), await st());
+      await c.page.getByTestId('push-new-products-switch').click();
+      await c.page.waitForFunction(() => /Activé : un nouvel article publié envoie une notification/.test(document.querySelector('[data-testid="push-new-products-status"]')?.textContent || ''), null, { timeout: 8000 });
+      check('nouveaux articles : rallume -> la base recoit push_new_products_enabled = true', JSON.stringify(fs2.patches[fs2.patches.length - 1]) === '{"push_new_products_enabled":true}' && fs2.pushNewProducts === true, fs2.patches);
+      await c.page.getByTestId('push-new-products-switch').click();
+      await c.page.waitForFunction(() => /Désactivé : publier un article/.test(document.querySelector('[data-testid="push-new-products-status"]')?.textContent || ''), null, { timeout: 8000 });
+      check('nouveaux articles : recoupe -> la base recoit false', JSON.stringify(fs2.patches[fs2.patches.length - 1]) === '{"push_new_products_enabled":false}' && fs2.pushNewProducts === false, fs2.patches);
+      check('aucune erreur (interrupteur nouveaux articles)', c.errs.length === 0, c.errs);
+      await c.ctx.close();
+    }
+    // le script add-push-new-products-switch.sql n'est pas encore lance : publier envoie bien une notification (vrai) ; le toucher explique quoi faire
+    {
+      const fu = accountOf();
+      const fs3 = { waOrder: true, patches: [] };
+      const c = await newVisitor(phone, { lang: 'fr', storage: { [SK]: fu.session }, fakeUser: fu, fakePushes: { rows: rowsOf(), products, posts: [], patches: [] }, fakeStore: fs3 });
+      await c.page.goto(`${BASE}/admin/promotions`, { waitUntil: 'load' });
+      await c.page.getByTestId('push-new-products-toggle').waitFor({ timeout: 25000 });
+      await sleep(1500);
+      check('script pas lance : l\'interrupteur dit la verite (« Activé », car publier envoie bien une notification)', /Activé : un nouvel article publié envoie une notification/.test(await c.page.getByTestId('push-new-products-status').innerText()));
+      await c.page.getByTestId('push-new-products-switch').click();
+      await sleep(1500);
+      check('script pas lance : « Lancez d’abord le script add-push-new-products-switch.sql dans Supabase. » et l\'interrupteur ne bouge pas', (await c.page.getByText(/Lancez d’abord le script add-push-new-products-switch\.sql dans Supabase\./).count()) >= 1 && /Activé/.test(await c.page.getByTestId('push-new-products-status').innerText()));
+      await c.ctx.close();
+    }
     // la vraie utilisation
     {
       const fp = { rows: rowsOf(), products, posts: [], patches: [] };
@@ -4716,7 +4753,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await c.page.getByText('Oui, envoyer').click();
       await sleep(1500);
       const pn = fp.patches.find((x) => x.id === 'new1');
-      check('envoyer maintenant : l\'heure de depart devient « maintenant » (le minuteur l\'envoie dans la minute)', pn && Math.abs(new Date(pn.body.send_at).getTime() - Date.now()) < 60000 && pn.status === 'eq.pending', pn);
+      check('envoyer maintenant : l\'heure de depart devient « maintenant » (le gardien l\'envoie des que l\'ecart avec la derniere notification est respecte)', pn && Math.abs(new Date(pn.body.send_at).getTime() - Date.now()) < 60000 && pn.status === 'eq.pending', pn);
       check('aucune erreur (notifications programmees)', c.errs.length === 0, c.errs);
       await c.ctx.close();
     }

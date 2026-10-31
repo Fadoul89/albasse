@@ -6,6 +6,7 @@ import { GoldButton } from './GoldButton';
 import { ConfirmDialog } from './ConfirmDialog';
 import { DateField } from './DateField';
 import { TimeField } from './TimeField';
+import { StoreSettingToggle } from './StoreSettingToggle';
 import { useToastStore } from '../store/toastStore';
 import { chadDayIso } from '../lib/assistantSales';
 import {
@@ -102,8 +103,8 @@ export function ScheduledPushes({ products }: { products: Product[] }) {
       showToast(error, { title: 'Erreur', type: 'error' });
       return;
     }
-    showToast(pending.kind === 'cancel' ? 'Cette notification ne partira pas.' : 'Elle part dans la minute.', {
-      title: pending.kind === 'cancel' ? 'Annulée' : 'Envoi en cours',
+    showToast(pending.kind === 'cancel' ? 'Cette notification ne partira pas.' : 'Elle part dès que possible, jamais en même temps qu\'une autre.', {
+      title: pending.kind === 'cancel' ? 'Annulée' : 'Envoi demandé',
       type: 'success',
     });
     void load();
@@ -114,9 +115,14 @@ export function ScheduledPushes({ products }: { products: Product[] }) {
       <Text style={styles.title}>📣 Notifications push programmées</Text>
       <Text style={styles.helper}>
         Choisissez un article, écrivez un message court, puis le jour et l'heure (heure du Tchad). À l'heure dite, la
-        notification part sur tous les téléphones abonnés, avec la photo de l'article ; un toucher ouvre sa fiche. Vous
-        pouvez en programmer autant que vous voulez.
+        notification part sur tous les téléphones abonnés, avec la photo de l'article ; un toucher ouvre sa fiche. Zara
+        n'envoie jamais deux notifications en même temps : s'il y en a une partie depuis moins de 3 heures, la suivante
+        attend. Les ventes flash (et les nouveaux articles, si vous rallumez l'interrupteur ci-dessous) sont envoyées par Zara
+        aux heures où le plus de monde est sur le site (au plus 2 par jour, de 9 h à 20 h), regroupées en une seule
+        quand il y en a plusieurs.
       </Text>
+
+      <StoreSettingToggle setting="pushNewProducts" />
 
       {missing ? (
         <View style={styles.warning} testID="push-missing">
@@ -284,7 +290,7 @@ export function ScheduledPushes({ products }: { products: Product[] }) {
           pending
             ? pending.kind === 'cancel'
               ? `« ${pending.row.message} » ne partira pas.`
-              : `« ${pending.row.message} » part dans la minute sur tous les téléphones abonnés.`
+              : `« ${pending.row.message} » part sur tous les téléphones abonnés dès que l'écart avec la dernière notification est respecté : Zara n'envoie jamais deux notifications en même temps.`
             : ''
         }
         confirmLabel={pending?.kind === 'cancel' ? 'Oui, annuler' : 'Oui, envoyer'}
