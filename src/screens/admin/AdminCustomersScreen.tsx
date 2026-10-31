@@ -17,6 +17,8 @@ import {
 import { getLoyaltyStatus } from '../../lib/loyalty';
 import { phoneDigits, visibleEmail } from '../../lib/phoneAuth';
 import { fetchBrowsingOverview } from '../../lib/assistantData';
+import { fetchRelanceData, type RelanceData } from '../../lib/relanceData';
+import { pickRelance, relanceMessage, whatsappLink, type RelancePick } from '../../lib/relanceMessage';
 import { supabase } from '../../lib/supabase';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { StoreSettingToggle } from '../../components/StoreSettingToggle';
@@ -60,11 +62,12 @@ function daysAway(c: CustomerSummary, now: number = Date.now()): number {
 
 const firstName = (c: CustomerSummary) => (c.profile.full_name ?? '').trim().split(/\s+/)[0] ?? '';
 
-function whatsappUrl(c: CustomerSummary): string | null {
+// Message WhatsApp prêt à envoyer (l'administrateur peut le modifier avant) : si le client a regardé de près un article encore en vente,
+// le message le cite avec son vrai prix et la livraison de sa ville ; sinon, simple bonjour (voir src/lib/relanceMessage.ts).
+function whatsappUrl(c: CustomerSummary, pick: RelancePick | null): string | null {
   const digits = phoneDigits(c.profile.whatsapp_number ?? '') ?? phoneDigits(c.profile.phone ?? '');
   if (!digits) return null;
-  const text = `Bonjour ${firstName(c)}, ici l'équipe Albasse Shopping 😊`.replace('Bonjour ,', 'Bonjour,');
-  return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
+  return whatsappLink(digits, relanceMessage({ firstName: firstName(c), product: pick?.product ?? null, region: c.profile.region }));
 }
 
 function emailUrl(c: CustomerSummary): string | null {
@@ -100,6 +103,8 @@ export function AdminCustomersScreen() {
   const [highInterest, setHighInterest] = useState<Set<string>>(new Set());
   // « j'aime » (cœurs) donnés par chaque client : un client qui aime des articles est aussi « Intérêt élevé »
   const [likesByUser, setLikesByUser] = useState<Map<string, number>>(new Map());
+  // tous les articles regardés de près par des clients connectés, leurs commandes et les prix/stocks du jour (pour le message WhatsApp)
+  const [relance, setRelance] = useState<RelanceData | null>(null);
 
   useEffect(() => {
     if (!profile?.is_admin) return;
@@ -107,7 +112,13 @@ export function AdminCustomersScreen() {
     fetchBrowsingOverview('30d').then((res) => {
       if (!alive || !res.ok) return;
       const refs = res.overview.rows.filter((r) => r.interest === 'eleve' && r.accountRef).map((r) => r.accountRef!.slice(2));
-      setHighInterest(new Set(refs));
+      setHighInterest((prev) => new Set([...prev, ...refs]));
+    });
+    // le tableau de suivi ci-dessus ne garde que les 300 regards les plus récents (1 compte sur 30 « Intérêt élevé ») : on lit ici la liste complète
+    fetchRelanceData().then((data) => {
+      if (!alive || !data) return;
+      setRelance(data);
+      setHighInterest((prev) => new Set([...prev, ...data.rows.map((r) => r.userId.slice(0, 8))]));
     });
     Promise.resolve(supabase.from('favorites').select('user_id')).then(({ data }) => {
       if (!alive || !data) return;
@@ -191,6 +202,17 @@ export function AdminCustomersScreen() {
 
   const visible = filtered.slice(0, visibleCount);
 
+  // pour chaque client : l'article regardé de près qu'on peut encore lui proposer (en vente, en stock, pas déjà commandé)
+  const picks = useMemo(() => {
+    const m = new Map<string, RelancePick>();
+    if (!relance) return m;
+    for (const c of customers) {
+      const p = pickRelance(relance.rows, c.profile.id, relance.products, relance.ordered);
+      if (p) m.set(c.profile.id, p);
+    }
+    return m;
+  }, [customers, relance]);
+
   return (
     <View style={styles.screen}>
       <ScreenHeader title="Gestion des clients" showBack />
@@ -204,6 +226,7 @@ export function AdminCustomersScreen() {
             customer={item}
             highInterest={highInterest.has(item.profile.id.slice(0, 8)) || (likesByUser.get(item.profile.id) ?? 0) > 0}
             likes={likesByUser.get(item.profile.id) ?? 0}
+            pick={picks.get(item.profile.id) ?? null}
             onPress={() => navigation.navigate('AdminCustomerDetail', { userId: item.profile.id })}
           />
         )}
@@ -307,11 +330,13 @@ function CustomerRow({
   customer,
   highInterest,
   likes,
+  pick,
   onPress,
 }: {
   customer: CustomerSummary;
   highInterest: boolean;
   likes: number;
+  pick: RelancePick | null;
   onPress: () => void;
 }) {
   const level = engagementLevel(customer.totalDurationSeconds);
@@ -319,7 +344,7 @@ function CustomerRow({
   const loyalty = getLoyaltyStatus(customer.profile.loyalty_points);
   const away = daysAway(customer);
   const isAway = away >= AWAY_DAYS;
-  const wa = whatsappUrl(customer);
+  const wa = whatsappUrl(customer, pick);
   const mail = emailUrl(customer);
   return (
     <Pressable style={[styles.row, isAway && styles.rowAway]} onPress={onPress} testID="admin-customer-row">
@@ -347,6 +372,11 @@ function CustomerRow({
             </View>
           )}
         </View>
+      )}
+      {pick && (
+        <Text style={styles.rowRelance} testID="customer-relance-article">
+          {`💙 A regardé de près : ${pick.product.name.trim()} · ${formatXAF(pick.product.price)} (le message WhatsApp en parle)`}
+        </Text>
       )}
       <Text style={styles.rowLoyalty}>
         {loyalty.current.icon} {loyalty.current.label} · {customer.profile.loyalty_points ?? 0} pts
@@ -473,6 +503,7 @@ const styles = StyleSheet.create({
   contactText: { color: '#fff', fontFamily: fonts.bodyBold, fontSize: 12 },
   rowBadge: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 11, marginLeft: 8 },
   rowEngagement: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 10, marginBottom: 2 },
+  rowRelance: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 11.5, lineHeight: 16, marginBottom: 4 },
   rowLoyalty: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 11, marginBottom: 2 },
   rowMeta: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11, marginTop: 2 },
   rowFooter: { flexDirection: 'row', gap: 14, marginTop: 8 },

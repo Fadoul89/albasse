@@ -16,7 +16,7 @@ const port = process.argv[3] || '4333';
 // BASE_URL=https://www.albasseshopping.com : teste le VRAI site en ligne (les commandes et comptes restent simules, rien n'est enregistre)
 const BASE = (process.env.BASE_URL || `http://localhost:${port}`).replace(/\/$/, '');
 const BASE_HOST = new URL(BASE).hostname;
-const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI0123456789TOFBCDE+').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI0123456789TOFBCDE+^').toUpperCase();
 // saison fraiche (blousons et manteaux) : le bouton du menu de Zara n'existe que jusqu'au 31 decembre 2026 a 23h59 (N'Djamena)
 const COLD_ON = Date.now() < Date.parse('2027-01-01T00:00:00+01:00');
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
@@ -4842,6 +4842,155 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.page.goto(`${BASE}/admin/assistant-marketing`, { waitUntil: 'load' });
       await sleep(4000);
       check('client non administrateur : ni interrupteur Telegram ni chiffres', (await v.page.getByTestId('telegram-absent-toggle').count()) === 0 && (await v.page.getByTestId('telegram-linked-stats').count()) === 0);
+      await v.ctx.close();
+    }
+  }
+
+  if (PARTS.includes('^')) {
+    console.log("\n== ^ Relance « Intérêt élevé » (Admin › Clients) : filtre complet, article regardé, bouton WhatsApp avec message déjà écrit, panne de lecture (fausse base)");
+    const uidR = '66666666-6666-4666-8666-666666666666';
+    const JWTR = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2NjY2NjY2Ni02NjY2LTQ2NjYtODY2Ni02NjY2NjY2NjY2NjYiLCJleHAiOjQxMDI0NDQ4MDAsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.c2ln';
+    const SKR = 'sb-xtitsmmccpkelxfjyqyh-auth-token';
+    const adminR = () => {
+      const auth = { id: uidR, aud: 'authenticated', role: 'authenticated', email: 'admin@example.com', app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' };
+      const token = { access_token: JWTR, refresh_token: 'fake-refresh', token_type: 'bearer', expires_in: 3600, expires_at: 4102444800, user: auth };
+      return { auth, token, session: JSON.stringify(token), editable: false, patches: [], profile: { id: uidR, email: 'admin@example.com', full_name: 'Admin Albasse', phone: '66123456', whatsapp_number: null, profession: null, region: null, country: 'Tchad', address: null, loyalty_points: 0, banned: false, role: 'admin', is_admin: true, is_affiliate: false } };
+    };
+    const ids = { aicha: 'aaaaaaaa-0000-4000-8000-000000000001', hassan: 'bbbbbbbb-0000-4000-8000-000000000002', mariam: 'cccccccc-0000-4000-8000-000000000003', ali: 'dddddddd-0000-4000-8000-000000000004', fatima: 'eeeeeeee-0000-4000-8000-000000000005' };
+    const P = { slip: '11111111-0000-4000-8000-00000000000a', zegna: '22222222-0000-4000-8000-00000000000b', bague: '33333333-0000-4000-8000-00000000000c', gone: '44444444-0000-4000-8000-00000000000d', bought: '55555555-0000-4000-8000-00000000000e' };
+    const prof = (id, name, phone, region, extra = {}) => ({ id, email: `${name.split(' ')[0].toLowerCase()}@gmail.com`, full_name: name, phone, whatsapp_number: null, profession: null, region, country: 'Tchad', address: null, loyalty_points: 0, banned: false, role: 'customer', is_admin: false, is_affiliate: false, created_at: '2026-10-20T10:00:00Z', last_login_at: '2026-10-30T10:00:00Z', ...extra });
+    const customersR = [
+      prof(ids.aicha, 'Aïcha Moussa', '66111111', '  N’Djamena '),
+      prof(ids.hassan, 'Hassan Doba', '66000000', 'Doba', { whatsapp_number: '66222222' }),
+      prof(ids.mariam, 'Mariam Sold', '66333333', null),
+      prof(ids.ali, 'Ali Commande', '66444444', "N'Djamena"),
+      prof(ids.fatima, 'Fatima Calme', '66555555', 'Abéché'),
+    ];
+    const productsR = [
+      { id: P.slip, name: 'Chaussures homme slip-on sport ', slug: 'chaussures-homme-slip-on-sport', price: 15000, compare_at_price: null, stock: 6, is_active: true },
+      { id: P.zegna, name: 'Survêtement ZEGNA', slug: 'survetement-zegna', price: 25000, compare_at_price: null, stock: 60, is_active: true },
+      { id: P.bague, name: 'Bague Homme NR01', slug: 'bague-homme-nr01', price: 17500, compare_at_price: 22500, stock: 80, is_active: true },
+      { id: P.gone, name: 'Article épuisé', slug: 'article-epuise', price: 9000, compare_at_price: null, stock: 0, is_active: true },
+      { id: P.bought, name: 'Article déjà commandé', slug: 'article-deja-commande', price: 12000, compare_at_price: null, stock: 30, is_active: true },
+    ];
+    const interestR = [
+      { user_id: ids.aicha, product_id: P.zegna, cart_status: 'none', last_viewed_at: '2026-10-29T10:00:00Z', active_seconds: 200 },
+      { user_id: ids.aicha, product_id: P.slip, cart_status: 'in_cart', last_viewed_at: '2026-10-25T10:00:00Z', active_seconds: 60 },
+      { user_id: ids.hassan, product_id: P.bague, cart_status: 'none', last_viewed_at: '2026-10-28T10:00:00Z', active_seconds: 90 },
+      { user_id: ids.mariam, product_id: P.gone, cart_status: 'none', last_viewed_at: '2026-10-28T10:00:00Z', active_seconds: 90 },
+      { user_id: ids.ali, product_id: P.bought, cart_status: 'none', last_viewed_at: '2026-10-28T10:00:00Z', active_seconds: 90 },
+    ];
+    const ordersR = [{ user_id: ids.ali, status: 'pending', items: [{ product_id: P.bought, product_name: 'Article déjà commandé', quantity: 1 }] }];
+    const HDRR = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+    const jsonR = (route, body, status = 200) => route.fulfill({ status, headers: { 'content-type': 'application/json', ...HDRR }, body: JSON.stringify(body) });
+    // la fausse base de l'administrateur ; failInterest : la lecture des articles regardes tombe en panne
+    const openClients = async ({ failInterest = false } = {}) => {
+      const fu = adminR();
+      const seen = { interestUrl: null, ordersUrl: null, overviewCalls: 0 };
+      const v = await newVisitor(phone, { storage: { [SKR]: fu.session }, fakeUser: fu, fakeStore: { waOrder: true, accountRequired: false, patches: [] } });
+      await v.page.route(/\/rest\/v1\//, (route) => {
+        const req = route.request();
+        const u = new URL(req.url());
+        if (req.method() === 'OPTIONS') return route.fallback();
+        const t = u.pathname.replace('/rest/v1/', '');
+        if (t === 'profiles' && !u.searchParams.get('id') && u.searchParams.get('is_admin') === 'eq.false') return jsonR(route, customersR);
+        if (t === 'orders') {
+          if (/items/.test(u.searchParams.get('select') || '')) { seen.ordersUrl = u.search; return jsonR(route, ordersR); }
+          return jsonR(route, []);
+        }
+        if (t === 'visitor_product_interest') {
+          seen.interestUrl = u.search;
+          return failInterest ? jsonR(route, { code: '42501', message: 'permission denied' }, 403) : jsonR(route, interestR);
+        }
+        if (t === 'products' && /compare_at_price/.test(u.searchParams.get('select') || '') && /^in\./.test(u.searchParams.get('id') || '')) return jsonR(route, productsR);
+        if (['visitor_sessions', 'product_views', 'cart_events', 'favorites'].includes(t)) return jsonR(route, []);
+        if (t === 'rpc/browsing_overview') {
+          seen.overviewCalls++;
+          // le tableau de suivi ne garde que les 300 regards les plus recents : ici une seule ligne « Intérêt élevé » (le compte d'Aïcha) sur les 5
+          return jsonR(route, { rows: [{ visitor_ref: 'V-aaaaaa', account_ref: 'C-aaaaaaaa', product_id: P.zegna, product_name: 'Survêtement ZEGNA', views: 3, sessions: 1, active_seconds: 200, last_duration_seconds: 20, last_viewed_at: '2026-10-29T10:00:00Z', variant_clicks: 0, cart_status: 'none', order_status: null, interest: 'eleve' }], top_products: [], top_categories: [], top_searches: [], levels: { leger: 0, moyen: 0, eleve: 1 }, totals: { visitors: 1, rows: 1 } });
+        }
+        return route.fallback();
+      });
+      await v.page.goto(`${BASE}/admin/clients`, { waitUntil: 'load' });
+      await v.page.getByTestId('admin-customer-row').first().waitFor({ timeout: 25000 });
+      await sleep(2500); // le temps de lire les articles regardes, les commandes et les prix
+      return { v, seen };
+    };
+    const rowOf = (pg, name) => pg.getByTestId('admin-customer-row').filter({ hasText: new RegExp(`^\\s*${name}`) });
+    // clic sur « WhatsApp » d'un client : l'adresse ouverte (la page WhatsApp reste vide, rien ne sort)
+    const whatsappOf = async (v, name) => {
+      const [popup] = await Promise.all([v.ctx.waitForEvent('page', { timeout: 10000 }), rowOf(v.page, name).getByTestId('customer-contact-whatsapp').click()]);
+      await popup.waitForLoadState('domcontentloaded').catch(() => {});
+      const url = popup.url();
+      await popup.close();
+      return { url, text: decodeURIComponent(url.split('text=')[1] || '') };
+    };
+
+    // --- a. tout marche : la liste complete, l'article regarde et le message
+    {
+      const { v, seen } = await openClients();
+      check('5 clients affiches', (await v.page.getByTestId('admin-customer-row').count()) === 5);
+      check('la liste est lue directement : seulement « Intérêt élevé », comptes connectes, 30 jours, avec la liste des commandes et des prix',
+        /interest=eq\.eleve/.test(seen.interestUrl || '') && /user_id=not\.is\.null/.test(seen.interestUrl || '') && /last_viewed_at=gte\./.test(seen.interestUrl || '') && /user_id=in\./.test(seen.ordersUrl || ''), seen);
+      // le filtre « Intérêt élevé » : avant, seul le compte vu dans les 300 derniers regards (1 sur 4) ressortait
+      await v.page.getByText('💙 Intérêt élevé', { exact: true }).first().click();
+      await sleep(600);
+      const names = await v.page.getByTestId('admin-customer-row').allInnerTexts();
+      check('filtre « Intérêt élevé » : les 4 comptes (Aïcha, Hassan, Mariam, Ali), pas Fatima', names.length === 4 && ['Aïcha', 'Hassan', 'Mariam', 'Ali'].every((n) => names.some((t) => t.includes(n))) && !names.some((t) => t.includes('Fatima')), names.map((t) => t.split('\n')[0]));
+
+      // Aïcha : N'Djamena (ecrit « ’N’Djamena »), geste d'achat sur les chaussures → les chaussures, pas le survetement regarde plus longtemps
+      const lineA = await rowOf(v.page, 'Aïcha').getByTestId('customer-relance-article').innerText();
+      check('Aïcha : « A regardé de près : Chaussures homme slip-on sport · 15 000 FCFA » (l\'article avec geste d\'achat passe avant)', /Chaussures homme slip-on sport · 15[\s  ]000 FCFA/.test(lineA) && !/ZEGNA/.test(lineA), lineA);
+      const a = await whatsappOf(v, 'Aïcha');
+      check('Aïcha : WhatsApp ouvre le bon numéro (235 + 66111111) avec un message déjà écrit', a.url.startsWith('https://wa.me/23566111111?text='), a.url.slice(0, 60));
+      check('Aïcha : message = prénom, article, vrai prix, « il n\'en reste que 6 », livraison sans frais et paiement à la livraison, lien de l\'article',
+        /^Bonjour Aïcha, ici l'équipe Albasse Shopping 😊/.test(a.text) && a.text.includes('« Chaussures homme slip-on sport »') && a.text.includes('15 000 FCFA') && a.text.includes("Il n'en reste que 6.") &&
+        a.text.includes("Livraison à N'Djamena sans frais, et paiement à la livraison.") && a.text.includes('https://www.albasseshopping.com/produit/chaussures-homme-slip-on-sport'), a.text);
+
+      // Hassan : Doba, numéro WhatsApp préféré, vraie promotion, stock élevé
+      const h = await whatsappOf(v, 'Hassan');
+      check('Hassan : WhatsApp utilise son numéro WhatsApp (66222222), pas son téléphone', h.url.startsWith('https://wa.me/23566222222?text='), h.url.slice(0, 60));
+      check('Hassan : vraie promotion « au lieu de 22 500 FCFA », paiement à l\'avance (autre ville), jamais « sans frais » ni stock', h.text.includes('17 500 FCFA (au lieu de 22 500 FCFA)') && h.text.includes('paiement à l’avance par Airtel Money ou Moov Money') && !/sans frais|Il n'en reste/.test(h.text), h.text);
+
+      // Mariam : article épuisé ; Ali : article déjà commandé → simple bonjour, aucune ligne « A regardé »
+      for (const [name, label] of [['Mariam', 'article épuisé'], ['Ali', 'article déjà commandé']]) {
+        const n = await rowOf(v.page, name).getByTestId('customer-relance-article').count();
+        const w = await whatsappOf(v, name);
+        check(`${name} (${label}) : aucune ligne « A regardé », message = simple bonjour comme avant`, n === 0 && w.text === `Bonjour ${name}, ici l'équipe Albasse Shopping 😊`, { n, text: w.text });
+      }
+      // sans filtre : Fatima (aucun intérêt) a toujours son simple bonjour
+      await v.page.getByText('Tous', { exact: true }).first().click();
+      await sleep(500);
+      const f = await whatsappOf(v, 'Fatima');
+      check('Fatima (aucun article regardé) : simple bonjour', f.text === "Bonjour Fatima, ici l'équipe Albasse Shopping 😊", f.text);
+      await v.page.getByText('💙 Intérêt élevé', { exact: true }).first().click();
+      await sleep(400);
+      await v.page.screenshot({ path: path.join(OUT, '^a-clients-interet-eleve.png'), fullPage: true });
+      check('aucune erreur (relance)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+
+    // --- b. la lecture des articles regardés tombe en panne : l'écran marche comme avant (simple bonjour), le filtre garde le tableau de suivi
+    {
+      const { v } = await openClients({ failInterest: true });
+      check('panne de lecture : les 5 clients s\'affichent quand même', (await v.page.getByTestId('admin-customer-row').count()) === 5);
+      check('panne de lecture : aucune ligne « A regardé de près »', (await v.page.getByTestId('customer-relance-article').count()) === 0);
+      const a = await whatsappOf(v, 'Aïcha');
+      check('panne de lecture : WhatsApp = simple bonjour (rien d\'inventé)', a.text === "Bonjour Aïcha, ici l'équipe Albasse Shopping 😊", a.text);
+      await v.page.getByText('💙 Intérêt élevé', { exact: true }).first().click();
+      await sleep(500);
+      const names = await v.page.getByTestId('admin-customer-row').allInnerTexts();
+      check('panne de lecture : le filtre retrouve au moins le compte du tableau de suivi (Aïcha)', names.length === 1 && names[0].includes('Aïcha'), names.map((t) => t.split('\n')[0]));
+      await v.ctx.close();
+    }
+
+    // --- c. un client (non administrateur) ne voit rien de tout cela
+    {
+      const fu = { ...adminR(), profile: { ...adminR().profile, role: 'customer', is_admin: false } };
+      const v = await newVisitor(phone, { storage: { [SKR]: fu.session }, fakeUser: fu, fakeStore: { waOrder: true, accountRequired: false, patches: [] } });
+      await v.page.goto(`${BASE}/admin/clients`, { waitUntil: 'load' });
+      await sleep(4000);
+      check('client non administrateur : « Accès réservé aux administrateurs », aucune ligne client', (await v.page.getByText('Accès réservé aux administrateurs').count()) >= 1 && (await v.page.getByTestId('admin-customer-row').count()) === 0);
       await v.ctx.close();
     }
   }
