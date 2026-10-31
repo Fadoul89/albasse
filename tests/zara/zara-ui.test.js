@@ -5526,22 +5526,25 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await openHome(v);
       check('« 👋 Bienvenue » retire du haut de l\'accueil', (await v.page.getByText('👋 Bienvenue', { exact: true }).count()) === 0);
       check('site en francais : seulement le bouton « العربية » (pas « 🇫🇷 FR »)', (await v.page.getByTestId('lang-ar').count()) === 1 && (await v.page.getByTestId('lang-fr').count()) === 0);
-      const online = (await v.page.getByTestId('home-online').innerText()).trim();
+      const online = (await v.page.getByTestId('home-online-text').innerText()).trim();
       check('compteur : le vrai nombre de la base, « 3 en ligne »', online === '3 en ligne' && fo.calls >= 1, { online, calls: fo.calls });
+      const tag = v.page.getByTestId('home-live-tag');
+      check('pastille rouge « LIVE » devant le compteur (a la place du point vert)', (await tag.innerText()).trim() === 'LIVE' && (await tag.evaluate((el) => getComputedStyle(el).backgroundColor)) === 'rgb(255, 45, 45)' && (await v.page.getByTestId('home-online').innerText()).replace(/\s+/g, ' ').trim() === 'LIVE 3 en ligne');
+      await v.page.screenshot({ path: path.join(OUT, '4a-accueil-live.png'), clip: { x: 0, y: 0, width: 390, height: 190 } });
       const ar = await v.page.getByTestId('lang-ar').boundingBox();
       const on = await v.page.getByTestId('home-online').boundingBox();
       check('une seule ligne : le bouton de langue a gauche, le compteur au milieu (plus petit)', Math.abs((ar.y + ar.height / 2) - (on.y + on.height / 2)) < 4 && Math.abs(on.x + on.width / 2 - 195) < 3 && on.height <= 24 && ar.x < 30, { ar, on });
       check('plus de nombre invente (« personnes en ligne »)', (await v.page.getByText(/personnes en ligne/).count()) === 0);
       fo.n = 5;
       await sleep(31000);
-      check('relu toutes les 30 s : « 5 en ligne »', (await v.page.getByTestId('home-online').innerText()).trim() === '5 en ligne', fo.calls);
+      check('relu toutes les 30 s : « 5 en ligne »', (await v.page.getByTestId('home-online-text').innerText()).trim() === '5 en ligne', fo.calls);
       await v.ctx.close();
     }
     {
       const fo = { n: 0 };
       const v = await newVisitor(phone, { fakeOnline: fo });
       await openHome(v);
-      check('la base dit 0 (signal pas encore arrive) : « 1 en ligne » (la personne qui regarde)', (await v.page.getByTestId('home-online').innerText()).trim() === '1 en ligne');
+      check('la base dit 0 (signal pas encore arrive) : « 1 en ligne » (la personne qui regarde)', (await v.page.getByTestId('home-online-text').innerText()).trim() === '1 en ligne');
       await v.ctx.close();
     }
     {
