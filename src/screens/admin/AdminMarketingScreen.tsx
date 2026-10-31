@@ -5,6 +5,7 @@ import { colors, fonts, radius, spacing } from '../../theme';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { supabase } from '../../lib/supabase';
 import { StoreSettingToggle } from '../../components/StoreSettingToggle';
+import { TelegramAbsentCard } from '../../components/TelegramAbsentCard';
 
 // Assistant marketing (admin) : écrit des publicités Facebook, TikTok, WhatsApp et Google à partir d'un article.
 const CHANNELS = [
@@ -192,6 +193,8 @@ export function AdminMarketingScreen() {
             </Text>
           ) : null}
         </View>
+
+        <TelegramAbsentCard />
       </ScrollView>
     </View>
   );

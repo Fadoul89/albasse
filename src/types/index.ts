@@ -343,6 +343,9 @@ export interface StoreSettings {
   // e-mails publicitaires aux clients absents depuis 7 jours (absent tant que add-inactive-promo-emails.sql n'est pas lancé : éteints)
   inactive_emails_enabled?: boolean;
   inactive_emails_daily_limit?: number;
+  // Telegram aux clients absents depuis 7 jours, pour ceux qui ont lié leur Telegram (absent tant que add-telegram-absent.sql n'est pas lancé : éteint)
+  telegram_absent_enabled?: boolean;
+  telegram_absent_daily_limit?: number;
   // publicités de Zara à l'écran (accueil + fenêtre de promotion) ; absent tant que add-zara-ads.sql n'est pas lancé : éteintes
   zara_ads_enabled?: boolean;
   // après combien de secondes la publicité de Zara s'affiche (0 à 120) ; absent tant que add-zara-ads-delay.sql n'est pas lancé : 5 secondes

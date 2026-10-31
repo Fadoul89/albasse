@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Linking } from 'react-native';
 import type { RouteProp } from '@react-navigation/native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -11,6 +11,7 @@ import { useAuthStore } from '../store/authStore';
 import { DELIVERY_HOURS, GIFT_WRAP_FEE, ORDER_VALIDITY_HOURS } from '../constants/shopRules';
 import { formatSlot } from '../lib/scheduledDelivery';
 import { prettyChadPhone } from '../lib/guestAccount';
+import { telegramLinkUrl } from '../lib/telegramLink';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
 
@@ -22,6 +23,7 @@ export function OrderConfirmationScreen({ route }: Props) {
   const { orderId, total, instructions, giftWrap, scheduledFor, newAccount } = route.params;
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const signedIn = useAuthStore((s) => !!s.profile?.id); // la facture PDF n'est donnée qu'au compte qui a passé la commande
+  const telegramUserId = useAuthStore((s) => (s.profile && !s.profile.telegram_chat_id ? s.profile.id : null)); // Telegram pas encore lié : on l'invite
 
   return (
     <View style={styles.screen}>
@@ -63,6 +65,16 @@ export function OrderConfirmationScreen({ route }: Props) {
               </Text>
             </Text>
             <Text style={styles.accountHint}>📸 Faites une capture d’écran pour le garder. Vous pourrez le changer dans « Compte ».</Text>
+          </View>
+        ) : null}
+
+        {telegramUserId ? (
+          <View style={styles.telegramBox} testID="confirm-telegram">
+            <Text style={styles.telegramTitle}>✈️ Recevez nos nouveautés et nos offres sur Telegram</Text>
+            <Text style={styles.telegramText}>
+              Liez votre Telegram en un toucher : vous serez prévenu des nouveaux articles et des ventes flash. C’est gratuit, et vous arrêtez quand vous voulez en écrivant STOP.
+            </Text>
+            <GoldButton label="Lier mon Telegram" variant="outline" onPress={() => Linking.openURL(telegramLinkUrl(telegramUserId))} style={{ marginTop: spacing.sm, width: '100%' }} />
           </View>
         ) : null}
 
@@ -131,6 +143,9 @@ const styles = StyleSheet.create({
   accountLine: { color: colors.cream, fontFamily: fonts.body, fontSize: 15, marginTop: 2 },
   accountValue: { color: colors.goldLight, fontFamily: fonts.displayBold, fontSize: 19, letterSpacing: 1 },
   accountHint: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 12.5, lineHeight: 18, textAlign: 'center', marginTop: 10 },
+  telegramBox: { backgroundColor: colors.panel, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, marginTop: spacing.lg, width: '100%', alignItems: 'center' },
+  telegramTitle: { color: colors.goldLight, fontFamily: fonts.bodyBold, fontSize: 14.5, textAlign: 'center', marginBottom: 6 },
+  telegramText: { color: colors.cream, fontFamily: fonts.body, fontSize: 13, lineHeight: 19, textAlign: 'center' },
   gift: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 14, textAlign: 'center', marginBottom: spacing.md },
   note: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 12.5, lineHeight: 19, textAlign: 'center', marginTop: spacing.md },
 });

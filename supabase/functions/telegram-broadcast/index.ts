@@ -54,12 +54,16 @@ Deno.serve(async (req: Request) => {
     }
     const telegramApi = `https://api.telegram.org/bot${token}`;
 
-    const { data: recipients, error: recipientsError } = await serviceClient
+    const { data: allRecipients, error: recipientsError } = await serviceClient
       .from("profiles")
-      .select("telegram_chat_id")
+      .select("id, telegram_chat_id")
       .eq("is_admin", false)
       .not("telegram_chat_id", "is", null);
     if (recipientsError) throw recipientsError;
+    // ceux qui ont écrit STOP au bot (ou l'ont bloqué) ne reçoivent plus de messages publicitaires ; table absente (script pas lancé) : personne d'écarté
+    const { data: stopped } = await serviceClient.from("telegram_prefs").select("user_id").not("stopped_at", "is", null);
+    const stoppedIds = new Set((stopped ?? []).map((r: { user_id: string }) => r.user_id));
+    const recipients = (allRecipients ?? []).filter((r) => !stoppedIds.has(r.id as string));
 
     const text = `📣 ${title}\n\n${message}`;
     let sent = 0;

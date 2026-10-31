@@ -70,6 +70,7 @@ async function main() {
     ['je veux retourner un article', 'returns'], ['remboursement', 'returns'], ['conditions de retour', 'returns'], ['échanger la taille', 'returns'], ['article défectueux', 'returns'],
     ['qui êtes-vous', 'about'], ['depuis quand existez-vous', 'about'], ['vous êtes là depuis 2013', 'about'], ['votre histoire', 'about'],
     ['quelle est l’adresse du site ?', 'about'], ['lien du site', 'about'], ['site officiel', 'about'], ['رابط الموقع', 'about'], ['comment commander sur votre site', 'order'],
+    ['telegram', 'telegram'], ['Telegram', 'telegram'], ['lier mon telegram', 'telegram'], ['comment recevoir vos offres sur Telegram', 'telegram'], ['bot telegram', 'telegram'],
   ];
   for (const [input, expected] of intents) ok(`« ${input} » -> ${expected}`, b.detectIntent(input) === expected, b.detectIntent(input));
 
@@ -83,6 +84,7 @@ async function main() {
     ['حسابي', 'account'], ['كيف اسجل', 'account'], ['طلباتي', 'orders'], ['ميزانيتي 20000', 'budget'],
     ['من انتم', 'about'], ['واتساب', 'contact'], ['ساعات العمل', 'contact'], ['انصحني', 'advice'], ['هل انت روبوت', 'bot'], ['لاحقا', 'later'],
     ['عطر رجالي', 'search'], ['حذاء', 'search'],
+    ['تيليجرام', 'telegram'], ['ربط تلغرام', 'telegram'], ['كيف اربط تليجرام', 'telegram'],
   ];
   for (const [input, expected] of arIntents) ok(`« ${input} » -> ${expected}`, b.detectIntent(input) === expected, b.detectIntent(input));
 

@@ -327,6 +327,7 @@ export type Intent =
   | 'cart'
   | 'add'
   | 'install'
+  | 'telegram'
   | 'tracking'
   | 'wholesale'
   | 'callback'
@@ -483,6 +484,8 @@ export function detectIntent(text: string): Intent {
   const base = n.split(' ').filter(Boolean);
   if (base.length === 0) return 'search';
   const tokens = [...base, ...base.map(stemAr).filter((t, i) => t !== base[i])];
+  // « lier Telegram », « Telegram » : Zara explique et donne le bouton pour lier son compte (avant « bot » : le mot fait partie de « bot Telegram »)
+  if (has(tokens, ['telegram', 'telegramme', 'telegrame', 'تيليجرام', 'تيليغرام', 'تلغرام', 'تليجرام', 'تلجرام'])) return 'telegram';
   if (has(tokens, ['robot', 'bot', 'ia', 'intelligence', 'artificielle', 'humain', 'humaine', 'machine', 'automatique', 'روبوت', 'بوت', 'ذكاء', 'اصطناعي', 'اله']) || /vraie? personne|vrai humain|une personne|شخص حقيقي|انسان حقيقي/.test(n)) return 'bot';
   if (COMPLIMENT.test(n)) return 'compliment';
   if (goodbyeKind(text)) return 'goodbye';

@@ -16,7 +16,7 @@ const port = process.argv[3] || '4333';
 // BASE_URL=https://www.albasseshopping.com : teste le VRAI site en ligne (les commandes et comptes restent simules, rien n'est enregistre)
 const BASE = (process.env.BASE_URL || `http://localhost:${port}`).replace(/\/$/, '');
 const BASE_HOST = new URL(BASE).hostname;
-const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI0123456789TOFBCDE').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI0123456789TOFBCDE+').toUpperCase();
 // saison fraiche (blousons et manteaux) : le bouton du menu de Zara n'existe que jusqu'au 31 decembre 2026 a 23h59 (N'Djamena)
 const COLD_ON = Date.now() < Date.parse('2027-01-01T00:00:00+01:00');
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
@@ -48,7 +48,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   // rank : rang du jour renvoye par la fonction de la base (null : fonction pas installee). fakeUser : compte simule (token : reponse a une connexion par mot de passe ; delay : lenteur du profil en ms). fakeOrders : { list: [...], patches: [] } = fausse table des commandes.
   // zaraInstall : par defaut, le visiteur a deja repondu « Plus tard » a l'installation (Zara ne la propose pas) ; null = vrai nouveau
   // visiteur, pour les parties qui testent l'installation
-  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, fakeSales = null, fakeCallbacks = null, fakePushes = null, fakeStore = null, fakeCats = null, fakeOnline = null, fakeRecent = null, fakeUnsub = null, initScripts = [], zaraInstall = 'dismissed', zaraPush = 'later', installAfterSignUp = '1', pushPerm = null, pushAnswer = 'granted', fakeAi = null, autoOpen = false, fakePromos = null } = {}) {
+  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, fakeSales = null, fakeCallbacks = null, fakePushes = null, fakeStore = null, fakeCats = null, fakeOnline = null, fakeRecent = null, fakeUnsub = null, initScripts = [], zaraInstall = 'dismissed', zaraPush = 'later', installAfterSignUp = '1', pushPerm = null, pushAnswer = 'granted', fakeAi = null, autoOpen = false, fakePromos = null, fakeTelegram = null } = {}) {
     // Zara s'ouvre seule sur l'Accueil apres 8 s : par defaut c'est deja « fait » pour ce visiteur (les autres tests gardent leur deroulement) ; autoOpen: true = vrai nouveau visiteur
     if (!autoOpen) session = { albasse_assistant_autoopen_seen: '1', ...session };
     const ctx = await b.newContext(opts);
@@ -231,6 +231,12 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
           fakeOnline.calls = (fakeOnline.calls || 0) + 1;
           return json(route, fakeOnline.n);
         }
+        // nombre de clients lies a Telegram (add-telegram-absent.sql) : fakeTelegram.stats = {linked, consented, stopped} ; sans fakeTelegram : fonction absente (script pas lance)
+        if (u.pathname === '/rest/v1/rpc/telegram_linked_stats' && m === 'POST') {
+          if (!fakeTelegram) return json(route, { code: 'PGRST202', message: 'Could not find the function public.telegram_linked_stats without parameters in the schema cache' }, 404);
+          fakeTelegram.calls = (fakeTelegram.calls || 0) + 1;
+          return json(route, fakeTelegram.stats);
+        }
         // barre « achats recents » (add-recent-purchases.sql) : fakeRecent.rows = les vraies commandes recentes renvoyees (fakeRecent.calls = appels) ;
         // sans fakeRecent : fonction absente (script pas lance), la barre est cachee
         if (u.pathname === '/rest/v1/rpc/recent_purchases' && m === 'POST') {
@@ -291,6 +297,9 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
               if (wants('order_emails_enabled')) r.order_emails_enabled = fakeStore.orderEmails === true;
               if (wants('inactive_emails_enabled')) r.inactive_emails_enabled = fakeStore.inactiveEmails === true;
               if (fakeStore.legalLine !== undefined && wants('invoice_legal_line')) r.invoice_legal_line = fakeStore.legalLine;
+              // Telegram aux clients absents : fakeStore.telegramAbsent undefined = colonne absente (script add-telegram-absent.sql pas lance), sinon true / false
+              if (fakeStore.telegramAbsent === undefined) { delete r.telegram_absent_enabled; delete r.telegram_absent_daily_limit; }
+              else if (wants('telegram_absent_enabled')) r.telegram_absent_enabled = fakeStore.telegramAbsent;
               // publicites de Zara : fakeStore.zaraAds undefined = colonne absente (script add-zara-ads.sql pas lance), sinon true / false
               if (fakeStore.zaraAds === undefined) delete r.zara_ads_enabled;
               else if (wants('zara_ads_enabled')) r.zara_ads_enabled = fakeStore.zaraAds;
@@ -324,12 +333,13 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         if (fakeStore && u.pathname === '/rest/v1/store_settings' && m === 'PATCH') {
           const body = JSON.parse(req.postData() || '{}');
           (fakeStore.patches = fakeStore.patches || []).push(body);
-          const missing = ('zara_auto_flash_enabled' in body && fakeStore.zaraAutoFlash === undefined && 'zara_auto_flash_enabled') || ('zara_ads_delay_seconds' in body && fakeStore.zaraDelay === undefined && 'zara_ads_delay_seconds') || ('zara_ads_enabled' in body && fakeStore.zaraAds === undefined && 'zara_ads_enabled') || ('whatsapp_order_enabled' in body && fakeStore.waOrder === undefined && 'whatsapp_order_enabled') || ('account_required' in body && fakeStore.accountRequired === 'missing' && 'account_required');
+          const missing = ('telegram_absent_enabled' in body && fakeStore.telegramAbsent === undefined && 'telegram_absent_enabled') || ('zara_auto_flash_enabled' in body && fakeStore.zaraAutoFlash === undefined && 'zara_auto_flash_enabled') || ('zara_ads_delay_seconds' in body && fakeStore.zaraDelay === undefined && 'zara_ads_delay_seconds') || ('zara_ads_enabled' in body && fakeStore.zaraAds === undefined && 'zara_ads_enabled') || ('whatsapp_order_enabled' in body && fakeStore.waOrder === undefined && 'whatsapp_order_enabled') || ('account_required' in body && fakeStore.accountRequired === 'missing' && 'account_required');
           if (missing) return json(route, { code: 'PGRST204', message: `Could not find the '${missing}' column of 'store_settings' in the schema cache` }, 400);
           if ('whatsapp_order_enabled' in body) fakeStore.waOrder = body.whatsapp_order_enabled;
           if ('account_required' in body) fakeStore.accountRequired = body.account_required;
           if ('order_emails_enabled' in body) fakeStore.orderEmails = body.order_emails_enabled;
           if ('inactive_emails_enabled' in body) fakeStore.inactiveEmails = body.inactive_emails_enabled;
+          if ('telegram_absent_enabled' in body) fakeStore.telegramAbsent = body.telegram_absent_enabled;
           if ('zara_ads_enabled' in body) fakeStore.zaraAds = body.zara_ads_enabled;
           if ('zara_ads_delay_seconds' in body) fakeStore.zaraDelay = body.zara_ads_delay_seconds;
           if ('zara_auto_flash_enabled' in body) fakeStore.zaraAutoFlash = body.zara_auto_flash_enabled;
@@ -4662,6 +4672,180 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     }
   }
 
+  if (PARTS.includes('+')) {
+    console.log("\n== + Telegram : invitation a lier Telegram (page de confirmation, Zara en francais et en arabe), interrupteur « Telegram aux clients absents » et nombre de clients lies (fausse base)");
+    const uidT = '55555555-5555-4555-8555-555555555555';
+    const JWTT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NTU1NTU1NS01NTU1LTQ1NTUtODU1NS01NTU1NTU1NTU1NTUiLCJleHAiOjQxMDI0NDQ4MDAsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.c2ln';
+    const SKT = 'sb-xtitsmmccpkelxfjyqyh-auth-token';
+    const LINK_URL = `https://t.me/AlbasseShoppingBot?start=${uidT}`;
+    const accountT = (profile = {}, opts = {}) => {
+      const auth = { id: uidT, aud: 'authenticated', role: 'authenticated', email: '23566123456@tel.albasseshopping.com', app_metadata: {}, user_metadata: {}, created_at: '2026-10-26T00:00:00Z' };
+      const token = { access_token: JWTT, refresh_token: 'fake-refresh', token_type: 'bearer', expires_in: 3600, expires_at: 4102444800, user: auth };
+      return { auth, token, session: JSON.stringify(token), editable: true, patches: [], ...opts, profile: { id: uidT, email: null, full_name: 'Amina Hassan', phone: '66123456', whatsapp_number: null, profession: null, region: null, country: null, address: null, loyalty_points: 0, banned: false, role: 'customer', is_admin: false, is_affiliate: false, telegram_chat_id: null, ...profile } };
+    };
+    // les liens vers Telegram ne sortent jamais : on note l'adresse demandee
+    const watchTelegram = async (ctx) => {
+      const hits = [];
+      await ctx.route('https://t.me/**', (route) => {
+        hits.push(route.request().url());
+        return route.fulfill({ status: 200, contentType: 'text/html', body: 'ok' });
+      });
+      return hits;
+    };
+    const liveT = await get('products?select=id,name,slug,price,stock,images,sizes,colors,category_id&is_active=eq.true&stock=gt.2&limit=1000');
+    const prodT = liveT.filter((p) => (p.sizes || []).length <= 1 && (p.colors || []).length <= 1 && Number(p.price) > 0 && (p.images || [])[0])[0];
+    check('un article simple existe pour le test', !!prodT);
+    const cartT = JSON.stringify({ state: { items: [{ id: `${prodT.id}__nc__ns`, product: prodT, quantity: 1, color: null, size: null }], updatedAt: Date.now() }, version: 1 });
+    // le visiteur sans compte commande : son compte est cree a la confirmation, avec ou sans Telegram deja lie
+    const guestOrder = async (profile) => {
+      const fu = accountT(profile);
+      const fo = { list: [], patches: [], created: [] };
+      const g = await newVisitor(phone, { storage: { 'albasse-cart': cartT }, fakeUser: fu, fakeOrders: fo, fakeStore: { waOrder: true, accountRequired: false, patches: [] } });
+      g.hits = await watchTelegram(g.ctx);
+      await g.page.goto(`${BASE}/commande`, { waitUntil: 'load' });
+      await g.page.getByTestId('checkout-first-name').waitFor({ timeout: 25000 });
+      await g.page.getByTestId('checkout-first-name').fill('Amina');
+      await g.page.getByTestId('checkout-last-name').fill('Hassan');
+      await g.page.getByTestId('checkout-phone').fill('66123456');
+      await g.page.getByTestId('checkout-email').fill('amina@gmail.com');
+      await g.page.getByPlaceholder(/Adresse \(quartier, rue\)/).fill('Quartier Moursal');
+      await g.page.getByPlaceholder(/Rechercher une ville/).click();
+      await g.page.keyboard.type("N'Dja", { delay: 60 });
+      await g.page.getByText(/^\s*N.Djamena\s*$/).locator('visible=true').first().click();
+      await sleep(600);
+      await g.page.getByText('Paiement à la livraison', { exact: true }).locator('visible=true').first().click();
+      await g.page.getByText('Confirmer la commande', { exact: true }).locator('visible=true').first().click();
+      await g.page.getByTestId('confirm-new-account').waitFor({ timeout: 25000 });
+      return g;
+    };
+
+    // --- a. page de confirmation : la carte invite a lier Telegram (compte pas encore lie)
+    {
+      const g = await guestOrder({});
+      await g.page.getByTestId('confirm-telegram').waitFor({ timeout: 10000 });
+      const card = await g.page.getByTestId('confirm-telegram').innerText();
+      check('confirmation : carte « Recevez nos nouveautes et nos offres sur Telegram », gratuit, STOP pour arreter', /Recevez nos nouveautés et nos offres sur Telegram/.test(card) && /gratuit/.test(card) && /STOP/.test(card), card);
+      await g.page.getByText('Lier mon Telegram', { exact: true }).locator('visible=true').first().click();
+      await sleep(1500);
+      check('« Lier mon Telegram » ouvre le bot avec l\'identifiant du compte (https://t.me/AlbasseShoppingBot?start=<compte>)', g.hits.length === 1 && g.hits[0] === LINK_URL, g.hits);
+      await g.page.screenshot({ path: path.join(OUT, '+a-confirmation-telegram.png'), fullPage: true });
+      check('aucune erreur (carte Telegram)', g.errs.length === 0, g.errs);
+      await g.ctx.close();
+    }
+    // --- b. Telegram deja lie : pas de carte
+    {
+      const g = await guestOrder({ telegram_chat_id: 777 });
+      await sleep(1500);
+      check('Telegram deja lie : aucune carte d\'invitation sur la confirmation', (await g.page.getByTestId('confirm-telegram').count()) === 0);
+      await g.ctx.close();
+    }
+
+    // --- c. Zara : le mot « Telegram » (client connecte pas lie / deja lie / sans compte, francais et arabe)
+    const openChatT = async (v) => {
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await v.page.getByRole('button', { name: /Discuter avec Zara Kings|التحدث مع زارا كينغز/ }).click();
+    };
+    {
+      const fu = accountT({});
+      const v = await newVisitor(phone, { lang: 'fr', storage: { [SKT]: fu.session, albasse_zara_name: 'Amina' }, fakeUser: fu });
+      v.hits = await watchTelegram(v.ctx);
+      await openChatT(v);
+      await ask(v.page, 'telegram', /Avec Telegram, je vous préviens des nouveautés/);
+      const panelTxt = await panelOf(v.page).innerText();
+      check('Zara : explique (nouveautes et ventes flash, gratuit, STOP)', /ventes flash/.test(panelTxt) && /gratuit/.test(panelTxt) && /STOP/.test(panelTxt));
+      check('Zara : bouton « Lier mon Telegram »', (await chip(v.page, '✈️ Lier mon Telegram').count()) >= 1);
+      await chip(v.page, '✈️ Lier mon Telegram').click();
+      await sleep(1500);
+      check('le bouton de Zara ouvre le bot avec l\'identifiant du compte', v.hits.length === 1 && v.hits[0] === LINK_URL, v.hits);
+      check('aucune erreur (Zara Telegram)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+    {
+      const fu = accountT({ telegram_chat_id: 777 });
+      const v = await newVisitor(phone, { lang: 'fr', storage: { [SKT]: fu.session, albasse_zara_name: 'Amina' }, fakeUser: fu });
+      await openChatT(v);
+      await ask(v.page, 'lier mon telegram', /Votre Telegram est déjà lié/);
+      check('deja lie : Zara le dit, pas de bouton « Lier mon Telegram »', (await chip(v.page, '✈️ Lier mon Telegram').count()) === 0);
+      await v.ctx.close();
+    }
+    {
+      const v = await newVisitor(phone, { lang: 'fr', storage: { albasse_zara_name: 'Ali' } });
+      await openChatT(v);
+      await ask(v.page, 'telegram', /Pour lier Telegram, il faut d’abord un compte/);
+      check('sans compte : Zara demande de creer un compte (boutons creer / connecter, pas de lien Telegram)', (await chip(v.page, '👤 Créer mon compte').count()) >= 1 && (await chip(v.page, '✈️ Lier mon Telegram').count()) === 0);
+      await v.ctx.close();
+    }
+    {
+      const fu = accountT({});
+      const v = await newVisitor(phone, { lang: 'ar', storage: { [SKT]: fu.session, albasse_zara_name: 'أمينة' }, fakeUser: fu });
+      v.hits = await watchTelegram(v.ctx);
+      await openChatT(v);
+      await ask(v.page, 'تيليجرام', /عبر تيليجرام أُعلمك بالجديد/);
+      check('arabe : Zara explique et propose le bouton « ربط تيليجرام »', (await chip(v.page, '✈️ ربط تيليجرام').count()) >= 1 && /توقف/.test(await panelOf(v.page).innerText()));
+      await chip(v.page, '✈️ ربط تيليجرام').click();
+      await sleep(1500);
+      check('arabe : le bouton ouvre le bot avec l\'identifiant du compte', v.hits.length === 1 && v.hits[0] === LINK_URL, v.hits);
+      await v.ctx.close();
+    }
+
+    // --- d. administrateur : interrupteur « Telegram aux clients absents » et nombre de clients lies (page Assistant marketing)
+    {
+      const adminT = accountT({ is_admin: true, role: 'admin', full_name: 'Admin Albasse' });
+      const fs = { waOrder: true, telegramAbsent: false, patches: [] };
+      const ft = { stats: { linked: 12, consented: 10, stopped: 1 } };
+      const v = await newVisitor(phone, { storage: { [SKT]: adminT.session }, fakeUser: adminT, fakeStore: fs, fakeTelegram: ft });
+      await v.page.goto(`${BASE}/admin/assistant-marketing`, { waitUntil: 'load' });
+      await v.page.getByTestId('telegram-absent-toggle').waitFor({ timeout: 25000 });
+      check('Telegram aux clients absents : eteint au depart (« Desactive »)', /Désactivé/.test(await v.page.getByTestId('telegram-absent-status').innerText()));
+      await v.page.getByTestId('telegram-linked-stats').waitFor({ timeout: 10000 });
+      const stats = await v.page.getByTestId('telegram-linked-stats').innerText();
+      check('nombre de clients lies : 12 lies, 10 recoivent les offres, 1 a ecrit STOP', /12 clients ont lié leur Telegram/.test(stats) && /10 reçoivent/.test(stats) && /1 a écrit STOP/.test(stats), stats);
+      await sleep(1500); // l'interrupteur reste bloque tant que les reglages ne sont pas lus
+      await v.page.getByTestId('telegram-absent-switch').click();
+      await v.page.getByText('Telegram activé').waitFor({ timeout: 8000 }).catch(async (e) => {
+        await v.page.screenshot({ path: path.join(OUT, '+d-echec-interrupteur.png'), fullPage: true });
+        console.log('apres le clic : patches =', JSON.stringify(fs.patches), '| statut =', await v.page.getByTestId('telegram-absent-status').innerText(), '| erreurs =', JSON.stringify(v.errs));
+        throw e;
+      });
+      check('on l\'allume : la base recoit telegram_absent_enabled = true', (fs.patches || []).some((b) => b.telegram_absent_enabled === true), fs.patches);
+      await v.page.waitForFunction(() => /Activé/.test(document.querySelector('[data-testid="telegram-absent-status"]')?.textContent || ''), null, { timeout: 8000 });
+      await v.page.getByTestId('telegram-absent-switch').click();
+      await v.page.getByText('Telegram coupé').waitFor({ timeout: 8000 });
+      check('on l\'eteint : la base recoit telegram_absent_enabled = false', (fs.patches || []).some((b) => b.telegram_absent_enabled === false), fs.patches);
+      const txt = await v.page.getByTestId('telegram-absent-card').innerText();
+      check('le texte dit 9 h 30, 50 clients, 7 jours, STOP, 14 jours, rapport de 17 h sur Telegram', /9 h 30/.test(txt) && /50 clients/.test(txt) && /7 jours/.test(txt) && /STOP/.test(txt) && /14 jours/.test(txt) && /17 h/.test(txt), txt);
+      await v.page.screenshot({ path: path.join(OUT, '+d-admin-telegram.png'), fullPage: true });
+      check('aucune erreur (interrupteur Telegram)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+    // script SQL pas lance : l'interrupteur explique, le nombre de clients lies n'est pas invente
+    {
+      const adminT = accountT({ is_admin: true, role: 'admin', full_name: 'Admin Albasse' });
+      const fs = { waOrder: true, telegramAbsent: undefined, patches: [] };
+      const v = await newVisitor(phone, { storage: { [SKT]: adminT.session }, fakeUser: adminT, fakeStore: fs });
+      await v.page.goto(`${BASE}/admin/assistant-marketing`, { waitUntil: 'load' });
+      await v.page.getByTestId('telegram-absent-toggle').waitFor({ timeout: 25000 });
+      await v.page.getByTestId('telegram-linked-stats').waitFor({ timeout: 10000 });
+      check('script pas lance : « Lancez d\'abord le script add-telegram-absent.sql » au lieu d\'un nombre', /add-telegram-absent\.sql/.test(await v.page.getByTestId('telegram-linked-stats').innerText()));
+      await sleep(1500);
+      await v.page.getByTestId('telegram-absent-switch').click();
+      await v.page.getByText(/Lancez d’abord le script add-telegram-absent\.sql/).first().waitFor({ timeout: 8000 });
+      await sleep(500);
+      check('script pas lance : l\'interrupteur reste « Desactive »', /Désactivé/.test(await v.page.getByTestId('telegram-absent-status').innerText()));
+      await v.ctx.close();
+    }
+    // client non administrateur : la page est refusee
+    {
+      const fu = accountT({});
+      const v = await newVisitor(phone, { storage: { [SKT]: fu.session }, fakeUser: fu, fakeStore: { waOrder: true, telegramAbsent: false, patches: [] }, fakeTelegram: { stats: { linked: 3, consented: 3, stopped: 0 } } });
+      await v.page.goto(`${BASE}/admin/assistant-marketing`, { waitUntil: 'load' });
+      await sleep(4000);
+      check('client non administrateur : ni interrupteur Telegram ni chiffres', (await v.page.getByTestId('telegram-absent-toggle').count()) === 0 && (await v.page.getByTestId('telegram-linked-stats').count()) === 0);
+      await v.ctx.close();
+    }
+  }
+
   if (PARTS.includes('1')) {
     console.log('\n== 1. bouton « Commander sur WhatsApp » des articles : l\'admin le cache ou le remet (page Produits, fausse base)');
     const uid = '33333333-3333-4333-8333-333333333333';
@@ -6381,7 +6565,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const airtelLine = payRow.airtel_payment_url ? `Payez ici : ${payRow.airtel_payment_url}` : `Envoyez ${numRe(total)} FCFA au ${esc(payRow.airtel_number || '60 60 51 51')} \\(Airtel Money\\)`;
       check('confirmation : numero de commande, total, instructions de paiement, emballage cadeau, horaires et 48 h', done.includes(`#${b.id.slice(0, 8)}`) && new RegExp(`Total à régler : ${numRe(total)} FCFA`).test(done) && new RegExp(airtelLine).test(done) && /Emballage cadeau inclus/.test(done) && /valable 48 h/.test(done) && /8h30 à 16h/.test(done) && new RegExp(`Fidélité : cette commande vous rapportera ${Math.floor(total / 5000)} points? une fois livrée`).test(done), done);
       check('confirmation : jamais « payee » ni « confirmee par la boutique » (seulement « enregistree »)', !/payée|paiement reçu|commande confirmée/i.test(done), done);
-      check('le panier est vide apres l\'enregistrement, et boutons Facture / Mes commandes / Menu', (await cartCount(c.page)) === 0 && (await chipLabels(c.page)).join('|') === '📄 Télécharger ma facture|📦 Mes commandes|🏠 Menu', await chipLabels(c.page));
+      check('le panier est vide apres l\'enregistrement, et boutons Facture / Mes commandes / Lier mon Telegram (compte pas encore lie) / Menu', (await cartCount(c.page)) === 0 && (await chipLabels(c.page)).join('|') === '📄 Télécharger ma facture|📦 Mes commandes|✈️ Lier mon Telegram|🏠 Menu', await chipLabels(c.page));
+      check('apres la commande dans le chat : une ligne d\'astuce invite a lier Telegram', /Astuce : liez votre Telegram/.test(await panelOf(c.page).innerText()));
       check('confirmation : Zara annonce que la facture est prete', /Votre facture est prête/.test(done), done);
       await c.page.screenshot({ path: path.join(OUT, 'O2-confirmation.png') });
       // facture PDF : le bouton de Zara demande le PDF a la fonction serveur avec le jeton du compte et le telecharge sans quitter le chat

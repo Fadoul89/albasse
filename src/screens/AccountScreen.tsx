@@ -7,6 +7,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing } from '../theme';
 import { useAuthStore } from '../store/authStore';
+import { telegramLinkUrl } from '../lib/telegramLink';
 import { visibleEmail } from '../lib/phoneAuth';
 import { GoldButton } from '../components/GoldButton';
 import { ProfileEditor } from '../components/ProfileEditor';
@@ -213,11 +214,11 @@ export function AccountScreen() {
       {profile && (
         <Pressable
           style={styles.menuItem}
-          onPress={() => Linking.openURL(`https://t.me/AlbasseShoppingBot?start=${profile.id}`)}
+          onPress={() => Linking.openURL(telegramLinkUrl(profile.id))}
         >
           <Text style={styles.menuIcon}>✈️</Text>
           <Text style={styles.menuLabel}>
-            {profile.telegram_chat_id ? 'Telegram connecté ✓' : 'Lier Telegram'}
+            {profile.telegram_chat_id ? 'Telegram connecté ✓' : 'Lier Telegram (nouveautés et offres)'}
           </Text>
         </Pressable>
       )}
