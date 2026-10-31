@@ -171,8 +171,8 @@ insert into public.products(id, name, price, stock, is_active, notify_on_publish
 select t.stamp('2026-11-12 08:00');
 select t.ok('une annonce « nouvel article » attend', t.pending('new') = 1);
 update public.store_settings set push_new_products_enabled = false where id = 1;
-select t.ok('interrupteur éteint : le gardien n''envoie rien', public.run_push_gate(t.at('2026-11-12 11:00')) = 0);
-select t.ok('… et l''annonce est abandonnée (« nouveaux articles désactivés »)', (select status || ':' || note from public.push_outbox where product_id = t.pid(17)) = 'expired:nouveaux articles désactivés');
+select t.ok('interrupteur éteint : l''annonce en attente est abandonnée TOUT DE SUITE, avant tout passage du gardien (« nouveaux articles désactivés »)', (select status || ':' || note from public.push_outbox where product_id = t.pid(17)) = 'expired:nouveaux articles désactivés');
+select t.ok('… et le gardien n''envoie rien', public.run_push_gate(t.at('2026-11-12 11:00')) = 0);
 insert into public.products(id, name, price, stock, is_active, notify_on_publish) values (t.pid(18), 'Montre R', 36000, 5, true, true);
 select t.ok('éteint : un nouvel article publié ne crée rien', (select count(*) from public.push_outbox where product_id = t.pid(18)) = 0);
 update public.store_settings set push_new_products_enabled = true where id = 1;
