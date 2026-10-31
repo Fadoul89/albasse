@@ -4716,7 +4716,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await c.page.getByText('Oui, envoyer').click();
       await sleep(1500);
       const pn = fp.patches.find((x) => x.id === 'new1');
-      check('envoyer maintenant : l\'heure de depart devient « maintenant » (le minuteur l\'envoie dans la minute)', pn && Math.abs(new Date(pn.body.send_at).getTime() - Date.now()) < 60000 && pn.status === 'eq.pending', pn);
+      check('envoyer maintenant : l\'heure de depart devient « maintenant » (le gardien l\'envoie des que l\'ecart avec la derniere notification est respecte)', pn && Math.abs(new Date(pn.body.send_at).getTime() - Date.now()) < 60000 && pn.status === 'eq.pending', pn);
       check('aucune erreur (notifications programmees)', c.errs.length === 0, c.errs);
       await c.ctx.close();
     }

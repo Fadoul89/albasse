@@ -54,7 +54,8 @@ export async function cancelScheduledPush(id: string): Promise<string | null> {
   return error ? error.message : null;
 }
 
-// Elle part dans la minute (le minuteur passe toutes les minutes).
+// Elle devient « due » tout de suite ; le gardien (add-push-gate.sql, qui passe chaque minute) l'envoie dès que l'écart minimum avec la
+// dernière notification est respecté : jamais deux notifications en même temps.
 export async function sendScheduledPushNow(id: string): Promise<string | null> {
   const { error } = await supabase
     .from('scheduled_pushes')
