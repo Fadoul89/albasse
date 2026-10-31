@@ -1,6 +1,6 @@
 // Référencement (SEO) : textes de page, données structurées (JSON-LD), pages vues par Google, plan du site et robots.txt.
 // Aucun réseau, aucune base : tout est testable (tests/seo/seo.test.ts). Utilisé par og-preview.ts et sitemap.ts (fonctions Netlify).
-// Règles : on n'écrit que des faits connus (nom, catégorie, prix, stock, conditions de retour). Jamais de note ni d'avis dans les données structurées
+// Règles : on n'écrit que des faits connus (nom, catégorie, prix, stock, conditions de retour, frais et délai de livraison). Jamais de note ni d'avis dans les données structurées
 // (les avis du site peuvent être de démonstration : Google interdit les faux avis).
 
 export const SITE_URL = 'https://www.albasseshopping.com';
@@ -145,6 +145,25 @@ export function returnPolicyJsonLd(): Record<string, unknown> {
   };
 }
 
+// Livraison (Admin › Livraison (Villes)) : gratuite à N'Djamena, 2 500 FCFA dans toutes les autres villes ; délai donné par le patron : 1 à 2 jours à
+// N'Djamena, 1 à 3 jours ailleurs. Une seule description pour tout le Tchad : frais de 0 à 2 500 FCFA, délai de 1 à 3 jours (le plus long des deux).
+// Google veut un délai total : on le compte tout en « transit » (préparation 0 jour), sans inventer de répartition. À mettre à jour ici si les frais ou
+// les délais changent.
+export const SHIPPING_MAX_FEE = 2500;
+export const DELIVERY_DAYS = { min: 1, max: 3 };
+export function shippingDetailsJsonLd(): Record<string, unknown> {
+  return {
+    '@type': 'OfferShippingDetails',
+    shippingRate: { '@type': 'MonetaryAmount', minValue: 0, maxValue: SHIPPING_MAX_FEE, currency: 'XAF' },
+    shippingDestination: { '@type': 'DefinedRegion', addressCountry: 'TD' },
+    deliveryTime: {
+      '@type': 'ShippingDeliveryTime',
+      handlingTime: { '@type': 'QuantitativeValue', minValue: 0, maxValue: 0, unitCode: 'DAY' },
+      transitTime: { '@type': 'QuantitativeValue', minValue: DELIVERY_DAYS.min, maxValue: DELIVERY_DAYS.max, unitCode: 'DAY' },
+    },
+  };
+}
+
 export function productJsonLd(p: SeoProduct, category?: SeoCategory | null): Record<string, unknown> {
   const images = (p.images ?? []).filter((i) => typeof i === 'string' && i.startsWith('https://')).slice(0, 5);
   const inStock = Number(p.stock ?? 0) > 0;
@@ -165,6 +184,7 @@ export function productJsonLd(p: SeoProduct, category?: SeoCategory | null): Rec
       itemCondition: 'https://schema.org/NewCondition',
       seller: { '@type': 'Organization', name: SITE_NAME },
       hasMerchantReturnPolicy: returnPolicyJsonLd(),
+      shippingDetails: shippingDetailsJsonLd(),
     },
   };
 }
