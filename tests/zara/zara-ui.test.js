@@ -173,7 +173,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         // le tableau de suivi de navigation (administrateur) : fakeOverview.replies = reponses a donner dans l'ordre (la derniere se repete)
         if (fakeOverview && u.pathname === '/rest/v1/rpc/browsing_overview' && m === 'POST') {
           overviewCalls.push(JSON.parse(req.postData() || '{}'));
-          const reply = fakeOverview.replies[Math.min(overviewCalls.length - 1, fakeOverview.replies.length - 1)];
+          // fakeOverview.respond(demande, numero) : la reponse depend de la demande (filtre p_interest, plafond p_limit)
+          const reply = fakeOverview.respond ? fakeOverview.respond(overviewCalls[overviewCalls.length - 1], overviewCalls.length) : fakeOverview.replies[Math.min(overviewCalls.length - 1, fakeOverview.replies.length - 1)];
           return json(route, reply.body, reply.status || 200);
         }
         // ventes reelles des 7 derniers jours : fakeSales.rows = lignes { product_id, orders_count } ; sans fakeSales, la fonction est « absente » (la requete est coupee)
@@ -3870,6 +3871,83 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         await c.page.getByTestId('browsing-row-0').waitFor({ timeout: 25000 });
         check('donnees incompletes ou abimees : l\'ecran s\'affiche quand meme (valeurs sures), sans erreur', /Article sans nom/.test(await text(c, 'browsing-row-0')) && /VUES 0/.test(await text(c, 'browsing-row-0')) && /Léger/.test(await text(c, 'browsing-row-0')) && c.errs.length === 0, c.errs);
         await c.ctx.close();
+      }
+      // --- W3. la liste « Détail » montre TOUTES les lignes du niveau choisi (avant : les tuiles disaient 141, la liste « Élevé » n'en montrait que 5)
+      {
+        const mk = (n, interest) => Array.from({ length: n }, (_, i) => ({ visitor_ref: `V-${interest[0]}${String(i).padStart(5, '0')}`, account_ref: null, session_id: null, product_id: `p${i}`, product_name: `Article ${interest} ${i}`, category_name: 'Test', views: 1, sessions: 1, active_seconds: 10, last_duration_seconds: 10, last_viewed_at: iso(i * 60000), variant_clicks: 0, cart_status: 'none', order_status: null, interest, last_suggestion_kind: null, last_suggestion_at: null }));
+        const LEVELS = { eleve: 141, moyen: 166, leger: 2705 };
+        const base3 = { top_products: [], top_categories: [], top_searches: [], levels: LEVELS, totals: { visitors: 108, rows: 3012 } };
+        // la base d'avant (script add-browsing-interest-filter.sql pas lance) : elle ne connait pas p_interest
+        const oldDb = (b) => ({ status: 404, body: { code: 'PGRST202', message: 'Could not find the function public.browsing_overview(p_interest, p_limit, p_since) in the schema cache' }, _b: b });
+        // la base d'aujourd'hui : p_interest ne change que la liste (les tuiles restent), 1 000 lignes au plus
+        const respond = (b) => {
+          if (!b.p_interest) return { body: { ...base3, rows: [...mk(5, 'eleve'), ...mk(295, 'leger')] } };
+          return { body: { ...base3, rows: mk(Math.min(b.p_limit || 300, LEVELS[b.p_interest]), b.p_interest) } };
+        };
+        const countRows = (c) => c.page.locator('[data-testid^="browsing-row-"]').count();
+        {
+          const c = await open({ respond });
+          await c.page.getByTestId('browsing-levels').waitFor({ timeout: 25000 });
+          check('tuile « Intérêt élevé » : 141 (comme dans la base)', (await text(c, 'browsing-level-eleve')).startsWith('141'));
+          check('sans filtre : les 300 lignes les plus récentes, avec la note « 300 lignes »', (await countRows(c)) === 300 && /Les 300 lignes les plus récentes sont affichées/.test(await text(c, 'browsing-rows-limit')), await countRows(c));
+          check('sans filtre : la demande n\'a ni niveau (p_interest) ni plafond de 1 000', c.overviewCalls[0].p_interest === undefined && c.overviewCalls[0].p_limit === 300, c.overviewCalls[0]);
+          await c.page.getByTestId('browsing-filter-eleve').click();
+          await c.page.waitForFunction(() => document.querySelectorAll('[data-testid^="browsing-row-"]').length === 141, null, { timeout: 15000 });
+          const last = c.overviewCalls[c.overviewCalls.length - 1];
+          check('filtre « Élevé » : la demande porte p_interest = eleve et un plafond de 1 000', last.p_interest === 'eleve' && last.p_limit === 1000 && typeof last.p_since === 'string', last);
+          check('filtre « Élevé » : les 141 lignes (la tuile dit 141), plus de note de plafond', (await countRows(c)) === 141 && (await c.page.getByTestId('browsing-rows-limit').count()) === 0 && /Élevé/.test(await text(c, 'browsing-row-140')));
+          check('filtre « Élevé » : les tuiles ne changent pas (141 / 166 / 2 705)', (await text(c, 'browsing-level-eleve')).startsWith('141') && (await text(c, 'browsing-level-moyen')).startsWith('166') && /^2[\s\u202f\u00a0]?705/.test(await text(c, 'browsing-level-leger')), await text(c, 'browsing-level-leger'));
+          await c.page.getByTestId('browsing-filter-moyen').click();
+          await c.page.waitForFunction(() => document.querySelectorAll('[data-testid^="browsing-row-"]').length === 166, null, { timeout: 15000 });
+          check('filtre « Moyen » : les 166 lignes', (await countRows(c)) === 166 && c.overviewCalls[c.overviewCalls.length - 1].p_interest === 'moyen');
+          await c.page.getByTestId('browsing-filter-leger').click();
+          await c.page.waitForFunction(() => document.querySelectorAll('[data-testid^="browsing-row-"]').length === 1000, null, { timeout: 30000 });
+          check('filtre « Léger » : 1 000 lignes au plus, avec la note « 1000 lignes »', (await countRows(c)) === 1000 && /Les 1000 lignes les plus récentes sont affichées/.test(await text(c, 'browsing-rows-limit')));
+          await c.page.getByTestId('browsing-filter-all').click();
+          await c.page.waitForFunction(() => document.querySelectorAll('[data-testid^="browsing-row-"]').length === 300, null, { timeout: 15000 });
+          const back = c.overviewCalls[c.overviewCalls.length - 1];
+          check('retour à « Tous » : on redemande les 300 lignes sans niveau', back.p_interest === undefined && back.p_limit === 300, back);
+          await c.page.getByTestId('browsing-period-7d').click();
+          await sleep(1500);
+          check('changer de période garde le niveau choisi : « Tous » ici, donc toujours sans p_interest', c.overviewCalls[c.overviewCalls.length - 1].p_interest === undefined && c.overviewCalls.length >= 6, c.overviewCalls.length);
+          check('aucune erreur (liste complète par niveau)', c.errs.length === 0, c.errs);
+          await c.ctx.close();
+        }
+        // changer de période avec un niveau choisi : le niveau est redemandé avec la nouvelle période
+        {
+          const c = await open({ respond });
+          await c.page.getByTestId('browsing-levels').waitFor({ timeout: 25000 });
+          await c.page.getByTestId('browsing-filter-eleve').click();
+          await c.page.waitForFunction(() => document.querySelectorAll('[data-testid^="browsing-row-"]').length === 141, null, { timeout: 15000 });
+          await c.page.getByTestId('browsing-period-all').click();
+          await c.page.waitForFunction(() => document.querySelectorAll('[data-testid^="browsing-row-"]').length === 141, null, { timeout: 15000 });
+          const last = c.overviewCalls[c.overviewCalls.length - 1];
+          check('période « Tout » avec « Élevé » : demande p_interest = eleve et sans date de début', last.p_interest === 'eleve' && last.p_since === null, last);
+          await c.ctx.close();
+        }
+        // la base d'avant (script pas encore lancé) : on retombe sur les 300 lignes, filtrées sur l'écran, sans erreur ni écran vide
+        {
+          const c = await open({ respond: (b) => (b.p_interest ? oldDb(b) : { body: { ...base3, rows: [...mk(5, 'eleve'), ...mk(295, 'leger')] } }) });
+          await c.page.getByTestId('browsing-levels').waitFor({ timeout: 25000 });
+          await c.page.getByTestId('browsing-filter-eleve').click();
+          await sleep(2500);
+          const withInterest = c.overviewCalls.filter((x) => x.p_interest === 'eleve').length;
+          check('base pas encore mise à jour : la demande avec niveau est refusée, puis refaite comme avant (2 demandes)', withInterest === 1 && c.overviewCalls[c.overviewCalls.length - 1].p_interest === undefined && c.overviewCalls[c.overviewCalls.length - 1].p_limit === 300, c.overviewCalls.slice(-3));
+          check('base pas encore mise à jour : la liste « Élevé » montre les 5 lignes des 300 récentes, avec la note « 300 lignes », sans message d\'erreur', (await countRows(c)) === 5 && /Les 300 lignes/.test(await text(c, 'browsing-rows-limit')) && (await c.page.getByTestId('browsing-error').count()) === 0 && (await c.page.getByTestId('browsing-not-installed').count()) === 0);
+          await c.ctx.close();
+        }
+        // panne pendant le filtrage : message clair et « Réessayer »
+        {
+          let failed = false;
+          const c = await open({ respond: (b) => { if (b.p_interest && !failed) { failed = true; return { status: 500, body: { code: 'XX000', message: 'service indisponible' } }; } return respond(b); } });
+          await c.page.getByTestId('browsing-levels').waitFor({ timeout: 25000 });
+          await c.page.getByTestId('browsing-filter-eleve').click();
+          await c.page.getByTestId('browsing-error').waitFor({ timeout: 15000 });
+          await c.page.getByTestId('browsing-retry').click();
+          await c.page.waitForFunction(() => document.querySelectorAll('[data-testid^="browsing-row-"]').length === 141, null, { timeout: 15000 });
+          check('panne pendant le filtrage : « Réessayer » redemande le niveau choisi et affiche les 141 lignes', (await countRows(c)) === 141 && c.overviewCalls[c.overviewCalls.length - 1].p_interest === 'eleve');
+          await c.ctx.close();
+        }
       }
       // le lien depuis le tableau de bord et le menu du compte
       {
