@@ -1,4 +1,5 @@
 import type { Profile } from '../types';
+import { genderOf, type Gender } from './clientGender';
 
 // Memes regles que l'inscription : 8 a 15 chiffres, avec « + », espaces ou tirets possibles.
 export const PROFILE_PHONE_REGEX = /^[+]?[\d\s-]{8,15}$/;
@@ -11,6 +12,7 @@ export interface ProfileForm {
   region: string;
   country: string;
   address: string;
+  gender: '' | Gender; // '' : pas encore choisi
 }
 
 // Les colonnes de la table `profiles` que le client peut changer lui-meme (les memes que celles de l'inscription).
@@ -22,6 +24,7 @@ export interface ProfileChanges {
   region: string | null;
   country: string | null;
   address: string | null;
+  gender?: Gender; // seulement quand le client a choisi (et que la base a la colonne) : sinon la colonne n'est jamais écrite
 }
 
 export type ProfileField = keyof ProfileForm;
@@ -42,6 +45,7 @@ export function formFromProfile(profile: Profile): ProfileForm {
     region: profile.region ?? '',
     country: profile.country ?? '',
     address: profile.address ?? '',
+    gender: genderOf(profile.gender) ?? '',
   };
 }
 
@@ -69,6 +73,7 @@ export function checkProfileForm(form: ProfileForm): ProfileCheck {
       region: orNull(form.region),
       country: orNull(form.country),
       address: orNull(form.address),
+      ...(form.gender ? { gender: form.gender } : {}),
     },
   };
 }

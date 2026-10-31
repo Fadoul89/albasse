@@ -61,6 +61,8 @@ export interface Profile {
   phone: string | null;
   whatsapp_number: string | null;
   profession: string | null;
+  // « homme » ou « femme » ; absent (clé inconnue) tant que add-client-gender.sql n'est pas lancé, null tant que le client n'a pas choisi
+  gender?: 'homme' | 'femme' | null;
   region: string | null;
   country: string | null;
   address: string | null;
