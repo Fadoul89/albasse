@@ -14,6 +14,9 @@ Deux pages de 1080 px, parce que Telegram réduit les photos à 1280 px au plus 
 - **Repli** : si le dessin échoue, la fonction envoie le texte du rapport, comme avant.
 - Rien n'est inventé : pas de visite = « Aucune visite ». Les noms d'articles sont nettoyés (pas d'emoji ni d'arabe dans l'affiche, les polices ne les ont pas).
 
+## Couleurs
+Les 3 couleurs du patron, comme les e-mails (voir `docs/couleurs-emails.md`) : **violet aubergine** `#4B0082` (fond et cartes), **doré** `#D4AF37` (rangs, nombres, pastilles, filets), **argenté** `#C0C0C0` (textes). Le doré n'est jamais un texte sur fond clair : il sert de texte seulement sur le violet, ou de fond de pastille avec un texte violet. Tout est dans `supabase/functions/zara-report-poster/poster.ts` (constantes en haut du fichier).
+
 ## Installation
 `add-zara-weekly-poster.sql` (après avoir déployé la fonction). Pour revenir au texte seul : relancer `add-zara-weekly-report.sql`.
 
