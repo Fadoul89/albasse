@@ -34,3 +34,26 @@ begin
   return new;
 end;
 $$;
+
+-- Dès qu'on ÉTEINT l'interrupteur, les annonces « nouveaux articles » encore en attente dans la file sont abandonnées tout de suite
+-- (sans attendre le gardien). Sans effet si le gardien (add-push-gate.sql) n'est pas installé : il n'y a pas de file.
+create or replace function public.expire_new_pushes_when_off()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if to_regclass('public.push_outbox') is not null then
+    update push_outbox set status = 'expired', note = 'nouveaux articles désactivés' where status = 'pending' and kind = 'new';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_push_new_products_off on public.store_settings;
+create trigger on_push_new_products_off
+  after update of push_new_products_enabled on public.store_settings
+  for each row
+  when (new.push_new_products_enabled is distinct from old.push_new_products_enabled and not new.push_new_products_enabled)
+  execute function public.expire_new_pushes_when_off();
