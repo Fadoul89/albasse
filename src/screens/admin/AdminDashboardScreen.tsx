@@ -9,6 +9,7 @@ import { colors, fonts, radius, spacing } from '../../theme';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { NotificationBell } from '../../components/NotificationBell';
 import { AdminMenuGroups } from '../../components/AdminMenuGroups';
+import { campaignLabel, realVisitsLabel, sharePercent } from '../../lib/visitStats';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
 
@@ -43,9 +44,17 @@ export function AdminDashboardScreen() {
               <StatCard icon="💰" label="CA livré aujourd'hui" value={formatXAF(stats.revenueToday)} />
               <StatCard icon="🛒" label="Commandes livrées aujourd'hui" value={String(stats.ordersToday)} />
               <StatCard icon="👥" label="Nouveaux clients" value={String(stats.newCustomersToday)} />
-              <StatCard icon="👀" label="Visiteurs aujourd'hui" value={String(stats.visitorsToday)} />
+              <StatCard icon="👀" label="Visiteurs aujourd'hui" value={String(stats.visitorsToday)} testID="dashboard-visitors" />
+              {stats.visitQuality && (
+                <StatCard icon="✅" label="Vraies visites aujourd'hui" value={String(stats.visitQuality.realVisitors)} testID="dashboard-real-visits" />
+              )}
               <StatCard icon="📱" label="Raccourcis installés (total)" value={String(stats.appInstallsTotal)} />
             </View>
+            {stats.visitQuality && (
+              <Text style={styles.downloadsToday} testID="dashboard-real-help">
+                {`Vraie visite = la personne reste 20 secondes ou plus, voit 2 pages ou plus, ou est connectée. Aujourd'hui : ${realVisitsLabel(stats.visitQuality.realVisitors, stats.visitQuality.visitors)} visiteurs.`}
+              </Text>
+            )}
             <Text style={styles.downloadsToday} testID="dashboard-received">
               {`📥 ${stats.ordersReceivedToday} commande(s) reçue(s) aujourd'hui : comptées une fois livrées (les fausses commandes ne comptent jamais)`}
             </Text>
@@ -159,6 +168,42 @@ export function AdminDashboardScreen() {
               <Text style={styles.sourceLinkArrow}>→</Text>
             </Pressable>
 
+            {stats.visitQuality && stats.visitQuality.bySource.length > 0 && (
+              <Section title="🎯 Qualité des visites (aujourd'hui)">
+                <View style={styles.sourceHeaderRow}>
+                  <Text style={[styles.sourceHeaderCell, { flex: 2.6 }]}>Source</Text>
+                  <Text style={styles.sourceHeaderCell}>Visiteurs</Text>
+                  <Text style={styles.sourceHeaderCell}>Vrais</Text>
+                  <Text style={styles.sourceHeaderCell}>Part</Text>
+                </View>
+                {stats.visitQuality.bySource.map((s) => (
+                  <View key={s.source} style={styles.sourceRow} testID={`dashboard-quality-${s.source}`}>
+                    <Text style={[styles.sourceCell, { flex: 2.6, fontFamily: fonts.bodySemiBold }]} numberOfLines={1}>
+                      {s.source}
+                    </Text>
+                    <Text style={styles.sourceCell}>{s.visitors}</Text>
+                    <Text style={styles.sourceCell}>{s.realVisitors}</Text>
+                    <Text style={[styles.sourceCell, styles.sourceConversion]}>{sharePercent(s.realVisitors, s.visitors)}</Text>
+                  </View>
+                ))}
+                {stats.visitQuality.byCampaign.length > 0 && (
+                  <>
+                    <Text style={styles.qualityCampaignTitle}>Campagnes (visites · vraies)</Text>
+                    {stats.visitQuality.byCampaign.slice(0, 6).map((c) => (
+                      <View key={`${c.source}|${c.medium}|${c.campaign}`} style={styles.sourceRow} testID={`dashboard-campaign-${c.campaign}`}>
+                        <Text style={[styles.sourceCell, { flex: 2.6 }]} numberOfLines={1}>
+                          {campaignLabel(c)}
+                        </Text>
+                        <Text style={styles.sourceCell}>{c.sessions}</Text>
+                        <Text style={styles.sourceCell}>{c.realSessions}</Text>
+                        <Text style={[styles.sourceCell, styles.sourceConversion]}>{sharePercent(c.realSessions, c.sessions)}</Text>
+                      </View>
+                    ))}
+                  </>
+                )}
+              </Section>
+            )}
+
             <Section title="📡 Performance par source (résumé)">
               {stats.sourcePerformance.length === 0 ? (
                 <Text style={styles.emptyText}>Pas encore de données.</Text>
@@ -196,9 +241,9 @@ export function AdminDashboardScreen() {
   );
 }
 
-function StatCard({ icon, label, value }: { icon: string; label: string; value: string }) {
+function StatCard({ icon, label, value, testID }: { icon: string; label: string; value: string; testID?: string }) {
   return (
-    <View style={styles.statCard}>
+    <View style={styles.statCard} testID={testID}>
       <Text style={styles.statIcon}>{icon}</Text>
       <Text style={styles.statValue}>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
@@ -285,6 +330,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   sourceCell: { flex: 1, color: colors.creamMuted, fontFamily: fonts.body, fontSize: 12 },
+  qualityCampaignTitle: { color: colors.creamFaint, fontFamily: fonts.bodySemiBold, fontSize: 10, textTransform: 'uppercase', marginTop: 12, marginBottom: 2 },
   sourceConversion: { color: colors.goldLight, fontFamily: fonts.bodyBold },
   sourceLinkCard: {
     flexDirection: 'row',

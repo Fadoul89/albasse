@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import type { Order, Product } from '../types';
 import { countsAsSale, salesTotal } from '../lib/salesRules';
+import { parseVisitOverview, type VisitOverview } from '../lib/visitStats';
 
 export interface TopProduct {
   product_id: string;
@@ -30,6 +31,9 @@ export interface DashboardStats {
   ordersReceivedToday: number; // commandes reçues aujourd'hui, livrées ou pas encore
   newCustomersToday: number;
   visitorsToday: number;
+  // « vraies visites » (restent 20 s ou plus, voient 2 pages ou plus, ou sont connectés) et détail par source / campagne d'aujourd'hui ;
+  // null tant que add-visit-stats.sql n'est pas lancé (le tableau de bord garde alors son ancien calcul, sans cette partie)
+  visitQuality: VisitOverview | null;
   mostViewedProducts: TopProduct[];
   bestSellingProducts: TopProduct[];
   lowStockProducts: Product[];
@@ -49,6 +53,8 @@ const LOW_STOCK_THRESHOLD = 5;
 // charger des tables d'evenements non bornees finit par rendre les stats
 // fausses (ex. "0 visiteur aujourd'hui" alors que des visites existent).
 const RECENT_WINDOW_DAYS = 30;
+// Depuis add-visit-stats.sql, les visites, les articles les plus vus et la performance par source sont comptés DANS la base (exacts, sans limite
+// de 1 000 lignes). Les anciennes lectures ligne par ligne ne servent plus que de secours, tant que ce script n'est pas lancé.
 
 function startOfToday(): string {
   const d = new Date();
@@ -76,6 +82,15 @@ export function useDashboardStats() {
     const todayIso = startOfToday();
     const windowStartIso = recentWindowStart();
 
+    // comptes exacts faits par la base ; en cas d'erreur (script pas lancé) : null, et les anciennes lectures prennent le relais
+    const [todayRpc, windowRpc] = await Promise.all([
+      supabase.rpc('admin_visit_overview', { p_since: todayIso }),
+      supabase.rpc('admin_visit_overview', { p_since: windowStartIso }),
+    ]);
+    const visitsToday = todayRpc.error ? null : parseVisitOverview(todayRpc.data);
+    const visitsWindow = windowRpc.error ? null : parseVisitOverview(windowRpc.data);
+    const noRows = Promise.resolve({ data: null as unknown[] | null });
+
     const [
       ordersTodayRes,
       ordersWindowRes,
@@ -97,16 +112,10 @@ export function useDashboardStats() {
         .select('id,total,status,is_flagged_fake,created_at,session_id,referrer_source,items')
         .gte('created_at', windowStartIso),
       supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('is_admin', false).gte('created_at', todayIso),
-      supabase
-        .from('visitor_sessions')
-        .select('id,started_at,referrer_source,visitor_id')
-        .gte('started_at', todayIso),
-      supabase
-        .from('visitor_sessions')
-        .select('id,started_at,referrer_source,visitor_id')
-        .gte('started_at', windowStartIso),
-      supabase.from('product_views').select('product_id,session_id,created_at').gte('created_at', windowStartIso),
-      supabase.from('cart_events').select('session_id,created_at').gte('created_at', windowStartIso),
+      visitsToday ? noRows : supabase.from('visitor_sessions').select('id,started_at,referrer_source,visitor_id').gte('started_at', todayIso),
+      visitsWindow ? noRows : supabase.from('visitor_sessions').select('id,started_at,referrer_source,visitor_id').gte('started_at', windowStartIso),
+      visitsWindow ? noRows : supabase.from('product_views').select('product_id,session_id,viewed_at').gte('viewed_at', windowStartIso),
+      visitsWindow ? noRows : supabase.from('cart_events').select('session_id,created_at').gte('created_at', windowStartIso),
       supabase.from('products').select('*'),
       supabase.from('app_download_clicks').select('id', { count: 'exact', head: true }),
       supabase.from('app_download_clicks').select('id', { count: 'exact', head: true }).gte('created_at', todayIso),
@@ -131,15 +140,19 @@ export function useDashboardStats() {
     // commandes reçues aujourd'hui (ni annulées ni fausses) : pas encore comptées tant qu'elles ne sont pas livrées
     const ordersReceivedToday = ordersToday.filter((o) => o.status !== 'cancelled' && !o.is_flagged_fake).length;
     const newCustomersToday = profilesTodayRes.count ?? 0;
-    const visitorsToday = new Set(sessionsToday.map((s) => s.visitor_id ?? s.id)).size;
+    const visitorsToday = visitsToday ? visitsToday.visitors : new Set(sessionsToday.map((s) => s.visitor_id ?? s.id)).size;
 
     // Produits les plus consultes (30 derniers jours)
     const viewCounts: Record<string, number> = {};
     views.forEach((v) => {
       viewCounts[v.product_id] = (viewCounts[v.product_id] ?? 0) + 1;
     });
-    const mostViewedProducts: TopProduct[] = Object.entries(viewCounts)
-      .map(([product_id, count]) => ({
+    const mostViewedProducts: TopProduct[] = (
+      visitsWindow
+        ? visitsWindow.topViewed.map((t) => ({ product_id: t.productId, count: t.views }))
+        : Object.entries(viewCounts).map(([product_id, count]) => ({ product_id, count }))
+    )
+      .map(({ product_id, count }) => ({
         product_id,
         count,
         name: products.find((p) => p.id === product_id)?.name ?? 'Produit supprimé',
@@ -168,7 +181,7 @@ export function useDashboardStats() {
     const sourceKeys = new Set<string>();
     sessionsWindow.forEach((s) => sourceKeys.add(s.referrer_source ?? 'Inconnue'));
 
-    const sourcePerformance: SourcePerformance[] = Array.from(sourceKeys).map((source) => {
+    const legacySourcePerformance: SourcePerformance[] = Array.from(sourceKeys).map((source) => {
       const sourceSessions = sessionsWindow.filter((s) => (s.referrer_source ?? 'Inconnue') === source);
       const sessionIds = new Set(sourceSessions.map((s) => s.id));
 
@@ -187,7 +200,18 @@ export function useDashboardStats() {
         conversionRate: sourceSessions.length > 0 ? (sourceOrders.length / sourceSessions.length) * 100 : 0,
       };
     });
-    sourcePerformance.sort((a, b) => b.sessions - a.sessions);
+    legacySourcePerformance.sort((a, b) => b.sessions - a.sessions);
+    const sourcePerformance: SourcePerformance[] = visitsWindow
+      ? visitsWindow.bySource.map((r) => ({
+          source: r.source,
+          sessions: r.sessions,
+          productViews: r.productViews,
+          cartAdds: r.cartAdds,
+          orders: r.orders,
+          revenue: r.revenue,
+          conversionRate: r.sessions > 0 ? (r.orders / r.sessions) * 100 : 0,
+        }))
+      : legacySourcePerformance;
 
     const browserCounts: Record<string, number> = {};
     const deviceCounts: Record<string, number> = {};
@@ -212,6 +236,7 @@ export function useDashboardStats() {
       ordersReceivedToday,
       newCustomersToday,
       visitorsToday,
+      visitQuality: visitsToday,
       mostViewedProducts,
       bestSellingProducts,
       lowStockProducts,
