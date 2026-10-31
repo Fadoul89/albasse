@@ -7,6 +7,7 @@ import type { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing } from '../theme';
 import { GoldButton } from '../components/GoldButton';
 import { InvoiceDownloadButton } from '../components/InvoiceDownloadButton';
+import { InstallAfterOrderCard } from '../components/InstallAfterOrderCard';
 import { useAuthStore } from '../store/authStore';
 import { DELIVERY_HOURS, GIFT_WRAP_FEE, ORDER_VALIDITY_HOURS } from '../constants/shopRules';
 import { formatSlot } from '../lib/scheduledDelivery';
@@ -67,6 +68,9 @@ export function OrderConfirmationScreen({ route }: Props) {
             <Text style={styles.accountHint}>📸 Faites une capture d’écran pour le garder. Vous pourrez le changer dans « Compte ».</Text>
           </View>
         ) : null}
+
+        {/* l'application d'abord : suivre sa commande en un toucher (téléphone sans l'application seulement) */}
+        <InstallAfterOrderCard />
 
         {telegramUserId ? (
           <View style={styles.telegramBox} testID="confirm-telegram">
