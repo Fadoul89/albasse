@@ -792,6 +792,38 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     check('delai de 8 s : la fenetre s’ouvre ensuite avec la phrase de Zara', true);
     await promoLate.ctx.close();
 
+    // f2. client CONNECTE : la carte s'affiche d'abord, puis Zara ouvre son chat 10 s plus tard, en fenetre du bas (pas en plein ecran)
+    {
+      const m = memberWith(null);
+      const c = await newVisitor(phone, { storage: { [SK7]: m.session }, fakeUser: m, fakeStore: { zaraAds: true, zaraDelay: 3, waOrder: true, patches: [] }, autoOpen: true });
+      const t0 = Date.now();
+      await c.page.goto(`${BASE}/`, { waitUntil: 'load' });
+      await c.page.getByTestId('zara-ad').waitFor({ timeout: 25000 });
+      const seen = (await c.page.evaluate(() => {
+        const el = document.querySelector('[data-testid="zara-ad"]');
+        const r = el.getBoundingClientRect();
+        const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+        return { visibleDansEcran: r.y >= 0 && r.y + r.height <= innerHeight, libre: !!top && el.contains(top) };
+      }));
+      check('client connecte : la carte de Zara s\'affiche (apres 3 s), dans l\'ecran et PAS cachee par le chat', seen.visibleDansEcran && seen.libre, seen);
+      // l'ancienne regle ouvrait le chat a 8 s : maintenant la carte reste seule jusqu'a 3 s + 10 s
+      const wait11 = Math.max(0, 11000 - (Date.now() - t0));
+      await sleep(wait11);
+      check('11 s apres l\'arrivee (Zara s\'ouvrait a 8 s avant) : le chat n\'est pas encore ouvert, la carte est toujours visible', (await panelOf(c.page).count()) === 0 && (await c.page.getByTestId('zara-ad').count()) === 1);
+      await panelOf(c.page).waitFor({ timeout: 12000 });
+      const openedAfter = Date.now() - t0;
+      check('Zara ouvre son chat environ 10 s apres l\'apparition de la carte (entre 12 s et 19 s apres l\'arrivee)', openedAfter >= 12000 && openedAfter <= 19000, openedAfter);
+      await sleep(700);
+      const pb = await panelOf(c.page).boundingBox();
+      const vp = c.page.viewportSize();
+      check('le chat est une fenetre du bas, pas en plein ecran : moins de 70 % de la hauteur, collee en bas, haut de l\'ecran visible', pb.height < vp.height * 0.7 && pb.y > 100 && Math.round(pb.y + pb.height) === vp.height, { pb, vp });
+      const tagline = await c.page.getByTestId('home-tagline').boundingBox();
+      check('le haut de l\'accueil reste visible au-dessus de la fenetre de Zara', !!tagline && tagline.y + tagline.height < pb.y, { tagline, pb });
+      await c.page.screenshot({ path: path.join(OUT, '7f2-pub-puis-chat-du-bas.png') });
+      check('aucune erreur (client connecte, publicite puis chat)', c.errs.length === 0, c.errs);
+      await c.ctx.close();
+    }
+
     // g. l'interrupteur de l'admin (page « Promotions intelligentes ») : la base recoit zara_ads_enabled ; colonne absente : il faut lancer le script
     const adm = memberWith(null, true);
     const fs7 = { zaraAds: false, zaraDelay: 5, waOrder: true, patches: [] };
@@ -1662,7 +1694,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
 
     // --- L9b. Zara prend la parole la premiere : sur l'Accueil, 8 secondes apres l'arrivee, elle ouvre toute seule la conversation (une fois par visite)
     {
-      const v = await newVisitor(phone, { lang: 'fr', autoOpen: true, rank: 5 });
+      const v = await newVisitor(phone, { lang: 'fr', autoOpen: true, fakeStore: { waOrder: true, patches: [], zaraAds: false }, rank: 5 });
       await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(6500);
       check('avant 8 secondes : rien ne s\'ouvre, et la petite bulle ne passe pas juste avant', (await panelOf(v.page).count()) === 0 && (await v.page.getByTestId('assistant-teaser').count()) === 0);
@@ -1679,7 +1711,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.ctx.close();
 
       // hors Accueil : pas d'ouverture automatique, la petite bulle reste comme avant
-      const o = await newVisitor(phone, { lang: 'fr', autoOpen: true });
+      const o = await newVisitor(phone, { lang: 'fr', autoOpen: true, fakeStore: { waOrder: true, patches: [], zaraAds: false } });
       await o.page.goto(`${BASE}/contact`, { waitUntil: 'load' });
       await sleep(9500);
       check('page Contact : Zara ne s\'ouvre pas seule', (await panelOf(o.page).count()) === 0);
@@ -1687,7 +1719,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await o.ctx.close();
 
       // le visiteur qui touche le bouton avant les 8 secondes : une seule ouverture, une seule conversation comptee
-      const t = await newVisitor(phone, { lang: 'fr', autoOpen: true, rank: 7 });
+      const t = await newVisitor(phone, { lang: 'fr', autoOpen: true, fakeStore: { waOrder: true, patches: [], zaraAds: false }, rank: 7 });
       await t.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await t.page.getByRole('button', { name: FAB_NAME }).click();
@@ -1702,7 +1734,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
           createGain() { return { gain: { setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() {} }; }
           createOscillator() { return { frequency: { setValueAtTime() {} }, connect() {}, start() { window.__ding.started++; }, stop() {} }; }
           close() { window.__ding.closed++; return Promise.resolve(); } };`;
-      const s1 = await newVisitor(phone, { lang: 'fr', autoOpen: true, initScripts: [fakeAudio('running')] });
+      const s1 = await newVisitor(phone, { lang: 'fr', autoOpen: true, fakeStore: { waOrder: true, patches: [], zaraAds: false }, initScripts: [fakeAudio('running')] });
       await s1.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(6500);
       const before = await s1.page.evaluate(() => window.__ding);
@@ -1711,7 +1743,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const played = await s1.page.evaluate(() => window.__ding);
       check('telephone qui autorise le son : un petit « ding » de deux notes quand Zara s\'ouvre', played.created === 1 && played.started === 2, played);
       await s1.ctx.close();
-      const s2 = await newVisitor(phone, { lang: 'fr', autoOpen: true, initScripts: [fakeAudio('suspended')] });
+      const s2 = await newVisitor(phone, { lang: 'fr', autoOpen: true, fakeStore: { waOrder: true, patches: [], zaraAds: false }, initScripts: [fakeAudio('suspended')] });
       await s2.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await waitText(s2.page, /Bienvenue chez Albasse Shopping/, 20000);
       const muted = await s2.page.evaluate(() => window.__ding);
@@ -8048,12 +8080,12 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await k.page.getByRole('button', { name: FAB_NAME }).click();
       await sleep(600);
       const full = await panelOf(k.page).boundingBox();
-      check('sans clavier : la fenetre occupe toute la hauteur', Math.round(full.height) === 800, full);
+      check('sans clavier : la fenetre n\'est PAS en plein ecran : fenetre du bas, 60 % de la hauteur (480 px sur 800), collee en bas, pleine largeur', Math.round(full.height) === 480 && Math.round(full.y + full.height) === 800 && Math.round(full.width) === 390, full);
       await k.page.evaluate(() => { window.__vv.height = 430; window.__vv.offsetTop = 0; window.__vv.dispatchEvent(new Event('resize')); });
       await sleep(400);
       const small = await panelOf(k.page).boundingBox();
       const inputBox = await k.page.getByLabel('Votre message').boundingBox();
-      check('clavier ouvert (zone visible de 430 px) : la fenetre se reduit, la saisie reste visible', Math.round(small.height) === 430 && Math.round(small.y) === 0 && inputBox.y + inputBox.height <= 430, { small, inputBox });
+      check('clavier ouvert (zone visible de 430 px) : la fenetre se reduit (360 px, collee en bas de la zone visible), la saisie reste visible', Math.round(small.height) === 360 && Math.round(small.y + small.height) === 430 && inputBox.y + inputBox.height <= 430 && inputBox.y >= small.y, { small, inputBox });
       await k.page.evaluate(() => { window.__vv.height = 800; window.__vv.dispatchEvent(new Event('resize')); });
       await sleep(300);
       await k.page.getByRole('button', { name: 'Fermer' }).click();

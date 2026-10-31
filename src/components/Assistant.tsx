@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import { colors, fonts, radius } from '../theme';
 import { navigationRef } from '../navigation/navigationRef';
 import { useAssistantStore } from '../store/assistantStore';
+import { useZaraAdSignal, zaraChatOpensAt } from '../store/zaraAdSignal';
 import { useAuthStore } from '../store/authStore';
 import { firstNameOfFullName } from '../lib/assistantBrain';
 import { texts } from '../lib/assistantText';
@@ -414,8 +415,17 @@ export function Assistant() {
   // avant la fin des 8 secondes, rien ne s'ouvre et la petite bulle reprend son rôle.
   const onHome = routeName === 'Home';
   const autoOpenPending = onHome && !open && !teaserDismissed && !autoOpenedThisVisit && !teaserAlreadySeen(AUTO_OPEN_SEEN_KEY);
+  // Si Zara gère les publicités et qu'une carte va s'afficher sur l'accueil, Zara ouvre son chat 10 secondes après l'apparition de la carte
+  // (jamais avant l'heure habituelle de 8 secondes) : le client voit d'abord la publicité.
+  const adReadyAt = useZaraAdSignal((s) => s.readyAt);
+  const autoOpenStart = useRef<number | null>(null);
   useEffect(() => {
-    if (!autoOpenPending) return;
+    if (!autoOpenPending) {
+      autoOpenStart.current = null;
+      return;
+    }
+    if (autoOpenStart.current === null) autoOpenStart.current = Date.now();
+    const wait = Math.max(0, zaraChatOpensAt(autoOpenStart.current, AUTO_OPEN_DELAY_MS, adReadyAt) - Date.now());
     const timer = setTimeout(() => {
       autoOpenedThisVisit = true;
       if (Platform.OS === 'web') {
@@ -434,9 +444,9 @@ export function Assistant() {
       if (pushDue) openFor('push');
       else if (installDue) openFor('install');
       else openChat();
-    }, AUTO_OPEN_DELAY_MS);
+    }, wait);
     return () => clearTimeout(timer);
-  }, [autoOpenPending, pushDue, installDue, openFor, openChat]);
+  }, [autoOpenPending, adReadyAt, pushDue, installDue, openFor, openChat]);
 
   // Un client qui se connecte pendant la visite a droit à sa propre salutation (par son prénom), même si la bulle des visiteurs est déjà passée.
   const isMember = !!memberName;
