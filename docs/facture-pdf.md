@@ -33,3 +33,6 @@ Pour arrêter l'envoi sur Telegram : `drop trigger if exists on_order_created_in
 - Les polices standard d'un PDF ne connaissent que l'alphabet latin : un **nom en arabe** ou un emoji n'est pas écrit sur le PDF (le nom devient « Client »). La page « Facture » à l'écran, elle, l'affiche en entier. Le message Telegram qui accompagne le PDF garde le nom tel quel.
 - Plus de ~7 articles : le total passe sur une 2ᵉ page (rare : une commande = un article).
 - Sur iPhone installé comme application, le PDF peut s'ouvrir dans la visionneuse du téléphone (bouton « Partager » pour l'enregistrer).
+
+## Couleurs
+Les 3 couleurs du patron, comme les e-mails et l'affiche Telegram (voir `docs/couleurs-emails.md`) : **violet aubergine** `#4B0082` (bande du haut, nom de la boutique, numéro de facture, en-tête du tableau, cadre du total), **doré** `#D4AF37` (filet sous la bande, titres des colonnes et montant du total, toujours sur fond violet : le doré n'est jamais un texte sur fond blanc), **argenté** `#C0C0C0` (traits). Le rouge de « COMMANDE ANNULÉE » reste rouge : c'est un statut. Les couleurs sont au début de `buildInvoicePdf` dans `supabase/functions/order-invoice/invoice.ts`. La facture à l'écran (`src/`) n'est pas changée.

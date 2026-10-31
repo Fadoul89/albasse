@@ -149,19 +149,28 @@ export async function buildInvoicePdf(lib: PdfLib, data: InvoiceData, logoImage:
     }
   }
 
+  // Les 3 couleurs du patron (comme les e-mails) : violet aubergine (bande, titres, en-tête du tableau, total), doré (filet, chiffres sur violet),
+  // argenté (traits). Le doré n'est jamais un texte sur fond blanc (trop pâle) : il sert de filet ou de texte sur le violet.
   const INK = hex(lib.rgb, "#1d2433");
   const MUTED = hex(lib.rgb, "#5b6475");
-  const LINE = hex(lib.rgb, "#e3e6ee");
-  const NAVY = hex(lib.rgb, "#062266");
-  const HEAD_BG = hex(lib.rgb, "#f4f5f9");
-  const RED = hex(lib.rgb, "#c0262d");
+  const LINE = hex(lib.rgb, "#C0C0C0");
+  const VIOLET = hex(lib.rgb, "#4B0082");
+  const GOLD = hex(lib.rgb, "#D4AF37");
+  const SILVER_LIGHT = hex(lib.rgb, "#EDEDF2");
+  const RED = hex(lib.rgb, "#c0262d"); // « commande annulée » : un statut, il reste rouge
 
   const number = invoiceNumber(order);
   doc.setTitle(`Facture ${number}`);
   doc.setAuthor(pdfText(shop.shop_name) || "Albasse Shopping");
   doc.setSubject(`Commande ${orderNumberLabel(order)}`);
 
+  // la bande violette et son filet doré, en haut de chaque page (dans la marge : rien ne se décale)
+  const band = (pg: any) => {
+    pg.drawRectangle({ x: 0, y: A4.h - 14, width: A4.w, height: 14, color: VIOLET });
+    pg.drawRectangle({ x: 0, y: A4.h - 17.5, width: A4.w, height: 3.5, color: GOLD });
+  };
   let page = doc.addPage([A4.w, A4.h]);
+  band(page);
   let y = A4.h - MARGIN;
   const right = A4.w - MARGIN;
   const width = (font: any, size: number, text: string) => font.widthOfTextAtSize(text, size);
@@ -208,7 +217,7 @@ export async function buildInvoicePdf(lib: PdfLib, data: InvoiceData, logoImage:
     page.drawImage(logo, { x: MARGIN, y: topY - logoSize, width: logoSize, height: logoSize });
     leftX = MARGIN + logoSize + 12;
   }
-  text(shop.shop_name || "Albasse Shopping", leftX, topY - 22, 17, { font: bold, color: NAVY });
+  text(shop.shop_name || "Albasse Shopping", leftX, topY - 22, 17, { font: bold, color: VIOLET });
   const shopLines = [shop.address, [shop.postal_code, shop.city].filter(Boolean).join(" "), shop.country, shop.phone ? `Tél. ${shop.phone}` : "", shop.email]
     .map((l) => pdfText(l))
     .filter(Boolean);
@@ -218,7 +227,7 @@ export async function buildInvoicePdf(lib: PdfLib, data: InvoiceData, logoImage:
     sy -= 12.5;
   }
   text("FACTURE", right, topY - 18, 22, { font: bold, alignRight: true });
-  text(number, right, topY - 36, 12, { font: bold, color: NAVY, alignRight: true });
+  text(number, right, topY - 36, 12, { font: bold, color: VIOLET, alignRight: true });
   text(`Date : ${dateLabel(order.created_at)}`, right, topY - 51, 9.5, { color: MUTED, alignRight: true });
   text(`Commande ${orderNumberLabel(order)}`, right, topY - 64, 9.5, { color: MUTED, alignRight: true });
   y = Math.min(topY - logoSize, sy) - 22;
@@ -250,15 +259,16 @@ export async function buildInvoicePdf(lib: PdfLib, data: InvoiceData, logoImage:
   const nameW = colQty - 40 - MARGIN - 10;
 
   const drawHead = () => {
-    page.drawRectangle({ x: MARGIN, y: y - 20, width: right - MARGIN, height: 20, color: HEAD_BG });
-    text("Désignation", MARGIN + 6, y - 14, 9.5, { font: bold, color: MUTED });
-    text("Qté", colQty, y - 14, 9.5, { font: bold, color: MUTED, alignRight: true });
-    text("Prix unit.", colPrice, y - 14, 9.5, { font: bold, color: MUTED, alignRight: true });
-    text("Total", colTotal - 6, y - 14, 9.5, { font: bold, color: MUTED, alignRight: true });
+    page.drawRectangle({ x: MARGIN, y: y - 20, width: right - MARGIN, height: 20, color: VIOLET });
+    text("Désignation", MARGIN + 6, y - 14, 9.5, { font: bold, color: GOLD });
+    text("Qté", colQty, y - 14, 9.5, { font: bold, color: GOLD, alignRight: true });
+    text("Prix unit.", colPrice, y - 14, 9.5, { font: bold, color: GOLD, alignRight: true });
+    text("Total", colTotal - 6, y - 14, 9.5, { font: bold, color: GOLD, alignRight: true });
     y -= 20;
   };
   const newPage = () => {
     page = doc.addPage([A4.w, A4.h]);
+    band(page);
     y = A4.h - MARGIN;
   };
   drawHead();
@@ -301,10 +311,10 @@ export async function buildInvoicePdf(lib: PdfLib, data: InvoiceData, logoImage:
     text(l.value, right - 6, y, 10.5, { alignRight: true });
     y -= 17;
   }
-  page.drawLine({ start: { x: boxLeft, y: y + 8 }, end: { x: right, y: y + 8 }, thickness: 1.6, color: INK });
   y -= 6;
-  text("TOTAL À PAYER", boxLeft, y, 12, { font: bold, color: NAVY });
-  text(formatXAF(b.total), right - 6, y, 12, { font: bold, color: NAVY, alignRight: true });
+  page.drawRectangle({ x: boxLeft - 10, y: y - 8, width: right - boxLeft + 10, height: 25, color: VIOLET });
+  text("TOTAL À PAYER", boxLeft, y, 12, { font: bold, color: SILVER_LIGHT });
+  text(formatXAF(b.total), right - 6, y, 12, { font: bold, color: GOLD, alignRight: true });
   y -= 34;
 
   // --- paiement et statut
