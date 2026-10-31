@@ -1893,7 +1893,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     const after: ChatAction[] = [{ label: T().chip.invoice, kind: 'invoice', payload: created.order.id, highlight: true }, { label: T().chip.orders, kind: 'orders' }, ...(telegramChip ? [{ ...telegramChip, highlight: false }] : []), menuBtn()];
     await say(lines.join('\n'), { actions: after });
     // le bon moment pour proposer l'application (une seule fois) : suivre sa commande en un toucher
-    await maybeOfferInstall(after);
+    await maybeOfferInstall(after, true);
   }
 
   // Ce que le client écrit pendant la commande. Vrai : Zara a traité le message ; faux : on laisse le routage normal répondre.
@@ -2236,9 +2236,11 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
   const saidBefore = (text: string) => get().messages.some((m) => m.role === 'assistant' && m.text.includes(text));
 
   // `extra` : les boutons déjà affichés restent disponibles sous la proposition.
-  async function maybeOfferInstall(extra: ChatAction[] = []) {
+  // afterOrder : juste après une commande, le client a confiance : Zara repropose l'application même si elle l'a déjà demandée sans réponse
+  // (« asked »), mais jamais si le client a déjà installé, ni s'il vient de répondre « Plus tard ».
+  async function maybeOfferInstall(extra: ChatAction[] = [], afterOrder = false) {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
-    if (alreadyInstalled() || installPaused()) return;
+    if (alreadyInstalled() || (afterOrder ? installDeclined() : installPaused())) return;
     if (!isIosDevice() && !isAndroidDevice()) return; // ordinateur : jamais de question
     recordInstall('asked'); // on ne le redit pas, même si le client l'ignore
     logAssistantEvent('install_question');

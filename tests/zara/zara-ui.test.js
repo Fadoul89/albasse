@@ -4844,11 +4844,19 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     check('un article simple existe pour le test', !!prodT);
     const cartT = JSON.stringify({ state: { items: [{ id: `${prodT.id}__nc__ns`, product: prodT, quantity: 1, color: null, size: null }], updatedAt: Date.now() }, version: 1 });
     // le visiteur sans compte commande : son compte est cree a la confirmation, avec ou sans Telegram deja lie
-    const guestOrder = async (profile) => {
+    const guestOrder = async (profile, extra = {}, vis = phone) => {
       const fu = accountT(profile);
       const fo = { list: [], patches: [], created: [] };
-      const g = await newVisitor(phone, { storage: { 'albasse-cart': cartT }, fakeUser: fu, fakeOrders: fo, fakeStore: { waOrder: true, accountRequired: false, patches: [] } });
+      const g = await newVisitor(vis, { storage: { 'albasse-cart': cartT, ...(extra.storage || {}) }, fakeUser: fu, fakeOrders: fo, fakeStore: { waOrder: true, accountRequired: false, patches: [] }, initScripts: extra.initScripts || [] });
       g.hits = await watchTelegram(g.ctx);
+      // les clics « Installer » sont notes (source|appareil|navigateur|resultat), rien n'est ecrit en vrai
+      g.clicks = [];
+      const CORS_I = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+      await g.ctx.route('**/rest/v1/app_download_clicks*', (route) => {
+        if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS_I });
+        try { g.clicks.push(route.request().postDataJSON().source); } catch (e) {}
+        return route.fulfill({ status: 201, headers: CORS_I, body: '' });
+      });
       await g.page.goto(`${BASE}/commande`, { waitUntil: 'load' });
       await g.page.getByTestId('checkout-first-name').waitFor({ timeout: 25000 });
       await g.page.getByTestId('checkout-first-name').fill('Amina');
@@ -4884,6 +4892,62 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const g = await guestOrder({ telegram_chat_id: 777 });
       await sleep(1500);
       check('Telegram deja lie : aucune carte d\'invitation sur la confirmation', (await g.page.getByTestId('confirm-telegram').count()) === 0);
+      await g.ctx.close();
+    }
+
+    // --- d. l'application apres une commande : carte « Installez l'application » sur la confirmation (telephone sans l'application seulement)
+    const FAKE_PROMPT = "window.__fakePromptCalls = 0; window.__pwaInstallPrompt__ = { prompt: async () => { window.__fakePromptCalls++; }, userChoice: Promise.resolve({ outcome: 'accepted' }) };";
+    {
+      const g = await guestOrder({});
+      await g.page.getByTestId('confirm-install').waitFor({ timeout: 10000 });
+      const card = await g.page.getByTestId('confirm-install').innerText();
+      check('confirmation (Android) : carte « Installez l\'application Albasse Shopping », ce que ca apporte, gratuit', /Installez l.application Albasse Shopping/.test(card) && /Suivez votre commande/.test(card) && /gratuit/.test(card) && /Installer l.application/.test(card), card);
+      const yi = (await g.page.getByTestId('confirm-install').boundingBox()).y;
+      const yt = (await g.page.getByTestId('confirm-telegram').boundingBox()).y;
+      check('la carte de l\'application est AVANT la carte Telegram (l\'application d\'abord)', yi < yt, { yi, yt });
+      await g.page.screenshot({ path: path.join(OUT, '+d-confirmation-installer.png'), fullPage: true });
+      await g.page.getByText("📲 Installer l'application", { exact: true }).locator('visible=true').first().click();
+      await g.page.getByTestId('confirm-install-message').waitFor({ timeout: 8000 });
+      check('Chrome pas encore pret : un message clair (patientez / etapes a la main), la carte reste', ((await g.page.getByTestId('confirm-install-message').innerText()) || '').length > 20 && (await g.page.getByTestId('confirm-install').count()) === 1);
+      await sleep(800);
+      check('le clic est note : source « commande », appareil Android, resultat « indisponible »', g.clicks.length === 1 && /^commande\|android\|navigateur\|indisponible$/.test(g.clicks[0]), g.clicks);
+      check('aucune erreur (carte application)', g.errs.length === 0, g.errs);
+      await g.ctx.close();
+    }
+    {
+      const g = await guestOrder({}, { initScripts: [FAKE_PROMPT] });
+      await g.page.getByTestId('confirm-install').waitFor({ timeout: 10000 });
+      await g.page.getByText("📲 Installer l'application", { exact: true }).locator('visible=true').first().click();
+      await g.page.getByTestId('confirm-install-done').waitFor({ timeout: 8000 });
+      check('Android avec la boite d\'installation : un toucher l\'ouvre (une seule fois), puis « Application installee »', (await g.page.evaluate(() => window.__fakePromptCalls)) === 1 && /Application installée/.test(await g.page.getByTestId('confirm-install-done').innerText()) && (await g.page.getByTestId('confirm-install').count()) === 0);
+      await sleep(800);
+      check('le clic est note : « commande|android|navigateur|accepte »', g.clicks.includes('commande|android|navigateur|accepte'), g.clicks);
+      await g.page.screenshot({ path: path.join(OUT, '+d-confirmation-installee.png'), fullPage: true });
+      check('aucune erreur (installation acceptee)', g.errs.length === 0, g.errs);
+      await g.ctx.close();
+    }
+    {
+      const g = await guestOrder({}, { storage: { albasse_app_installed: '1' } });
+      await sleep(2500);
+      check('application deja installee : aucune carte d\'installation sur la confirmation', (await g.page.getByTestId('confirm-install').count()) === 0 && (await g.page.getByTestId('confirm-install-done').count()) === 0);
+      await g.ctx.close();
+    }
+    {
+      const iphoneT = { ...devices['iPhone 13'], viewport: { width: 390, height: 800 } };
+      const g = await guestOrder({}, {}, iphoneT);
+      await g.page.getByTestId('confirm-install').waitFor({ timeout: 10000 });
+      check('iPhone : le bouton dit « Voir comment installer »', (await g.page.getByText('📲 Voir comment installer', { exact: true }).count()) >= 1);
+      await g.page.getByText('📲 Voir comment installer', { exact: true }).locator('visible=true').first().click();
+      await g.page.getByText(/Installer Albasse sur iPhone/).first().waitFor({ timeout: 8000 });
+      check('iPhone : le tutoriel video s\'ouvre', true);
+      await sleep(800);
+      check('le clic est note : « commande|iphone|navigateur|ios-guide »', g.clicks.includes('commande|iphone|navigateur|ios-guide'), g.clicks);
+      await g.ctx.close();
+    }
+    {
+      const g = await guestOrder({}, {}, { viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
+      await sleep(2500);
+      check('ordinateur : aucune carte d\'installation (telephone seulement)', (await g.page.getByTestId('confirm-install').count()) === 0);
       await g.ctx.close();
     }
 
@@ -6790,8 +6854,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const cartOf = (qty) => JSON.stringify({ state: { items: [{ id: `${realProduct.id}__nc__ns`, product: realProduct, quantity: qty, color: null, size: null }], updatedAt: Date.now() }, version: 1 });
     // le client est deja connu et salue (conversation et « deja salue » mis dans l'onglet) : ces essais testent la commande, pas l'accueil
     const seedOf = (lg) => ({ albasse_zara_v1: JSON.stringify({ messages: [{ id: 's1', role: 'assistant', text: lg === 'ar' ? 'مرحباً' : 'Bonjour', lang: lg }], step: 'menu', ctx: null, need: null, order: null }), albasse_zara_member: UID });
-    const orderVisitor = (fu, db, { qty = 1, lg = 'fr' } = {}) =>
-      newVisitor(phone, { lang: lg, storage: { 'sb-xtitsmmccpkelxfjyqyh-auth-token': fu.session, 'albasse-cart': cartOf(qty) }, session: seedOf(lg), fakeUser: fu, fakeOrders: db });
+    const orderVisitor = (fu, db, { qty = 1, lg = 'fr', install } = {}) =>
+      newVisitor(phone, { ...(install !== undefined ? { zaraInstall: install } : {}), lang: lg, storage: { 'sb-xtitsmmccpkelxfjyqyh-auth-token': fu.session, 'albasse-cart': cartOf(qty) }, session: seedOf(lg), fakeUser: fu, fakeOrders: db });
     const openOrderChat = async (c) => {
       await c.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
@@ -6930,6 +6994,38 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('recapitulatif sans rendez-vous : aucune ligne « Livraison programmee »', !/Livraison programmée/.test(recap), recap);
       check('aucune erreur (paiement a la livraison)', c.errs.length === 0, c.errs);
       await c.ctx.close();
+    }
+
+    // --- O2d. apres une commande dans le chat : Zara propose l'application (question deja posee sans reponse = elle la repose ; « Plus tard » = jamais)
+    {
+      for (const [install, expected] of [['asked', true], ['dismissed', false]]) {
+        const fu = mkMember('Ahmed Hassan');
+        const db = newDb();
+        const c = await orderVisitor(fu, db, { qty: 1, install });
+        await openOrderChat(c);
+        await ask(c.page, 'je veux commander', /Quelle est votre adresse de livraison/);
+        await typeIn(c.page, 'Farcha, face à la pharmacie');
+        await waitText(c.page, /Dans quelle ville doit-on vous livrer/);
+        await typeIn(c.page, homeCity.name);
+        await waitText(c.page, /Voulez-vous choisir le jour et l’heure/);
+        await typeIn(c.page, 'passer');
+        await waitText(c.page, /Comment souhaitez-vous payer/);
+        await typeIn(c.page, 'je paie à la livraison');
+        await waitText(c.page, /Souhaitez-vous l’emballage cadeau/);
+        await typeIn(c.page, 'non merci');
+        await waitText(c.page, /Récapitulatif de votre commande/);
+        await typeIn(c.page, 'oui');
+        await waitText(c.page, /a bien été enregistrée/);
+        await sleep(3500);
+        const asked = (await panelOf(c.page).getByText(/Avez-vous déjà installé l’application Albasse Shopping/).count()) >= 1;
+        if (expected) {
+          check('apres la commande (question deja posee sans reponse) : Zara repropose l\'application, avec le bouton pour l\'installer', asked && (await chipLabels(c.page)).some((l) => /Voir comment installer|Installer Albasse Shopping/.test(l)), await chipLabels(c.page));
+        } else {
+          check('apres la commande, le client avait repondu « Plus tard » : Zara ne le redemande pas', !asked, await chipLabels(c.page));
+        }
+        check('aucune erreur (commande puis installation)', c.errs.length === 0, c.errs);
+        await c.ctx.close();
+      }
     }
 
     // --- O2b. N'Djamena : le client choisit un rendez-vous de livraison (jour puis heure) dans le chat
