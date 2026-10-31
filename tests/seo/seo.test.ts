@@ -48,6 +48,8 @@ check('Product : type, nom, SKU', ld['@type'] === 'Product' && ld.name === 'Mont
 check('Product : prix en XAF sans décimales', ld.offers.priceCurrency === 'XAF' && ld.offers.price === '11000', ld.offers);
 check('Product : en stock', ld.offers.availability === 'https://schema.org/InStock');
 check('Product : seulement les photos https', JSON.stringify(ld.image) === JSON.stringify(['https://img.example/a.jpg', 'https://img.example/c.jpg']), ld.image);
+check('Product : retours (hasMerchantReturnPolicy) : Tchad, 3 jours (72 h), lien vers « Conditions de retour »', ld.offers.hasMerchantReturnPolicy?.['@type'] === 'MerchantReturnPolicy' && ld.offers.hasMerchantReturnPolicy.applicableCountry === 'TD' && ld.offers.hasMerchantReturnPolicy.merchantReturnDays === 3 && ld.offers.hasMerchantReturnPolicy.returnPolicyCategory === 'https://schema.org/MerchantReturnFiniteReturnWindow' && ld.offers.hasMerchantReturnPolicy.merchantReturnLink === 'https://www.albasseshopping.com/conditions-de-retour', ld.offers.hasMerchantReturnPolicy);
+check('Product : jamais de « retour gratuit » (les frais dépendent du cas) ni de note, avis, marque, code GTIN ou livraison inventés', !('returnFees' in ld.offers.hasMerchantReturnPolicy) && !/aggregateRating|review|brand|gtin|shippingDetails/i.test(JSON.stringify(ld)), JSON.stringify(ld).slice(0, 300));
 check('Product : épuisé quand stock = 0', (seo.productJsonLd({ ...prod, stock: 0 }) as any).offers.availability === 'https://schema.org/OutOfStock');
 check('Product : AUCUNE note ni avis (les avis du site peuvent être de démonstration)', !/aggregateRating|reviewRating|"review"|ratingValue/.test(JSON.stringify(ld)));
 check('Product : adresse de l\'offre = adresse de la fiche', ld.offers.url === 'https://www.albasseshopping.com/produit/montre-keep-moving');
@@ -144,6 +146,7 @@ const ldBlocks = (html: string): any[] => [...html.matchAll(/<script type="appli
     const p = blocks.find((b) => b['@type'] === 'Product');
     const b = blocks.find((x) => x['@type'] === 'BreadcrumbList');
     check('produit : données structurées Product valides', p?.offers?.price === '11000' && p?.offers?.availability === 'https://schema.org/InStock', p?.offers);
+    check('produit : la page envoyée à Google contient la politique de retour (Tchad, 3 jours)', p?.offers?.hasMerchantReturnPolicy?.applicableCountry === 'TD' && p?.offers?.hasMerchantReturnPolicy?.merchantReturnDays === 3, p?.offers?.hasMerchantReturnPolicy);
     check('produit : fil d\'Ariane Accueil › Montres › produit', b?.itemListElement?.map((i: any) => i.name).join(' > ') === 'Accueil > Montres > Montre KEEP MOVING', b);
     check('produit : pas de noindex', !/noindex/.test(html));
   }

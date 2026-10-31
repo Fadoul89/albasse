@@ -1,6 +1,6 @@
 // Référencement (SEO) : textes de page, données structurées (JSON-LD), pages vues par Google, plan du site et robots.txt.
 // Aucun réseau, aucune base : tout est testable (tests/seo/seo.test.ts). Utilisé par og-preview.ts et sitemap.ts (fonctions Netlify).
-// Règles : on n'écrit que des faits connus (nom, catégorie, prix, stock). Jamais de note ni d'avis dans les données structurées
+// Règles : on n'écrit que des faits connus (nom, catégorie, prix, stock, conditions de retour). Jamais de note ni d'avis dans les données structurées
 // (les avis du site peuvent être de démonstration : Google interdit les faux avis).
 
 export const SITE_URL = 'https://www.albasseshopping.com';
@@ -132,6 +132,19 @@ export function websiteJsonLd(): Record<string, unknown> {
   };
 }
 
+// Retours : seulement ce que dit la page « Conditions de retour » : un article incorrect ou défectueux se signale dans les 72 heures (3 jours) après la
+// réception. Les échanges de taille n'ont pas de délai écrit : on n'en dit rien. Pas de « retour gratuit » (les frais dépendent du cas).
+export const RETURN_WINDOW_DAYS = 3;
+export function returnPolicyJsonLd(): Record<string, unknown> {
+  return {
+    '@type': 'MerchantReturnPolicy',
+    applicableCountry: 'TD',
+    returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow',
+    merchantReturnDays: RETURN_WINDOW_DAYS,
+    merchantReturnLink: `${SITE_URL}/conditions-de-retour`,
+  };
+}
+
 export function productJsonLd(p: SeoProduct, category?: SeoCategory | null): Record<string, unknown> {
   const images = (p.images ?? []).filter((i) => typeof i === 'string' && i.startsWith('https://')).slice(0, 5);
   const inStock = Number(p.stock ?? 0) > 0;
@@ -151,6 +164,7 @@ export function productJsonLd(p: SeoProduct, category?: SeoCategory | null): Rec
       availability: inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
       itemCondition: 'https://schema.org/NewCondition',
       seller: { '@type': 'Organization', name: SITE_NAME },
+      hasMerchantReturnPolicy: returnPolicyJsonLd(),
     },
   };
 }
