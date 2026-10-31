@@ -30,18 +30,20 @@ export function AdminBrowsingScreen() {
   const [result, setResult] = useState<BrowsingOverviewResult | null>(null);
   const latest = useRef(0);
 
-  const load = useCallback(async (p: StatsPeriod) => {
+  // la liste « Détail » est demandée à la base pour le niveau choisi (Élevé, Moyen, Léger) : sinon on ne verrait que les 300 regards les plus
+  // récents, et les tuiles (« Intérêt élevé : 141 ») ne correspondraient pas à la liste (5 lignes)
+  const load = useCallback(async (p: StatsPeriod, f: InterestFilter) => {
     const mine = ++latest.current;
     setLoading(true);
-    const next = await fetchBrowsingOverview(p);
+    const next = await fetchBrowsingOverview(p, f === 'all' ? undefined : f);
     if (mine !== latest.current) return; // une demande plus récente est partie entre-temps
     setResult(next);
     setLoading(false);
   }, []);
 
   useEffect(() => {
-    if (profile?.is_admin) void load(period);
-  }, [period, profile?.is_admin, load]);
+    if (profile?.is_admin) void load(period, filter);
+  }, [period, filter, profile?.is_admin, load]);
 
   if (!profile?.is_admin) {
     return (
@@ -57,7 +59,7 @@ export function AdminBrowsingScreen() {
       <ScreenHeader title="Suivi de navigation" showBack />
       <ScrollView
         contentContainerStyle={{ padding: spacing.md, paddingBottom: 60 }}
-        refreshControl={<RefreshControl refreshing={loading} onRefresh={() => load(period)} tintColor={colors.gold} />}
+        refreshControl={<RefreshControl refreshing={loading} onRefresh={() => load(period, filter)} tintColor={colors.gold} />}
       >
         <Text style={styles.note}>
           🔎 Les articles que les visiteurs regardent sur le site, pour que Zara les conseille mieux. Les visiteurs sont anonymes (V-xxxxxx) ; un
@@ -74,8 +76,8 @@ export function AdminBrowsingScreen() {
         </View>
 
         {loading && !result ? <Text style={styles.loading}>Chargement…</Text> : null}
-        {result && !result.ok ? <Problem reason={result.reason} message={result.message} onRetry={() => load(period)} /> : null}
-        {result && result.ok ? <Board overview={result.overview} filter={filter} setFilter={setFilter} dimmed={loading} /> : null}
+        {result && !result.ok ? <Problem reason={result.reason} message={result.message} onRetry={() => load(period, filter)} /> : null}
+        {result && result.ok ? <Board overview={result.overview} limit={result.limit} filter={filter} setFilter={setFilter} dimmed={loading} /> : null}
       </ScrollView>
     </View>
   );
@@ -110,7 +112,7 @@ function Problem({ reason, message, onRetry }: { reason: 'not_installed' | 'forb
   );
 }
 
-function Board({ overview, filter, setFilter, dimmed }: { overview: BrowsingOverview; filter: InterestFilter; setFilter: (f: InterestFilter) => void; dimmed: boolean }) {
+function Board({ overview, limit, filter, setFilter, dimmed }: { overview: BrowsingOverview; limit: number; filter: InterestFilter; setFilter: (f: InterestFilter) => void; dimmed: boolean }) {
   const rows = filterRows(overview.rows, filter);
   const { levels, totals } = overview;
   return (
@@ -195,7 +197,11 @@ function Board({ overview, filter, setFilter, dimmed }: { overview: BrowsingOver
       ) : (
         rows.map((r, i) => <RowCard key={`${r.visitorRef}-${r.productId}-${i}`} row={r} index={i} />)
       )}
-      {overview.rows.length >= 300 ? <Text style={styles.footnote}>Les 300 lignes les plus récentes sont affichées.</Text> : null}
+      {overview.rows.length >= limit ? (
+        <Text style={styles.footnote} testID="browsing-rows-limit">
+          {`Les ${limit} lignes les plus récentes sont affichées.`}
+        </Text>
+      ) : null}
 
       <Text style={styles.footnote}>
         Comment lire : le temps est le temps ACTIF (écran allumé, onglet ouvert, le client touche l'écran) ; un client qui laisse la page ouverte ne
