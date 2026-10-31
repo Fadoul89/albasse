@@ -352,6 +352,8 @@ export interface StoreSettings {
   zara_ads_delay_seconds?: number;
   // Vente flash automatique de Zara (24 h) et son dernier choix ; absents tant que add-zara-promotions.sql n'est pas lancé : éteinte
   zara_auto_flash_enabled?: boolean;
+  // notification automatique des nouveaux articles (add-push-new-products-switch.sql) : éteinte par défaut
+  push_new_products_enabled?: boolean;
   zara_auto_flash_last?: { at: string; count: number; names?: string[]; note?: string } | null;
   // ligne facultative en bas des factures (NIF, RCCM…) ; absente tant que add-order-numbers-invoices.sql n'est pas lancé
   invoice_legal_line?: string | null;

@@ -8,7 +8,7 @@ Cela dérange les clients.
 
 ## Ce que fait le gardien (`add-push-gate.sql`)
 
-Les notifications **automatiques** (nouvel article, vente flash) attendent dans une file (`push_outbox`). Un gardien passe chaque minute et en
+Les notifications **automatiques** (vente flash, et nouvel article si l'interrupteur ci-dessous est rallumé) attendent dans une file (`push_outbox`). Un gardien passe chaque minute et en
 envoie **une seule** quand tout est vrai :
 
 | Règle | Réglage (par défaut) |
@@ -29,7 +29,19 @@ envoie **une seule** quand tout est vrai :
   maintenant » les envoie dès que l'écart est respecté. Une programmée pour un article épuisé est abandonnée.
 - La cloche des clients (liste des notifications) reçoit la notification au moment où elle part, comme avant.
 
-## Interrupteur
+## Notifications de nouveaux articles : ÉTEINTES par défaut
+
+Avant, chaque article publié envoyait tout de suite une notification à tous les téléphones (la case « notify_on_publish » est cochée par défaut et
+n'apparaît pas dans le formulaire article). Maintenant, **publier un article n'envoie rien** tant que l'interrupteur
+« 🛍️ Notification automatique des nouveaux articles » (page **Promotions intelligentes**, dans la section des notifications programmées) est éteint.
+
+- Pour les rallumer plus tard : touchez l'interrupteur, ou `update store_settings set push_new_products_enabled = true where id = 1;`.
+- Rallumés, les nouveaux articles passent par le gardien (une seule notification à la fois, aux bonnes heures, regroupées).
+- Éteints, rien n'est envoyé ni mis dans la cloche des clients ; une annonce « nouvel article » restée en attente dans la file est abandonnée.
+- Script : `add-push-new-products-switch.sql` (marche **seul**, sans le gardien, et dans n'importe quel ordre avec `add-push-gate.sql`, qui contient la même fonction).
+- Les ventes flash et les notifications programmées par l'administrateur ne dépendent pas de cet interrupteur.
+
+## Interrupteur du gardien
 
 `update store_settings set push_gate_enabled = false where id = 1;` : le gardien s'éteint et envoie d'un coup tout ce qui attend, puis tout
 repart tout de suite comme avant. Pour le rallumer : `= true`. Les autres réglages se changent de la même façon (`update store_settings set push_max_per_day = 3 where id = 1;`).
@@ -42,5 +54,6 @@ select kind, status, title, note, created_at at time zone 'Africa/Ndjamena' as c
 
 ## Tests
 
-`sh tests/sql/run-push-gate.sh` (Postgres local jetable, jamais la vraie base) : ~60 contrôles (horaires, écart, plafond, regroupement,
-programmées, interrupteur, droits d'accès).
+`sh tests/sql/run-push-gate.sh` (Postgres local jetable, jamais la vraie base) : 68 contrôles (horaires, écart, plafond, regroupement,
+programmées, interrupteurs, droits d'accès). `sh tests/sql/run-push-new-switch.sh` : l'interrupteur « nouveaux articles » seul, puis avec le gardien
+dans les deux ordres d'installation. Navigateur : partie `I` de `tests/zara/zara-ui.test.js`.

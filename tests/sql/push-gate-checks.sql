@@ -29,6 +29,7 @@ create function t.pending(k text) returns bigint language sql as $$ select count
 -- 0. le script a créé ce qu'il fallait
 select t.ok('réglages ajoutés : gardien actif, écart 3 h, 2 par jour, de 9 h à 20 h',
   (select push_gate_enabled and push_min_gap_minutes = 180 and push_max_per_day = 2 and push_window_start = 9 and push_window_end = 20 from public.store_settings where id = 1));
+select t.ok('nouveaux articles : interrupteur ÉTEINT par défaut', (select push_new_products_enabled = false from public.store_settings where id = 1));
 select t.ok('file d''attente créée, sécurité par ligne activée', (select relrowsecurity from pg_class where relname = 'push_outbox'));
 select t.ok('une seule planification : « albasse-push-gate » chaque minute (l''ancienne est partie, l''autre tâche est intacte)',
   (select count(*) from cron.job) = 2
@@ -39,6 +40,10 @@ select t.ok('l''ancien nom run_scheduled_pushes() appelle le gardien', (select p
 
 -- 1. les produits ; les 3 abonnés aux notifications
 insert into public.web_push_subscriptions select from generate_series(1, 3);
+-- interrupteur « nouveaux articles » éteint : publier ne fait rien (ni file, ni notification)
+insert into public.products(id, name, price, stock, is_active, notify_on_publish) values (t.pid(99), 'Article sans notification', 1000, 5, true, true);
+select t.ok('interrupteur éteint : publier un article n''envoie rien et ne met rien en attente', t.pending('new') = 0 and t.notifs() = 0 and t.pushes() = 0);
+update public.store_settings set push_new_products_enabled = true where id = 1;
 insert into public.products(id, name, price, stock, is_active, notify_on_publish) values
   (t.pid(1), 'Montre A', 15000, 5, true, true),   -- « nouvel article » : va dans la file
   (t.pid(2), 'Montre B', 20000, 5, true, false),
@@ -161,6 +166,22 @@ select t.stamp('2026-11-11 08:00');
 select t.ok('fenêtre invalide (début = fin) : retour à 9 h–20 h, il part à 12 h 00 (bonne heure, 60 min passées)', public.run_push_gate(t.at('2026-11-11 12:00')) = 1);
 update public.store_settings set push_window_start = 9, push_window_end = 20, push_min_gap_minutes = 180, push_max_per_day = 2 where id = 1;
 
+-- 7 bis. on éteint l'interrupteur « nouveaux articles » alors qu'une annonce attend : elle ne partira jamais
+insert into public.products(id, name, price, stock, is_active, notify_on_publish) values (t.pid(17), 'Montre Q', 35000, 5, true, true);
+select t.stamp('2026-11-12 08:00');
+select t.ok('une annonce « nouvel article » attend', t.pending('new') = 1);
+update public.store_settings set push_new_products_enabled = false where id = 1;
+select t.ok('interrupteur éteint : le gardien n''envoie rien', public.run_push_gate(t.at('2026-11-12 11:00')) = 0);
+select t.ok('… et l''annonce est abandonnée (« nouveaux articles désactivés »)', (select status || ':' || note from public.push_outbox where product_id = t.pid(17)) = 'expired:nouveaux articles désactivés');
+insert into public.products(id, name, price, stock, is_active, notify_on_publish) values (t.pid(18), 'Montre R', 36000, 5, true, true);
+select t.ok('éteint : un nouvel article publié ne crée rien', (select count(*) from public.push_outbox where product_id = t.pid(18)) = 0);
+update public.store_settings set push_new_products_enabled = true where id = 1;
+insert into public.products(id, name, price, stock, is_active, notify_on_publish) values (t.pid(19), 'Montre S', 37000, 5, true, false);
+select t.ok('rallumé, mais « notify_on_publish » faux pour cet article : rien', (select count(*) from public.push_outbox where product_id = t.pid(19)) = 0);
+insert into public.products(id, name, price, stock, is_active, notify_on_publish) values (t.pid(20), 'Montre T', 38000, 5, true, true);
+select t.ok('rallumé : le nouvel article attend de nouveau dans la file', (select count(*) from public.push_outbox where product_id = t.pid(20) and status = 'pending') = 1);
+select t.stamp('2026-11-12 08:00');
+
 -- 8. gardien éteint : comme avant
 update public.store_settings set push_gate_enabled = false where id = 1;
 insert into public.products(id, name, price, stock, is_active, notify_on_publish) values (t.pid(14), 'Montre N', 32000, 5, true, true);
@@ -170,8 +191,8 @@ select t.ok('gardien éteint : le nouvel article part tout de suite, rien dans l
 update public.store_settings set push_gate_enabled = true where id = 1;
 insert into public.products(id, name, price, stock, is_active, notify_on_publish) values (t.pid(15), 'Montre O', 33000, 5, true, true), (t.pid(16), 'Montre P', 34000, 5, true, true);
 update public.store_settings set push_gate_enabled = false where id = 1;
-select t.ok('on éteint le gardien avec 2 annonces en attente : elles partent, une par une, comme avant', public.run_push_gate(t.at('2026-11-12 03:00')) = 2);
-select t.ok('… marquées « envoyée sans gardien »', (select count(*) from public.push_outbox where note = 'envoyée sans gardien') = 2);
+select t.ok('on éteint le gardien avec 3 annonces en attente (Montre T, O et P) : elles partent, une par une, comme avant', public.run_push_gate(t.at('2026-11-12 03:00')) = 3);
+select t.ok('… marquées « envoyée sans gardien »', (select count(*) from public.push_outbox where note = 'envoyée sans gardien') = 3);
 update public.store_settings set push_gate_enabled = true where id = 1;
 
 -- 9. droits d'accès

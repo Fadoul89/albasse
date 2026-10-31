@@ -17,6 +17,9 @@
 -- Les notifications PROGRAMMÉES par l'administrateur (page « Promotions intelligentes ») gardent l'heure qu'il a choisie (pas de fenêtre ni de
 -- plafond), mais respectent l'écart minimum : jamais deux en même temps. Elles passent avant les automatiques.
 --
+-- Les notifications de NOUVEAUX ARTICLES sont éteintes par défaut (store_settings.push_new_products_enabled = false, voir aussi
+-- add-push-new-products-switch.sql) : publier un article n'envoie rien tant que le patron ne rallume pas cet interrupteur.
+--
 -- Interrupteur et réglages : store_settings.push_gate_enabled (true = gardien actif ; false = comme avant, tout part tout de suite),
 -- push_min_gap_minutes, push_max_per_day, push_window_start, push_window_end.
 -- À lancer après add-scheduled-push.sql et add-push-clicks.sql. Sans danger à relancer.
@@ -29,6 +32,7 @@ alter table public.store_settings add column if not exists push_min_gap_minutes 
 alter table public.store_settings add column if not exists push_max_per_day integer not null default 2;
 alter table public.store_settings add column if not exists push_window_start integer not null default 9;
 alter table public.store_settings add column if not exists push_window_end integer not null default 20;
+alter table public.store_settings add column if not exists push_new_products_enabled boolean not null default false;
 
 -- 2. La file d'attente (lecture réservée aux administrateurs ; l'écriture se fait par les fonctions ci-dessous)
 create table if not exists public.push_outbox (
@@ -82,9 +86,19 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  new_on boolean;
 begin
   if new.notify_on_publish then
-    perform public.push_enqueue(new.id, 'new', '🛍️ Nouveau produit disponible', new.name || ' — ' || new.price || ' FCFA');
+    select push_new_products_enabled into new_on from store_settings where id = 1;
+    if coalesce(new_on, false) then
+      if to_regprocedure('public.push_enqueue(uuid,text,text,text)') is not null then
+        perform public.push_enqueue(new.id, 'new', '🛍️ Nouveau produit disponible', new.name || ' — ' || new.price || ' FCFA');
+      else
+        insert into product_notifications (product_id, title, message)
+        values (new.id, '🛍️ Nouveau produit disponible', new.name || ' — ' || new.price || ' FCFA');
+      end if;
+    end if;
   end if;
   return new;
 end;
@@ -138,6 +152,7 @@ set search_path = public
 as $$
 declare
   gate_on boolean;
+  new_on boolean;
   gap_min integer;
   per_day integer;
   w_start integer;
@@ -159,9 +174,10 @@ begin
     return 0;
   end if;
 
-  select push_gate_enabled, push_min_gap_minutes, push_max_per_day, push_window_start, push_window_end
-    into gate_on, gap_min, per_day, w_start, w_end from store_settings where id = 1;
+  select push_gate_enabled, push_min_gap_minutes, push_max_per_day, push_window_start, push_window_end, push_new_products_enabled
+    into gate_on, gap_min, per_day, w_start, w_end, new_on from store_settings where id = 1;
   gate_on := coalesce(gate_on, true);
+  new_on := coalesce(new_on, false);
   gap_min := coalesce(gap_min, 180);
   per_day := coalesce(per_day, 2);
   w_start := coalesce(w_start, 9);
@@ -169,6 +185,11 @@ begin
   if w_end <= w_start then w_start := 9; w_end := 20; end if;
 
   select count(*) into subs from web_push_subscriptions;
+
+  -- Interrupteur « nouveaux articles » éteint : ceux qui attendaient encore dans la file ne partiront jamais
+  if not new_on then
+    update push_outbox set status = 'expired', note = 'nouveaux articles désactivés' where status = 'pending' and kind = 'new';
+  end if;
 
   -- Gardien éteint : comme avant, tout ce qui attend part tout de suite (une ligne = une notification)
   if not gate_on then
