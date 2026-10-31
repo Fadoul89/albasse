@@ -4847,7 +4847,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   }
 
   if (PARTS.includes('=')) {
-    console.log("\n== = photos protegees : pas de menu « Enregistrer l'image » (clic droit, appui long) ni de glisser-deposer sur les images ; les textes restent normaux");
+    console.log("\n== = photos des articles protegees : pas de menu « Enregistrer l'image » (clic droit, appui long) ni de glisser-deposer ; le reste du site reste normal");
     const prodP = (await get('products?select=slug,name&is_active=eq.true&stock=gt.0&order=created_at.desc&limit=1'))[0];
     const v = await newVisitor(phone, {});
     await v.page.goto(`${BASE}/produit/${prodP.slug}`, { waitUntil: 'load' });
@@ -4862,21 +4862,48 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         el.dispatchEvent(ev);
         return ev.defaultPrevented;
       }, { selector, type });
-    const nImg = await v.page.locator('img').count();
-    check('la fiche article affiche des photos (images <img>)', nImg > 0, nImg);
-    check('clic droit / appui long sur une photo : menu bloque', (await blocked('img', 'contextmenu')) === true);
-    check('glisser une photo : bloque', (await blocked('img', 'dragstart')) === true);
+    const ART = 'img[src*="/public/product-images/"]';
+    const OTHER = 'img:not([src*="/public/product-images/"])';
+    const nArt = await v.page.locator(ART).count();
+    const nOther = await v.page.locator(OTHER).count();
+    check('la fiche article affiche des photos d\'articles (rangees dans product-images)', nArt > 0, { nArt, nOther });
+    check('clic droit / appui long sur une photo d\'article : menu bloque', (await blocked(ART, 'contextmenu')) === true);
+    check('glisser une photo d\'article : bloque', (await blocked(ART, 'dragstart')) === true);
+    check('les photos d\'articles ne sont plus « glissables » (CSS : -webkit-user-drag et -webkit-touch-callout)', await v.page.evaluate((sel) => {
+      const cs = getComputedStyle(document.querySelector(sel));
+      return cs.getPropertyValue('-webkit-touch-callout') === 'none' || cs.getPropertyValue('-webkit-user-drag') === 'none';
+    }, ART));
+    if (nOther > 0) {
+      check('les autres images du site (logo, Zara, profil...) ne sont PAS bloquees : menu possible', (await blocked(OTHER, 'contextmenu')) === false && (await blocked(OTHER, 'dragstart')) === false);
+    } else {
+      check('(pas d\'autre image sur cette page : rien a verifier)', true);
+    }
     check('clic droit sur du texte : le menu du navigateur reste possible (copier, coller)', (await v.page.evaluate(() => {
       const el = [...document.querySelectorAll('div,span')].find((e) => e.children.length === 0 && /Commander/.test(e.textContent || ''));
       const ev = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
       el.dispatchEvent(ev);
       return ev.defaultPrevented;
     })) === false);
-    check('les photos ne sont plus « glissables » (CSS : -webkit-user-drag et -webkit-touch-callout)', await v.page.evaluate(() => {
-      const el = document.querySelector('img');
-      const cs = getComputedStyle(el);
-      return cs.getPropertyValue('-webkit-touch-callout') === 'none' || cs.getPropertyValue('-webkit-user-drag') === 'none';
-    }));
+    // toutes les photos d'articles de l'accueil et d'une categorie (balises <img> ET images de fond) : le menu est bloque sur chacune
+    const catP = (await get('categories?select=slug&limit=1'))[0];
+    for (const [label, url] of [['accueil', `${BASE}/`], ['categorie', `${BASE}/categorie/${catP.slug}`]]) {
+      await v.page.goto(url, { waitUntil: 'load' });
+      await sleep(4500);
+      const res = await v.page.evaluate(() => {
+        const RE = /\/public\/product-images\//;
+        const all = [...document.querySelectorAll('*')].filter((e) => {
+          const bg = getComputedStyle(e).backgroundImage || '';
+          return (e.tagName === 'IMG' && RE.test(e.currentSrc || e.src || '')) || RE.test(bg);
+        });
+        const open = all.filter((e) => {
+          const ev = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+          e.dispatchEvent(ev);
+          return !ev.defaultPrevented;
+        });
+        return { total: all.length, ouvertes: open.length };
+      });
+      check(`${label} : ${res.total} photo(s) d'articles trouvee(s), aucune ne laisse ouvrir le menu « Enregistrer »`, res.total > 0 && res.ouvertes === 0, res);
+    }
     await v.page.screenshot({ path: path.join(OUT, '=a-photos-protegees.png') });
     check('aucune erreur (photos protegees)', v.errs.length === 0, v.errs);
     await v.ctx.close();

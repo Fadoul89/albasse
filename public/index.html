@@ -38,9 +38,10 @@
         flex: 1;
       }
     </style>
-    <!-- Photos protégées : pas d'aperçu / glisser-déposer / menu « Enregistrer l'image » sur les images du site (les textes restent sélectionnables). -->
+    <!-- Photos des articles protégées : pas d'aperçu / glisser-déposer / menu « Enregistrer l'image » (seulement les photos rangées dans « product-images » :
+         articles, catégories, pubs des côtés ; pas les photos de profil, le logo, Zara…). Les textes restent sélectionnables. -->
     <style id="photo-protection">
-      img, picture, video {
+      img[src*="/public/product-images/"] {
         -webkit-touch-callout: none;
         -webkit-user-drag: none;
         user-drag: none;
@@ -56,18 +57,20 @@
     <!-- The root element for your Expo app. -->
     <div id="root"></div>
     <script>
-      // Photos protégées : ni clic droit ni appui long (menu « Enregistrer l'image », « Rechercher avec Google Lens »), ni glisser-déposer sur les
-      // images du site. Cela décourage la copie ; une capture d'écran reste toujours possible. Google voit toujours les images (aucun effet sur le référencement).
+      // Photos des articles protégées : ni clic droit ni appui long (menu « Enregistrer l'image », « Rechercher avec Google Lens »), ni glisser-déposer.
+      // Seulement les photos rangées dans « product-images » (articles, catégories, pubs des côtés). Cela décourage la copie ; une capture d'écran reste
+      // toujours possible. Google voit toujours les images (aucun effet sur le référencement).
       (function () {
-        function isPhoto(t) {
-          if (!t || !t.closest) return false;
-          if (t.closest('img, picture, video')) return true;
-          // image de fond d'un bloc (photos affichées par le site en « background-image ») : seulement l'élément touché lui-même
-          var bg = t.nodeType === 1 ? window.getComputedStyle(t).backgroundImage : '';
-          return !!bg && bg.indexOf('url(') !== -1;
+        var ARTICLE_PHOTO = /\/public\/product-images\//;
+        function isArticlePhoto(t) {
+          if (!t || t.nodeType !== 1) return false;
+          var img = t.closest ? t.closest('img') : null;
+          if (img && ARTICLE_PHOTO.test(img.currentSrc || img.src || '')) return true;
+          // photo affichée en « background-image » : seulement l'élément touché lui-même
+          return ARTICLE_PHOTO.test(window.getComputedStyle(t).backgroundImage || '');
         }
-        document.addEventListener('contextmenu', function (e) { if (isPhoto(e.target)) e.preventDefault(); }, true);
-        document.addEventListener('dragstart', function (e) { if (isPhoto(e.target)) e.preventDefault(); }, true);
+        document.addEventListener('contextmenu', function (e) { if (isArticlePhoto(e.target)) e.preventDefault(); }, true);
+        document.addEventListener('dragstart', function (e) { if (isArticlePhoto(e.target)) e.preventDefault(); }, true);
       })();
     </script>
     <script>
