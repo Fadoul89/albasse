@@ -65,7 +65,7 @@ export function OrderConfirmationScreen({ route }: Props) {
                 {newAccount.password}
               </Text>
             </Text>
-            <Text style={styles.accountHint}>📸 Faites une capture d’écran pour le garder. Vous pourrez le changer dans « Compte ».</Text>
+            <Text style={styles.accountHint}>📸 Faites une capture d’écran pour le garder. Vous pourrez le changer dans « Compte » › « Changer mon mot de passe ». Perdu ? Écrivez-nous sur WhatsApp, nous vous en donnons un nouveau.</Text>
           </View>
         ) : null}
 

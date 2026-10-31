@@ -67,8 +67,8 @@ export function ForgotPasswordScreen() {
         {phoneHelp ? (
           <View testID="forgot-phone-help">
             <Text style={styles.info}>
-              Votre compte a été créé avec votre numéro de téléphone. Écrivez-nous sur WhatsApp : notre équipe vous aide à
-              choisir un nouveau mot de passe.
+              Votre compte a été créé avec votre numéro de téléphone. Écrivez-nous sur WhatsApp : notre équipe vous donne
+              un nouveau code. Vous pourrez ensuite le changer dans « Compte » › « Changer mon mot de passe ».
             </Text>
             <GoldButton label="💬 Écrire sur WhatsApp" onPress={askOnWhatsApp} style={{ marginTop: spacing.md }} />
           </View>

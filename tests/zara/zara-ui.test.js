@@ -16,7 +16,7 @@ const port = process.argv[3] || '4333';
 // BASE_URL=https://www.albasseshopping.com : teste le VRAI site en ligne (les commandes et comptes restent simules, rien n'est enregistre)
 const BASE = (process.env.BASE_URL || `http://localhost:${port}`).replace(/\/$/, '');
 const BASE_HOST = new URL(BASE).hostname;
-const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI0123456789TOFBCDE+=^').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI0123456789TOFBCDE+=^~').toUpperCase();
 // saison fraiche (blousons et manteaux) : le bouton du menu de Zara n'existe que jusqu'au 31 decembre 2026 a 23h59 (N'Djamena)
 const COLD_ON = Date.now() < Date.parse('2027-01-01T00:00:00+01:00');
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
@@ -384,7 +384,14 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
           const reply = fakeStats.replies[Math.min(statsCalls.length - 1, fakeStats.replies.length - 1)];
           return json(route, reply.body, reply.status || 200);
         }
-        if (fakeUser && u.pathname === '/auth/v1/user') return json(route, fakeUser.auth);
+        if (fakeUser && u.pathname === '/auth/v1/user') {
+          // changement du mot de passe par le client connecte : passwordChanges = ce que Supabase aurait recu ; passwordError = { status, body } pour le refuser
+          if (m === 'PUT') {
+            (fakeUser.passwordChanges = fakeUser.passwordChanges || []).push(JSON.parse(req.postData() || '{}'));
+            if (fakeUser.passwordError) return json(route, fakeUser.passwordError.body, fakeUser.passwordError.status || 422);
+          }
+          return json(route, fakeUser.auth);
+        }
         if (fakeUser && fakeUser.token && u.pathname === '/auth/v1/token' && m === 'POST') {
           (fakeUser.tokenCalls = fakeUser.tokenCalls || []).push({ grant: u.searchParams.get('grant_type'), ...JSON.parse(req.postData() || '{}') });
           if (fakeUser.loginError && u.searchParams.get('grant_type') === 'password') return json(route, { code: 400, error_code: 'invalid_credentials', msg: 'Invalid login credentials' }, 400);
@@ -8287,6 +8294,215 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('ordinateur : la fenetre reste ouverte quand on ouvre un produit', (await d.page.getByText('Assistante marketing', { exact: true }).count()) === 1 && d.page.url().includes('/produit/'));
       check('aucune erreur (ordinateur)', d.errs.length === 0, d.errs);
       await d.ctx.close();
+    }
+  }
+
+  // =============================================== ~ RETROUVER SON COMPTE : MOT DE PASSE CHANGE PAR LE CLIENT, NOUVEAU CODE DONNE PAR L'ADMIN ===============================================
+  if (PARTS.includes('~')) {
+    console.log('\n== ~ Retrouver son compte : « Changer mon mot de passe » dans Compte, « Donner un nouveau code » dans Admin › Clients (fausse base)');
+    const SKT = 'sb-xtitsmmccpkelxfjyqyh-auth-token';
+    const HDRT = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+    const jsonT = (route, body, status = 200) => route.fulfill({ status, headers: { 'content-type': 'application/json', ...HDRT }, body: JSON.stringify(body) });
+    const mkUser = (uid, jwt, email, profile) => {
+      const auth = { id: uid, aud: 'authenticated', role: 'authenticated', email, app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' };
+      const token = { access_token: jwt, refresh_token: 'fake-refresh', token_type: 'bearer', expires_in: 3600, expires_at: 4102444800, user: auth };
+      return { auth, token, session: JSON.stringify(token), editable: true, patches: [], profile: { id: uid, email, full_name: 'Ahmed Hassan', phone: '66123456', whatsapp_number: null, profession: null, region: null, country: 'Tchad', address: null, loyalty_points: 0, banned: false, role: 'customer', is_admin: false, is_affiliate: false, created_at: '2026-10-20T10:00:00Z', last_login_at: '2026-10-30T10:00:00Z', ...profile } };
+    };
+    const JWT_CLIENT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMTExMTExMS0xMTExLTQxMTEtODExMS0xMTExMTExMTExMTEiLCJleHAiOjQxMDI0NDQ4MDAsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.c2ln';
+    const JWT_ADMIN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2NjY2NjY2Ni02NjY2LTQ2NjYtODY2Ni02NjY2NjY2NjY2NjYiLCJleHAiOjQxMDI0NDQ4MDAsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.c2ln';
+    const clientUser = (opts = {}) => ({ ...mkUser('11111111-1111-4111-8111-111111111111', JWT_CLIENT, 'test@example.com', {}), ...opts });
+    const adminUser = () => mkUser('66666666-6666-4666-8666-666666666666', JWT_ADMIN, 'admin@example.com', { id: '66666666-6666-4666-8666-666666666666', full_name: 'Admin Albasse', role: 'admin', is_admin: true });
+
+    // ---------- 1. le client connecte change son mot de passe dans « Compte »
+    const openAccountT = async (fu) => {
+      const c = await newVisitor(phone, { lang: 'fr', storage: { [SKT]: fu.session }, fakeUser: fu });
+      await c.page.goto(`${BASE}/compte`, { waitUntil: 'load' });
+      await c.page.getByTestId('password-change-open').waitFor({ timeout: 25000 });
+      return c;
+    };
+    const errOf = (c) => c.page.getByTestId('password-error');
+    const saveT = (c) => c.page.getByText('Enregistrer le mot de passe', { exact: true }).click();
+    const fillT = async (c, a, b) => {
+      await c.page.getByTestId('password-input-new').fill(a);
+      await c.page.getByTestId('password-input-confirm').fill(b);
+    };
+    {
+      const fu = clientUser();
+      const c = await openAccountT(fu);
+      check('page Compte : « Changer mon mot de passe » est proposé, la carte est fermée', (await c.page.getByText('Changer mon mot de passe', { exact: true }).count()) === 1 && (await c.page.getByTestId('password-card').count()) === 0);
+      await c.page.getByTestId('password-change-open').click();
+      await c.page.getByTestId('password-card').waitFor({ timeout: 10000 });
+      check('la carte s\'ouvre avec deux cases vides (nouveau mot de passe, encore une fois)', (await c.page.getByTestId('password-input-new').inputValue()) === '' && (await c.page.getByTestId('password-input-confirm').inputValue()) === '');
+      check('les cases cachent le mot de passe (points)', (await c.page.getByTestId('password-input-new').getAttribute('type')) === 'password');
+      await c.page.getByText('Annuler', { exact: true }).scrollIntoViewIfNeeded().catch(() => {}); // la carte entiere dans l'image (au-dessus de la barre du bas)
+      await fillT(c, '730591', '730591');
+      await c.page.getByTestId('password-show').click();
+      await c.page.screenshot({ path: path.join(OUT, '~1-compte-mot-de-passe.png') });
+      await c.page.getByTestId('password-show').click();
+      await fillT(c, '', '');
+
+      await saveT(c);
+      await errOf(c).waitFor({ timeout: 5000 });
+      check('cases vides : « au moins 6 caractères », rien envoyé à Supabase', /au moins 6/.test(await errOf(c).innerText()) && !(fu.passwordChanges || []).length);
+      await fillT(c, '48291', '48291');
+      await saveT(c);
+      await sleep(400);
+      check('5 caractères : refusé, rien envoyé', /au moins 6/.test(await errOf(c).innerText()) && !(fu.passwordChanges || []).length);
+      await fillT(c, '730591', '730592');
+      await sleep(300);
+      check('le message disparait des que le client retape', (await errOf(c).count()) === 0);
+      await saveT(c);
+      await errOf(c).waitFor({ timeout: 5000 });
+      check('deux saisies différentes : « ne correspondent pas », rien envoyé', /ne correspondent pas/.test(await errOf(c).innerText()) && !(fu.passwordChanges || []).length);
+
+      await c.page.getByTestId('password-show').click();
+      check('« Voir les mots de passe » : les cases montrent le texte (plus de points)', (await c.page.getByTestId('password-input-new').getAttribute('type')) !== 'password' && (await c.page.getByTestId('password-input-confirm').getAttribute('type')) !== 'password' && (await c.page.getByText('Cacher les mots de passe').count()) === 1);
+      await fillT(c, '730591', '730591');
+      await saveT(c);
+      await c.page.getByText('Mot de passe changé ✓').waitFor({ timeout: 10000 });
+      check('bon mot de passe : UNE demande à Supabase, avec exactement ce mot de passe', (fu.passwordChanges || []).length === 1 && fu.passwordChanges[0].password === '730591', fu.passwordChanges);
+      check('la carte se ferme, le menu revient, le client reste connecté', (await c.page.getByTestId('password-card').count()) === 0 && (await c.page.getByTestId('password-change-open').count()) === 1 && (await c.page.getByText('Se déconnecter').count()) === 1);
+      check('aucune erreur (changement du mot de passe)', c.errs.length === 0, c.errs);
+      await c.ctx.close();
+    }
+    {
+      // Supabase refuse (même mot de passe que l'ancien) : phrase simple, la carte reste ouverte pour réessayer
+      const fu = clientUser({ passwordError: { status: 422, body: { code: 422, error_code: 'same_password', msg: 'New password should be different from the old password.' } } });
+      const c = await openAccountT(fu);
+      await c.page.getByTestId('password-change-open').click();
+      await fillT(c, '482915', '482915');
+      await saveT(c);
+      await errOf(c).waitFor({ timeout: 10000 });
+      check('Supabase refuse (même mot de passe) : « déjà le vôtre », la carte reste ouverte', /déjà le vôtre/.test(await errOf(c).innerText()) && (await c.page.getByTestId('password-card').count()) === 1 && (fu.passwordChanges || []).length === 1);
+      check('aucune annonce « Mot de passe changé » en cas de refus', (await c.page.getByText('Mot de passe changé ✓').count()) === 0);
+      await c.ctx.close();
+    }
+    {
+      // annuler : rien n'est envoyé
+      const fu = clientUser();
+      const c = await openAccountT(fu);
+      await c.page.getByTestId('password-change-open').click();
+      await fillT(c, '730591', '730591');
+      await c.page.getByText('Annuler', { exact: true }).click();
+      await sleep(400);
+      check('Annuler : la carte se ferme, rien envoyé', (await c.page.getByTestId('password-card').count()) === 0 && !(fu.passwordChanges || []).length);
+      await c.ctx.close();
+    }
+
+    // ---------- 2. l'administrateur donne un nouveau code (Admin › Clients › le client)
+    const custId = 'aaaaaaaa-0000-4000-8000-000000000001';
+    const custProfile = (extra = {}) => ({ id: custId, email: 'aicha@gmail.com', full_name: 'Aïcha Moussa', phone: '66111111', whatsapp_number: null, profession: null, region: "N'Djamena", country: 'Tchad', address: null, loyalty_points: 0, banned: false, role: 'customer', is_admin: false, is_affiliate: false, created_at: '2026-10-20T10:00:00Z', last_login_at: '2026-10-30T10:00:00Z', login_count: 2, fake_order_count: 0, ...extra });
+    // rpc = (corps recu) → { body, status } ; sans rpc : la base accepte et renvoie l'identifiant de connexion d'un compte créé avec le numéro
+    const openDetail = async ({ rpc = null, customer = custProfile(), admin = true } = {}) => {
+      const fu = admin ? adminUser() : clientUser();
+      const seen = { rpcs: [] };
+      const v = await newVisitor(phone, { lang: 'fr', storage: { [SKT]: fu.session }, fakeUser: fu, fakeStore: { waOrder: true, accountRequired: false, patches: [] } });
+      await v.page.route(/\/rest\/v1\//, (route) => {
+        const req = route.request();
+        const u = new URL(req.url());
+        if (req.method() === 'OPTIONS') return route.fallback();
+        const t = u.pathname.replace('/rest/v1/', '');
+        if (t === 'profiles' && !u.searchParams.get('id') && u.searchParams.get('is_admin') === 'eq.false') return jsonT(route, [customer]);
+        if (['orders', 'visitor_sessions', 'product_views', 'cart_events', 'customer_sanctions', 'favorites'].includes(t)) return jsonT(route, []);
+        if (t === 'rpc/admin_set_client_password') {
+          const body = JSON.parse(req.postData() || '{}');
+          seen.rpcs.push(body);
+          const r = rpc ? rpc(body) : { body: '23566111111@tel.albasseshopping.com' };
+          return jsonT(route, r.body, r.status || 200);
+        }
+        return route.fallback();
+      });
+      await v.page.goto(`${BASE}/admin/clients/${customer.id}`, { waitUntil: 'load' });
+      if (admin) await v.page.getByTestId('admin-password-section').waitFor({ timeout: 25000 });
+      else await v.page.getByText('Accès réservé aux administrateurs').first().waitFor({ timeout: 25000 });
+      return { v, seen };
+    };
+    const askNewCode = async (v) => {
+      await v.page.getByText(/^(Donner un nouveau code|Créer un autre code)$/).first().click();
+      await v.page.getByText('Donner un nouveau code ?', { exact: true }).waitFor({ timeout: 8000 });
+    };
+    const confirmNewCode = async (v) => {
+      await v.page.getByText('Créer le code', { exact: true }).click();
+    };
+    const whatsappT = async (v) => {
+      const [popup] = await Promise.all([v.ctx.waitForEvent('page', { timeout: 10000 }), v.page.getByTestId('admin-new-code-whatsapp').click()]);
+      await popup.waitForLoadState('domcontentloaded').catch(() => {});
+      const url = popup.url();
+      await popup.close();
+      return { url, text: decodeURIComponent(url.split('text=')[1] || '') };
+    };
+
+    // a. tout marche : confirmation, code a 6 chiffres, WhatsApp avec le message et le code
+    {
+      const { v, seen } = await openDetail();
+      check('page du client : la section « Mot de passe oublié » est là, aucun code n\'est montré', (await v.page.getByText(/Mot de passe oublié/).count()) >= 1 && (await v.page.getByTestId('admin-new-code').count()) === 0);
+      await askNewCode(v);
+      await v.page.screenshot({ path: path.join(OUT, '~2-admin-confirmer.png') });
+      await v.page.getByText('Annuler', { exact: true }).click();
+      await sleep(400);
+      check('« Annuler » : rien n\'est envoyé à la base, aucun code', seen.rpcs.length === 0 && (await v.page.getByTestId('admin-new-code').count()) === 0);
+      await askNewCode(v);
+      await confirmNewCode(v);
+      await v.page.getByTestId('admin-new-code').waitFor({ timeout: 10000 });
+      const code = (await v.page.getByTestId('admin-new-code').innerText()).trim();
+      check('UNE demande à la base : ce client, un code de 6 chiffres', seen.rpcs.length === 1 && seen.rpcs[0].target_user_id === custId && /^\d{6}$/.test(seen.rpcs[0].new_password), seen.rpcs);
+      check('le code affiché est exactement celui envoyé à la base', code === seen.rpcs[0].new_password, { code, sent: seen.rpcs[0] && seen.rpcs[0].new_password });
+      check('le code n\'est pas une suite ou un motif facile (123456, 111111, 121212…)', !/^(\d)\1{5}$/.test(code) && !'01234567890'.includes(code) && !'09876543210'.includes(code) && !/^(\d\d)\1\1$/.test(code) && !/^(\d{3})\1$/.test(code), code);
+      check('le texte dit d\'envoyer le code tout de suite (il ne sera plus visible)', (await v.page.getByText(/Envoyez-le maintenant/).count()) >= 1);
+      check('le bouton devient « Créer un autre code »', (await v.page.getByText('Créer un autre code', { exact: true }).count()) === 1);
+      await sleep(1200); // la fenetre de confirmation se ferme et l'annonce disparait : on photographie la page propre
+      await v.page.screenshot({ path: path.join(OUT, '~3-admin-nouveau-code.png') });
+      const w = await whatsappT(v);
+      check('WhatsApp ouvre le bon numéro (235 + 66111111)', w.url.startsWith('https://wa.me/23566111111?text='), w.url.slice(0, 60));
+      check('message : prénom, équipe, le code, « votre numéro +235 66 11 11 11 », le site et où le changer',
+        w.text.startsWith("Bonjour Aïcha, ici l'équipe Albasse Shopping 😊") && w.text.includes(`Voici votre nouveau code : ${code}`) && w.text.includes('votre numéro +235 66 11 11 11') && w.text.includes('https://www.albasseshopping.com') && w.text.includes('« Compte » › « Changer mon mot de passe »'), w.text);
+      check('le message ne montre jamais l\'adresse fabriquée (tel.albasseshopping.com)', !/tel\.albasseshopping\.com/.test(w.text));
+      // un deuxième code
+      await askNewCode(v);
+      await confirmNewCode(v);
+      await v.page.waitForFunction(() => document.querySelectorAll('[data-testid="admin-new-code"]').length === 1, null, { timeout: 8000 });
+      await sleep(500);
+      check('« Créer un autre code » : deuxième demande, le nouveau code remplace l\'ancien à l\'écran', seen.rpcs.length === 2 && (await v.page.getByTestId('admin-new-code').innerText()).trim() === seen.rpcs[1].new_password, seen.rpcs.length);
+      check('aucune erreur (nouveau code)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+    // b. ancien compte (connexion par e-mail) : le message dit l'e-mail
+    {
+      const { v } = await openDetail({ rpc: () => ({ body: 'aicha@gmail.com' }), customer: custProfile({ whatsapp_number: '66 22 22 22' }) });
+      await askNewCode(v);
+      await confirmNewCode(v);
+      await v.page.getByTestId('admin-new-code').waitFor({ timeout: 10000 });
+      const w = await whatsappT(v);
+      check('ancien compte : WhatsApp utilise le numéro WhatsApp (66222222) et le message dit « votre e-mail aicha@gmail.com »', w.url.startsWith('https://wa.me/23566222222?text=') && w.text.includes('votre e-mail aicha@gmail.com') && !/votre numéro/.test(w.text), w.text);
+      await v.ctx.close();
+    }
+    // c. client sans numero : le code est montre, pas de bouton WhatsApp
+    {
+      const { v } = await openDetail({ customer: custProfile({ phone: null, whatsapp_number: null }) });
+      await askNewCode(v);
+      await confirmNewCode(v);
+      await v.page.getByTestId('admin-new-code').waitFor({ timeout: 10000 });
+      check('client sans numéro : le code est montré, pas de bouton WhatsApp, un mot explique', (await v.page.getByTestId('admin-new-code-whatsapp').count()) === 0 && (await v.page.getByTestId('admin-new-code-nophone').count()) === 1);
+      await v.ctx.close();
+    }
+    // d. la base refuse : script pas lance, pas administrateur, client introuvable → message clair, AUCUN code montré
+    for (const [label, rpc, expect] of [
+      ['script pas encore lancé', () => ({ status: 404, body: { code: 'PGRST202', message: 'Could not find the function public.admin_set_client_password(new_password, target_user_id) in the schema cache', details: null, hint: null } }), /add-admin-reset-password\.sql/],
+      ['pas administrateur', () => ({ status: 400, body: { code: 'P0001', message: 'Non autorise', details: null, hint: null } }), /Seul un administrateur/],
+      ['client introuvable', () => ({ status: 400, body: { code: 'P0001', message: 'Client introuvable', details: null, hint: null } }), /introuvable/],
+    ]) {
+      const { v, seen } = await openDetail({ rpc });
+      await askNewCode(v);
+      await confirmNewCode(v);
+      await v.page.getByText('Nouveau code impossible').waitFor({ timeout: 10000 });
+      check(`base qui refuse (${label}) : message clair, aucun code montré`, expect.test(await v.page.locator('body').innerText()) && (await v.page.getByTestId('admin-new-code').count()) === 0 && seen.rpcs.length === 1);
+      await v.ctx.close();
+    }
+    // e. un client ordinaire n'ouvre pas la page : aucune section, aucune demande
+    {
+      const { v, seen } = await openDetail({ admin: false });
+      check('client non administrateur : « Accès réservé aux administrateurs », aucune section, aucune demande', (await v.page.getByTestId('admin-password-section').count()) === 0 && (await v.page.getByText('Donner un nouveau code').count()) === 0 && seen.rpcs.length === 0);
+      await v.ctx.close();
     }
   }
 
