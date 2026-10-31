@@ -12,7 +12,7 @@
 // passé au plan : il règle la meilleure variante d'objet, l'ordre des segments et met en pause un segment qui fatigue ses clients.
 // Rien n'est envoyé ici : l'envoi est décidé et verrouillé ailleurs (marketingRun.ts, drain.ts). Aucune remise, aucun prix ni aucune urgence ne sont
 // inventés : un chiffre n'apparaît que s'il est vrai d'après la base.
-import { LOYALTY_MIN_DELIVERED, SITE, button, escapeHtml, firstName, fmt, layout, mask, para, realEmail } from "./orderEmails.ts";
+import { BRAND, FOOTER_LINK_STYLE, LOYALTY_MIN_DELIVERED, SITE, button, escapeHtml, firstName, fmt, layout, mask, para, realEmail } from "./orderEmails.ts";
 
 export const DAY_MS = 86_400_000;
 export const NDJAMENA_MS = 3_600_000; // UTC+1, sans heure d'été
@@ -844,13 +844,13 @@ function productRow(p: VerifiedProduct, input: EmailInput): string {
   const ar = input.lang === "ar";
   const href = escapeHtml(productUrl(p, input));
   const badges: string[] = [];
-  if (p.flashEndsAt) badges.push(`<span style="color:#c0262d;font-size:12px;font-weight:bold">${ar ? "🔥 تخفيضات خاطفة" : "🔥 Vente flash"}</span>`);
-  if (p.lowStock) badges.push(`<span style="color:#8a5a00;font-size:12px;font-weight:bold">${ar ? `بقي ${p.lowStock} فقط` : `Plus que ${p.lowStock} en stock`}</span>`);
+  if (p.flashEndsAt) badges.push(`<span style="background:${BRAND.violet};color:${BRAND.gold};font-size:12px;font-weight:bold;padding:2px 7px;border-radius:10px">${ar ? "🔥 تخفيضات خاطفة" : "🔥 Vente flash"}</span>`);
+  if (p.lowStock) badges.push(`<span style="color:${BRAND.violet};font-size:12px;font-weight:bold">${ar ? `بقي ${p.lowStock} فقط` : `Plus que ${p.lowStock} en stock`}</span>`);
   const side = ar ? "right" : "left";
   return `<tr>
-<td style="padding:10px 0;border-bottom:1px solid #eceef3;width:84px;vertical-align:top"><a href="${href}"><img src="${escapeHtml(p.image)}" width="72" height="72" alt="" style="display:block;width:72px;height:72px;object-fit:cover;border-radius:8px"></a></td>
-<td style="padding:10px 8px;border-bottom:1px solid #eceef3;vertical-align:top;font-size:14px;line-height:20px;text-align:${side}"><a href="${href}" style="color:#1d2433;text-decoration:none;font-weight:bold">${escapeHtml(p.name)}</a><br><span style="font-size:15px;color:#062266;font-weight:bold">${fmt(p.price)}</span>${
-    p.compareAt ? ` <span style="color:#6b7280;text-decoration:line-through;font-size:12px">${fmt(p.compareAt)}</span> <span style="color:#c0262d;font-size:12px;font-weight:bold">${ar ? `−${p.discountPct}٪` : `−${p.discountPct} %`}</span>` : ""
+<td style="padding:10px 0;border-bottom:1px solid ${BRAND.silver};width:84px;vertical-align:top"><a href="${href}"><img src="${escapeHtml(p.image)}" width="72" height="72" alt="" style="display:block;width:72px;height:72px;object-fit:cover;border-radius:8px"></a></td>
+<td style="padding:10px 8px;border-bottom:1px solid ${BRAND.silver};vertical-align:top;font-size:14px;line-height:20px;text-align:${side}"><a href="${href}" style="color:#1d2433;text-decoration:none;font-weight:bold">${escapeHtml(p.name)}</a><br><span style="font-size:15px;color:${BRAND.violet};font-weight:bold">${fmt(p.price)}</span>${
+    p.compareAt ? ` <span style="color:#6b7280;text-decoration:line-through;font-size:12px">${fmt(p.compareAt)}</span> <span style="background:${BRAND.gold};color:${BRAND.violet};font-size:12px;font-weight:bold;padding:2px 7px;border-radius:10px">${ar ? `−${p.discountPct}٪` : `−${p.discountPct} %`}</span>` : ""
   }${badges.length ? `<br>${badges.join(" · ")}` : ""}</td></tr>`;
 }
 
@@ -890,11 +890,11 @@ export function renderEmail(input: EmailInput): { subject: string; html: string 
     para(greeting) +
       para(escapeHtml(fill(copy.intros[i], x))) +
       table +
-      (tip ? `<p style="font-size:14px;line-height:21px;margin:0 0 12px;padding:10px 12px;background:#f4f1e6;border-radius:10px;color:#3d3a2c"><b>${ar ? "💡 نصيحة" : "💡 Conseil"} :</b> ${escapeHtml(tip)}</p>` : "") +
+      (tip ? `<p style="font-size:14px;line-height:21px;margin:0 0 12px;padding:10px 12px;background:#f5f5f5;border-left:4px solid ${BRAND.gold};border-radius:10px;color:#2b2b2b"><b>${ar ? "💡 نصيحة" : "💡 Conseil"} :</b> ${escapeHtml(tip)}</p>` : "") +
       button(`${SITE}/?${utm(input)}`, copy.cta) +
       para(ar ? "🚚 التوصيل إلى كل أنحاء تشاد 🇹🇩" : "🚚 Livraison partout au Tchad 🇹🇩"),
     CONSENT_LINE[SEGMENT_CONSENT[input.segment]][lang],
-    `<br><a href="${escapeHtml(input.unsubscribeUrl)}" style="color:#6b7280">${ar ? "إلغاء الاشتراك من الرسائل الإعلانية" : "Me désinscrire des e-mails publicitaires"}</a>`,
+    `<br><a href="${escapeHtml(input.unsubscribeUrl)}" style="${FOOTER_LINK_STYLE}">${ar ? "إلغاء الاشتراك من الرسائل الإعلانية" : "Me désinscrire des e-mails publicitaires"}</a>`,
     lang,
     preheader(`${fill(copy.intros[(i + 1) % 3], x)} ${ar ? "التوصيل إلى كل أنحاء تشاد." : "Livraison partout au Tchad."}`)
   );
