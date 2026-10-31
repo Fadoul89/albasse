@@ -10,7 +10,7 @@ import { colors, fonts, radius, spacing } from '../theme';
 import type { StoreSettings } from '../types';
 
 interface Setting {
-  column: 'whatsapp_order_enabled' | 'account_required' | 'order_emails_enabled' | 'inactive_emails_enabled' | 'telegram_absent_enabled' | 'zara_ads_enabled' | 'zara_auto_flash_enabled';
+  column: 'whatsapp_order_enabled' | 'account_required' | 'order_emails_enabled' | 'inactive_emails_enabled' | 'telegram_absent_enabled' | 'zara_ads_enabled' | 'zara_auto_flash_enabled' | 'push_new_products_enabled';
   // valeur quand la colonne n'existe pas encore (script SQL pas lancé)
   missingValue: boolean;
   script: string;
@@ -22,7 +22,7 @@ interface Setting {
   offToast: { title: string; message: string };
 }
 
-const SETTINGS: Record<'whatsappOrder' | 'accountRequired' | 'orderEmails' | 'inactiveEmails' | 'telegramAbsent' | 'zaraAds' | 'zaraAutoFlash', Setting> = {
+const SETTINGS: Record<'whatsappOrder' | 'accountRequired' | 'orderEmails' | 'inactiveEmails' | 'telegramAbsent' | 'zaraAds' | 'zaraAutoFlash' | 'pushNewProducts', Setting> = {
   whatsappOrder: {
     column: 'whatsapp_order_enabled',
     missingValue: true,
@@ -99,6 +99,18 @@ const SETTINGS: Record<'whatsappOrder' | 'accountRequired' | 'orderEmails' | 'in
     offText: '⚪ Désactivé : Zara ne lance aucune Vente flash toute seule',
     onToast: { title: '⚡ Vente flash automatique', message: 'Zara choisit seule les articles de la Vente flash (24 h) d’après les statistiques, dans les 5 minutes qui suivent. Elle ne modifie aucun prix.' },
     offToast: { title: '⚪ Vente flash automatique coupée', message: 'Zara ne lance plus de Vente flash toute seule. Celle en cours se termine normalement.' },
+  },
+  pushNewProducts: {
+    column: 'push_new_products_enabled',
+    // tant que le script n'est pas lancé, publier un article envoie bien une notification : la vérité est « activé »
+    missingValue: true,
+    script: 'add-push-new-products-switch.sql',
+    testID: 'push-new-products',
+    title: '🛍️ Notification automatique des nouveaux articles',
+    onText: '🟢 Activé : un nouvel article publié envoie une notification aux clients',
+    offText: '⚪ Désactivé : publier un article n’envoie aucune notification',
+    onToast: { title: '🛍️ Notifications activées', message: 'Un nouvel article publié envoie une notification aux téléphones abonnés.' },
+    offToast: { title: '⚪ Notifications coupées', message: 'Publier un article n’envoie plus aucune notification. Les notifications programmées ne changent pas.' },
   },
 };
 
