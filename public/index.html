@@ -38,6 +38,14 @@
         flex: 1;
       }
     </style>
+    <!-- Photos protégées : pas d'aperçu / glisser-déposer / menu « Enregistrer l'image » sur les images du site (les textes restent sélectionnables). -->
+    <style id="photo-protection">
+      img, picture, video {
+        -webkit-touch-callout: none;
+        -webkit-user-drag: none;
+        user-drag: none;
+      }
+    </style>
   </head>
 
   <body>
@@ -47,6 +55,21 @@
     </noscript>
     <!-- The root element for your Expo app. -->
     <div id="root"></div>
+    <script>
+      // Photos protégées : ni clic droit ni appui long (menu « Enregistrer l'image », « Rechercher avec Google Lens »), ni glisser-déposer sur les
+      // images du site. Cela décourage la copie ; une capture d'écran reste toujours possible. Google voit toujours les images (aucun effet sur le référencement).
+      (function () {
+        function isPhoto(t) {
+          if (!t || !t.closest) return false;
+          if (t.closest('img, picture, video')) return true;
+          // image de fond d'un bloc (photos affichées par le site en « background-image ») : seulement l'élément touché lui-même
+          var bg = t.nodeType === 1 ? window.getComputedStyle(t).backgroundImage : '';
+          return !!bg && bg.indexOf('url(') !== -1;
+        }
+        document.addEventListener('contextmenu', function (e) { if (isPhoto(e.target)) e.preventDefault(); }, true);
+        document.addEventListener('dragstart', function (e) { if (isPhoto(e.target)) e.preventDefault(); }, true);
+      })();
+    </script>
     <script>
       // Capture l'evenement Chrome avant que le bundle React soit charge.
       window.addEventListener('beforeinstallprompt', function(e) {

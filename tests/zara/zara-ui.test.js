@@ -16,7 +16,7 @@ const port = process.argv[3] || '4333';
 // BASE_URL=https://www.albasseshopping.com : teste le VRAI site en ligne (les commandes et comptes restent simules, rien n'est enregistre)
 const BASE = (process.env.BASE_URL || `http://localhost:${port}`).replace(/\/$/, '');
 const BASE_HOST = new URL(BASE).hostname;
-const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI0123456789TOFBCDE+').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI0123456789TOFBCDE+=').toUpperCase();
 // saison fraiche (blousons et manteaux) : le bouton du menu de Zara n'existe que jusqu'au 31 decembre 2026 a 23h59 (N'Djamena)
 const COLD_ON = Date.now() < Date.parse('2027-01-01T00:00:00+01:00');
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
@@ -4844,6 +4844,42 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('client non administrateur : ni interrupteur Telegram ni chiffres', (await v.page.getByTestId('telegram-absent-toggle').count()) === 0 && (await v.page.getByTestId('telegram-linked-stats').count()) === 0);
       await v.ctx.close();
     }
+  }
+
+  if (PARTS.includes('=')) {
+    console.log("\n== = photos protegees : pas de menu « Enregistrer l'image » (clic droit, appui long) ni de glisser-deposer sur les images ; les textes restent normaux");
+    const prodP = (await get('products?select=slug,name&is_active=eq.true&stock=gt.0&order=created_at.desc&limit=1'))[0];
+    const v = await newVisitor(phone, {});
+    await v.page.goto(`${BASE}/produit/${prodP.slug}`, { waitUntil: 'load' });
+    await v.page.getByText('Commander', { exact: true }).first().waitFor({ timeout: 25000 });
+    await sleep(2500);
+    // un evenement « clic droit / appui long » ou « glisser » envoye sur l'element ; vrai = le navigateur n'ouvrira pas son menu
+    const blocked = (selector, type) =>
+      v.page.evaluate(({ selector, type }) => {
+        const el = [...document.querySelectorAll(selector)].find((e) => e.getBoundingClientRect().width > 20) || document.querySelector(selector);
+        if (!el) return null;
+        const ev = type === 'dragstart' ? new Event('dragstart', { bubbles: true, cancelable: true }) : new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+        el.dispatchEvent(ev);
+        return ev.defaultPrevented;
+      }, { selector, type });
+    const nImg = await v.page.locator('img').count();
+    check('la fiche article affiche des photos (images <img>)', nImg > 0, nImg);
+    check('clic droit / appui long sur une photo : menu bloque', (await blocked('img', 'contextmenu')) === true);
+    check('glisser une photo : bloque', (await blocked('img', 'dragstart')) === true);
+    check('clic droit sur du texte : le menu du navigateur reste possible (copier, coller)', (await v.page.evaluate(() => {
+      const el = [...document.querySelectorAll('div,span')].find((e) => e.children.length === 0 && /Commander/.test(e.textContent || ''));
+      const ev = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+      el.dispatchEvent(ev);
+      return ev.defaultPrevented;
+    })) === false);
+    check('les photos ne sont plus « glissables » (CSS : -webkit-user-drag et -webkit-touch-callout)', await v.page.evaluate(() => {
+      const el = document.querySelector('img');
+      const cs = getComputedStyle(el);
+      return cs.getPropertyValue('-webkit-touch-callout') === 'none' || cs.getPropertyValue('-webkit-user-drag') === 'none';
+    }));
+    await v.page.screenshot({ path: path.join(OUT, '=a-photos-protegees.png') });
+    check('aucune erreur (photos protegees)', v.errs.length === 0, v.errs);
+    await v.ctx.close();
   }
 
   if (PARTS.includes('1')) {
