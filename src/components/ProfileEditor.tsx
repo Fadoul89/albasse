@@ -5,6 +5,8 @@ import { useAuthStore } from '../store/authStore';
 import { useToastStore } from '../store/toastStore';
 import { GoldButton } from './GoldButton';
 import { CityPicker } from './CityPicker';
+import { GenderPicker } from './GenderPicker';
+import { hasGenderColumn } from '../lib/clientGender';
 import { checkProfileForm, formFromProfile, profileFormChanged, type ProfileField, type ProfileForm } from '../lib/profileEdit';
 import type { Profile } from '../types';
 import { visibleEmail } from '../lib/phoneAuth';
@@ -23,7 +25,7 @@ export function ProfileEditor({ profile, onClose }: Props) {
   const [saving, setSaving] = useState(false);
   const [problem, setProblem] = useState<{ field: ProfileField; message: string } | null>(null);
 
-  const change = (key: ProfileField) => (value: string) => {
+  const change = (key: Exclude<ProfileField, 'gender'>) => (value: string) => {
     setForm((f) => ({ ...f, [key]: value }));
     if (problem?.field === key) setProblem(null);
   };
@@ -47,7 +49,7 @@ export function ProfileEditor({ profile, onClose }: Props) {
     onClose();
   };
 
-  const field = (key: ProfileField, label: string, extra: { keyboardType?: 'phone-pad'; testID: string }) => (
+  const field = (key: Exclude<ProfileField, 'gender'>, label: string, extra: { keyboardType?: 'phone-pad'; testID: string }) => (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
       <TextInput
@@ -72,6 +74,12 @@ export function ProfileEditor({ profile, onClose }: Props) {
       <Text style={styles.title}>✏️ Modifier mon profil</Text>
       <Text style={styles.email}>E-mail : {visibleEmail(profile.email) ?? '— (connexion avec votre numéro de téléphone)'}</Text>
       {field('fullName', 'Nom et prénom', { testID: 'profile-input-fullName' })}
+      {hasGenderColumn(profile) ? (
+        <View style={styles.field}>
+          <Text style={styles.label}>Vous êtes</Text>
+          <GenderPicker value={form.gender} onChange={(g) => setForm((f) => ({ ...f, gender: g }))} testIDPrefix="profile-gender" />
+        </View>
+      ) : null}
       {field('phone', 'Numéro de téléphone', { keyboardType: 'phone-pad', testID: 'profile-input-phone' })}
       {field('whatsappNumber', 'Numéro WhatsApp', { keyboardType: 'phone-pad', testID: 'profile-input-whatsapp' })}
       {!form.whatsappNumber.trim() && form.phone.trim() ? (

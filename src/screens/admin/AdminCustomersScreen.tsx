@@ -22,6 +22,8 @@ import { pickRelance, relanceMessage, whatsappLink, type RelancePick } from '../
 import { supabase } from '../../lib/supabase';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { StoreSettingToggle } from '../../components/StoreSettingToggle';
+import { GenderStatsCard } from '../../components/GenderStatsCard';
+import { GENDER_ICON, genderOf, hasGenderColumn } from '../../lib/clientGender';
 import type { CustomerSummary } from '../../types';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
@@ -37,7 +39,10 @@ type FilterKey =
   | 'statusInactive'
   | 'statusBanned'
   | 'highInterest'
-  | 'away';
+  | 'away'
+  | 'men'
+  | 'women'
+  | 'genderUnknown';
 
 const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'all', label: 'Tous' },
@@ -50,7 +55,12 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'statusBanned', label: '🔴 Bannis' },
   { key: 'highInterest', label: '💙 Intérêt élevé' },
   { key: 'away', label: '⏰ Absents 7 j et +' },
+  { key: 'men', label: '👨 Hommes' },
+  { key: 'women', label: '👩 Femmes' },
+  { key: 'genderUnknown', label: '❔ Genre non précisé' },
 ];
+// ces trois filtres n'ont de sens que quand la base a la colonne « gender » (script add-client-gender.sql lancé)
+const GENDER_FILTERS: FilterKey[] = ['men', 'women', 'genderUnknown'];
 
 const AWAY_DAYS = 7;
 
@@ -151,6 +161,10 @@ export function AdminCustomersScreen() {
     return { total, newCustomers, activeCustomers, withOrders, avgSeconds, mostActive };
   }, [customers]);
 
+  // Homme / Femme : seulement quand la base a la colonne (script add-client-gender.sql lancé) ; les comptes test masqués ne comptent pas
+  const genderReady = useMemo(() => customers.some((c) => hasGenderColumn(c.profile)), [customers]);
+  const genderCustomers = useMemo(() => (hideTestAccounts ? customers.filter((c) => !isTestEmail(c.profile.email)) : customers), [customers, hideTestAccounts]);
+
   const top10 = useMemo(
     () => [...customers].sort((a, b) => b.totalDurationSeconds - a.totalDurationSeconds).slice(0, 10),
     [customers]
@@ -195,6 +209,12 @@ export function AdminCustomersScreen() {
         return list.filter((c) => highInterest.has(c.profile.id.slice(0, 8)) || (likesByUser.get(c.profile.id) ?? 0) > 0);
       case 'away':
         return list.filter((c) => daysAway(c) >= AWAY_DAYS);
+      case 'men':
+        return list.filter((c) => genderOf(c.profile.gender) === 'homme');
+      case 'women':
+        return list.filter((c) => genderOf(c.profile.gender) === 'femme');
+      case 'genderUnknown':
+        return list.filter((c) => !genderOf(c.profile.gender));
       default:
         return list;
     }
@@ -242,6 +262,8 @@ export function AdminCustomersScreen() {
               <StatCard icon="🔥" label="Très actifs" value={String(stats.mostActive)} />
             </View>
 
+            {genderReady && <GenderStatsCard customers={genderCustomers} />}
+
             {top10.length > 0 && (
               <View style={styles.topSection}>
                 <Text style={styles.sectionTitle}>🔥 Top 10 clients les plus actifs</Text>
@@ -286,9 +308,10 @@ export function AdminCustomersScreen() {
             />
 
             <View style={styles.filtersRow}>
-              {FILTERS.map((f) => (
+              {FILTERS.filter((f) => genderReady || !GENDER_FILTERS.includes(f.key)).map((f) => (
                 <Pressable
                   key={f.key}
+                  testID={`customers-filter-${f.key}`}
                   style={[styles.filterChip, filter === f.key && styles.filterChipActive]}
                   onPress={() => {
                     setFilter(f.key);
@@ -387,6 +410,11 @@ function CustomerRow({
       <Text style={styles.rowMeta}>
         📞 {customer.profile.phone ?? '—'} · 💼 {customer.profile.profession ?? '—'}
       </Text>
+      {hasGenderColumn(customer.profile) && (
+        <Text style={styles.rowMeta} testID="customer-gender">
+          {genderOf(customer.profile.gender) ? `${GENDER_ICON[genderOf(customer.profile.gender)!]} ${genderOf(customer.profile.gender) === 'homme' ? 'Homme' : 'Femme'}` : '❔ Genre non précisé'}
+        </Text>
+      )}
       <Text style={styles.rowMeta}>
         📍 {customer.profile.region ?? '—'}, {customer.profile.country ?? '—'}
       </Text>

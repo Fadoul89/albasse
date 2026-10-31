@@ -5,6 +5,7 @@ import { attachUserToSession } from '../lib/analytics';
 import { useToastStore } from './toastStore';
 import { useFavoritesStore } from './favoritesStore';
 import type { Profile } from '../types';
+import type { Gender } from '../lib/clientGender';
 import type { ProfileChanges } from '../lib/profileEdit';
 import { clearIntent, readIntent } from '../lib/assistantAttribution';
 import { isMissingColumn } from '../lib/dbErrors';
@@ -16,6 +17,7 @@ export interface SignUpDetails {
   phone: string;
   whatsappNumber?: string;
   profession?: string;
+  gender?: Gender;
   email?: string;
   region?: string;
   country?: string;
@@ -33,7 +35,7 @@ interface AuthState {
   signUp: (password: string, details: SignUpDetails) => Promise<{ error: string | null; needsEmailConfirmation?: boolean }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
-  updateProfile: (changes: ProfileChanges) => Promise<{ error: string | null }>;
+  updateProfile: (changes: Partial<ProfileChanges>) => Promise<{ error: string | null }>;
   resetPassword: (email: string) => Promise<{ error: string | null }>;
   updatePassword: (newPassword: string) => Promise<{ error: string | null }>;
   signInWithGoogle: () => Promise<{ error: string | null }>;
@@ -305,6 +307,12 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
             notify_flash_sale: details.acceptsNotifications,
           })
           .eq('id', data.user.id);
+        // Homme / Femme : demande à part, comme pour les autres statistiques. Si le script add-client-gender.sql n'est pas encore lancé (colonne absente),
+        // l'inscription elle-même n'est jamais touchée.
+        if (details.gender) {
+          const { error: genderError } = await supabase.from('profiles').update({ gender: details.gender }).eq('id', data.user.id);
+          if (genderError && !isMissingColumn(genderError, 'gender')) console.warn('albasse: genre non enregistré', genderError.message);
+        }
         await recordLogin(data.user.id);
       }
 

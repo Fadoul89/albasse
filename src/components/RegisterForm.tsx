@@ -1,4 +1,4 @@
-// Le formulaire « Créer un compte » : nom, téléphone et mot de passe obligatoires, le reste facultatif. Sur la page Inscription et
+// Le formulaire « Créer un compte » : nom, Homme / Femme, téléphone et mot de passe obligatoires, le reste facultatif. Sur la page Inscription et
 // en premier sur l'écran d'entrée quand le compte est obligatoire.
 import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet, Pressable } from 'react-native';
@@ -12,10 +12,13 @@ import { installAfterSignUpDue, markInstallPageShown } from '../lib/installAfter
 import { navigationRef } from '../navigation/navigationRef';
 import { GoldButton } from './GoldButton';
 import { CityPicker } from './CityPicker';
+import { GenderPicker } from './GenderPicker';
+import type { Gender } from '../lib/clientGender';
 
 export function RegisterForm({ onSuccess, onPrivacy }: { onSuccess: () => void; onPrivacy: () => void }) {
   const signUp = useAuthStore((s) => s.signUp);
   const [fullName, setFullName] = useState('');
+  const [gender, setGender] = useState<'' | Gender>('');
   const [phone, setPhone] = useState('');
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [profession, setProfession] = useState('');
@@ -39,6 +42,10 @@ export function RegisterForm({ onSuccess, onPrivacy }: { onSuccess: () => void; 
     }
     if (!fullName.trim() || !phone.trim() || !password) {
       showToast('Nom, numéro de téléphone et mot de passe sont obligatoires.', { title: 'Champs manquants', type: 'error' });
+      return;
+    }
+    if (!gender) {
+      showToast('Merci de choisir « Homme » ou « Femme ».', { title: 'Choix manquant', type: 'error' });
       return;
     }
     if (!phoneDigits(phone)) {
@@ -76,6 +83,7 @@ export function RegisterForm({ onSuccess, onPrivacy }: { onSuccess: () => void; 
       phone: phone.trim(),
       whatsappNumber: whatsappNumber.trim(),
       profession: profession.trim(),
+      gender,
       email: email.trim(),
       region,
       country,
@@ -117,6 +125,8 @@ export function RegisterForm({ onSuccess, onPrivacy }: { onSuccess: () => void; 
         placeholderTextColor={accountFieldPlaceholder}
         style={accountField}
       />
+      <Text style={styles.fieldLabel}>Vous êtes * </Text>
+      <GenderPicker value={gender} onChange={setGender} testIDPrefix="register-gender" light />
       <TextInput
         testID="register-phone"
         autoComplete="tel"

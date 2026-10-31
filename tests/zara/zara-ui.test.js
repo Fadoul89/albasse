@@ -16,7 +16,7 @@ const port = process.argv[3] || '4333';
 // BASE_URL=https://www.albasseshopping.com : teste le VRAI site en ligne (les commandes et comptes restent simules, rien n'est enregistre)
 const BASE = (process.env.BASE_URL || `http://localhost:${port}`).replace(/\/$/, '');
 const BASE_HOST = new URL(BASE).hostname;
-const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI0123456789TOFBCDE+=^~').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI0123456789TOFBCDE+=^~%').toUpperCase();
 // saison fraiche (blousons et manteaux) : le bouton du menu de Zara n'existe que jusqu'au 31 decembre 2026 a 23h59 (N'Djamena)
 const COLD_ON = Date.now() < Date.parse('2027-01-01T00:00:00+01:00');
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
@@ -5564,10 +5564,11 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.ctx.close();
     }
     // 5) inscription depuis le mur : nom, numero, mot de passe ; on revient sur la fiche demandee
-    const register = async (v, { name = 'Ali Mahamat', phoneNo = '66 12 34 56', password = 'secret12', email = '', terms = true } = {}) => {
+    const register = async (v, { name = 'Ali Mahamat', phoneNo = '66 12 34 56', password = 'secret12', email = '', terms = true, gender = 'homme' } = {}) => {
       await v.page.getByTestId('register-phone').waitFor({ timeout: 15000 });
       await sleep(800);
       if (name) await v.page.getByTestId('register-name').locator('visible=true').fill(name);
+      if (gender) await v.page.getByTestId(`register-gender-${gender}`).locator('visible=true').click();
       if (phoneNo) await v.page.getByTestId('register-phone').locator('visible=true').fill(phoneNo);
       if (password) await v.page.getByTestId('register-password').locator('visible=true').fill(password);
       if (email) await v.page.getByTestId('register-email').locator('visible=true').fill(email);
@@ -5587,6 +5588,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('formulaire court : e-mail, WhatsApp et profession dans « facultatif »', /E-mail \(facultatif\)|Informations optionnelles/i.test(form) && !/Email \*/.test(form) && !/Profession \*/.test(form) && !/Numéro WhatsApp \*/.test(form));
       // il manque le numero : rien n'est envoye
       await v.page.getByTestId('register-name').locator('visible=true').fill('Ali Mahamat');
+      await v.page.getByTestId('register-gender-homme').locator('visible=true').click();
       await v.page.getByTestId('register-password').locator('visible=true').fill('secret12');
       await v.page.getByTestId('register-terms').locator('visible=true').click();
       await shown(v.page, 'Créer mon compte').click();
@@ -8502,6 +8504,331 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     {
       const { v, seen } = await openDetail({ admin: false });
       check('client non administrateur : « Accès réservé aux administrateurs », aucune section, aucune demande', (await v.page.getByTestId('admin-password-section').count()) === 0 && (await v.page.getByText('Donner un nouveau code').count()) === 0 && seen.rpcs.length === 0);
+      await v.ctx.close();
+    }
+  }
+
+  // =============================================== % HOMME / FEMME : INSCRIPTION, PROFIL, CARTE DE ZARA, ADMIN › CLIENTS ===============================================
+  if (PARTS.includes('%')) {
+    console.log('\n== % Homme / Femme : choix obligatoire a l\'inscription, profil, carte de Zara (anciens clients), Admin › Clients (fausse base)');
+    const SKG = 'sb-xtitsmmccpkelxfjyqyh-auth-token';
+    const HDRG = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+    const jsonG = (route, body, status = 200) => route.fulfill({ status, headers: { 'content-type': 'application/json', ...HDRG }, body: JSON.stringify(body) });
+    const JWTG_CLIENT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMTExMTExMS0xMTExLTQxMTEtODExMS0xMTExMTExMTExMTEiLCJleHAiOjQxMDI0NDQ4MDAsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.c2ln';
+    const JWTG_ADMIN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2NjY2NjY2Ni02NjY2LTQ2NjYtODY2Ni02NjY2NjY2NjY2NjYiLCJleHAiOjQxMDI0NDQ4MDAsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.c2ln';
+    // profile : { gender: null } = le script SQL est lance (la colonne existe, vide) ; sans la cle « gender » = script pas encore lance
+    const mkG = (uid, jwt, email, profile = {}, opts = {}) => {
+      const auth = { id: uid, aud: 'authenticated', role: 'authenticated', email, app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' };
+      const token = { access_token: jwt, refresh_token: 'fake-refresh', token_type: 'bearer', expires_in: 3600, expires_at: 4102444800, user: auth };
+      return { auth, token, session: JSON.stringify(token), editable: true, patches: [], ...opts, profile: { id: uid, email, full_name: 'Ahmed Hassan', phone: '66123456', whatsapp_number: null, profession: null, region: null, country: 'Tchad', address: null, loyalty_points: 0, banned: false, role: 'customer', is_admin: false, is_affiliate: false, created_at: '2026-10-20T10:00:00Z', last_login_at: '2026-10-30T10:00:00Z', ...profile } };
+    };
+    const UID_C = '11111111-1111-4111-8111-111111111111';
+    const UID_A = '66666666-6666-4666-8666-666666666666';
+    const clientG = (profile = {}, opts = {}) => mkG(UID_C, JWTG_CLIENT, 'ahmed@gmail.com', profile, opts);
+    const adminG = (profile = {}) => mkG(UID_A, JWTG_ADMIN, 'admin@gmail.com', { id: UID_A, full_name: 'Admin Albasse', role: 'admin', is_admin: true, ...profile });
+    const selected = async (page, testId) => (await page.getByTestId(testId).getAttribute('aria-checked')) === 'true';
+    const askKey = 'albasse_gender_ask_v1_' + UID_C;
+    const homeG = async (fu, extra = {}) => {
+      const c = await newVisitor(phone, { lang: 'fr', storage: { [SKG]: fu.session }, fakeUser: fu, fakeStore: { waOrder: true, accountRequired: false, patches: [] }, ...extra });
+      await c.page.goto(`${BASE}/`, { waitUntil: 'load' });
+      await c.page.getByTestId('home-tagline').waitFor({ timeout: 25000 });
+      return c;
+    };
+
+    // ---------- 1. inscription : le choix Homme / Femme est obligatoire
+    const signupG = async (fuOpts = {}, profile = { gender: null }) => {
+      const fu = { ...mkG(UID_C, JWTG_CLIENT, 'ahmed@gmail.com', profile), ...fuOpts };
+      const v = await newVisitor(phone, { fakeUser: fu, fakeStore: { waOrder: true, accountRequired: false, patches: [] } });
+      await v.page.goto(`${BASE}/inscription`, { waitUntil: 'load' });
+      await v.page.getByTestId('register-name').locator('visible=true').waitFor({ timeout: 25000 });
+      await sleep(800);
+      return { v, fu };
+    };
+    const fillSignupG = async (v) => {
+      await v.page.getByTestId('register-name').locator('visible=true').fill('Aïcha Moussa');
+      await v.page.getByTestId('register-phone').locator('visible=true').fill('66 12 34 56');
+      await v.page.getByTestId('register-password').locator('visible=true').fill('secret12');
+      await v.page.getByTestId('register-terms').locator('visible=true').click();
+    };
+    const submitG = (v) => v.page.getByText('Créer mon compte', { exact: true }).locator('visible=true').last().click();
+    const genderPatches = (fu) => fu.patches.filter((x) => Object.keys(x).join() === 'gender');
+    {
+      const { v, fu } = await signupG();
+      check('inscription : « Vous êtes * » avec deux boutons Homme et Femme, aucun choisi au départ', (await v.page.getByText('Vous êtes *').count()) === 1 && (await v.page.getByTestId('register-gender-homme').count()) === 1 && (await v.page.getByTestId('register-gender-femme').count()) === 1 && !(await selected(v.page, 'register-gender-homme')) && !(await selected(v.page, 'register-gender-femme')));
+      const pos = async (id) => (await v.page.getByTestId(id).locator('visible=true').boundingBox()) || { y: -1 };
+      const yName = (await pos('register-name')).y;
+      const yGender = (await pos('register-gender-homme')).y;
+      const yPhone = (await pos('register-phone')).y;
+      check('le choix est juste sous le nom, avant le téléphone (dans « obligatoire »)', yName > 0 && yGender > yName && yPhone > yGender, { yName, yGender, yPhone });
+      await v.page.screenshot({ path: path.join(OUT, '%1-inscription-genre.png') });
+      await fillSignupG(v);
+      await submitG(v);
+      await v.page.getByText('Choix manquant').waitFor({ timeout: 8000 });
+      check('sans choix : « Merci de choisir Homme ou Femme », aucun compte créé', /Homme.*Femme/.test(await v.page.locator('body').innerText()) && !(fu.signups || []).length);
+      await v.page.getByTestId('register-gender-femme').locator('visible=true').click();
+      check('Femme choisi : le bouton est coché, pas Homme', (await selected(v.page, 'register-gender-femme')) && !(await selected(v.page, 'register-gender-homme')));
+      await v.page.getByTestId('register-gender-homme').locator('visible=true').click();
+      check('on peut changer d\'avis : Homme coché, plus Femme', (await selected(v.page, 'register-gender-homme')) && !(await selected(v.page, 'register-gender-femme')));
+      await v.page.getByTestId('register-gender-femme').locator('visible=true').click();
+      await v.page.screenshot({ path: path.join(OUT, '%2-inscription-femme-choisie.png') });
+      await submitG(v);
+      await v.page.getByText('Bienvenue ✓').waitFor({ timeout: 15000 });
+      await sleep(1500);
+      const main = fu.patches.find((x) => 'full_name' in x) || {};
+      check('compte créé UNE fois (numéro), avec le choix fait', (fu.signups || []).length === 1);
+      check('le profil principal ne porte PAS le genre (demande séparée : la colonne absente ne casse jamais l\'inscription)', main.full_name === 'Aïcha Moussa' && !('gender' in main), main);
+      check('une demande à part enregistre exactement { gender: "femme" }', genderPatches(fu).length === 1 && genderPatches(fu)[0].gender === 'femme', fu.patches);
+      check('aucune erreur (inscription avec genre)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+    {
+      // le script SQL n'est pas encore lancé : la base répond « colonne introuvable » pour le genre ; l'inscription réussit quand même
+      const { v, fu } = await signupG({ rejectColumn: 'gender' }, {});
+      await fillSignupG(v);
+      await v.page.getByTestId('register-gender-homme').locator('visible=true').click();
+      await submitG(v);
+      await v.page.getByText('Bienvenue ✓').waitFor({ timeout: 15000 });
+      await sleep(1200);
+      check('colonne « gender » absente de la base : l\'inscription réussit quand même, aucun message d\'erreur', (fu.signups || []).length === 1 && (await v.page.getByText(/Inscription impossible/).count()) === 0 && !('gender' in fu.profile));
+      await v.ctx.close();
+    }
+
+    // ---------- 2. profil du client : « Vous êtes » (seulement quand la base a la colonne)
+    const openEditorG = async (fu) => {
+      const c = await newVisitor(phone, { lang: 'fr', storage: { [SKG]: fu.session }, fakeUser: fu });
+      await c.page.goto(`${BASE}/compte`, { waitUntil: 'load' });
+      await c.page.getByTestId('profile-edit-open').waitFor({ timeout: 25000 });
+      await c.page.getByTestId('profile-edit-open').click();
+      await c.page.getByTestId('profile-editor').waitFor({ timeout: 10000 });
+      return c;
+    };
+    const saveG = (c) => c.page.getByText('Enregistrer', { exact: true }).click();
+    {
+      const fu = clientG({ gender: null });
+      const c = await openEditorG(fu);
+      check('profil : « Vous êtes » avec Homme et Femme, aucun choisi', (await c.page.getByTestId('profile-gender-group').count()) === 1 && !(await selected(c.page, 'profile-gender-homme')) && !(await selected(c.page, 'profile-gender-femme')));
+      await saveG(c);
+      await sleep(600);
+      check('rien changé : « Enregistrer » ne fait rien', fu.patches.length === 0);
+      await c.page.getByTestId('profile-gender-homme').click();
+      await c.page.screenshot({ path: path.join(OUT, '%3-profil-genre.png') });
+      await saveG(c);
+      await c.page.getByText('Profil mis à jour ✓').waitFor({ timeout: 10000 });
+      check('une seule demande, avec les 7 informations + { gender: "homme" } (rien d\'autre : jamais de points, d\'admin ou d\'e-mail)',
+        fu.patches.length === 1 && JSON.stringify(fu.patches[0]) === JSON.stringify({ full_name: 'Ahmed Hassan', phone: '66123456', whatsapp_number: null, profession: null, region: null, country: 'Tchad', address: null, gender: 'homme' }), fu.patches);
+      await c.ctx.close();
+    }
+    {
+      // déjà « femme » : le formulaire le montre ; on change pour « homme »
+      const fu = clientG({ gender: 'femme' });
+      const c = await openEditorG(fu);
+      check('client déjà « Femme » : le formulaire montre Femme coché', await selected(c.page, 'profile-gender-femme'));
+      await c.page.getByTestId('profile-gender-homme').click();
+      await saveG(c);
+      await c.page.getByText('Profil mis à jour ✓').waitFor({ timeout: 10000 });
+      check('changer pour Homme : enregistré', fu.patches.length === 1 && fu.patches[0].gender === 'homme', fu.patches);
+      await c.ctx.close();
+    }
+    {
+      // script SQL pas lancé (pas de clé « gender » dans le profil) : rien à choisir, et rien n'est envoyé pour le genre
+      const fu = clientG({});
+      const c = await openEditorG(fu);
+      check('base sans la colonne : pas de « Vous êtes » dans le profil', (await c.page.getByTestId('profile-gender-group').count()) === 0);
+      await c.page.getByTestId('profile-input-fullName').fill('Ahmed Hassan Ali');
+      await saveG(c);
+      await c.page.getByText('Profil mis à jour ✓').waitFor({ timeout: 10000 });
+      check('...et le profil s\'enregistre sans jamais envoyer « gender »', fu.patches.length === 1 && !('gender' in fu.patches[0]), fu.patches);
+      await c.ctx.close();
+    }
+
+    // ---------- 3. la carte de Zara pour les clients déjà inscrits
+    {
+      const fu = clientG({ gender: null });
+      const c = await homeG(fu);
+      await c.page.getByTestId('gender-card').waitFor({ timeout: 15000 });
+      const txt = await c.page.getByTestId('gender-card').innerText();
+      check('accueil : la carte « Zara : une petite question — vous êtes… » avec Homme, Femme et « Plus tard »', /Zara : une petite question/.test(txt) && /vous êtes/i.test(txt) && /Homme/.test(txt) && /Femme/.test(txt) && /Plus tard/.test(txt), txt);
+      await c.page.screenshot({ path: path.join(OUT, '%4-accueil-carte-zara.png') });
+      const ask = JSON.parse((await c.page.evaluate((k) => localStorage.getItem(k), askKey)) || 'null');
+      check('la demande est notée sur le téléphone (1re fois)', ask && ask.count === 1 && Math.abs(Date.now() - ask.last) < 60000, ask);
+      await c.page.getByTestId('gender-card-femme').click();
+      await c.page.getByText('Merci ✓').waitFor({ timeout: 10000 });
+      check('un geste : exactement { gender: "femme" } envoyé à la base', fu.patches.length === 1 && JSON.stringify(fu.patches[0]) === '{"gender":"femme"}', fu.patches);
+      check('la carte disparaît, remerciement affiché', (await c.page.getByTestId('gender-card').count()) === 0);
+      await c.page.reload({ waitUntil: 'load' });
+      await c.page.getByTestId('home-tagline').waitFor({ timeout: 25000 });
+      await sleep(2500);
+      check('après rechargement : la carte ne revient pas (le client a répondu)', (await c.page.getByTestId('gender-card').count()) === 0);
+      check('aucune erreur (carte de Zara)', c.errs.length === 0, c.errs);
+      await c.ctx.close();
+    }
+    {
+      // « Plus tard » : revient 3 jours après, trois fois au plus
+      const fu = clientG({ gender: null });
+      const c = await homeG(fu);
+      await c.page.getByTestId('gender-card').waitFor({ timeout: 15000 });
+      await c.page.getByTestId('gender-card-later').click();
+      check('« Plus tard » : la carte se ferme, rien n\'est envoyé à la base', (await c.page.getByTestId('gender-card').count()) === 0 && fu.patches.length === 0);
+      await c.page.reload({ waitUntil: 'load' });
+      await c.page.getByTestId('home-tagline').waitFor({ timeout: 25000 });
+      await sleep(2500);
+      check('rechargement tout de suite : la carte ne revient pas (pas avant 3 jours)', (await c.page.getByTestId('gender-card').count()) === 0);
+      await c.page.evaluate(([k, v]) => localStorage.setItem(k, v), [askKey, JSON.stringify({ count: 1, last: Date.now() - 4 * 86400000 })]);
+      await c.page.reload({ waitUntil: 'load' });
+      await c.page.getByTestId('gender-card').waitFor({ timeout: 15000 });
+      check('4 jours après : la carte revient (2e fois)', (JSON.parse(await c.page.evaluate((k) => localStorage.getItem(k), askKey)) || {}).count === 2);
+      await c.page.getByTestId('gender-card-later').click();
+      await c.page.evaluate(([k, v]) => localStorage.setItem(k, v), [askKey, JSON.stringify({ count: 3, last: Date.now() - 20 * 86400000 })]);
+      await c.page.reload({ waitUntil: 'load' });
+      await c.page.getByTestId('home-tagline').waitFor({ timeout: 25000 });
+      await sleep(2500);
+      check('après 3 demandes : Zara ne demande plus, même 20 jours après', (await c.page.getByTestId('gender-card').count()) === 0);
+      await c.ctx.close();
+    }
+    {
+      // la base refuse l'enregistrement : message, la carte reste pour réessayer
+      const fu = clientG({ gender: null }, { failNext: 1 });
+      const c = await homeG(fu);
+      await c.page.getByTestId('gender-card').waitFor({ timeout: 15000 });
+      await c.page.getByTestId('gender-card-homme').click();
+      await c.page.getByText('Enregistrement impossible').waitFor({ timeout: 10000 });
+      check('enregistrement refusé : message clair, la carte reste pour réessayer', (await c.page.getByTestId('gender-card').count()) === 1);
+      await c.page.getByTestId('gender-card-homme').click();
+      await c.page.getByText('Merci ✓').waitFor({ timeout: 10000 });
+      check('deuxième essai réussi : enregistré, la carte disparaît', fu.patches.length === 2 && fu.patches[1].gender === 'homme' && (await c.page.getByTestId('gender-card').count()) === 0, fu.patches);
+      await c.ctx.close();
+    }
+    for (const [label, fu] of [
+      ['client qui a déjà choisi', clientG({ gender: 'homme' })],
+      ['base sans la colonne (script SQL pas lancé)', clientG({})],
+      ['équipe (administrateur)', adminG({ gender: null })],
+    ]) {
+      const c = await homeG(fu);
+      await sleep(3000);
+      check(`pas de carte pour : ${label}`, (await c.page.getByTestId('gender-card').count()) === 0 && fu.patches.length === 0);
+      await c.ctx.close();
+    }
+    {
+      // visiteur sans compte : pas de carte
+      const c = await newVisitor(phone, { lang: 'fr', fakeStore: { waOrder: true, accountRequired: false, patches: [] } });
+      await c.page.goto(`${BASE}/`, { waitUntil: 'load' });
+      await c.page.getByTestId('home-tagline').waitFor({ timeout: 25000 });
+      await sleep(2500);
+      check('pas de carte pour un visiteur sans compte', (await c.page.getByTestId('gender-card').count()) === 0);
+      await c.ctx.close();
+    }
+
+    // ---------- 4. Admin › Clients : liste, statistiques par genre, filtres, fiche du client
+    const mkCust = (n, name, gender, extra = {}) => ({ id: `aaaaaaaa-0000-4000-8000-00000000000${n}`, email: `${name.toLowerCase()}@gmail.com`, full_name: name, phone: `6611110${n}`, whatsapp_number: null, profession: null, region: "N'Djamena", country: 'Tchad', address: null, loyalty_points: 0, banned: false, role: 'customer', is_admin: false, is_affiliate: false, created_at: '2026-10-20T10:00:00Z', last_login_at: '2026-10-30T10:00:00Z', login_count: 2, fake_order_count: 0, ...(gender === undefined ? {} : { gender }), ...extra });
+    const openAdminG = async ({ customers, orders = [], rpc = null, route = 'clients' }) => {
+      const fu = adminG();
+      const seen = { rpcs: [] };
+      const v = await newVisitor(phone, { lang: 'fr', storage: { [SKG]: fu.session }, fakeUser: fu, fakeStore: { waOrder: true, accountRequired: false, patches: [] } });
+      await v.page.route(/\/rest\/v1\//, (rt) => {
+        const req = rt.request();
+        const u = new URL(req.url());
+        if (req.method() === 'OPTIONS') return rt.fallback();
+        const t = u.pathname.replace('/rest/v1/', '');
+        if (t === 'profiles' && !u.searchParams.get('id') && u.searchParams.get('is_admin') === 'eq.false') return jsonG(rt, customers);
+        if (t === 'orders') return jsonG(rt, orders);
+        if (['visitor_sessions', 'product_views', 'cart_events', 'customer_sanctions', 'favorites'].includes(t)) return jsonG(rt, []);
+        if (t === 'rpc/admin_set_client_gender') {
+          const body = JSON.parse(req.postData() || '{}');
+          seen.rpcs.push(body);
+          const r = rpc ? rpc(body) : { body: null };
+          if (!r.status || r.status < 300) {
+            const c = customers.find((x) => x.id === body.target_user_id);
+            if (c) c.gender = body.new_gender;
+          }
+          return jsonG(rt, r.body, r.status || 200);
+        }
+        return rt.fallback();
+      });
+      await v.page.goto(`${BASE}/admin/${route}`, { waitUntil: 'load' });
+      return { v, seen, fu };
+    };
+    const order = (n, uid, total, status) => ({ id: `bbbbbbbb-0000-4000-8000-00000000000${n}`, user_id: uid, total, status, is_flagged_fake: false, created_at: '2026-10-25T10:00:00Z' });
+    {
+      const customers = [mkCust(1, 'Aicha', 'femme'), mkCust(2, 'Mahamat', 'homme'), mkCust(3, 'Idriss', 'homme'), mkCust(4, 'Hawa', null), mkCust(5, 'Salim', null)];
+      const orders = [order(1, customers[0].id, 30000, 'delivered'), order(2, customers[0].id, 20000, 'delivered'), order(3, customers[1].id, 10000, 'delivered'), order(4, customers[1].id, 8000, 'pending'), order(5, customers[3].id, 5000, 'delivered')];
+      const { v } = await openAdminG({ customers, orders });
+      await v.page.getByTestId('gender-stats').waitFor({ timeout: 25000 });
+      const stat = (k) => v.page.getByTestId(`gender-stat-${k}`).innerText();
+      check('Admin › Clients : « Genre connu pour 3 clients sur 5 (60 %) »', /Genre connu pour 3 clients sur 5 \(60 %\)/.test(await v.page.getByTestId('gender-stats-known').innerText()));
+      const h = await stat('homme');
+      check('Hommes : 2 clients (40 %), 1 a commandé, 2 commandes, ventes 10 000 FCFA, moyenne 5 000', /2 clients · 40 %/.test(h) && /1 ont commandé \(50 %\) · 2 commandes/.test(h) && /Ventes : 10[\s  ]000 FCFA/.test(h) && /moyenne par client : 5[\s  ]000 FCFA/.test(h), h);
+      const f = await stat('femme');
+      check('Femmes : 1 cliente (20 %), 1 a commandé, 2 commandes, ventes 50 000 FCFA', /1 client · 20 %/.test(f) && /1 ont commandé \(100 %\) · 2 commandes/.test(f) && /Ventes : 50[\s  ]000 FCFA/.test(f), f);
+      const u = await stat('unknown');
+      check('Non précisé : 2 clients (40 %), 1 a commandé, 1 commande, ventes 5 000 FCFA', /2 clients · 40 %/.test(u) && /1 ont commandé \(50 %\) · 1 commande/.test(u) && /Ventes : 5[\s  ]000 FCFA/.test(u), u);
+      await v.page.getByTestId('gender-stats').scrollIntoViewIfNeeded();
+      await v.page.screenshot({ path: path.join(OUT, '%5-admin-stats-genre.png') });
+      await v.page.getByTestId('customers-filter-men').click();
+      await v.page.getByText('2 client(s)', { exact: true }).waitFor({ timeout: 8000 });
+      const rowsG = async () => (await v.page.getByTestId('admin-customer-row').allInnerTexts()).join('\n');
+      const rowsMen = await rowsG();
+      check('filtre « Hommes » : 2 lignes, Mahamat et Idriss (ni Aicha, ni Hawa, ni Salim)', (await v.page.getByTestId('admin-customer-row').count()) === 2 && /Mahamat/.test(rowsMen) && /Idriss/.test(rowsMen) && !/Aicha|Hawa|Salim/.test(rowsMen), rowsMen.slice(0, 200));
+      check('chaque ligne dit « 👨 Homme »', (await v.page.getByTestId('customer-gender').allInnerTexts()).every((t) => /Homme/.test(t)));
+      await v.page.getByTestId('customers-filter-women').click();
+      await v.page.getByText('1 client(s)', { exact: true }).waitFor({ timeout: 8000 });
+      const rowsWomen = await rowsG();
+      check('filtre « Femmes » : 1 ligne, Aicha seulement', (await v.page.getByTestId('admin-customer-row').count()) === 1 && /Aicha/.test(rowsWomen) && !/Mahamat|Idriss|Hawa|Salim/.test(rowsWomen) && /Femme/.test((await v.page.getByTestId('customer-gender').allInnerTexts()).join()), rowsWomen.slice(0, 200));
+      await v.page.getByTestId('customers-filter-genderUnknown').click();
+      await v.page.getByText('2 client(s)', { exact: true }).waitFor({ timeout: 8000 });
+      const rowsUnknown = await rowsG();
+      check('filtre « Genre non précisé » : 2 lignes, Hawa et Salim', (await v.page.getByTestId('admin-customer-row').count()) === 2 && /Hawa/.test(rowsUnknown) && /Salim/.test(rowsUnknown) && !/Aicha|Mahamat|Idriss/.test(rowsUnknown) && (await v.page.getByTestId('customer-gender').allInnerTexts()).every((t) => /non précisé/.test(t)), rowsUnknown.slice(0, 200));
+      check('aucune erreur (Admin › Clients, genre)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+    {
+      // base sans la colonne : ni statistiques, ni filtres, ni ligne « genre »
+      const customers = [mkCust(1, 'Aicha', undefined), mkCust(2, 'Mahamat', undefined)];
+      const { v } = await openAdminG({ customers });
+      await v.page.getByText('Total clients').waitFor({ timeout: 25000 });
+      await v.page.getByText('2 client(s)', { exact: true }).waitFor({ timeout: 8000 });
+      check('base sans la colonne : pas de carte « par genre », pas de filtres Hommes / Femmes, pas de ligne genre', (await v.page.getByTestId('gender-stats').count()) === 0 && (await v.page.getByTestId('customers-filter-men').count()) === 0 && (await v.page.getByTestId('customer-gender').count()) === 0);
+      await v.ctx.close();
+    }
+    // fiche du client : l'administrateur choisit, corrige, remet « non précisé »
+    {
+      const customers = [mkCust(1, 'Aicha', null)];
+      const { v, seen } = await openAdminG({ customers, route: `clients/${customers[0].id}` });
+      await v.page.getByTestId('admin-gender-section').waitFor({ timeout: 25000 });
+      check('fiche : « Genre : Non précisé », deux boutons, pas de « Remettre »', /Non précisé/.test(await v.page.getByTestId('admin-gender-section').innerText()) && (await v.page.getByTestId('admin-gender-clear').count()) === 0 && !(await selected(v.page, 'admin-gender-homme')));
+      await v.page.getByTestId('admin-gender-femme').click();
+      await v.page.getByText('Genre enregistré ✓').waitFor({ timeout: 10000 });
+      check('un geste : UNE demande { target_user_id, new_gender: "femme" } à la base', seen.rpcs.length === 1 && seen.rpcs[0].target_user_id === customers[0].id && seen.rpcs[0].new_gender === 'femme', seen.rpcs);
+      await v.page.getByTestId('admin-gender-clear').waitFor({ timeout: 10000 });
+      check('la fiche se met à jour : « Femme » coché, « Remettre non précisé » apparaît', (await selected(v.page, 'admin-gender-femme')) && /Femme/.test(await v.page.getByTestId('admin-gender-section').innerText()));
+      await v.page.screenshot({ path: path.join(OUT, '%6-admin-fiche-genre.png') });
+      await v.page.getByTestId('admin-gender-femme').click();
+      await sleep(500);
+      check('re-toucher le choix déjà fait : aucune nouvelle demande', seen.rpcs.length === 1);
+      await v.page.getByTestId('admin-gender-homme').click();
+      await v.page.waitForFunction(() => document.querySelector('[data-testid="admin-gender-homme"]')?.getAttribute('aria-checked') === 'true', null, { timeout: 8000 });
+      check('correction en Homme : demande { new_gender: "homme" }', seen.rpcs.length === 2 && seen.rpcs[1].new_gender === 'homme', seen.rpcs);
+      await v.page.getByTestId('admin-gender-clear').click();
+      await v.page.waitForFunction(() => !document.querySelector('[data-testid="admin-gender-clear"]'), null, { timeout: 8000 });
+      check('« Remettre non précisé » : demande { new_gender: null }, le client redevient « Non précisé »', seen.rpcs.length === 3 && seen.rpcs[2].new_gender === null && /Non précisé/.test(await v.page.getByTestId('admin-gender-section').innerText()), seen.rpcs);
+      check('aucune erreur (fiche client, genre)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+    {
+      // la base refuse (script pas lancé) : message clair, rien ne change à l'écran
+      const customers = [mkCust(1, 'Aicha', null)];
+      const { v, seen } = await openAdminG({ customers, route: `clients/${customers[0].id}`, rpc: () => ({ status: 404, body: { code: 'PGRST202', message: 'Could not find the function public.admin_set_client_gender(new_gender, target_user_id) in the schema cache' } }) });
+      await v.page.getByTestId('admin-gender-section').waitFor({ timeout: 25000 });
+      await v.page.getByTestId('admin-gender-homme').click();
+      await v.page.getByText('Genre non enregistré').waitFor({ timeout: 10000 });
+      check('base qui refuse : message d\'erreur, le client reste « Non précisé »', seen.rpcs.length === 1 && /Non précisé/.test(await v.page.getByTestId('admin-gender-section').innerText()) && !(await selected(v.page, 'admin-gender-homme')));
+      await v.ctx.close();
+    }
+    {
+      // base sans la colonne : la fiche n'a pas de section genre
+      const customers = [mkCust(1, 'Aicha', undefined)];
+      const { v } = await openAdminG({ customers, route: `clients/${customers[0].id}` });
+      await v.page.getByText('Identité').first().waitFor({ timeout: 25000 });
+      check('fiche d\'un client dont la base n\'a pas la colonne : pas de section genre', (await v.page.getByTestId('admin-gender-section').count()) === 0);
       await v.ctx.close();
     }
   }
