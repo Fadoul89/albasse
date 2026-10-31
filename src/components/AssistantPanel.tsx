@@ -30,6 +30,10 @@ import { ASSISTANT_NAME, WHATSAPP_URL } from '../constants/assistant';
 const AVATAR = require('../../assets/assistante-avatar.jpg');
 const DESKTOP_WIDTH = 640;
 const COMPACT_WIDTH = 430;
+// Sur téléphone, la fenêtre de Zara n'est pas en plein écran : c'est une fenêtre qui monte du bas, sur environ 60 % de la zone visible
+// (au moins 360 px, jamais plus que la zone visible quand le clavier la réduit). Le haut de la page reste visible.
+const SHEET_RATIO = 0.6;
+const SHEET_MIN_HEIGHT = 360;
 
 const formatXAF = (n: number) => `${Math.round(n).toLocaleString('fr-FR')} FCFA`;
 
@@ -338,9 +342,12 @@ export function AssistantPanel() {
     }
   };
 
+  const areaTop = area?.top ?? 0;
+  const areaHeight = area?.height ?? height;
+  const sheetHeight = Math.round(Math.min(areaHeight, Math.max(areaHeight * SHEET_RATIO, SHEET_MIN_HEIGHT)));
   const panelStyle = desktop
     ? { right: spacing.md, bottom: spacing.md, width: 400, height: Math.min(620, height - spacing.md * 2) }
-    : { left: 0, right: 0, top: area?.top ?? 0, height: area?.height ?? height };
+    : { left: 0, right: 0, top: areaTop + areaHeight - sheetHeight, height: sheetHeight };
 
   const placeholder =
     step === 'ask_name' || step === 'cb_name'
@@ -368,14 +375,14 @@ export function AssistantPanel() {
       ref={panelRef}
       style={[
         styles.panel,
-        desktop ? styles.panelDesktop : null,
+        desktop ? styles.panelDesktop : styles.panelSheet,
         panelStyle,
         { opacity: appear, transform: [{ translateY: appear.interpolate({ inputRange: [0, 1], outputRange: [24, 0] }) }] },
       ]}
       accessibilityViewIsModal
       testID="assistant-panel"
     >
-      <LinearGradient colors={[colors.panelAlt, colors.panel]} style={[styles.header, compact && styles.headerCompact, !desktop ? { paddingTop: spacing.sm + insets.top } : null]}>
+      <LinearGradient colors={[colors.panelAlt, colors.panel]} style={[styles.header, compact && styles.headerCompact]}>
         <View style={[styles.avatarRing, compact && styles.avatarRingCompact]}>
           <Image source={AVATAR} style={styles.headerAvatar} contentFit="cover" />
           <View style={styles.onlineDot} />
@@ -477,6 +484,20 @@ const styles = StyleSheet.create({
     zIndex: 1000,
     backgroundColor: colors.background,
     overflow: 'hidden',
+  },
+  // téléphone : fenêtre du bas, coins arrondis en haut, ombre vers le haut
+  panelSheet: {
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    borderTopWidth: 1,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOpacity: 0.45,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: -6 },
+    elevation: 12,
   },
   panelDesktop: {
     borderRadius: radius.xl,

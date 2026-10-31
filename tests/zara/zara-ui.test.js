@@ -792,6 +792,38 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     check('delai de 8 s : la fenetre s’ouvre ensuite avec la phrase de Zara', true);
     await promoLate.ctx.close();
 
+    // f2. client CONNECTE : la carte s'affiche d'abord, puis Zara ouvre son chat 10 s plus tard, en fenetre du bas (pas en plein ecran)
+    {
+      const m = memberWith(null);
+      const c = await newVisitor(phone, { storage: { [SK7]: m.session }, fakeUser: m, fakeStore: { zaraAds: true, zaraDelay: 3, waOrder: true, patches: [] }, autoOpen: true });
+      const t0 = Date.now();
+      await c.page.goto(`${BASE}/`, { waitUntil: 'load' });
+      await c.page.getByTestId('zara-ad').waitFor({ timeout: 25000 });
+      const seen = (await c.page.evaluate(() => {
+        const el = document.querySelector('[data-testid="zara-ad"]');
+        const r = el.getBoundingClientRect();
+        const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+        return { visibleDansEcran: r.y >= 0 && r.y + r.height <= innerHeight, libre: !!top && el.contains(top) };
+      }));
+      check('client connecte : la carte de Zara s\'affiche (apres 3 s), dans l\'ecran et PAS cachee par le chat', seen.visibleDansEcran && seen.libre, seen);
+      // l'ancienne regle ouvrait le chat a 8 s : maintenant la carte reste seule jusqu'a 3 s + 10 s
+      const wait11 = Math.max(0, 11000 - (Date.now() - t0));
+      await sleep(wait11);
+      check('11 s apres l\'arrivee (Zara s\'ouvrait a 8 s avant) : le chat n\'est pas encore ouvert, la carte est toujours visible', (await panelOf(c.page).count()) === 0 && (await c.page.getByTestId('zara-ad').count()) === 1);
+      await panelOf(c.page).waitFor({ timeout: 12000 });
+      const openedAfter = Date.now() - t0;
+      check('Zara ouvre son chat environ 10 s apres l\'apparition de la carte (entre 12 s et 19 s apres l\'arrivee)', openedAfter >= 12000 && openedAfter <= 19000, openedAfter);
+      await sleep(700);
+      const pb = await panelOf(c.page).boundingBox();
+      const vp = c.page.viewportSize();
+      check('le chat est une fenetre du bas, pas en plein ecran : moins de 70 % de la hauteur, collee en bas, haut de l\'ecran visible', pb.height < vp.height * 0.7 && pb.y > 100 && Math.round(pb.y + pb.height) === vp.height, { pb, vp });
+      const tagline = await c.page.getByTestId('home-tagline').boundingBox();
+      check('le haut de l\'accueil reste visible au-dessus de la fenetre de Zara', !!tagline && tagline.y + tagline.height < pb.y, { tagline, pb });
+      await c.page.screenshot({ path: path.join(OUT, '7f2-pub-puis-chat-du-bas.png') });
+      check('aucune erreur (client connecte, publicite puis chat)', c.errs.length === 0, c.errs);
+      await c.ctx.close();
+    }
+
     // g. l'interrupteur de l'admin (page « Promotions intelligentes ») : la base recoit zara_ads_enabled ; colonne absente : il faut lancer le script
     const adm = memberWith(null, true);
     const fs7 = { zaraAds: false, zaraDelay: 5, waOrder: true, patches: [] };
@@ -1662,7 +1694,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
 
     // --- L9b. Zara prend la parole la premiere : sur l'Accueil, 8 secondes apres l'arrivee, elle ouvre toute seule la conversation (une fois par visite)
     {
-      const v = await newVisitor(phone, { lang: 'fr', autoOpen: true, rank: 5 });
+      const v = await newVisitor(phone, { lang: 'fr', autoOpen: true, fakeStore: { waOrder: true, patches: [], zaraAds: false }, rank: 5 });
       await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(6500);
       check('avant 8 secondes : rien ne s\'ouvre, et la petite bulle ne passe pas juste avant', (await panelOf(v.page).count()) === 0 && (await v.page.getByTestId('assistant-teaser').count()) === 0);
@@ -1679,7 +1711,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.ctx.close();
 
       // hors Accueil : pas d'ouverture automatique, la petite bulle reste comme avant
-      const o = await newVisitor(phone, { lang: 'fr', autoOpen: true });
+      const o = await newVisitor(phone, { lang: 'fr', autoOpen: true, fakeStore: { waOrder: true, patches: [], zaraAds: false } });
       await o.page.goto(`${BASE}/contact`, { waitUntil: 'load' });
       await sleep(9500);
       check('page Contact : Zara ne s\'ouvre pas seule', (await panelOf(o.page).count()) === 0);
@@ -1687,7 +1719,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await o.ctx.close();
 
       // le visiteur qui touche le bouton avant les 8 secondes : une seule ouverture, une seule conversation comptee
-      const t = await newVisitor(phone, { lang: 'fr', autoOpen: true, rank: 7 });
+      const t = await newVisitor(phone, { lang: 'fr', autoOpen: true, fakeStore: { waOrder: true, patches: [], zaraAds: false }, rank: 7 });
       await t.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
       await t.page.getByRole('button', { name: FAB_NAME }).click();
@@ -1702,7 +1734,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
           createGain() { return { gain: { setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() {} }; }
           createOscillator() { return { frequency: { setValueAtTime() {} }, connect() {}, start() { window.__ding.started++; }, stop() {} }; }
           close() { window.__ding.closed++; return Promise.resolve(); } };`;
-      const s1 = await newVisitor(phone, { lang: 'fr', autoOpen: true, initScripts: [fakeAudio('running')] });
+      const s1 = await newVisitor(phone, { lang: 'fr', autoOpen: true, fakeStore: { waOrder: true, patches: [], zaraAds: false }, initScripts: [fakeAudio('running')] });
       await s1.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(6500);
       const before = await s1.page.evaluate(() => window.__ding);
@@ -1711,7 +1743,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const played = await s1.page.evaluate(() => window.__ding);
       check('telephone qui autorise le son : un petit « ding » de deux notes quand Zara s\'ouvre', played.created === 1 && played.started === 2, played);
       await s1.ctx.close();
-      const s2 = await newVisitor(phone, { lang: 'fr', autoOpen: true, initScripts: [fakeAudio('suspended')] });
+      const s2 = await newVisitor(phone, { lang: 'fr', autoOpen: true, fakeStore: { waOrder: true, patches: [], zaraAds: false }, initScripts: [fakeAudio('suspended')] });
       await s2.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await waitText(s2.page, /Bienvenue chez Albasse Shopping/, 20000);
       const muted = await s2.page.evaluate(() => window.__ding);
@@ -4812,11 +4844,19 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     check('un article simple existe pour le test', !!prodT);
     const cartT = JSON.stringify({ state: { items: [{ id: `${prodT.id}__nc__ns`, product: prodT, quantity: 1, color: null, size: null }], updatedAt: Date.now() }, version: 1 });
     // le visiteur sans compte commande : son compte est cree a la confirmation, avec ou sans Telegram deja lie
-    const guestOrder = async (profile) => {
+    const guestOrder = async (profile, extra = {}, vis = phone) => {
       const fu = accountT(profile);
       const fo = { list: [], patches: [], created: [] };
-      const g = await newVisitor(phone, { storage: { 'albasse-cart': cartT }, fakeUser: fu, fakeOrders: fo, fakeStore: { waOrder: true, accountRequired: false, patches: [] } });
+      const g = await newVisitor(vis, { storage: { 'albasse-cart': cartT, ...(extra.storage || {}) }, fakeUser: fu, fakeOrders: fo, fakeStore: { waOrder: true, accountRequired: false, patches: [] }, initScripts: extra.initScripts || [] });
       g.hits = await watchTelegram(g.ctx);
+      // les clics « Installer » sont notes (source|appareil|navigateur|resultat), rien n'est ecrit en vrai
+      g.clicks = [];
+      const CORS_I = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+      await g.ctx.route('**/rest/v1/app_download_clicks*', (route) => {
+        if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS_I });
+        try { g.clicks.push(route.request().postDataJSON().source); } catch (e) {}
+        return route.fulfill({ status: 201, headers: CORS_I, body: '' });
+      });
       await g.page.goto(`${BASE}/commande`, { waitUntil: 'load' });
       await g.page.getByTestId('checkout-first-name').waitFor({ timeout: 25000 });
       await g.page.getByTestId('checkout-first-name').fill('Amina');
@@ -4852,6 +4892,62 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const g = await guestOrder({ telegram_chat_id: 777 });
       await sleep(1500);
       check('Telegram deja lie : aucune carte d\'invitation sur la confirmation', (await g.page.getByTestId('confirm-telegram').count()) === 0);
+      await g.ctx.close();
+    }
+
+    // --- d. l'application apres une commande : carte « Installez l'application » sur la confirmation (telephone sans l'application seulement)
+    const FAKE_PROMPT = "window.__fakePromptCalls = 0; window.__pwaInstallPrompt__ = { prompt: async () => { window.__fakePromptCalls++; }, userChoice: Promise.resolve({ outcome: 'accepted' }) };";
+    {
+      const g = await guestOrder({});
+      await g.page.getByTestId('confirm-install').waitFor({ timeout: 10000 });
+      const card = await g.page.getByTestId('confirm-install').innerText();
+      check('confirmation (Android) : carte « Installez l\'application Albasse Shopping », ce que ca apporte, gratuit', /Installez l.application Albasse Shopping/.test(card) && /Suivez votre commande/.test(card) && /gratuit/.test(card) && /Installer l.application/.test(card), card);
+      const yi = (await g.page.getByTestId('confirm-install').boundingBox()).y;
+      const yt = (await g.page.getByTestId('confirm-telegram').boundingBox()).y;
+      check('la carte de l\'application est AVANT la carte Telegram (l\'application d\'abord)', yi < yt, { yi, yt });
+      await g.page.screenshot({ path: path.join(OUT, '+d-confirmation-installer.png'), fullPage: true });
+      await g.page.getByText("📲 Installer l'application", { exact: true }).locator('visible=true').first().click();
+      await g.page.getByTestId('confirm-install-message').waitFor({ timeout: 8000 });
+      check('Chrome pas encore pret : un message clair (patientez / etapes a la main), la carte reste', ((await g.page.getByTestId('confirm-install-message').innerText()) || '').length > 20 && (await g.page.getByTestId('confirm-install').count()) === 1);
+      await sleep(800);
+      check('le clic est note : source « commande », appareil Android, resultat « indisponible »', g.clicks.length === 1 && /^commande\|android\|navigateur\|indisponible$/.test(g.clicks[0]), g.clicks);
+      check('aucune erreur (carte application)', g.errs.length === 0, g.errs);
+      await g.ctx.close();
+    }
+    {
+      const g = await guestOrder({}, { initScripts: [FAKE_PROMPT] });
+      await g.page.getByTestId('confirm-install').waitFor({ timeout: 10000 });
+      await g.page.getByText("📲 Installer l'application", { exact: true }).locator('visible=true').first().click();
+      await g.page.getByTestId('confirm-install-done').waitFor({ timeout: 8000 });
+      check('Android avec la boite d\'installation : un toucher l\'ouvre (une seule fois), puis « Application installee »', (await g.page.evaluate(() => window.__fakePromptCalls)) === 1 && /Application installée/.test(await g.page.getByTestId('confirm-install-done').innerText()) && (await g.page.getByTestId('confirm-install').count()) === 0);
+      await sleep(800);
+      check('le clic est note : « commande|android|navigateur|accepte »', g.clicks.includes('commande|android|navigateur|accepte'), g.clicks);
+      await g.page.screenshot({ path: path.join(OUT, '+d-confirmation-installee.png'), fullPage: true });
+      check('aucune erreur (installation acceptee)', g.errs.length === 0, g.errs);
+      await g.ctx.close();
+    }
+    {
+      const g = await guestOrder({}, { storage: { albasse_app_installed: '1' } });
+      await sleep(2500);
+      check('application deja installee : aucune carte d\'installation sur la confirmation', (await g.page.getByTestId('confirm-install').count()) === 0 && (await g.page.getByTestId('confirm-install-done').count()) === 0);
+      await g.ctx.close();
+    }
+    {
+      const iphoneT = { ...devices['iPhone 13'], viewport: { width: 390, height: 800 } };
+      const g = await guestOrder({}, {}, iphoneT);
+      await g.page.getByTestId('confirm-install').waitFor({ timeout: 10000 });
+      check('iPhone : le bouton dit « Voir comment installer »', (await g.page.getByText('📲 Voir comment installer', { exact: true }).count()) >= 1);
+      await g.page.getByText('📲 Voir comment installer', { exact: true }).locator('visible=true').first().click();
+      await g.page.getByText(/Installer Albasse sur iPhone/).first().waitFor({ timeout: 8000 });
+      check('iPhone : le tutoriel video s\'ouvre', true);
+      await sleep(800);
+      check('le clic est note : « commande|iphone|navigateur|ios-guide »', g.clicks.includes('commande|iphone|navigateur|ios-guide'), g.clicks);
+      await g.ctx.close();
+    }
+    {
+      const g = await guestOrder({}, {}, { viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
+      await sleep(2500);
+      check('ordinateur : aucune carte d\'installation (telephone seulement)', (await g.page.getByTestId('confirm-install').count()) === 0);
       await g.ctx.close();
     }
 
@@ -6821,8 +6917,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const cartOf = (qty) => JSON.stringify({ state: { items: [{ id: `${realProduct.id}__nc__ns`, product: realProduct, quantity: qty, color: null, size: null }], updatedAt: Date.now() }, version: 1 });
     // le client est deja connu et salue (conversation et « deja salue » mis dans l'onglet) : ces essais testent la commande, pas l'accueil
     const seedOf = (lg) => ({ albasse_zara_v1: JSON.stringify({ messages: [{ id: 's1', role: 'assistant', text: lg === 'ar' ? 'مرحباً' : 'Bonjour', lang: lg }], step: 'menu', ctx: null, need: null, order: null }), albasse_zara_member: UID });
-    const orderVisitor = (fu, db, { qty = 1, lg = 'fr' } = {}) =>
-      newVisitor(phone, { lang: lg, storage: { 'sb-xtitsmmccpkelxfjyqyh-auth-token': fu.session, 'albasse-cart': cartOf(qty) }, session: seedOf(lg), fakeUser: fu, fakeOrders: db });
+    const orderVisitor = (fu, db, { qty = 1, lg = 'fr', install } = {}) =>
+      newVisitor(phone, { ...(install !== undefined ? { zaraInstall: install } : {}), lang: lg, storage: { 'sb-xtitsmmccpkelxfjyqyh-auth-token': fu.session, 'albasse-cart': cartOf(qty) }, session: seedOf(lg), fakeUser: fu, fakeOrders: db });
     const openOrderChat = async (c) => {
       await c.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await sleep(2500);
@@ -6961,6 +7057,38 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('recapitulatif sans rendez-vous : aucune ligne « Livraison programmee »', !/Livraison programmée/.test(recap), recap);
       check('aucune erreur (paiement a la livraison)', c.errs.length === 0, c.errs);
       await c.ctx.close();
+    }
+
+    // --- O2d. apres une commande dans le chat : Zara propose l'application (question deja posee sans reponse = elle la repose ; « Plus tard » = jamais)
+    {
+      for (const [install, expected] of [['asked', true], ['dismissed', false]]) {
+        const fu = mkMember('Ahmed Hassan');
+        const db = newDb();
+        const c = await orderVisitor(fu, db, { qty: 1, install });
+        await openOrderChat(c);
+        await ask(c.page, 'je veux commander', /Quelle est votre adresse de livraison/);
+        await typeIn(c.page, 'Farcha, face à la pharmacie');
+        await waitText(c.page, /Dans quelle ville doit-on vous livrer/);
+        await typeIn(c.page, homeCity.name);
+        await waitText(c.page, /Voulez-vous choisir le jour et l’heure/);
+        await typeIn(c.page, 'passer');
+        await waitText(c.page, /Comment souhaitez-vous payer/);
+        await typeIn(c.page, 'je paie à la livraison');
+        await waitText(c.page, /Souhaitez-vous l’emballage cadeau/);
+        await typeIn(c.page, 'non merci');
+        await waitText(c.page, /Récapitulatif de votre commande/);
+        await typeIn(c.page, 'oui');
+        await waitText(c.page, /a bien été enregistrée/);
+        await sleep(3500);
+        const asked = (await panelOf(c.page).getByText(/Avez-vous déjà installé l’application Albasse Shopping/).count()) >= 1;
+        if (expected) {
+          check('apres la commande (question deja posee sans reponse) : Zara repropose l\'application, avec le bouton pour l\'installer', asked && (await chipLabels(c.page)).some((l) => /Voir comment installer|Installer Albasse Shopping/.test(l)), await chipLabels(c.page));
+        } else {
+          check('apres la commande, le client avait repondu « Plus tard » : Zara ne le redemande pas', !asked, await chipLabels(c.page));
+        }
+        check('aucune erreur (commande puis installation)', c.errs.length === 0, c.errs);
+        await c.ctx.close();
+      }
     }
 
     // --- O2b. N'Djamena : le client choisit un rendez-vous de livraison (jour puis heure) dans le chat
@@ -8111,12 +8239,12 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await k.page.getByRole('button', { name: FAB_NAME }).click();
       await sleep(600);
       const full = await panelOf(k.page).boundingBox();
-      check('sans clavier : la fenetre occupe toute la hauteur', Math.round(full.height) === 800, full);
+      check('sans clavier : la fenetre n\'est PAS en plein ecran : fenetre du bas, 60 % de la hauteur (480 px sur 800), collee en bas, pleine largeur', Math.round(full.height) === 480 && Math.round(full.y + full.height) === 800 && Math.round(full.width) === 390, full);
       await k.page.evaluate(() => { window.__vv.height = 430; window.__vv.offsetTop = 0; window.__vv.dispatchEvent(new Event('resize')); });
       await sleep(400);
       const small = await panelOf(k.page).boundingBox();
       const inputBox = await k.page.getByLabel('Votre message').boundingBox();
-      check('clavier ouvert (zone visible de 430 px) : la fenetre se reduit, la saisie reste visible', Math.round(small.height) === 430 && Math.round(small.y) === 0 && inputBox.y + inputBox.height <= 430, { small, inputBox });
+      check('clavier ouvert (zone visible de 430 px) : la fenetre se reduit (360 px, collee en bas de la zone visible), la saisie reste visible', Math.round(small.height) === 360 && Math.round(small.y + small.height) === 430 && inputBox.y + inputBox.height <= 430 && inputBox.y >= small.y, { small, inputBox });
       await k.page.evaluate(() => { window.__vv.height = 800; window.__vv.dispatchEvent(new Event('resize')); });
       await sleep(300);
       await k.page.getByRole('button', { name: 'Fermer' }).click();

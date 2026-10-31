@@ -30,10 +30,16 @@ directeur, ingénieur, médecin, avocat, juriste, banquier, entrepreneur, homme 
 Ces clients lisent d'abord « Article rare » (si le stock est vraiment petit) et voient en premier les articles les plus haut de gamme.
 Les faits sont les mêmes pour tous : un article abondant n'est jamais présenté comme rare.
 
+## Qui voit la publicité, et le chat de Zara
+- La carte s'affiche sur l'accueil pour les clients **connectés** avec leur compte (avec « Compte obligatoire à l'entrée », un visiteur sans compte ne voit que la page d'inscription : la carte attend derrière).
+- **Le chat de Zara ne cache plus la publicité** : quand Zara gère les publicités et qu'une carte va s'afficher, Zara ouvre son chat **10 secondes après l'apparition de la carte** (au lieu de 8 secondes après l'arrivée). Avec un délai de 5 s : carte à 5 s, chat à 15 s. Avec 30 s : chat à 40 s (un délai court est donc conseillé). Sans publicité à montrer (interrupteur éteint, aucun fait vrai), le chat s'ouvre à 8 s comme avant.
+- **Sur téléphone, la fenêtre de Zara n'est plus en plein écran** : c'est une fenêtre qui monte du bas, sur environ 60 % de la zone visible (au moins 360 px), avec des coins arrondis ; le haut de la page reste visible. Quand le clavier s'ouvre, elle se réduit et la zone de saisie reste au-dessus du clavier. Sur ordinateur : toujours la carte de 400 px en bas à droite.
+- Réglages dans le code : `SHEET_RATIO` et `SHEET_MIN_HEIGHT` (`src/components/AssistantPanel.tsx`), `ZARA_AD_TO_CHAT_MS` (`src/store/zaraAdSignal.ts`).
+
 ## Données
 - Commandes réelles : fonction `assistant_product_sales` (totaux par article, jamais un nom de client), commandes non annulées et non signalées « fausses ».
 - Stock : celui du catalogue.
 
 ## Tests
-- `node --import ./tests/zara/register.mjs tests/email/zara-ads.test.ts` (38 contrôles)
-- navigateur : `PARTS=7 … node tests/zara/zara-ui.test.js <dist> <port>`
+- `node --import ./tests/zara/register.mjs tests/email/zara-ads.test.ts` (54 contrôles, dont l'heure d'ouverture du chat)
+- navigateur : `PARTS=7E … node tests/zara/zara-ui.test.js <dist> <port>` (7 : publicité puis chat chez un client connecté ; E : fenêtre du bas et clavier)

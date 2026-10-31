@@ -12,7 +12,8 @@ export type InstallClickOutcome = 'ios-guide' | 'chrome-intent' | 'chrome-bloque
 // Une ligne par toucher. Le résultat et l'appareil sont écrits dans la colonne « source » (texte libre), sans changer la base :
 //   popup|android|tiktok|chrome-bloque  (fenêtre | appareil | navigateur | résultat)
 // Les clics restent comptés une fois chacun ; pour le détail : split_part(source, '|', n).
-export function trackAppDownloadClick(source: 'banner' | 'popup' | 'page', outcome?: InstallClickOutcome) {
+// source : 'banner' (bandeau du haut), 'popup' (fenêtre « Télécharge l'app »), 'page' (page /installer), 'commande' (carte sur la confirmation d'une commande)
+export function trackAppDownloadClick(source: 'banner' | 'popup' | 'page' | 'commande', outcome?: InstallClickOutcome) {
   if (!isSupabaseConfigured) return;
   const device = isIosDevice() ? 'iphone' : isAndroidDevice() ? 'android' : 'pc';
   const label = outcome ? `${source}|${device}|${inAppName() ?? 'navigateur'}|${outcome}` : source;

@@ -13,6 +13,14 @@ export const appPopupSeenKey = () => `albasse_app_popup_seen_${new Date().toISOS
 // Même clé et même forme que la mémoire de Zara pour l'installation (assistantStore) : « déjà demandé », pour qu'elle ne redemande pas juste derrière.
 const ZARA_INSTALL_KEY = 'albasse_zara_install';
 
+// Après une commande, le client a confiance : on lui propose l'application. Téléphone seulement (jamais sur ordinateur), et seulement s'il n'a pas
+// déjà l'application. Contrairement à la page d'après l'inscription, elle est proposée après chaque commande tant que l'application n'est pas installée.
+export function installOfferAfterOrderDue(): boolean {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return false;
+  if (!isIosDevice() && !isAndroidDevice()) return false;
+  return !(isRunningInsideApp() || isRunningAsInstalledPwa() || isAppInstalledOnDevice());
+}
+
 export function installAfterSignUpDue(): boolean {
   if (Platform.OS !== 'web' || typeof window === 'undefined') return false;
   if (!isIosDevice() && !isAndroidDevice()) return false; // téléphone seulement, jamais sur ordinateur
