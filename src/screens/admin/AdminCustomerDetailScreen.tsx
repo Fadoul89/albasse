@@ -26,6 +26,8 @@ import { visibleEmail } from '../../lib/phoneAuth';
 import { generateTempPassword } from '../../lib/guestAccount';
 import { adminResetError, recoveryMessage, recoveryPhone } from '../../lib/passwordRecovery';
 import { whatsappLink } from '../../lib/relanceMessage';
+import { GenderPicker } from '../../components/GenderPicker';
+import { genderLabel, genderOf, hasGenderColumn, type Gender } from '../../lib/clientGender';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
 
@@ -134,6 +136,19 @@ export function AdminCustomerDetailScreen({ route }: Props) {
     return whatsappLink(digits, recoveryMessage({ firstName: first, loginEmail: newCode.loginEmail, code: newCode.code }));
   };
 
+  // Homme / Femme : l'administrateur choisit (ou remet « non précisé ») ; la base vérifie qu'il est administrateur (admin_set_client_gender)
+  const handleGender = async (gender: Gender | null) => {
+    setProcessing(true);
+    const { error } = await supabase.rpc('admin_set_client_gender', { target_user_id: profile.id, new_gender: gender });
+    setProcessing(false);
+    if (error) {
+      showToast(error.message, { title: 'Genre non enregistré', type: 'error' });
+      return;
+    }
+    showToast(gender ? `${profile.full_name ?? profile.email} : ${genderLabel(gender)}.` : 'Genre remis à « non précisé ».', { title: 'Genre enregistré ✓', type: 'success' });
+    refreshCustomers();
+  };
+
   const handleSendMessage = async () => {
     if (!msgTitle.trim() || !msgBody.trim()) {
       showToast('Merci de remplir le titre et le message.', { title: 'Champs manquants', type: 'error' });
@@ -227,6 +242,17 @@ export function AdminCustomerDetailScreen({ route }: Props) {
 
         <Section title="👤 Identité">
           <Row label="Nom et prénom" value={profile.full_name ?? '—'} />
+          {hasGenderColumn(profile) ? (
+            <View testID="admin-gender-section">
+              <Row label="Genre" value={genderLabel(profile.gender)} />
+              <GenderPicker value={genderOf(profile.gender) ?? ''} onChange={(g) => g !== genderOf(profile.gender) && handleGender(g)} testIDPrefix="admin-gender" disabled={processing} />
+              {genderOf(profile.gender) ? (
+                <Pressable testID="admin-gender-clear" onPress={() => handleGender(null)} disabled={processing}>
+                  <Text style={styles.genderClear}>Remettre « non précisé »</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
           <Row label="Téléphone" value={profile.phone ?? '—'} />
           <Row label="Profession" value={profile.profession ?? '—'} />
           <Row label="Ville" value={profile.region ?? '—'} />
@@ -373,6 +399,7 @@ const styles = StyleSheet.create({
   },
   msgTextarea: { minHeight: 90, textAlignVertical: 'top' },
   codeHelp: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 12, lineHeight: 18 },
+  genderClear: { color: colors.gold, fontFamily: fonts.bodyMedium, fontSize: 12, marginBottom: spacing.sm },
   codeBox: {
     backgroundColor: colors.panelAlt,
     borderRadius: radius.sm,

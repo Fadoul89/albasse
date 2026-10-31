@@ -19,6 +19,7 @@ import { ChadFlag } from '../components/ChadFlag';
 import { CityClock } from '../components/CityClock';
 import { ZaraAdCard } from '../components/ZaraAdCard';
 import { WebPushBanner } from '../components/WebPushBanner';
+import { GenderQuestionCard } from '../components/GenderQuestionCard';
 import { fetchOnlineCount, onlineLabel } from '../lib/onlineCount';
 import { coldSeasonActive, coldSeasonPicks } from '../lib/coldSeason';
 import { activeFlash, activePromotions, nextPromoChange } from '../lib/promotions';
@@ -123,6 +124,8 @@ export function HomeScreen() {
           <CustomerNotificationBell />
         </View>
       </View>
+
+      <GenderQuestionCard />
 
       <View style={styles.independenceBanner}>
         <ChadFlag width={26} height={18} />
