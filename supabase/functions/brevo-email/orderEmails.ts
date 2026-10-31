@@ -3,6 +3,11 @@
 
 export const FAKE_DOMAIN = "@tel.albasseshopping.com";
 export const SITE = "https://www.albasseshopping.com";
+// Les 3 couleurs des e-mails (choisies par le patron) : violet aubergine (en-tête, titres, prix), doré (filet, bouton, remises), argenté (fond, traits, textes sur violet).
+// Le doré ne sert jamais de couleur de texte sur fond blanc (trop pâle) : il sert de fond (bouton, pastille) ou de texte sur le violet.
+export const BRAND = { violet: "#4B0082", gold: "#D4AF37", silver: "#C0C0C0" } as const;
+// lien « Me désinscrire » : doré souligné sur le pied de page violet (lisible)
+export const FOOTER_LINK_STYLE = `color:${BRAND.gold};text-decoration:underline`;
 
 // mêmes règles que la boutique (src/constants/shopRules.ts et src/lib/loyaltyDiscount.ts)
 const PAYMENT = { airtel: "60 60 51 51", moov: "99 22 10 17" };
@@ -55,26 +60,26 @@ export function layout(title: string, bodyHtml: string, footerNote = "Cet e-mail
   const dir = rtl ? ' dir="rtl"' : "";
   const align = rtl ? "text-align:right;" : "";
   const pre = preheader ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all">${escapeHtml(preheader)}</div>` : "";
-  return `<!doctype html><html lang="${lang}"${dir}><body style="margin:0;background:#f4f4f7;font-family:Arial,Helvetica,sans-serif;color:#1d2433"${dir}>${pre}
+  return `<!doctype html><html lang="${lang}"${dir}><body style="margin:0;background:${BRAND.silver};font-family:Arial,Helvetica,sans-serif;color:#1d2433"${dir}>${pre}
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:14px;overflow:hidden">
-<tr><td style="background:#062266;padding:14px 24px"><table role="presentation" cellpadding="0" cellspacing="0"${dir}><tr><td style="padding-${rtl ? "left" : "right"}:12px"><img src="${SITE}/icon-192.png" width="44" height="44" alt="" style="display:block;width:44px;height:44px;border-radius:22px"></td><td style="color:#e8c46c;font-size:20px;font-weight:bold;font-family:Arial,Helvetica,sans-serif">Albasse Shopping</td></tr></table></td></tr>
-<tr><td style="padding:24px;${align}"><h1 style="margin:0 0 12px;font-size:20px;color:#062266">${escapeHtml(title)}</h1>${bodyHtml}</td></tr>
-<tr><td style="padding:16px 24px;background:#f4f4f7;font-size:12px;color:#6b7280;${align}">Albasse Shopping, N'Djamena, Tchad · albasseshopping.com<br>${escapeHtml(footerNote)}${footerHtml}</td></tr>
+<tr><td style="background:${BRAND.violet};padding:14px 24px;border-bottom:3px solid ${BRAND.gold}"><table role="presentation" cellpadding="0" cellspacing="0"${dir}><tr><td style="padding-${rtl ? "left" : "right"}:12px"><img src="${SITE}/icon-192.png" width="44" height="44" alt="" style="display:block;width:44px;height:44px;border-radius:22px;border:2px solid ${BRAND.silver}"></td><td style="color:${BRAND.gold};font-size:20px;font-weight:bold;font-family:Arial,Helvetica,sans-serif">Albasse Shopping</td></tr></table></td></tr>
+<tr><td style="padding:24px;${align}"><h1 style="margin:0 0 12px;font-size:20px;color:${BRAND.violet}">${escapeHtml(title)}</h1>${bodyHtml}</td></tr>
+<tr><td style="padding:16px 24px;background:${BRAND.violet};font-size:12px;line-height:18px;color:${BRAND.silver};${align}">Albasse Shopping, N'Djamena, Tchad · albasseshopping.com<br>${escapeHtml(footerNote)}${footerHtml}</td></tr>
 </table></td></tr></table></body></html>`;
 }
 
 export const para = (html: string) => `<p style="font-size:15px;line-height:22px;margin:0 0 12px">${html}</p>`;
 export const button = (href: string, label: string) =>
-  `<p style="margin:18px 0 6px"><a href="${href}" style="background:#062266;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:24px;font-size:14px;font-weight:bold;display:inline-block">${escapeHtml(label)}</a></p>`;
+  `<p style="margin:18px 0 6px"><a href="${href}" style="background:${BRAND.gold};color:${BRAND.violet};text-decoration:none;padding:12px 22px;border-radius:24px;font-size:14px;font-weight:bold;display:inline-block">${escapeHtml(label)}</a></p>`;
 
 function itemsTable(order: OrderRow): string {
   const rows = (order.items ?? [])
     .map((i) => {
       const variant = [i.size ? `Taille ${i.size}` : "", i.color ?? ""].filter(Boolean).join(" · ");
-      return `<tr><td style="padding:8px 0;border-bottom:1px solid #eceef3;font-size:14px">${escapeHtml(String(i.product_name ?? "").replace(/\s+/g, " ").trim())}${
+      return `<tr><td style="padding:8px 0;border-bottom:1px solid ${BRAND.silver};font-size:14px">${escapeHtml(String(i.product_name ?? "").replace(/\s+/g, " ").trim())}${
         variant ? `<br><span style="color:#6b7280;font-size:12px">${escapeHtml(variant)}</span>` : ""
-      }</td><td style="padding:8px 0 8px 12px;border-bottom:1px solid #eceef3;font-size:14px;text-align:right;white-space:nowrap">${Number(i.quantity) || 1} × ${fmt(i.unit_price)}</td></tr>`;
+      }</td><td style="padding:8px 0 8px 12px;border-bottom:1px solid ${BRAND.silver};font-size:14px;text-align:right;white-space:nowrap">${Number(i.quantity) || 1} × ${fmt(i.unit_price)}</td></tr>`;
     })
     .join("");
   const extra: string[] = [];
@@ -106,7 +111,7 @@ export function orderReceivedEmail(order: OrderRow, fullName: unknown): { subjec
       (city ? para(`🚚 Livraison à <b>${escapeHtml(city)}</b>. Nos services de livraison sont ouverts de ${DELIVERY_HOURS}.`) : "") +
       (pay ? para(escapeHtml(pay)) : "") +
       button(`${SITE}/mes-commandes`, "Suivre mes commandes") +
-      para(`🧾 <a href="${invoiceLink(order.id)}" style="color:#062266;font-weight:bold">Voir ma facture</a> (connectez-vous avec votre compte pour l'ouvrir).`)
+      para(`🧾 <a href="${invoiceLink(order.id)}" style="color:${BRAND.violet};font-weight:bold">Voir ma facture</a> (connectez-vous avec votre compte pour l'ouvrir).`)
   );
   return { subject: `Commande reçue n° ${ref} — Albasse Shopping`, html };
 }
@@ -130,7 +135,7 @@ export function orderDeliveredEmail(order: OrderRow, fullName: unknown, loyalty:
       (fidelity ? para(escapeHtml(fidelity)) : "") +
       para("Un souci avec votre commande ? Répondez simplement à cet e-mail, nous vous aidons.") +
       button(`${SITE}/mes-commandes`, "Voir mes commandes") +
-      para(`🧾 <a href="${invoiceLink(order.id)}" style="color:#062266;font-weight:bold">Voir ma facture</a>`)
+      para(`🧾 <a href="${invoiceLink(order.id)}" style="color:${BRAND.violet};font-weight:bold">Voir ma facture</a>`)
   );
   return { subject: `Votre commande n° ${ref} est livrée 🎉`, html };
 }

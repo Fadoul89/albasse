@@ -1,6 +1,6 @@
 // E-mail publicitaire aux clients absents depuis 7 jours : des fonctions pures, sans réseau ni base, testées dans tests/email/promo-emails.test.ts.
 // Les articles, les prix et la vente flash viennent de la base (jamais d'un texte envoyé par l'application) ; rien n'est inventé.
-import { SITE, button, escapeHtml, firstName, fmt, layout, para } from "./orderEmails.ts";
+import { BRAND, FOOTER_LINK_STYLE, SITE, button, escapeHtml, firstName, fmt, layout, para } from "./orderEmails.ts";
 
 export interface PromoProduct {
   id: string;
@@ -43,13 +43,13 @@ function productRow(p: PromoProduct): string {
   const off = reduced ? Math.round((1 - Number(p.price) / Number(p.compare_at_price)) * 100) : 0;
   const href = productUrl(p);
   return `<tr>
-<td style="padding:10px 0;border-bottom:1px solid #eceef3;width:84px;vertical-align:top">${
+<td style="padding:10px 0;border-bottom:1px solid ${BRAND.silver};width:84px;vertical-align:top">${
     img ? `<a href="${href}"><img src="${img}" width="72" height="72" alt="" style="display:block;width:72px;height:72px;object-fit:cover;border-radius:8px"></a>` : ""
   }</td>
-<td style="padding:10px 0 10px 8px;border-bottom:1px solid #eceef3;vertical-align:top;font-size:14px;line-height:20px"><a href="${href}" style="color:#1d2433;text-decoration:none;font-weight:bold">${escapeHtml(
+<td style="padding:10px 0 10px 8px;border-bottom:1px solid ${BRAND.silver};vertical-align:top;font-size:14px;line-height:20px"><a href="${href}" style="color:#1d2433;text-decoration:none;font-weight:bold">${escapeHtml(
     String(p.name).replace(/\s+/g, " ").trim()
-  )}</a><br><span style="font-size:15px;color:#062266;font-weight:bold">${fmt(Number(p.price))}</span>${
-    reduced ? ` <span style="color:#6b7280;text-decoration:line-through;font-size:12px">${fmt(Number(p.compare_at_price))}</span> <span style="color:#c0262d;font-size:12px;font-weight:bold">−${off} %</span>` : ""
+  )}</a><br><span style="font-size:15px;color:${BRAND.violet};font-weight:bold">${fmt(Number(p.price))}</span>${
+    reduced ? ` <span style="color:#6b7280;text-decoration:line-through;font-size:12px">${fmt(Number(p.compare_at_price))}</span> <span style="background:${BRAND.gold};color:${BRAND.violet};font-size:12px;font-weight:bold;padding:2px 7px;border-radius:10px">−${off} %</span>` : ""
   }</td></tr>`;
 }
 
@@ -70,7 +70,7 @@ export function inactiveClientEmail(input: {
       button(SITE, "Voir tous les articles") +
       para("🚚 Livraison partout au Tchad 🇹🇩"),
     "Vous recevez cet e-mail parce que vous avez accepté de recevoir nos promotions sur albasseshopping.com.",
-    `<br><a href="${escapeHtml(input.unsubscribeUrl)}" style="color:#6b7280">Me désinscrire des e-mails publicitaires</a>`
+    `<br><a href="${escapeHtml(input.unsubscribeUrl)}" style="${FOOTER_LINK_STYLE}">Me désinscrire des e-mails publicitaires</a>`
   );
   const subject = flash ? "🔥 Vente flash en cours chez Albasse Shopping" : name ? `${name}, les articles du moment vous attendent 🛍️` : "Les articles du moment chez Albasse Shopping 🛍️";
   return { subject, html };
