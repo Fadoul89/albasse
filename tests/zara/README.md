@@ -77,3 +77,10 @@ Même méthode : il n'est pas appliqué à la vraie base par les tests, on le jo
 Contrôles faits : relancé sans erreur ; ni l'anonyme ni un client ne peuvent l'appeler (« Non autorise ») ; 1 500 visites de plus que la limite de 1 000 lignes sont bien comptées ;
 visiteurs distincts ; « vraie visite » (20 s, 2 pages ou connecté) ; détail par source (source vide = « Inconnue ») et par campagne ; articles vus et ajouts au panier par source ;
 seules les commandes livrées et non fausses comptent ; articles les plus vus sur la période demandée ; période passée ; période sans visite ; activité de chaque client (visites, durée, source principale, articles vus).
+
+## Le script SQL de l'effacement de l'historique des notifications (add-push-history-cleanup.sql)
+Même méthode : il n'est pas appliqué à la vraie base par les tests, on le joue sur un Postgres local jetable (`sh tests/sql/run-push-history.sh`, pg_cron simulé).
+Contrôles faits : relancé sans erreur ; la colonne `status_changed_at` est remplie pour les lignes qui existaient (envoyée = depuis son envoi, les autres = depuis leur création) ;
+la tâche d'effacement est planifiée une seule fois (toutes les 10 minutes) et celle d'envoi n'a pas bougé ; ni l'anonyme ni le client ne peuvent lancer l'effacement ;
+les lignes finies depuis plus de 24 h partent (avec leurs clics), les récentes restent, les notifications programmées ne sont jamais touchées ;
+annuler ou envoyer remet le départ des 24 h à maintenant (pas à la date de création) ; modifier autre chose que l'état (un clic) ne le change pas ; l'administrateur lit et annule comme avant, le client ne voit rien.

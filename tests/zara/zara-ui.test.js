@@ -4724,6 +4724,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const txt = await section(c).innerText();
       check('la section est la premiere de « Promotions intelligentes », avec « A venir (1) » et l\'historique', /📣 Notifications push programmées/.test(txt) && /À venir \(1\)/.test(txt) && /Historique/.test(txt), txt.slice(0, 300));
       check('historique : « Envoyee » et « Pas envoyee (trop en retard) »', /✅ Envoyée/.test(await c.page.getByTestId('push-row-p2').innerText()) && /Pas envoyée \(trop en retard\)/.test(await c.page.getByTestId('push-row-p3').innerText()));
+      check('historique : une phrase explique l\'effacement automatique 24 h après l\'envoi ou l\'annulation (clics compris)', /s'efface toute seule 24 h après son envoi ou son annulation \(ses clics aussi\)/.test(await c.page.getByTestId('push-history-note').innerText()));
       const badge = c.page.getByTestId('push-clicks-p2');
       const badgeInfo = await badge.evaluate((el) => ({ text: el.innerText, bg: getComputedStyle(el).backgroundColor }));
       check('sous la notification envoyee : « 👆 3 clics » et « envoyee a 11 telephones · 27 % », sur fond vert bien visible', /👆 3 clics/.test(badgeInfo.text) && /envoyée à 11 téléphones · 27 %/.test(badgeInfo.text) && badgeInfo.bg === 'rgb(22, 163, 74)', badgeInfo);

@@ -272,12 +272,17 @@ export function ScheduledPushes({ products }: { products: Product[] }) {
       ))}
 
       {history.length > 0 ? (
-        <View style={styles.historyHead}>
-          <Text style={[styles.listTitle, { marginBottom: 0 }]}>Historique</Text>
-          <Pressable onPress={() => void load()} hitSlop={8} testID="push-refresh">
-            <Text style={styles.link}>↻ Actualiser les clics</Text>
-          </Pressable>
-        </View>
+        <>
+          <View style={styles.historyHead}>
+            <Text style={[styles.listTitle, { marginBottom: 0 }]}>Historique</Text>
+            <Pressable onPress={() => void load()} hitSlop={8} testID="push-refresh">
+              <Text style={styles.link}>↻ Actualiser les clics</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.helper} testID="push-history-note">
+            Chaque ligne s'efface toute seule 24 h après son envoi ou son annulation (ses clics aussi).
+          </Text>
+        </>
       ) : null}
       {history.map((r) => (
         <PushRow key={r.id} row={r} />
