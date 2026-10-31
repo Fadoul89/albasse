@@ -224,14 +224,27 @@ export async function fetchAssistantStats(period: StatsPeriod): Promise<Assistan
 }
 
 // Le tableau de suivi de navigation (administrateur seulement : la base refuse les autres).
-export type BrowsingOverviewResult = { ok: true; overview: BrowsingOverview } | { ok: false; reason: StatsFailure; message: string };
+// limit : le nombre de lignes demandé pour la liste « Détail » (300 sans filtre ; jusqu'à 1 000 quand on demande un seul niveau d'intérêt)
+export type BrowsingOverviewResult = { ok: true; overview: BrowsingOverview; limit: number } | { ok: false; reason: StatsFailure; message: string };
 
-export async function fetchBrowsingOverview(period: StatsPeriod): Promise<BrowsingOverviewResult> {
+export const BROWSING_LIMIT = 300;
+export const BROWSING_LIMIT_FILTERED = 1000;
+
+// interest : « eleve », « moyen » ou « leger » ; la base ne renvoie alors dans la liste que ce niveau (les tuiles et les classements ne changent pas).
+// Sans interest : les 300 regards les plus récents, comme avant.
+export async function fetchBrowsingOverview(period: StatsPeriod, interest?: 'eleve' | 'moyen' | 'leger'): Promise<BrowsingOverviewResult> {
   try {
     const { since } = periodBounds(period);
-    const { data, error, status } = await withTimeout(Promise.resolve(supabase.rpc('browsing_overview', { p_since: since, p_limit: 300 })), 15000);
+    const ask = (params: Record<string, unknown>) => withTimeout(Promise.resolve(supabase.rpc('browsing_overview', params)), 15000);
+    let limit = interest ? BROWSING_LIMIT_FILTERED : BROWSING_LIMIT;
+    let { data, error, status } = await ask(interest ? { p_since: since, p_limit: limit, p_interest: interest } : { p_since: since, p_limit: limit });
+    // la base n'a pas encore le filtre par niveau (script add-browsing-interest-filter.sql pas lancé) : on redemande comme avant, l'écran filtre les 300 lignes
+    if (interest && error && (error as { code?: string }).code === 'PGRST202') {
+      limit = BROWSING_LIMIT;
+      ({ data, error, status } = await ask({ p_since: since, p_limit: limit }));
+    }
     if (error) return { ok: false, reason: classifyStatsError({ code: (error as { code?: string }).code, message: error.message, status }), message: error.message };
-    return { ok: true, overview: buildBrowsingOverview(data) };
+    return { ok: true, overview: buildBrowsingOverview(data), limit };
   } catch (e) {
     return { ok: false, reason: 'error', message: e instanceof Error ? e.message : String(e) };
   }

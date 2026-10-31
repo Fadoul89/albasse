@@ -41,3 +41,15 @@ d'Admin › Clients ne reconnaissait donc que **1 compte sur 30**. L'écran lit 
 
 - Aucun message n'est envoyé automatiquement : c'est l'administrateur qui touche « WhatsApp » puis « Envoyer ».
 - L'écran « Meilleurs clients potentiels » (bouton 💬 sans texte) n'a pas été modifié.
+
+## Suivi de navigation : la liste montre toutes les lignes du niveau choisi
+
+Avant, les tuiles disaient « Intérêt élevé : 141 », mais la liste « Détail » (filtre « Élevé ») n'en montrait que 5 : l'écran ne recevait que les
+300 regards les plus récents et filtrait ces 300 lignes. Maintenant, quand on touche « Élevé », « Moyen » ou « Léger », l'écran demande ce niveau à la base :
+
+- `add-browsing-interest-filter.sql` ajoute à `browsing_overview` un 3e paramètre facultatif `p_interest` (`eleve`, `moyen`, `leger`).
+  Il ne change **que** la liste `rows` ; les tuiles (`levels`, `totals`) et les classements restent calculés sur toutes les lignes de la période.
+  Une valeur inconnue est ignorée. Plafond : 1 000 lignes (« Léger » en a plus de 2 700 : la note « Les 1000 lignes les plus récentes sont affichées » s'affiche).
+- La fonction à 2 paramètres est remplacée par celle à 3 (les deux ensemble rendraient l'appel par noms ambigu) ; les anciens appels marchent grâce à la valeur par défaut.
+- Si la base n'a pas encore le script, l'écran redemande comme avant (300 lignes, filtrées sur l'écran) : ni écran vide ni erreur.
+- Test : `PARTS=W` de `tests/zara/zara-ui.test.js` (partie W3).
