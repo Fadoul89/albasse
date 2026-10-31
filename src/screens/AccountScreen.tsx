@@ -11,6 +11,7 @@ import { telegramLinkUrl } from '../lib/telegramLink';
 import { visibleEmail } from '../lib/phoneAuth';
 import { GoldButton } from '../components/GoldButton';
 import { ProfileEditor } from '../components/ProfileEditor';
+import { ChangePasswordCard } from '../components/ChangePasswordCard';
 import { useCustomerMessages } from '../hooks/useCustomerMessages';
 import { useToastStore } from '../store/toastStore';
 import { supabase } from '../lib/supabase';
@@ -77,6 +78,7 @@ export function AccountScreen() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [adminExpanded, setAdminExpanded] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
 
   const handlePickAvatar = async () => {
     if (!profile) return;
@@ -160,6 +162,14 @@ export function AccountScreen() {
         <Pressable style={styles.menuItem} onPress={() => setEditingProfile(true)} testID="profile-edit-open">
           <Text style={styles.menuIcon}>✏️</Text>
           <Text style={styles.menuLabel}>Modifier mon profil</Text>
+        </Pressable>
+      )}
+      {changingPassword ? (
+        <ChangePasswordCard onClose={() => setChangingPassword(false)} />
+      ) : (
+        <Pressable style={styles.menuItem} onPress={() => setChangingPassword(true)} testID="password-change-open">
+          <Text style={styles.menuIcon}>🔑</Text>
+          <Text style={styles.menuLabel}>Changer mon mot de passe</Text>
         </Pressable>
       )}
 
