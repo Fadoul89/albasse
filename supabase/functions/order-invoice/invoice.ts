@@ -149,19 +149,27 @@ export async function buildInvoicePdf(lib: PdfLib, data: InvoiceData, logoImage:
     }
   }
 
+  // Les 3 couleurs choisies par le patron : marron #6B4F3B (titres, nom de la boutique, en-têtes du tableau, total), violet lavande #D8B4FE (filets),
+  // argenté #C0C0C0 (traits). La lavande est claire : elle ne sert JAMAIS de texte sur fond blanc, seulement de filet (ou de texte sur du marron).
   const INK = hex(lib.rgb, "#1d2433");
   const MUTED = hex(lib.rgb, "#5b6475");
-  const LINE = hex(lib.rgb, "#e3e6ee");
-  const NAVY = hex(lib.rgb, "#062266");
-  const HEAD_BG = hex(lib.rgb, "#f4f5f9");
-  const RED = hex(lib.rgb, "#c0262d");
+  const LINE = hex(lib.rgb, "#C0C0C0");
+  const BROWN = hex(lib.rgb, "#6B4F3B");
+  const LAVENDER = hex(lib.rgb, "#D8B4FE");
+  const RED = hex(lib.rgb, "#c0262d"); // « commande annulée » : un statut, il reste rouge
 
   const number = invoiceNumber(order);
   doc.setTitle(`Facture ${number}`);
   doc.setAuthor(pdfText(shop.shop_name) || "Albasse Shopping");
   doc.setSubject(`Commande ${orderNumberLabel(order)}`);
 
+  // le filet du haut de chaque page : lavande, avec un début marron (dans la marge : rien ne se décale)
+  const band = (pg: any) => {
+    pg.drawRectangle({ x: MARGIN, y: A4.h - 26, width: A4.w - 2 * MARGIN, height: 2.5, color: LAVENDER });
+    pg.drawRectangle({ x: MARGIN, y: A4.h - 26, width: 96, height: 2.5, color: BROWN });
+  };
   let page = doc.addPage([A4.w, A4.h]);
+  band(page);
   let y = A4.h - MARGIN;
   const right = A4.w - MARGIN;
   const width = (font: any, size: number, text: string) => font.widthOfTextAtSize(text, size);
@@ -208,7 +216,7 @@ export async function buildInvoicePdf(lib: PdfLib, data: InvoiceData, logoImage:
     page.drawImage(logo, { x: MARGIN, y: topY - logoSize, width: logoSize, height: logoSize });
     leftX = MARGIN + logoSize + 12;
   }
-  text(shop.shop_name || "Albasse Shopping", leftX, topY - 22, 17, { font: bold, color: NAVY });
+  text(shop.shop_name || "Albasse Shopping", leftX, topY - 22, 18, { font: bold, color: BROWN });
   const shopLines = [shop.address, [shop.postal_code, shop.city].filter(Boolean).join(" "), shop.country, shop.phone ? `Tél. ${shop.phone}` : "", shop.email]
     .map((l) => pdfText(l))
     .filter(Boolean);
@@ -217,8 +225,8 @@ export async function buildInvoicePdf(lib: PdfLib, data: InvoiceData, logoImage:
     text(l, leftX, sy, 9.5, { color: MUTED });
     sy -= 12.5;
   }
-  text("FACTURE", right, topY - 18, 22, { font: bold, alignRight: true });
-  text(number, right, topY - 36, 12, { font: bold, color: NAVY, alignRight: true });
+  text("FACTURE", right, topY - 18, 24, { font: bold, color: BROWN, alignRight: true });
+  text(number, right, topY - 36, 12, { font: bold, color: BROWN, alignRight: true });
   text(`Date : ${dateLabel(order.created_at)}`, right, topY - 51, 9.5, { color: MUTED, alignRight: true });
   text(`Commande ${orderNumberLabel(order)}`, right, topY - 64, 9.5, { color: MUTED, alignRight: true });
   y = Math.min(topY - logoSize, sy) - 22;
@@ -250,15 +258,16 @@ export async function buildInvoicePdf(lib: PdfLib, data: InvoiceData, logoImage:
   const nameW = colQty - 40 - MARGIN - 10;
 
   const drawHead = () => {
-    page.drawRectangle({ x: MARGIN, y: y - 20, width: right - MARGIN, height: 20, color: HEAD_BG });
-    text("Désignation", MARGIN + 6, y - 14, 9.5, { font: bold, color: MUTED });
-    text("Qté", colQty, y - 14, 9.5, { font: bold, color: MUTED, alignRight: true });
-    text("Prix unit.", colPrice, y - 14, 9.5, { font: bold, color: MUTED, alignRight: true });
-    text("Total", colTotal - 6, y - 14, 9.5, { font: bold, color: MUTED, alignRight: true });
+    text("DÉSIGNATION", MARGIN + 6, y - 14, 9, { font: bold, color: BROWN });
+    text("QTÉ", colQty, y - 14, 9, { font: bold, color: BROWN, alignRight: true });
+    text("PRIX UNIT.", colPrice, y - 14, 9, { font: bold, color: BROWN, alignRight: true });
+    text("TOTAL", colTotal - 6, y - 14, 9, { font: bold, color: BROWN, alignRight: true });
+    page.drawLine({ start: { x: MARGIN, y: y - 20 }, end: { x: right, y: y - 20 }, thickness: 1.6, color: BROWN });
     y -= 20;
   };
   const newPage = () => {
     page = doc.addPage([A4.w, A4.h]);
+    band(page);
     y = A4.h - MARGIN;
   };
   drawHead();
@@ -301,10 +310,11 @@ export async function buildInvoicePdf(lib: PdfLib, data: InvoiceData, logoImage:
     text(l.value, right - 6, y, 10.5, { alignRight: true });
     y -= 17;
   }
-  page.drawLine({ start: { x: boxLeft, y: y + 8 }, end: { x: right, y: y + 8 }, thickness: 1.6, color: INK });
   y -= 6;
-  text("TOTAL À PAYER", boxLeft, y, 12, { font: bold, color: NAVY });
-  text(formatXAF(b.total), right - 6, y, 12, { font: bold, color: NAVY, alignRight: true });
+  page.drawLine({ start: { x: boxLeft - 10, y: y + 17 }, end: { x: right, y: y + 17 }, thickness: 2, color: LAVENDER });
+  page.drawLine({ start: { x: boxLeft - 10, y: y - 9 }, end: { x: right, y: y - 9 }, thickness: 2, color: LAVENDER });
+  text("TOTAL À PAYER", boxLeft, y, 13, { font: bold, color: BROWN });
+  text(formatXAF(b.total), right - 6, y, 13, { font: bold, color: BROWN, alignRight: true });
   y -= 34;
 
   // --- paiement et statut
@@ -315,7 +325,7 @@ export async function buildInvoicePdf(lib: PdfLib, data: InvoiceData, logoImage:
 
   // --- pied de page (sur la dernière page)
   let fy = MARGIN + 28;
-  page.drawLine({ start: { x: MARGIN, y: fy + 18 }, end: { x: right, y: fy + 18 }, thickness: 0.7, color: LINE });
+  page.drawLine({ start: { x: MARGIN, y: fy + 18 }, end: { x: right, y: fy + 18 }, thickness: 1.2, color: LAVENDER });
   if (shop.invoice_legal_line) {
     for (const l of wrap(shop.invoice_legal_line, regular, 9, right - MARGIN)) {
       text(l, A4.w / 2 - width(regular, 9, l) / 2, fy + 4, 9, { color: MUTED });
@@ -323,7 +333,7 @@ export async function buildInvoicePdf(lib: PdfLib, data: InvoiceData, logoImage:
     }
   }
   const thanks = "Merci pour votre confiance · albasseshopping.com";
-  text(thanks, A4.w / 2 - width(regular, 9.5, pdfText(thanks)) / 2, fy + 4, 9.5, { color: MUTED });
+  text(thanks, A4.w / 2 - width(bold, 9.5, pdfText(thanks)) / 2, fy + 4, 9.5, { font: bold, color: BROWN });
 
   return await doc.save();
 }
