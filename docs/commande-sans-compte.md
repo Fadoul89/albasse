@@ -21,7 +21,7 @@ Le patron avait demandé « 1234 » pour tous. Deux raisons de ne pas le faire :
 - **Sécurité des clients** : avec un mot de passe connu de tous, quiconque connaît le numéro d'un client (livreur, voisin, ancien client) ouvrirait son compte : nom, adresse, commandes, factures, points de fidélité.
 - **Le système exige au moins 6 caractères** (le formulaire d'inscription le dit aussi) : « 1234 » serait refusé à la création du compte.
 
-À la place : **un code de 6 chiffres différent pour chaque client**, tiré au hasard, jamais une suite ou un motif facile (123456, 111111, 121212…). Il est montré une fois sur la page de confirmation. Le client peut le changer dans « Compte ». S'il l'oublie : « Mot de passe oublié » → l'équipe l'aide sur WhatsApp (comme pour tous les comptes créés avec un numéro).
+À la place : **un code de 6 chiffres différent pour chaque client**, tiré au hasard, jamais une suite ou un motif facile (123456, 111111, 121212…). Il est montré une fois sur la page de confirmation. Le client peut le changer dans « Compte ». S'il l'oublie : encore connecté → Compte › « Changer mon mot de passe » ; sinon « Mot de passe oublié » → l'équipe lui donne un nouveau code depuis Admin › Clients et l'envoie sur WhatsApp (voir `docs/recuperer-compte.md`).
 
 Le code est fabriqué dans `src/lib/guestAccount.ts` (`generateTempPassword`) : c'est le seul endroit à changer si le patron veut une autre règle.
 

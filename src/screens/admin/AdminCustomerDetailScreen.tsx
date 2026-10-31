@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Linking } from 'react-native';
 import type { RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../../navigation/types';
 import { colors, fonts, radius, spacing } from '../../theme';
@@ -23,6 +23,9 @@ import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { BanDialog } from '../../components/BanDialog';
 import { GoldButton } from '../../components/GoldButton';
 import { visibleEmail } from '../../lib/phoneAuth';
+import { generateTempPassword } from '../../lib/guestAccount';
+import { adminResetError, recoveryMessage, recoveryPhone } from '../../lib/passwordRecovery';
+import { whatsappLink } from '../../lib/relanceMessage';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
 
@@ -44,6 +47,9 @@ export function AdminCustomerDetailScreen({ route }: Props) {
   const [msgTitle, setMsgTitle] = useState('');
   const [msgBody, setMsgBody] = useState('');
   const [sendingMsg, setSendingMsg] = useState(false);
+  // nouveau code donné à un client qui a perdu son mot de passe : montré une seule fois (la base ne le garde pas en clair)
+  const [showCodeDialog, setShowCodeDialog] = useState(false);
+  const [newCode, setNewCode] = useState<{ code: string; loginEmail: string } | null>(null);
 
   if (!adminProfile?.is_admin) {
     return (
@@ -106,6 +112,28 @@ export function AdminCustomerDetailScreen({ route }: Props) {
     refreshSanctions();
   };
 
+  // « Donner un nouveau code » : un code de 6 chiffres tiré au hasard (jamais facile à deviner), mis sur le compte par la base ; l'ancien ne marche plus
+  const handleNewCode = async () => {
+    setProcessing(true);
+    const code = generateTempPassword();
+    const { data, error } = await supabase.rpc('admin_set_client_password', { target_user_id: profile.id, new_password: code });
+    setProcessing(false);
+    setShowCodeDialog(false);
+    if (error) {
+      showToast(adminResetError(error.message), { title: 'Nouveau code impossible', type: 'error' });
+      return;
+    }
+    setNewCode({ code, loginEmail: typeof data === 'string' && data ? data : profile.email });
+    showToast('Envoyez-le maintenant au client : il ne sera plus visible quand vous quitterez cette page.', { title: 'Nouveau code créé ✓', type: 'success' });
+  };
+
+  const recoveryUrl = (): string | null => {
+    const digits = recoveryPhone(profile);
+    if (!digits || !newCode) return null;
+    const first = (profile.full_name ?? '').trim().split(/\s+/)[0] ?? '';
+    return whatsappLink(digits, recoveryMessage({ firstName: first, loginEmail: newCode.loginEmail, code: newCode.code }));
+  };
+
   const handleSendMessage = async () => {
     if (!msgTitle.trim() || !msgBody.trim()) {
       showToast('Merci de remplir le titre et le message.', { title: 'Champs manquants', type: 'error' });
@@ -146,6 +174,36 @@ export function AdminCustomerDetailScreen({ route }: Props) {
             <Text style={styles.banBtnText}>🔴 BANNIR LE CLIENT</Text>
           </Pressable>
         )}
+
+        <Section title="🔑 Mot de passe oublié">
+          <View testID="admin-password-section">
+            <Text style={styles.codeHelp}>
+              Le client a perdu son code (par exemple : pas de capture d’écran à la commande) ? Donnez-lui un nouveau code de 6 chiffres. L’ancien code ne marchera plus.
+            </Text>
+            {newCode ? (
+              <View style={styles.codeBox} testID="admin-new-code-box">
+                <Text style={styles.codeLabel}>Nouveau code du client</Text>
+                <Text style={styles.codeValue} selectable testID="admin-new-code">
+                  {newCode.code}
+                </Text>
+                <Text style={styles.codeWarn}>Envoyez-le maintenant. Quand vous quittez cette page, il n’est plus visible (vous pourrez en créer un autre).</Text>
+                {recoveryUrl() ? (
+                  <Pressable style={styles.codeWa} onPress={() => Linking.openURL(recoveryUrl()!)} testID="admin-new-code-whatsapp">
+                    <Text style={styles.codeWaText}>💬 Envoyer le code sur WhatsApp</Text>
+                  </Pressable>
+                ) : (
+                  <Text style={styles.codeWarn} testID="admin-new-code-nophone">Ce client n’a pas de numéro valable : donnez-lui le code autrement.</Text>
+                )}
+              </View>
+            ) : null}
+            <GoldButton
+              label={newCode ? 'Créer un autre code' : 'Donner un nouveau code'}
+              variant="outline"
+              onPress={() => setShowCodeDialog(true)}
+              style={{ marginTop: spacing.sm }}
+            />
+          </View>
+        </Section>
 
         <Section title="✉️ Envoyer un message">
           <TextInput
@@ -251,6 +309,15 @@ export function AdminCustomerDetailScreen({ route }: Props) {
         onCancel={() => setShowBanDialog(false)}
       />
       <ConfirmDialog
+        visible={showCodeDialog}
+        title="Donner un nouveau code ?"
+        message={`${profile.full_name ?? profile.email} pourra se connecter avec le nouveau code. L'ancien code ne marchera plus.`}
+        confirmLabel="Créer le code"
+        loading={processing}
+        onConfirm={handleNewCode}
+        onCancel={() => setShowCodeDialog(false)}
+      />
+      <ConfirmDialog
         visible={showReactivateDialog}
         title="Réactiver ce client ?"
         message={`${profile.full_name ?? profile.email} retrouvera un accès normal à son compte.`}
@@ -305,6 +372,21 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   msgTextarea: { minHeight: 90, textAlignVertical: 'top' },
+  codeHelp: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 12, lineHeight: 18 },
+  codeBox: {
+    backgroundColor: colors.panelAlt,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.gold,
+    padding: spacing.sm,
+    marginTop: spacing.sm,
+    alignItems: 'center',
+  },
+  codeLabel: { color: colors.creamFaint, fontFamily: fonts.bodyMedium, fontSize: 11 },
+  codeValue: { color: colors.goldLight, fontFamily: fonts.displayBold, fontSize: 34, letterSpacing: 6, marginVertical: 6 },
+  codeWarn: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 11, lineHeight: 16, textAlign: 'center' },
+  codeWa: { backgroundColor: '#25D366', borderRadius: radius.pill, paddingVertical: 10, paddingHorizontal: 18, marginTop: spacing.sm },
+  codeWaText: { color: '#fff', fontFamily: fonts.bodyBold, fontSize: 13 },
   banBtn: {
     backgroundColor: colors.red,
     borderRadius: radius.md,
