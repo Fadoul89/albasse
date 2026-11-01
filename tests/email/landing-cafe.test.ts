@@ -1,6 +1,6 @@
 // Page unique « Café Homme » (/cafe) : état de la page, stock bas, lien WhatsApp, textes vrais. Aucun réseau.
 // Lancer : node --import ./tests/zara/register.mjs tests/email/landing-cafe.test.ts
-import { CAFE_FACTS, CAFE_PAGE, CAFE_POINTS, LOW_STOCK_MAX, cafeLowStock, cafeNeedsChoice, cafeStatus, cafeWhatsAppUrl } from '../../src/lib/landingCafe.ts';
+import { CAFE_ENVELOPE, CAFE_FACTS, CAFE_PAGE, CAFE_POINTS, LOW_STOCK_MAX, cafeLowStock, cafeNeedsChoice, cafeStatus, cafeWhatsAppUrl } from '../../src/lib/landingCafe.ts';
 import { DELIVERY_HOURS, HOME_CITY } from '../../src/constants/shopRules.ts';
 
 let ok = 0;
@@ -15,6 +15,8 @@ const check = (label: string, cond: unknown, detail?: unknown) => {
 };
 
 check('adresse /cafe, article « cafe-homme »', CAFE_PAGE.path === 'cafe' && CAFE_PAGE.slug === 'cafe-homme');
+check('le nom de la page : « Vitalité & Énergie Homme »', CAFE_PAGE.name === 'Vitalité & Énergie Homme');
+check('la livraison se fait dans une enveloppe kaki : dit dans les points forts ET dans la livraison', CAFE_ENVELOPE === 'Livraison dans une enveloppe kaki' && CAFE_POINTS.some((p) => p.text === CAFE_ENVELOPE) && /enveloppe kaki/.test(CAFE_FACTS[0].text), CAFE_FACTS[0].text);
 check('la page est pour les hommes', CAFE_PAGE.badge === 'POUR HOMME' && CAFE_POINTS.some((p) => /destiné aux hommes/.test(p.text)));
 
 // état de la page

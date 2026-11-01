@@ -98,7 +98,7 @@ const linking: LinkingOptions<RootStackParamList> = {
       Category: 'categorie/:slug',
       Product: 'produit/:slug',
       // page unique « Café Homme » : adresse cachée (aucun lien depuis le site, hors plan du site, noindex)
-      Cafe: 'cafe',
+      Cafe: { path: 'cafe', alias: ['vitalite-energie-homme'] },
       Checkout: 'commande',
       Travel: 'voyage',
       // le lien à donner dans les publicités : albasseshopping.com/installer (ou /app)

@@ -40,7 +40,7 @@ export function CafeScreen() {
   useEffect(() => {
     if (Platform.OS !== 'web') return undefined;
     const before = document.title;
-    document.title = `${name} pour homme — Albasse Shopping`;
+    document.title = `${CAFE_PAGE.name} — Albasse Shopping`;
     const robots = document.createElement('meta');
     robots.name = 'robots';
     robots.content = 'noindex';
@@ -49,7 +49,7 @@ export function CafeScreen() {
       document.title = before;
       robots.remove();
     };
-  }, [name]);
+  }, []);
 
   // même suivi que la fiche de l'article (visites, temps actif, catégorie)
   useEffect(() => {
@@ -103,6 +103,8 @@ export function CafeScreen() {
             <Text style={styles.badgeText}>{CAFE_PAGE.badge}</Text>
           </View>
         </View>
+
+        <Text style={styles.pageName} testID="cafe-page-name">{CAFE_PAGE.name}</Text>
 
         <View style={styles.imageWrap} testID="cafe-image">
           {image ? <Image source={{ uri: image }} style={styles.image} contentFit="cover" transition={150} /> : <Text style={styles.imageFallback}>☕</Text>}
@@ -180,6 +182,7 @@ const styles = StyleSheet.create({
   brand: { color: colors.goldLight, fontFamily: fonts.displayBold, fontSize: 15, letterSpacing: 3 },
   badge: { borderWidth: 1, borderColor: colors.gold, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 4 },
   badgeText: { color: colors.gold, fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 1.5 },
+  pageName: { color: colors.cream, fontFamily: fonts.display, fontSize: 22, letterSpacing: 0.5, marginBottom: spacing.sm },
   imageWrap: { width: '100%', aspectRatio: 1, borderRadius: radius.lg, overflow: 'hidden', backgroundColor: colors.panel, alignItems: 'center', justifyContent: 'center' },
   image: { width: '100%', height: '100%' },
   imageFallback: { fontSize: 72 },

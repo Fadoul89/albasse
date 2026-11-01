@@ -9373,16 +9373,18 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const v = await openCafe({ ...phone, viewport: { width: 390, height: 1900 } });
       await v.page.getByTestId('cafe-price').waitFor({ timeout: 30000 });
       check('titre « Café Homme » et « POUR HOMME »', (await v.page.getByTestId('cafe-title').innerText()).trim() === 'Café Homme' && (await v.page.getByTestId('cafe-badge').innerText()).trim() === 'POUR HOMME');
+      check('le nom de la page : « Vitalité & Énergie Homme » en haut', (await v.page.getByTestId('cafe-page-name').innerText()).trim() === 'Vitalité & Énergie Homme');
       check('le vrai prix de la fiche, en FCFA', norm(await v.page.getByTestId('cafe-price').innerText()) === priceText(real.price), await v.page.getByTestId('cafe-price').innerText());
       check('la vraie photo de la fiche est affichee', (await v.page.getByTestId('cafe-image').locator('img').count()) >= 1 && (await v.page.getByTestId('cafe-image').locator('img').first().evaluate((el) => el.naturalWidth > 0)));
       const pointsText = await v.page.getByTestId('cafe-points').innerText();
       check('les points forts de la fiche : 5 sachets, preparation rapide, a emporter, pour les hommes', /Préparation rapide/.test(pointsText) && /5 sachets/.test(pointsText) && /emporter/.test(pointsText) && /destiné aux hommes/.test(pointsText), pointsText);
       const factsText = await v.page.getByTestId('cafe-facts').innerText();
+      check('la livraison dans une enveloppe kaki est dite deux fois : dans « Le café en bref » et dans « Livraison »', /Livraison dans une enveloppe kaki/.test(pointsText) && /livrée dans une enveloppe kaki/.test(factsText), { pointsText, factsText });
       check('livraison (8h30 a 16h, N\'Djamena et provinces), paiement (a la livraison a N\'Djamena, Airtel / Moov ailleurs), retour (72 heures)', /8h30 à 16h/.test(factsText) && /N'Djamena/.test(factsText) && /Airtel Money ou Moov Money/.test(factsText) && /72 heures/.test(factsText), factsText);
       const bodyText = await v.page.locator('body').innerText();
       check('aucune promesse de sante ou d\'effet sur la page (« aucun effet secondaire » de la fiche n\'est pas repris)', !/effet|santé|soigne|garanti|performance|virilité/i.test(await v.page.getByTestId('cafe-page').innerText()), bodyText.slice(0, 200));
       check('« une seule page » : ni categories, ni sections de l\'accueil, ni barre du bas du site', (await v.page.getByTestId('home-categories').count()) === 0 && (await v.page.getByTestId('home-sections').count()) === 0 && (await v.page.getByText('Recherche', { exact: true }).count()) === 0);
-      check('adresse cachee : « noindex » pour Google, et titre de l\'onglet', (await v.page.locator('meta[name="robots"][content="noindex"]').count()) === 1 && /Café Homme pour homme/.test(await v.page.title()), await v.page.title());
+      check('adresse cachee : « noindex » pour Google, et onglet du navigateur = nom de la page', (await v.page.locator('meta[name="robots"][content="noindex"]').count()) === 1 && /^Vitalité & Énergie Homme — Albasse Shopping$/.test(await v.page.title()), await v.page.title());
       const over = await overflow(v.page);
       const hasFooter = (await v.page.getByTestId('cafe-footer').count()) === 1;
       check('telephone 390 px : rien de la page ne depasse sur le cote, barre « Commander » collee en bas', over.length === 0 && hasFooter, { over, hasFooter });
@@ -9395,6 +9397,15 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('« Commander maintenant » : la page de commande du site s\'ouvre avec Café Homme et son prix', v.page.url().includes('/commande') && /Café Homme/.test(itemText) && norm(itemText).includes(priceText(real.price)), { url: v.page.url(), itemText });
       check('aucune commande ni compte envoyes (rien n\'est ecrit tant que le client ne confirme pas)', v.writes.every((w) => !/\/orders|\/rpc\/|auth\/v1\/signup/.test(w)), v.writes);
       check('aucune erreur (page cafe)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+
+    // --- a2. la page repond aussi a /vitalite-energie-homme (le nom de la page)
+    {
+      const v = await newVisitor(phone, {});
+      await v.page.goto(`${BASE}/vitalite-energie-homme`, { waitUntil: 'load' });
+      await v.page.getByTestId('cafe-page').waitFor({ timeout: 30000 });
+      check('/vitalite-energie-homme ouvre la meme page (nom de la page), avec le café', (await v.page.getByTestId('cafe-page-name').innerText()).trim() === 'Vitalité & Énergie Homme' && /Café Homme/.test(await v.page.getByTestId('cafe-title').innerText()));
       await v.ctx.close();
     }
 
