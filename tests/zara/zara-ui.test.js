@@ -9338,7 +9338,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const v = await newVisitor(phone, { fakeCats: { order: { ...order } } });
       await v.page.route(/\/rest\/v1\/products\?/, (route) => (route.request().method() === 'OPTIONS' ? route.fulfill({ status: 204, headers: HDRA }) : route.fulfill({ status: 200, headers: { ...HDRA, 'content-type': 'application/json' }, body: '[]' })));
       await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
-      await v.page.getByTestId('home-sections').waitFor({ timeout: 30000 });
+      await v.page.getByTestId('home-sections').waitFor({ state: 'attached', timeout: 30000 }); // sans article la zone est vide (hauteur 0) : « visible » ne viendrait jamais
       await sleep(2000);
       check('aucun article en vente : pas de section, pas de bouton « Voir tous », pas d\'erreur', (await v.page.locator('[data-testid^="home-section-"]').count()) === 0 && (await v.page.getByTestId('home-all-articles').count()) === 0 && v.errs.length === 0, v.errs);
       await v.ctx.close();
