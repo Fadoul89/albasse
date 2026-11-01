@@ -16,7 +16,7 @@ const port = process.argv[3] || '4333';
 // BASE_URL=https://www.albasseshopping.com : teste le VRAI site en ligne (les commandes et comptes restent simules, rien n'est enregistre)
 const BASE = (process.env.BASE_URL || `http://localhost:${port}`).replace(/\/$/, '');
 const BASE_HOST = new URL(BASE).hostname;
-const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI0123456789TOFBCDE+=^~%&@!').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI0123456789TOFBCDE+=^~%&@?').toUpperCase();
 // saison fraiche (blousons et manteaux) : le bouton du menu de Zara n'existe que jusqu'au 31 decembre 2026 a 23h59 (N'Djamena)
 const COLD_ON = Date.now() < Date.parse('2027-01-01T00:00:00+01:00');
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
@@ -9348,10 +9348,12 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   }
 
   // -----------------------------------------------------------------------------------------------------------------------------
-  // ! Page unique « Café Homme » (albasseshopping.com/cafe) : pour homme, sans menu du site, commande par la page de commande (docs/page-cafe.md)
+  // ! Page unique « Café Homme » : à lancer SEULEMENT sur un site fabriqué avec EXPO_PUBLIC_SINGLE_PAGE=cafe (docs/page-cafe.md, docs/site-cafe-separe.md) :
+  //   PARTS='!' node tests/zara/zara-ui.test.js <dossier> 4333 ; la page est l'accueil de ce site. Pas dans la liste par défaut.
+  // ? Le vrai site n'a plus de page /cafe : /cafe et /vitalite-energie-homme ouvrent l'accueil d'Albasse (liste par défaut).
   // -----------------------------------------------------------------------------------------------------------------------------
   if (PARTS.includes('!')) {
-    console.log('\n== ! page unique « Cafe Homme » (/cafe) : vraie fiche en lecture seule, aucune commande envoyee');
+    console.log('\n== ! page unique « Cafe Homme » (accueil du site a part) : vraie fiche en lecture seule, aucune commande envoyee');
     const HDRC = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
     const real = (await get('products?select=*&slug=eq.cafe-homme'))[0];
     check('la vraie fiche « cafe-homme » existe, en vente, dans « Vitalite & Energie Homme »', !!real && real.is_active === true && Number(real.price) > 0 && Number(real.stock) > 0, real && { price: real.price, stock: real.stock });
@@ -9359,12 +9361,12 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const norm = (t) => t.replace(/\s/g, '');
     // ce qui depasse sur le cote DANS la page (l'etoile lumineuse du site tourne autour de l'ecran et sort parfois : elle n'est pas dans la page)
     const overflow = (pg) => pg.evaluate(() => { const root = document.querySelector('[data-testid="cafe-page"]'); const w = window.innerWidth; return [...root.querySelectorAll('*')].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && (r.right > w + 1 || r.left < -1); }).slice(0, 6).map((e) => `${e.tagName}.${(e.getAttribute('data-testid') || '').slice(0, 30)} left=${Math.round(e.getBoundingClientRect().left)} right=${Math.round(e.getBoundingClientRect().right)}`); });
-    const openCafe = async (ctxOpts, product = undefined) => {
+    const openCafe = async (ctxOpts, product = undefined, url = '/') => {
       const v = await newVisitor(ctxOpts, {});
       if (product !== undefined) {
         await v.page.route(/\/rest\/v1\/products\?/, (route) => (route.request().method() === 'OPTIONS' ? route.fulfill({ status: 204, headers: HDRC }) : route.fulfill({ status: 200, headers: { ...HDRC, 'content-type': 'application/json' }, body: JSON.stringify(product) })));
       }
-      await v.page.goto(`${BASE}/cafe`, { waitUntil: 'load' });
+      await v.page.goto(`${BASE}${url}`, { waitUntil: 'load' });
       await v.page.getByTestId('cafe-page').waitFor({ timeout: 30000 });
       await sleep(2500);
       return v;
@@ -9386,7 +9388,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const bodyText = await v.page.locator('body').innerText();
       check('aucune promesse de sante ou d\'effet sur la page (« aucun effet secondaire » de la fiche n\'est pas repris)', !/effet|santé|soigne|garanti|performance|virilité/i.test(await v.page.getByTestId('cafe-page').innerText()), bodyText.slice(0, 200));
       check('« une seule page » : ni categories, ni sections de l\'accueil, ni barre du bas du site', (await v.page.getByTestId('home-categories').count()) === 0 && (await v.page.getByTestId('home-sections').count()) === 0 && (await v.page.getByText('Recherche', { exact: true }).count()) === 0);
-      check('adresse cachee : « noindex » pour Google, et onglet du navigateur = nom de la page', (await v.page.locator('meta[name="robots"][content="noindex"]').count()) === 1 && /^Vitalité & Énergie Homme — Albasse Shopping$/.test(await v.page.title()), await v.page.title());
+      check('adresse cachee : « noindex » pour Google, et onglet du navigateur = nom de la page', (await v.page.locator('meta[name="robots"][content="noindex"]').count()) === 1 && /^Vitalité & Énergie Homme$/.test(await v.page.title()), await v.page.title());
       const over = await overflow(v.page);
       const hasFooter = (await v.page.getByTestId('cafe-footer').count()) === 1;
       check('telephone 390 px : rien de la page ne depasse sur le cote, barre « Commander » collee en bas', over.length === 0 && hasFooter, { over, hasFooter });
@@ -9446,7 +9448,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('epuise : message clair, bouton « Épuisé pour le moment » inactif, pas de barre « Commander »', (await v.page.getByTestId('cafe-soldout').count()) === 1 && (await v.page.getByTestId('cafe-footer').count()) === 0);
       await v.page.getByText('Épuisé pour le moment', { exact: true }).first().click({ force: true });
       await sleep(800);
-      check('epuise : le bouton ne mene nulle part (on reste sur /cafe)', v.page.url().replace(/\/$/, '').endsWith('/cafe'), v.page.url());
+      check('epuise : le bouton ne mene nulle part (on reste sur la page)', new URL(v.page.url()).pathname === '/', v.page.url());
       await v.ctx.close();
     }
     {
@@ -9542,6 +9544,19 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('le logo animé d\'Albasse n\'est pas sur ce site', !/image\/gif/.test(gif.type), gif.type);
       const sw = await get2('/sw.js');
       check('service worker : sans le nom d\'Albasse Shopping', !/Albasse Shopping/.test(sw.text));
+      await v.ctx.close();
+    }
+  }
+
+  if (PARTS.includes('?')) {
+    console.log('\n== ? le vrai site n\'a plus de page /cafe : ces adresses ouvrent l\'accueil d\'Albasse');
+    for (const url of ['/cafe', '/vitalite-energie-homme']) {
+      const v = await newVisitor(phone, {});
+      await v.page.goto(`${BASE}${url}`, { waitUntil: 'load' });
+      await v.page.getByTestId('home-categories').waitFor({ timeout: 30000 });
+      await sleep(1500);
+      check(`${url} : l'accueil d'Albasse s'ouvre (categories), plus de page cafe`, (await v.page.getByTestId('cafe-page').count()) === 0 && (await v.page.getByTestId('home-categories').count()) === 1 && /Albasse/i.test(await v.page.title()), await v.page.title());
+      check(`${url} : aucune erreur`, v.errs.length === 0, v.errs);
       await v.ctx.close();
     }
   }

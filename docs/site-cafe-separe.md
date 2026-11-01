@@ -7,7 +7,7 @@ Le même code que le site Albasse, mis en ligne **une 2ᵉ fois** sur Netlify, s
 - pas de plan du site, `noindex` (Google ne l'affiche pas), pas de menu ni de recherche de la boutique ;
 - la **commande arrive dans ton admin**, comme les autres. Comme tu l'as choisi, la page de commande, la confirmation et la facture gardent le nom Albasse Shopping.
 
-Le site `albasseshopping.com` ne change pas du tout (son popup « Télécharge l'app » non plus). Sa page cachée `/cafe` reste comme avant.
+Le site `albasseshopping.com` ne change pas (son popup « Télécharge l'app » non plus). Son ancienne page cachée `/cafe` a été **supprimée** : elle n'existe que sur ce site à part.
 
 ## Étape 1. Créer le 2ᵉ site sur Netlify (gratuit)
 

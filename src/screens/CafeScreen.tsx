@@ -44,13 +44,16 @@ export function CafeScreen() {
     if (Platform.OS !== 'web') return undefined;
     const before = document.title;
     document.title = single ? CAFE_PAGE.name : `${CAFE_PAGE.name} — Albasse Shopping`;
-    const robots = document.createElement('meta');
-    robots.name = 'robots';
-    robots.content = 'noindex';
-    document.head.appendChild(robots);
+    // le site à part a déjà cette balise dans sa page fabriquée (scripts/single-page-shell.js) : jamais en double
+    const robots = document.querySelector('meta[name="robots"][content="noindex"]') ? null : document.createElement('meta');
+    if (robots) {
+      robots.name = 'robots';
+      robots.content = 'noindex';
+      document.head.appendChild(robots);
+    }
     return () => {
       document.title = before;
-      robots.remove();
+      robots?.remove();
     };
   }, [single]);
 
