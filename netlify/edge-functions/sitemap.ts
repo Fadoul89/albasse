@@ -14,6 +14,12 @@ async function rows<T>(supabaseUrl: string, key: string, query: string): Promise
 async function serve(request: Request, context: Context): Promise<Response> {
   const url = new URL(request.url);
 
+  // site « page unique » (docs/site-cafe-separe.md) : pas de plan du site d'Albasse Shopping ; le robots.txt simple fabriqué à la mise en ligne est servi
+  if (Deno.env.get('EXPO_PUBLIC_SINGLE_PAGE')) {
+    if (url.pathname === '/sitemap.xml') return new Response('Not found', { status: 404 });
+    return context.next();
+  }
+
   if (url.pathname === '/robots.txt') {
     return new Response(buildRobotsTxt(), { headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
   }
