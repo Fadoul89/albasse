@@ -196,6 +196,27 @@ const ldBlocks = (html: string): any[] => [...html.matchAll(/<script type="appli
     (globalThis as any).Deno = saved;
   }
 
+  // site « page unique » (docs/site-cafe-separe.md) : avec EXPO_PUBLIC_SINGLE_PAGE=cafe, rien d'Albasse n'est servi aux robots et la base n'est jamais lue
+  {
+    const saved = (globalThis as any).Deno;
+    (globalThis as any).Deno = { env: { get: (k: string) => ({ EXPO_PUBLIC_SUPABASE_URL: 'https://db.example', EXPO_PUBLIC_SUPABASE_ANON_KEY: 'anon', EXPO_PUBLIC_SINGLE_PAGE: 'cafe' } as Record<string, string>)[k] } };
+    const before = calls.length;
+    const home = await ask(ogPreview, '/', GOOGLEBOT);
+    const prod = await ask(ogPreview, '/produit/montre-keep-moving', GOOGLEBOT);
+    const robots = await ask(sitemap, '/robots.txt', GOOGLEBOT);
+    const map = await ask(sitemap, '/sitemap.xml', GOOGLEBOT);
+    check('page unique : accueil et fiches pour les robots = la page fabriquée (neutre), pas la page d\'Albasse', home.state.next === 1 && prod.state.next === 1 && !(/Albasse/.test(await home.res.text())));
+    check('page unique : robots.txt = le fichier simple fabriqué à la mise en ligne ; plan du site = 404', robots.state.next === 1 && map.res.status === 404 && map.state.next === 0, { robots: robots.state.next, map: map.res.status });
+    check('page unique : la base d\'Albasse n\'est jamais lue', calls.length === before, calls.slice(before));
+    (globalThis as any).Deno = saved;
+  }
+  {
+    // le vrai site (variable absente) : exactement comme avant
+    const home = await ask(ogPreview, '/', GOOGLEBOT);
+    const robots = await ask(sitemap, '/robots.txt', GOOGLEBOT);
+    check('vrai site (sans la variable) : accueil pour Google et robots.txt inchangés', home.state.next === 0 && /Albasse Shopping/.test(await home.res.text()) && robots.state.next === 0 && /Sitemap:/.test(await robots.res.text()));
+  }
+
   // base injoignable : jamais d'erreur pour le robot
   {
     dbDown = true;

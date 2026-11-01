@@ -35,5 +35,8 @@ Cas particuliers : stock à 0 → « Épuisé pour le moment » (bouton inactif,
 - `src/navigation/RootNavigator.tsx` : l'adresse `/cafe`.
 - Tests : `node --import ./tests/zara/register.mjs tests/email/landing-cafe.test.ts` et, dans le navigateur, `PARTS=! SUPABASE_ANON_KEY=... node tests/zara/zara-ui.test.js dist 4333`.
 
+## Site à part, sans Albasse
+La même page peut aussi s'ouvrir sur un 2ᵉ site (autre adresse, gratuit sur Netlify), sans le nom Albasse : voir `docs/site-cafe-separe.md`.
+
 ## Pour une autre page du même genre
 Même méthode : copier `CafeScreen.tsx` et `landingCafe.ts`, changer le `slug` de l'article, les phrases et l'adresse dans `RootNavigator.tsx`.

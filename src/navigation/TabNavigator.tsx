@@ -10,6 +10,8 @@ import { AdminOrdersScreen } from '../screens/admin/AdminOrdersScreen';
 import { useAuthStore } from '../store/authStore';
 import { AccountScreen } from '../screens/AccountScreen';
 import { TAB_BAR_HEIGHT, TAB_CENTER_GAP } from './tabLayout';
+import { CafeScreen } from '../screens/CafeScreen';
+import { isSinglePage } from '../lib/singlePage';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 
@@ -34,8 +36,11 @@ function OrdersTab() {
 }
 
 export function TabNavigator() {
+  // site « page unique » (docs/site-cafe-separe.md) : l'accueil EST la page café, et il n'y a pas de barre du bas (ni recherche, ni boutique)
+  const single = isSinglePage();
   return (
     <Tab.Navigator
+      tabBar={single ? () => null : undefined}
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarStyle: {
@@ -93,7 +98,7 @@ export function TabNavigator() {
         },
       })}
     >
-      <Tab.Screen name="Home" component={HomeScreen} />
+      <Tab.Screen name="Home" component={single ? CafeScreen : HomeScreen} />
       <Tab.Screen name="Search" component={SearchScreen} />
       <Tab.Screen name="Orders" component={OrdersTab} />
       <Tab.Screen name="Account" component={AccountScreen} />

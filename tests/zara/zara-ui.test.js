@@ -6105,18 +6105,20 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     }
     // l'accueil et Zara suivent l'ordre choisi
     {
-      const order = { parfum: 1, montre: 2 };
+      // la 2e categorie : celle des montres, avec son vrai nom et son vrai identifiant (elle s'appelle maintenant « MONTRE & ACCESSOIRES »)
+      const montre = (await get('categories?select=name,slug')).find((c) => /^montre/i.test(c.slug));
+      const order = { parfum: 1, [montre.slug]: 2 };
       const v = await newVisitor(phone, { fakeCats: { order }, storage: { albasse_zara_name: 'Ali' } });
       await openHome(v);
       const tiles = (await v.page.getByTestId('home-categories').innerText()).split('\n').map((t) => t.trim()).filter(Boolean);
-      check('accueil : Parfum 1re, Montre 2e, puis les autres par ordre alphabetique', tiles[0] === 'Parfum' && tiles[1] === 'Montre' && tiles[2] === (await get('categories?select=name&order=name'))[0].name, tiles.slice(0, 4));
+      check('accueil : Parfum 1re, les montres 2e, puis les autres par ordre alphabetique', tiles[0] === 'Parfum' && tiles[1] === montre.name && tiles[2] === (await get('categories?select=name&order=name'))[0].name, tiles.slice(0, 4));
       await v.page.keyboard.press('Escape');
       await v.page.getByRole('button', { name: FAB_NAME }).click();
       await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?/);
       await tap(v.page, '🛍️ Catégories', /Choisissez une catégorie/);
       await sleep(800);
       const chips = await chipLabels(v.page);
-      check('Zara : les boutons des categories suivent le meme ordre (Parfum avant Montre)', chips.indexOf('Parfum') !== -1 && chips.indexOf('Parfum') < chips.indexOf('Montre'), chips);
+      check('Zara : les boutons des categories suivent le meme ordre (Parfum avant les montres)', chips.indexOf('Parfum') !== -1 && chips.indexOf('Parfum') < chips.indexOf(montre.name) && chips.indexOf(montre.name) < chips.indexOf('Agriculture & Jardinage'), chips);
       await v.ctx.close();
     }
   }
@@ -9465,6 +9467,81 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const box = await v.page.getByTestId('cafe-title').boundingBox();
       check('ordinateur : la page reste etroite et centree (lisible), pas etiree sur 1280 px', !!box && box.x > 300 && box.x + box.width < 980, box);
       await v.page.screenshot({ path: path.join(OUT, '!2-cafe-ordinateur.png') });
+      await v.ctx.close();
+    }
+  }
+
+  // -----------------------------------------------------------------------------------------------------------------------------
+  // * Site « page unique » (docs/site-cafe-separe.md) : à lancer SEULEMENT sur un site fabriqué avec EXPO_PUBLIC_SINGLE_PAGE=cafe
+  //   (puis `node scripts/single-page-shell.js --dist <dossier>`) : PARTS='*' node tests/zara/zara-ui.test.js <dossier> 4333
+  //   (ce n'est pas dans la liste par défaut : le vrai site garde son accueil)
+  // -----------------------------------------------------------------------------------------------------------------------------
+  if (PARTS.includes('*')) {
+    console.log('\n== * site « page unique » : « / » ouvre la page « Vitalite & Energie Homme », sans le nom, le bandeau, les fenetres ni Zara d\'Albasse');
+    const real = (await get('products?select=*&slug=eq.cafe-homme'))[0];
+    const norm = (t) => t.replace(/\s/g, '');
+    const open = async (url, ctxOpts = phone) => {
+      const v = await newVisitor(ctxOpts, {});
+      await v.page.goto(`${BASE}${url}`, { waitUntil: 'load' });
+      await v.page.getByTestId('cafe-page').waitFor({ timeout: 30000 });
+      await v.page.getByTestId('cafe-price').waitFor({ timeout: 30000 });
+      await sleep(2500);
+      return v;
+    };
+
+    {
+      const v = await open('/', { ...phone, viewport: { width: 390, height: 1900 } });
+      const text = await v.page.getByTestId('cafe-page').innerText();
+      check('« / » ouvre directement la page « Vitalité & Énergie Homme » avec le café et son vrai prix', (await v.page.getByTestId('cafe-page-name').innerText()).trim() === 'Vitalité & Énergie Homme' && (await v.page.getByTestId('cafe-title').innerText()).trim() === 'Café Homme' && norm(await v.page.getByTestId('cafe-price').innerText()) === `${Number(real.price).toLocaleString('fr-FR')}FCFA`.replace(/\s/g, ''), text.slice(0, 120));
+      const body = await v.page.locator('body').innerText();
+      check('AUCUN « Albasse » nulle part sur la page (texte visible)', !/albasse/i.test(body), body.match(/.*albasse.*/gi));
+      check('onglet du navigateur : « Vitalité & Énergie Homme » (sans Albasse)', (await v.page.title()) === 'Vitalité & Énergie Homme', await v.page.title());
+      const head = await v.page.evaluate(() => ({ og: document.querySelector('meta[property="og:title"]')?.content, site: document.querySelector('meta[property="og:site_name"]')?.content, desc: document.querySelector('meta[name="description"]')?.content, image: document.querySelector('meta[property="og:image"]')?.content, apple: document.querySelector('meta[name="apple-mobile-web-app-title"]')?.content, robots: [...document.querySelectorAll('meta[name="robots"]')].map((m) => m.content) }));
+      check('aperçu des liens et nom sous l\'icône : neutres, « noindex » pour Google', head.og === 'Vitalité & Énergie Homme' && head.site === 'Vitalité & Énergie Homme' && /Café Homme/.test(head.desc) && !/albasse/i.test(JSON.stringify(head)) && head.robots.includes('noindex'), head);
+      check('ni catégories, ni barre du bas, ni recherche de la boutique', (await v.page.getByTestId('home-categories').count()) === 0 && (await v.page.getByText('Recherche', { exact: true }).count()) === 0 && (await v.page.getByText('Commandes', { exact: true }).count()) === 0);
+      check('ni Zara, ni bandeau « Télécharge l\'app », ni achats récents, ni fenêtre de promotion', (await v.page.getByRole('button', { name: FAB_NAME }).count()) === 0 && (await v.page.getByText(/Télécharge|Telecharge/i).count()) === 0 && (await v.page.getByTestId('recent-purchases').count()) === 0 && (await v.page.getByText(/Zara/).count()) === 0);
+      await sleep(6000);
+      check('6 secondes plus tard : toujours aucune fenêtre (promotion, roue, installation)', (await v.page.locator('[role="dialog"], [data-testid*="popup"], [data-testid*="wheel"]').count()) === 0 && !/albasse/i.test(await v.page.locator('body').innerText()));
+      await v.page.screenshot({ path: path.join(OUT, '*1-site-cafe.png') });
+      check('aucune erreur (site page unique)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+
+    // les anciennes adresses du café ouvrent la même page
+    for (const url of ['/cafe', '/vitalite-energie-homme']) {
+      const v = await open(url);
+      check(`${url} ouvre la même page`, (await v.page.getByTestId('cafe-page-name').innerText()).trim() === 'Vitalité & Énergie Homme');
+      await v.ctx.close();
+    }
+
+    // commander : la page de commande du site s'ouvre ; le bouton 🏠 y ramène à la page café (jamais à la boutique Albasse)
+    {
+      const v = await open('/');
+      await v.page.getByText('Commander maintenant', { exact: true }).click();
+      await v.page.getByTestId('checkout-item').waitFor({ timeout: 25000 });
+      check('« Commander maintenant » : la page de commande s\'ouvre avec le café', v.page.url().includes('/commande') && /Café Homme/.test(await v.page.getByTestId('checkout-item').innerText()));
+      await v.page.getByText('🏠', { exact: true }).first().click();
+      const back = v.page.locator('[data-testid="cafe-page-name"]:visible').first();
+      await back.waitFor({ timeout: 15000 });
+      check('le bouton 🏠 de la page de commande ramène à la page café (pas à la boutique Albasse)', (await back.innerText()).trim() === 'Vitalité & Énergie Homme' && (await v.page.getByTestId('home-categories').count()) === 0 && !/albasse/i.test(await v.page.locator('body').innerText()));
+      check('rien n\'est envoyé tant que le client ne confirme pas', v.writes.every((w) => !/\/orders|auth\/v1\/signup/.test(w)), v.writes);
+      await v.ctx.close();
+    }
+
+    // fichiers de la coquille : manifeste, icônes, robots.txt, pas de plan du site ni de fichier d'Albasse
+    {
+      const v = await newVisitor(phone, {});
+      const get2 = async (u) => { const r = await v.ctx.request.get(`${BASE}${u}`); return { status: r.status(), type: r.headers()['content-type'] || '', text: r.headers()['content-type']?.includes('image') ? '' : await r.text(), size: (await r.body()).length }; };
+      const man = JSON.parse((await get2('/manifest.json')).text);
+      check('manifest.json : « Vitalité & Énergie Homme », démarre sur « / », rien d\'Albasse', man.name === 'Vitalité & Énergie Homme' && man.start_url === '/' && !/albasse/i.test(JSON.stringify(man)), man.name);
+      const icon = await get2('/icon-512.png');
+      check('icône 512 : l\'icône neutre (image PNG)', icon.status === 200 && /image\/png/.test(icon.type) && icon.size > 5000);
+      const robots = await get2('/robots.txt');
+      check('robots.txt simple, sans plan du site', /Allow: \//.test(robots.text) && !/Sitemap/i.test(robots.text), robots.text);
+      const gif = await get2('/logo-albasse.gif');
+      check('le logo animé d\'Albasse n\'est pas sur ce site', !/image\/gif/.test(gif.type), gif.type);
+      const sw = await get2('/sw.js');
+      check('service worker : sans le nom d\'Albasse Shopping', !/Albasse Shopping/.test(sw.text));
       await v.ctx.close();
     }
   }

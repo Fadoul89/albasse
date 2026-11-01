@@ -19,6 +19,8 @@ async function rows<T>(supabaseUrl: string, key: string, query: string): Promise
 }
 
 async function serve(request: Request, context: Context): Promise<Response> {
+  // site « page unique » (docs/site-cafe-separe.md) : rien d'Albasse Shopping n'est servi aux robots, la page fabriquée est déjà neutre
+  if (Deno.env.get('EXPO_PUBLIC_SINGLE_PAGE')) return context.next();
   const userAgent = request.headers.get('user-agent') || '';
   // visiteur normal : exactement la page d'avant, rien n'est modifié
   if (!BOT_REGEX.test(userAgent)) return context.next();

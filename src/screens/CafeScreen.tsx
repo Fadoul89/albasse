@@ -15,6 +15,7 @@ import { GoldButton } from '../components/GoldButton';
 import { trackProductView, trackAddToCart } from '../lib/analytics';
 import { endProductView, enrichProductMeta, startProductView } from '../lib/browsingTracker';
 import { shownOldPrice } from '../lib/promotions';
+import { isSinglePage } from '../lib/singlePage';
 import { guestOrderAllowed } from '../lib/accountWall';
 import { CAFE_FACTS, CAFE_PAGE, CAFE_POINTS, cafeLowStock, cafeNeedsChoice, cafeStatus, cafeWhatsAppUrl } from '../lib/landingCafe';
 
@@ -30,6 +31,8 @@ export function CafeScreen() {
   const setOrderItem = useCartStore((s) => s.setOrderItem);
   const profile = useAuthStore((s) => s.profile);
   const showToast = useToastStore((s) => s.show);
+  // site « page unique » (docs/site-cafe-separe.md) : la page ne porte plus le nom d'Albasse Shopping
+  const single = isSinglePage();
   const status = cafeStatus(product, isLoading);
   const name = (product?.name ?? 'Café Homme').trim();
   const image = product?.images?.[0] ?? null;
@@ -40,7 +43,7 @@ export function CafeScreen() {
   useEffect(() => {
     if (Platform.OS !== 'web') return undefined;
     const before = document.title;
-    document.title = `${CAFE_PAGE.name} — Albasse Shopping`;
+    document.title = single ? CAFE_PAGE.name : `${CAFE_PAGE.name} — Albasse Shopping`;
     const robots = document.createElement('meta');
     robots.name = 'robots';
     robots.content = 'noindex';
@@ -49,7 +52,7 @@ export function CafeScreen() {
       document.title = before;
       robots.remove();
     };
-  }, []);
+  }, [single]);
 
   // même suivi que la fiche de l'article (visites, temps actif, catégorie)
   useEffect(() => {
@@ -97,8 +100,8 @@ export function CafeScreen() {
   return (
     <View style={styles.screen} testID="cafe-page">
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.topRow}>
-          <Text style={styles.brand}>ALBASSE SHOPPING</Text>
+        <View style={[styles.topRow, single && styles.topRowAlone]}>
+          {single ? null : <Text style={styles.brand}>ALBASSE SHOPPING</Text>}
           <View style={styles.badge} testID="cafe-badge">
             <Text style={styles.badgeText}>{CAFE_PAGE.badge}</Text>
           </View>
@@ -159,7 +162,7 @@ export function CafeScreen() {
           <Pressable onPress={() => navigation.navigate('PrivacyPolicy')} hitSlop={8}><Text style={styles.link}>Confidentialité</Text></Pressable>
           <Pressable onPress={() => navigation.navigate('Contact')} hitSlop={8}><Text style={styles.link}>Contact</Text></Pressable>
         </View>
-        <Text style={styles.legal}>{`${settings.shop_name} · ${settings.city}, ${settings.country}`}</Text>
+        <Text style={styles.legal}>{single ? `${settings.city}, ${settings.country}` : `${settings.shop_name} · ${settings.city}, ${settings.country}`}</Text>
       </ScrollView>
 
       {status === 'ready' && product && (
@@ -179,6 +182,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.md, paddingBottom: 110, maxWidth: 560, width: '100%', alignSelf: 'center' },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md },
+  topRowAlone: { justifyContent: 'flex-start' },
   brand: { color: colors.goldLight, fontFamily: fonts.displayBold, fontSize: 15, letterSpacing: 3 },
   badge: { borderWidth: 1, borderColor: colors.gold, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 4 },
   badgeText: { color: colors.gold, fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 1.5 },

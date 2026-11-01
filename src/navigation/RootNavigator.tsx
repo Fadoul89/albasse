@@ -20,6 +20,7 @@ import { useAuthStore } from '../store/authStore';
 import { useStoreSettings } from '../hooks/useStoreSettings';
 import { mustSignUp, wallCovers } from '../lib/accountWall';
 import { AccountWall } from '../components/AccountWall';
+import { isSinglePage } from '../lib/singlePage';
 import { TabNavigator } from './TabNavigator';
 import { CategoryScreen } from '../screens/CategoryScreen';
 import { ProductScreen } from '../screens/ProductScreen';
@@ -82,13 +83,16 @@ import type { LinkingOptions } from '@react-navigation/native';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
+// site « page unique » : « / » (et /cafe, /vitalite-energie-homme) ouvre la page café ; le vrai site garde son accueil
+const SINGLE = isSinglePage();
+
 const linking: LinkingOptions<RootStackParamList> = {
   prefixes: [],
   config: {
     screens: {
       Tabs: {
         screens: {
-          Home: '',
+          Home: SINGLE ? { path: '', alias: ['cafe', 'vitalite-energie-homme'] } : '',
           Search: 'recherche',
           // plus de panier : l'onglet « Commandes » le remplace (les anciens liens /panier y mènent)
           Orders: { path: 'mes-commandes', alias: ['panier'] },
@@ -98,7 +102,7 @@ const linking: LinkingOptions<RootStackParamList> = {
       Category: 'categorie/:slug',
       Product: 'produit/:slug',
       // page unique « Café Homme » : adresse cachée (aucun lien depuis le site, hors plan du site, noindex)
-      Cafe: { path: 'cafe', alias: ['vitalite-energie-homme'] },
+      ...(SINGLE ? {} : { Cafe: { path: 'cafe', alias: ['vitalite-energie-homme'] } }),
       Checkout: 'commande',
       Travel: 'voyage',
       // le lien à donner dans les publicités : albasseshopping.com/installer (ou /app)
@@ -189,7 +193,8 @@ export function RootNavigator() {
     isAuthenticated,
     userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
   });
-  const showWall = signUpFirst && wallCovers(routeName);
+  // site « page unique » : ni mur de connexion, ni bandeaux, ni fenêtres, ni Zara (tout cela porte le nom d'Albasse Shopping)
+  const showWall = !SINGLE && signUpFirst && wallCovers(routeName);
   const noteRoute = () => setRouteName(navigationRef.getCurrentRoute()?.name);
 
   useEffect(() => {
@@ -236,7 +241,7 @@ export function RootNavigator() {
       }}
     >
       <View style={styles.root}>
-        {!signUpFirst && (
+        {!signUpFirst && !SINGLE && (
           <SafeAreaView edges={['top']} style={styles.tickerSafeArea}>
             <AppDownloadBanner />
             <RecentPurchasesTicker />
@@ -302,8 +307,8 @@ export function RootNavigator() {
         <FavoritesSync />
         <AdminOrderAlert />
         {/* le tutoriel iPhone reste disponible sans compte : la page /installer le demande aux visiteurs qui n'ont pas encore de compte */}
-        <IosInstallGuide />
-        {!signUpFirst && (
+        {!SINGLE && <IosInstallGuide />}
+        {!signUpFirst && !SINGLE && (
           <>
             <Assistant />
             <SmartPromotionPopup />
