@@ -3,6 +3,9 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { TRAFFIC_SOURCES, type TrafficSource } from '../lib/analytics';
 import type { Order } from '../types';
 import { countsAsSale, salesTotal } from '../lib/salesRules';
+import { buildLeaderboard, parseSourceReport, type CampaignRow, type Leaderboard, type ReportTotals, type SourceReport, type SourceRow } from '../lib/sourceReport';
+
+export type { CampaignRow, Leaderboard, ReportTotals, SourceRow };
 
 export type Period = 'today' | 'yesterday' | '7d' | '30d' | 'month' | 'lastMonth' | 'custom';
 
@@ -26,37 +29,6 @@ export const SOURCE_STYLE: Record<TrafficSource, { emoji: string; color: string 
   'Publicité / campagne': { emoji: '📢', color: '#d8232a' },
   Autre: { emoji: '🔗', color: 'rgba(244, 239, 228, 0.6)' },
 };
-
-export interface SourceRow {
-  source: TrafficSource;
-  visitors: number;
-  newVisitors: number;
-  returningVisitors: number;
-  avgTimeSeconds: number;
-  pagesViewed: number;
-  productViews: number;
-  cartAdds: number;
-  orders: number;
-  revenue: number;
-  conversionRate: number;
-}
-
-export interface CampaignRow {
-  campaign: string;
-  medium: string | null;
-  source: TrafficSource;
-  visitors: number;
-  orders: number;
-  revenue: number;
-  conversionRate: number;
-}
-
-export interface Leaderboard {
-  bestSales: string | null;
-  bestConversion: string | null;
-  mostVisitors: string | null;
-  longestAvgTime: string | null;
-}
 
 type SessionRow = {
   id: string;
@@ -129,6 +101,8 @@ export function useSourcePerformance() {
   const [views, setViews] = useState<{ product_id: string; session_id: string | null }[]>([]);
   const [cartAdds, setCartAdds] = useState<{ session_id: string | null }[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  // le rapport exact compté par la base (add-source-report.sql) ; null tant que ce script n'est pas lancé : l'ancien calcul prend alors le relais
+  const [report, setReport] = useState<SourceReport | null>(null);
   const [isLoading, setIsLoading] = useState(isSupabaseConfigured);
 
   const refresh = async () => {
@@ -140,6 +114,22 @@ export function useSourcePerformance() {
     const { start, end } = getPeriodRange(period, customStart, customEnd);
     const startIso = start.toISOString();
     const endIso = end.toISOString();
+
+    // La base compte elle-même (exact, sans la limite de 1 000 lignes par demande) : visiteurs, nouveaux, temps moyen, pages, articles vus, paniers,
+    // commandes, ventes, vraies visites, campagnes. En cas d'erreur (script pas lancé) : null, et l'ancienne lecture ligne par ligne prend le relais.
+    const reportRes = await supabase.rpc('admin_source_report', { p_since: startIso, p_until: endIso });
+    const exact = reportRes.error ? null : parseSourceReport(reportRes.data, TRAFFIC_SOURCES);
+    if (exact) {
+      setReport(exact);
+      setSessions([]);
+      setFirstSeen({});
+      setViews([]);
+      setCartAdds([]);
+      setOrders([]);
+      setIsLoading(false);
+      return;
+    }
+    setReport(null);
 
     const sessionsRes = await supabase
       .from('visitor_sessions')
@@ -194,7 +184,8 @@ export function useSourcePerformance() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [period, customStart, customEnd]);
 
-  const { rows, campaigns, leaderboard } = useMemo(() => {
+  const { rows, campaigns, leaderboard, totals } = useMemo(() => {
+    if (report) return { rows: report.rows, campaigns: report.campaigns, leaderboard: buildLeaderboard(report.rows), totals: report.totals as ReportTotals | null };
     const { start, end } = getPeriodRange(period, customStart, customEnd);
     const startIso = start.toISOString();
     const endIso = end.toISOString();
@@ -255,21 +246,10 @@ export function useSourcePerformance() {
       };
     }).sort((a, b) => b.revenue - a.revenue);
 
-    const withVisitors = rows.filter((r) => r.visitors > 0);
-    const bestSales = [...rows].sort((a, b) => b.revenue - a.revenue)[0];
-    const bestConversion = [...withVisitors].sort((a, b) => b.conversionRate - a.conversionRate)[0];
-    const mostVisitors = [...rows].sort((a, b) => b.visitors - a.visitors)[0];
-    const longestAvgTime = [...withVisitors].sort((a, b) => b.avgTimeSeconds - a.avgTimeSeconds)[0];
+    const leaderboard: Leaderboard = buildLeaderboard(rows);
 
-    const leaderboard: Leaderboard = {
-      bestSales: bestSales && bestSales.revenue > 0 ? bestSales.source : null,
-      bestConversion: bestConversion && bestConversion.conversionRate > 0 ? bestConversion.source : null,
-      mostVisitors: mostVisitors && mostVisitors.visitors > 0 ? mostVisitors.source : null,
-      longestAvgTime: longestAvgTime && longestAvgTime.avgTimeSeconds > 0 ? longestAvgTime.source : null,
-    };
-
-    return { rows, campaigns, leaderboard };
-  }, [sessions, firstSeen, views, cartAdds, orders, period, customStart, customEnd]);
+    return { rows, campaigns, leaderboard, totals: null as ReportTotals | null };
+  }, [report, sessions, firstSeen, views, cartAdds, orders, period, customStart, customEnd]);
 
   return {
     period,
@@ -281,6 +261,7 @@ export function useSourcePerformance() {
     rows,
     campaigns,
     leaderboard,
+    totals,
     isLoading,
     refresh,
   };

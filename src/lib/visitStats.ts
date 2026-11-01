@@ -45,14 +45,14 @@ export interface CustomerActivity {
   cartAdds: number;
 }
 
-const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+export const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 // un nombre ou un texte numérique (la base renvoie parfois les montants en texte) ; sinon null
-const num = (v: unknown): number | null => {
+export const num = (v: unknown): number | null => {
   if (typeof v === 'number') return Number.isFinite(v) ? v : null;
   if (typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v))) return Number(v);
   return null;
 };
-const text = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null);
+export const text = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null);
 
 export function parseVisitOverview(raw: unknown): VisitOverview | null {
   if (!isObject(raw)) return null;

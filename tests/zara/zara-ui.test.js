@@ -8927,7 +8927,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   // & Vrais chiffres des visites (add-visit-stats.sql) : tableau de bord et Admin › Clients lisent les comptes exacts de la base
   // ---------------------------------------------------------------------------------------------------------------------------
   if (PARTS.includes('&')) {
-    console.log('\n== & Vrais chiffres des visites : tableau de bord (visiteurs, vraies visites, qualite par source/campagne), Admin › Clients (visites exactes, pages de 1000) (fausse base)');
+    console.log('\n== & Vrais chiffres des visites : tableau de bord (visiteurs, vraies visites, qualite par source/campagne), Admin › Clients (visites exactes, pages de 1000), Performance par source (rapport exact, vrais visiteurs, periode) (fausse base)');
     const SKV = 'sb-xtitsmmccpkelxfjyqyh-auth-token';
     const HDRV = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*', 'access-control-expose-headers': 'content-range' };
     const jsonV = (route, body, status = 200) => route.fulfill({ status, headers: { 'content-type': 'application/json', ...HDRV }, body: JSON.stringify(body) });
@@ -9103,6 +9103,95 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const stats = await v.page.locator('body').innerText();
       check('1 200 clients : deux demandes (depuis 0, puis depuis 1000)', seen.profileRanges.length === 2 && seen.profileRanges[0] === '0+1000' && seen.profileRanges[1] === '1000+1000', seen.profileRanges);
       check('1 200 clients : les 1 200 sont comptés (pas bloqué à 1 000)', /1200/.test(stats), stats.slice(0, 400));
+      await v.ctx.close();
+    }
+
+    // ---------- 4. page « Performance par source » : le rapport exact de la base, les « vrais visiteurs », la période choisie
+    const srcRow = (source, o = {}) => ({ source, sessions: 0, visitors: 0, new_visitors: 0, avg_time_seconds: 0, pages_viewed: 0, product_views: 0, cart_adds: 0, orders: 0, revenue: 0, real_sessions: 0, real_visitors: 0, ...o });
+    const report = {
+      totals: { sessions: 1863, visitors: 1638, real_sessions: 51, real_visitors: 5 },
+      sources: [
+        srcRow('Publicité / campagne', { sessions: 1693, visitors: 1524, new_visitors: 1500, pages_viewed: 1693, product_views: 1607, cart_adds: 8, real_sessions: 1, real_visitors: 1 }),
+        srcRow('TikTok', { sessions: 8339, visitors: 7125, new_visitors: 5000, avg_time_seconds: 31, pages_viewed: 20000, product_views: 3765, cart_adds: 110, orders: 12, revenue: 300500, real_sessions: 1559, real_visitors: 1469 }),
+      ],
+      campaigns: [
+        { campaign: '120253099938360325', medium: 'paid', source: 'Publicité / campagne', sessions: 415, visitors: 386, real_sessions: 1, real_visitors: 1, orders: 0, revenue: 0 },
+        { campaign: 'c-tik', medium: null, source: 'TikTok', sessions: 10, visitors: 8, real_sessions: 6, real_visitors: 5, orders: 2, revenue: 50000 },
+      ],
+    };
+    const openSourcePage = async ({ rpc = true, legacy = null }) => {
+      const fu = adminV();
+      const seen = { calls: [], reads: [] };
+      const v = await newVisitor(phone, { lang: 'fr', storage: { [SKV]: fu.session }, fakeUser: fu, fakeStore: { waOrder: true, accountRequired: false, patches: [] } });
+      await v.page.route(/\/rest\/v1\//, (rt) => {
+        const req = rt.request();
+        const u = new URL(req.url());
+        if (req.method() === 'OPTIONS') return rt.fallback();
+        const t = u.pathname.replace('/rest/v1/', '');
+        if (req.method() === 'GET' || req.method() === 'HEAD' || t.startsWith('rpc/get_visitor_first_seen')) seen.reads.push(t);
+        if (t === 'rpc/admin_source_report') {
+          seen.calls.push(JSON.parse(req.postData() || '{}'));
+          if (!rpc) return jsonV(rt, { code: 'PGRST202', message: 'Could not find the function public.admin_source_report', details: null, hint: null }, 404);
+          return jsonV(rt, report);
+        }
+        if (t === 'visitor_sessions') return jsonV(rt, legacy ? legacy.sessions : []);
+        if (t === 'rpc/get_visitor_first_seen') return jsonV(rt, legacy ? legacy.firstSeen : []);
+        if (['orders', 'product_views', 'cart_events'].includes(t)) return jsonV(rt, []);
+        if (t === 'profiles' && u.searchParams.get('id')) return rt.fallback();
+        return rt.fallback();
+      });
+      await v.page.goto(`${BASE}/admin/performance-par-source`, { waitUntil: 'load' });
+      await v.page.getByText('📈 Performance par source').first().waitFor({ timeout: 30000 });
+      return { v, seen };
+    };
+    {
+      const { v, seen } = await openSourcePage({ rpc: true });
+      await v.page.getByTestId('source-totals').waitFor({ timeout: 15000 });
+      const totalsTxt = await v.page.getByTestId('source-totals').innerText();
+      check('Performance par source : « 1863 visites · 1638 visiteurs · 5 vrais visiteurs (<1 %) » avec la règle expliquée', /1863 visites/.test(totalsTxt) && /1638 visiteurs/.test(totalsTxt) && /5 vrais visiteurs \(<1 %\)/.test(totalsTxt) && /20 secondes/.test(totalsTxt), totalsTxt);
+      const tik = await v.page.getByTestId('source-real-TikTok').innerText();
+      check('TikTok : 1469 vrais visiteurs', /1469/.test(tik), tik);
+      const ads = await v.page.getByTestId('source-real-Publicité / campagne').innerText();
+      check('Publicité / campagne : 1 seul vrai visiteur', /\b1\b/.test(ads) && !/1524/.test(ads), ads);
+      const body = await v.page.locator('body').innerText();
+      check('la page montre les chiffres EXACTS de la base (7125 visiteurs TikTok, 1524 pour la pub, 3765 articles vus, 12 commandes), pas 1 000 visites', /7125/.test(body) && /1524/.test(body) && /3765/.test(body) && /\b12\b/.test(body));
+      check('part de vrais : TikTok 21 %, pub « <1 % »', /21 %/.test(body) && /<1 %/.test(body));
+      check('classement automatique : TikTok meilleure source en ventes et en visiteurs', /Meilleure source en ventes/.test(body) && /🟣 TikTok/.test(body));
+      check('tableau comparatif : une colonne « Vrais »', (await v.page.getByText('Vrais', { exact: true }).count()) >= 1);
+      const camp = await v.page.getByTestId('source-campaign-120253099938360325').innerText();
+      check('campagne Meta : 386 visiteurs, 1 vrai (<1 %), 0 commande', /386 visiteur\(s\)/.test(camp) && /1 vrai\(s\) \(<1 %\)/.test(camp) && /0 cmd/.test(camp), camp);
+      check('une seule demande à la base (la période « 7 jours » par défaut), aucune ancienne lecture ligne par ligne',
+        seen.calls.length === 1 && !seen.reads.includes('visitor_sessions') && !seen.reads.includes('product_views') && !seen.reads.includes('cart_events') && !seen.reads.includes('rpc/get_visitor_first_seen'), { calls: seen.calls, reads: seen.reads });
+      const days = (c) => (Date.parse(c.p_until) - Date.parse(c.p_since)) / 86400000;
+      check('« 7 jours » : du début du jour il y a 6 jours à la fin d\'aujourd\'hui (7 jours pleins)', Math.abs(days(seen.calls[0]) - 7) < 0.01, seen.calls[0]);
+      await v.page.getByText('30 jours', { exact: true }).click();
+      await v.page.waitForFunction(() => true);
+      await sleep(1500);
+      check('« 30 jours » : une nouvelle demande de 30 jours pleins', seen.calls.length === 2 && Math.abs(days(seen.calls[1]) - 30) < 0.01, seen.calls);
+      await v.page.getByText("Aujourd'hui", { exact: true }).first().click();
+      await sleep(1500);
+      check('« Aujourd\'hui » : une nouvelle demande d\'un jour', seen.calls.length === 3 && Math.abs(days(seen.calls[2]) - 1) < 0.01, seen.calls);
+      await v.page.screenshot({ path: path.join(OUT, '&2-performance-par-source.png') });
+      check('aucune erreur (Performance par source, comptes exacts)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+    {
+      // le script SQL n'est pas lancé : l'ancien calcul de la page, sans « vrais visiteurs » ni total
+      const today = new Date().toISOString();
+      const legacy = {
+        sessions: [
+          { id: 's1', visitor_id: 'v1', user_id: null, started_at: today, duration_seconds: 30, page_views: 2, referrer_source: 'TikTok', utm_medium: null, utm_campaign: null },
+          { id: 's2', visitor_id: 'v2', user_id: null, started_at: today, duration_seconds: 0, page_views: 1, referrer_source: 'TikTok', utm_medium: 'paid', utm_campaign: 'c-old' },
+        ],
+        firstSeen: [{ visitor_key: 'v1', first_seen_at: today }, { visitor_key: 'v2', first_seen_at: '2020-01-01T00:00:00Z' }],
+      };
+      const { v, seen } = await openSourcePage({ rpc: false, legacy });
+      await sleep(1500);
+      const body = await v.page.locator('body').innerText();
+      check('script pas lancé : la page marche avec l\'ancien calcul (2 visiteurs TikTok, 1 nouveau, 1 revenant, campagne c-old)', /Performance par source/.test(body) && /c-old/.test(body) && seen.reads.includes('visitor_sessions') && seen.reads.includes('rpc/get_visitor_first_seen'), seen.reads);
+      check('script pas lancé : ni total, ni « Vrais visiteurs », ni colonne « Vrais », ni « vrai(s) » (rien d\'inventé)',
+        (await v.page.getByTestId('source-totals').count()) === 0 && (await v.page.getByTestId('source-real-TikTok').count()) === 0 && !/Vrais visiteurs|vrai\(s\)/.test(body) && (await v.page.getByText('Vrais', { exact: true }).count()) === 0);
+      check('script pas lancé : aucune erreur', v.errs.length === 0, v.errs);
       await v.ctx.close();
     }
   }
