@@ -73,6 +73,8 @@ export function ScheduledPushes({ products }: { products: Product[] }) {
   const title = product ? pushTitleFor(product.name) : '';
   const upcoming = rows.filter((r) => r.status === 'pending').sort((a, b) => a.send_at.localeCompare(b.send_at));
   const history = rows.filter((r) => r.status !== 'pending').slice(0, 20);
+  // la phrase n'est affichée que si la base efface vraiment l'historique (add-push-history-cleanup.sql lancé : la colonne existe)
+  const autoCleanup = rows.some((r) => 'status_changed_at' in r);
 
   const schedule = async () => {
     const issue = scheduleProblem({ productId, message, date, time });
@@ -272,12 +274,19 @@ export function ScheduledPushes({ products }: { products: Product[] }) {
       ))}
 
       {history.length > 0 ? (
-        <View style={styles.historyHead}>
-          <Text style={[styles.listTitle, { marginBottom: 0 }]}>Historique</Text>
-          <Pressable onPress={() => void load()} hitSlop={8} testID="push-refresh">
-            <Text style={styles.link}>↻ Actualiser les clics</Text>
-          </Pressable>
-        </View>
+        <>
+          <View style={styles.historyHead}>
+            <Text style={[styles.listTitle, { marginBottom: 0 }]}>Historique</Text>
+            <Pressable onPress={() => void load()} hitSlop={8} testID="push-refresh">
+              <Text style={styles.link}>↻ Actualiser les clics</Text>
+            </Pressable>
+          </View>
+          {autoCleanup ? (
+            <Text style={styles.helper} testID="push-history-note">
+              Chaque ligne s'efface toute seule 24 h après son envoi ou son annulation (ses clics aussi).
+            </Text>
+          ) : null}
+        </>
       ) : null}
       {history.map((r) => (
         <PushRow key={r.id} row={r} />

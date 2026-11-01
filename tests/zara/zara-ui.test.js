@@ -4662,8 +4662,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const at = (hoursFromNow) => new Date(Date.now() + hoursFromNow * 3600000).toISOString();
     const rowsOf = () => [
       { id: 'p1', product_id: prod.id, title: '🛍️ ' + prod.name.trim(), message: 'Promo du soir sur cet article', send_at: at(5), status: 'pending', sent_at: null, product: { name: prod.name, slug: prod.slug, images: prod.images } },
-      { id: 'p2', product_id: prod.id, title: '🛍️ ' + prod.name.trim(), message: 'Deja partie hier', send_at: at(-20), status: 'sent', sent_at: at(-20), clicks: 3, recipients: 11, product: { name: prod.name, slug: prod.slug, images: prod.images } },
-      { id: 'p3', product_id: prod.id, title: '🛍️ ' + prod.name.trim(), message: 'Trop en retard', send_at: at(-30), status: 'expired', sent_at: null, product: { name: prod.name, slug: prod.slug, images: prod.images } },
+      { id: 'p2', product_id: prod.id, title: '🛍️ ' + prod.name.trim(), message: 'Deja partie hier', send_at: at(-20), status: 'sent', sent_at: at(-20), status_changed_at: at(-20), clicks: 3, recipients: 11, product: { name: prod.name, slug: prod.slug, images: prod.images } },
+      { id: 'p3', product_id: prod.id, title: '🛍️ ' + prod.name.trim(), message: 'Trop en retard', send_at: at(-30), status: 'expired', sent_at: null, status_changed_at: at(-30), product: { name: prod.name, slug: prod.slug, images: prod.images } },
     ];
     const openAdmin = async (fp, admin = true) => {
       const fu = accountOf({ is_admin: admin });
@@ -4715,6 +4715,16 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('script pas lance : « Lancez d’abord le script add-push-new-products-switch.sql dans Supabase. » et l\'interrupteur ne bouge pas', (await c.page.getByText(/Lancez d’abord le script add-push-new-products-switch\.sql dans Supabase\./).count()) >= 1 && /Activé/.test(await c.page.getByTestId('push-new-products-status').innerText()));
       await c.ctx.close();
     }
+    // le script add-push-history-cleanup.sql n'est pas encore lance (pas de colonne status_changed_at) : l'historique s'affiche, SANS la phrase d'effacement (elle serait fausse)
+    {
+      const fp = { rows: rowsOf().map(({ status_changed_at, ...r }) => r), products, posts: [], patches: [] };
+      const c = await openAdmin(fp);
+      await section(c).waitFor({ timeout: 25000 });
+      await c.page.getByTestId('push-row-p2').waitFor({ timeout: 15000 });
+      check('script d\'effacement pas lance : l\'historique est la, mais aucune phrase « s\'efface toute seule » (elle serait fausse)', /Historique/.test(await section(c).innerText()) && (await c.page.getByTestId('push-history-note').count()) === 0);
+      check('script d\'effacement pas lance : aucune erreur', c.errs.length === 0, c.errs);
+      await c.ctx.close();
+    }
     // la vraie utilisation
     {
       const fp = { rows: rowsOf(), products, posts: [], patches: [] };
@@ -4724,6 +4734,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const txt = await section(c).innerText();
       check('la section est la premiere de « Promotions intelligentes », avec « A venir (1) » et l\'historique', /📣 Notifications push programmées/.test(txt) && /À venir \(1\)/.test(txt) && /Historique/.test(txt), txt.slice(0, 300));
       check('historique : « Envoyee » et « Pas envoyee (trop en retard) »', /✅ Envoyée/.test(await c.page.getByTestId('push-row-p2').innerText()) && /Pas envoyée \(trop en retard\)/.test(await c.page.getByTestId('push-row-p3').innerText()));
+      check('historique : une phrase explique l\'effacement automatique 24 h après l\'envoi ou l\'annulation (clics compris)', /s'efface toute seule 24 h après son envoi ou son annulation \(ses clics aussi\)/.test(await c.page.getByTestId('push-history-note').innerText()));
       const badge = c.page.getByTestId('push-clicks-p2');
       const badgeInfo = await badge.evaluate((el) => ({ text: el.innerText, bg: getComputedStyle(el).backgroundColor }));
       check('sous la notification envoyee : « 👆 3 clics » et « envoyee a 11 telephones · 27 % », sur fond vert bien visible', /👆 3 clics/.test(badgeInfo.text) && /envoyée à 11 téléphones · 27 %/.test(badgeInfo.text) && badgeInfo.bg === 'rgb(22, 163, 74)', badgeInfo);
@@ -6119,7 +6130,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       window.__fbNav = [];
       document.addEventListener('click', (e) => {
         const a = e.target && e.target.closest ? e.target.closest('a') : null;
-        if (a && /^(intent|fb):|facebook\.com/.test(a.getAttribute('href') || '')) {
+        if (a && /^(intent|fb):|facebook\.com|linkedin\.com/.test(a.getAttribute('href') || '')) {
           window.__fbNav.push(a.getAttribute('href'));
           e.preventDefault();
         }
@@ -6194,6 +6205,85 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await sleep(800);
       check('ordinateur : la page de partage Facebook s\'ouvre dans un nouvel onglet', popup !== v.page && asked.includes(sharer(pageUrl)) && v.page.url().includes(`/produit/${prod.slug}`), { asked, page: v.page.url() });
       check('aucune erreur (Facebook, ordinateur)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+    // LinkedIn, juste a cote de Facebook : sur telephone, l'application LinkedIn s'ouvre directement (pas le navigateur)
+    const linkedinWeb = (u) => 'https://www.linkedin.com/sharing/share-offsite/?url=' + encodeURIComponent(u);
+    const liIntent = (u) => `intent://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(u)}#Intent;scheme=https;package=com.linkedin.android;S.browser_fallback_url=${encodeURIComponent(linkedinWeb(u))};end`;
+    const layout = async (v, label) => {
+      await openProduct(v);
+      const fbBox = await v.page.getByText('📘 Facebook').first().boundingBox();
+      const liBtn = v.page.getByTestId('share-linkedin').first();
+      await liBtn.waitFor({ timeout: 10000 });
+      const liBox = await liBtn.boundingBox();
+      const waBox = await v.page.getByText('💬 WhatsApp').first().boundingBox();
+      const width = v.page.viewportSize().width;
+      const mid = (b) => b.y + b.height / 2;
+      check(`${label} : « 💼 LinkedIn » est A COTE de « 📘 Facebook » (meme rangee, a sa droite), WhatsApp et Facebook avant lui, le tout dans l'ecran`,
+        !!fbBox && !!liBox && !!waBox && Math.abs(mid(liBox) - mid(fbBox)) < 8 && Math.abs(mid(waBox) - mid(fbBox)) < 8 && liBox.x > fbBox.x + fbBox.width && fbBox.x > waBox.x && liBox.x >= 0 && liBox.x + liBox.width <= width, { waBox, fbBox, liBox, width });
+      check(`${label} : le texte du bouton est « 💼 LinkedIn »`, /💼 LinkedIn/.test(await liBtn.innerText()));
+      return liBtn;
+    };
+    // Android (Chrome) : le lien est donne DIRECTEMENT a l'application LinkedIn ; la page de partage du site seulement si elle n'est pas installee
+    {
+      const v = await newVisitor(phone, { initScripts: [catchLinks] });
+      const li = await layout(v, 'Android');
+      await v.page.screenshot({ path: path.join(OUT, 'N-linkedin-telephone.png') });
+      await li.click();
+      await sleep(600);
+      const nav = await shareOf(v);
+      check('Android : le bouton ouvre directement l\'application LinkedIn (com.linkedin.android), avec le lien de l\'article et la page de partage du site en secours', nav.length === 1 && nav[0] === liIntent(pageUrl), nav);
+      check('Android : la fiche produit reste affichee (pas d\'onglet du navigateur ouvert)', v.ctx.pages().length === 1 && v.page.url().includes(`/produit/${prod.slug}`), v.ctx.pages().map((p) => p.url()));
+      check('aucune erreur (LinkedIn, Android)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+    // petit telephone (360 px) : memes boutons cote a cote
+    {
+      const v = await newVisitor({ ...phone, viewport: { width: 360, height: 740 } }, { initScripts: [catchLinks] });
+      await layout(v, 'petit telephone (360 px)');
+      await v.ctx.close();
+    }
+    // Android, dans l'application Albasse : l'application LinkedIn d'abord ; sans reponse, la page de partage 1,5 s plus tard (une seule fois)
+    {
+      const v = await newVisitor(phone, { storage: { albasse_app_shell: '1' }, initScripts: [catchLinks] });
+      const li = await layout(v, 'application Albasse');
+      await li.click();
+      await sleep(400);
+      const first = await shareOf(v);
+      check('application Albasse : l\'application LinkedIn est appelee tout de suite', first.length === 1 && first[0] === liIntent(pageUrl), first);
+      await sleep(1700);
+      const after = await shareOf(v);
+      check('application Albasse : LinkedIn ne s\'est pas ouvert -> la page de partage ensuite (une seule fois)', after.length === 2 && after[1] === linkedinWeb(pageUrl), after);
+      await li.click();
+      await sleep(300);
+      await v.page.evaluate(() => window.dispatchEvent(new Event('blur')));
+      await sleep(1800);
+      const opened = await shareOf(v);
+      check('application Albasse : si LinkedIn s\'ouvre, rien d\'autre ne s\'ouvre', opened.length === 3 && opened[2].startsWith('intent://www.linkedin.com'), opened);
+      check('aucune erreur (LinkedIn, application Albasse)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+    // iPhone : le lien linkedin.com (l'iPhone l'ouvre dans l'application LinkedIn quand elle est installee)
+    {
+      const v = await newVisitor({ ...devices['iPhone 13'], viewport: { width: 390, height: 800 } }, { initScripts: [catchLinks] });
+      const li = await layout(v, 'iPhone');
+      await li.click();
+      await sleep(600);
+      const nav = await shareOf(v);
+      check('iPhone : le lien linkedin.com est touche dans la page (lien universel vers l\'application LinkedIn)', nav.length === 1 && nav[0] === linkedinWeb(pageUrl), nav);
+      check('aucune erreur (LinkedIn, iPhone)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+    // ordinateur : un nouvel onglet avec la page de partage, la fiche reste affichee
+    {
+      const v = await newVisitor({ viewport: { width: 1280, height: 800 } }, {});
+      const li = await layout(v, 'ordinateur');
+      const asked = [];
+      v.ctx.on('request', (r) => { if (/linkedin\.com/.test(r.url())) asked.push(r.url()); }); // le test ne laisse rien sortir : on note l'adresse demandee
+      const [popup] = await Promise.all([v.ctx.waitForEvent('page', { timeout: 10000 }), li.click()]);
+      await sleep(800);
+      check('ordinateur : la page de partage LinkedIn s\'ouvre dans un nouvel onglet avec le lien de l\'article, la fiche reste affichee', popup !== v.page && asked.includes(linkedinWeb(pageUrl)) && v.page.url().includes(`/produit/${prod.slug}`), { asked, page: v.page.url() });
+      check('aucune erreur (LinkedIn, ordinateur)', v.errs.length === 0, v.errs);
       await v.ctx.close();
     }
   }
