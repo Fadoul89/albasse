@@ -2,15 +2,15 @@
 
 Le fichier `public/logo-albasse.gif` (300 × 300 px, 0,5 Mo, boucle de 4 secondes) est publié avec le site :
 
-    https://albasseshopping.com/logo-albasse.gif
+    https://www.albasseshopping.com/logo-albasse.gif
 
-Gmail demande une adresse web publique pour l'image d'une signature : c'est celle-ci.
+Gmail demande une adresse web publique pour l'image d'une signature : c'est celle-ci (avec « www » : sans « www », le site renvoie d'abord vers « www »).
 
 ## Mettre le logo dans la signature de contact@albasseshopping.com
 
 1. Gmail sur ordinateur › roue dentée › **Voir tous les paramètres** › **Général** › **Signature**.
 2. Crée ou ouvre la signature, clique sur l'icône **image**.
-3. Onglet **Adresse web (URL)**, colle `https://albasseshopping.com/logo-albasse.gif`.
+3. Onglet **Adresse web (URL)**, colle `https://www.albasseshopping.com/logo-albasse.gif`.
 4. Clique sur l'image, choisis la taille **Petite** ou **Moyenne** (environ 130 px de large), puis enregistre.
 
 Le logo bouge dans Gmail (téléphone et ordinateur). Outlook sur ordinateur ne montre que la première image.
