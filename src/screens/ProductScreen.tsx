@@ -27,6 +27,7 @@ import { useAuthStore } from '../store/authStore';
 import { trackProductView, trackAddToCart } from '../lib/analytics';
 import { endProductView, enrichProductMeta, startProductView, trackVariant } from '../lib/browsingTracker';
 import { facebookSharerUrl, shareOnFacebook } from '../lib/facebookShare';
+import { linkedinShareUrl, shareOnLinkedIn } from '../lib/linkedinShare';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { StarRating } from '../components/StarRating';
 import { GoldButton } from '../components/GoldButton';
@@ -215,6 +216,12 @@ export function ProductScreen({ route }: Props) {
     else Linking.openURL(facebookSharerUrl(getShareUrl()));
   };
 
+  // la page de partage de LinkedIn dans un nouvel onglet (la fiche reste affichée)
+  const shareToLinkedIn = () => {
+    if (Platform.OS === 'web') shareOnLinkedIn(getShareUrl());
+    else Linking.openURL(linkedinShareUrl(getShareUrl()));
+  };
+
   const handleShare = async () => {
     const url = getShareUrl();
 
@@ -383,6 +390,9 @@ export function ProductScreen({ route }: Props) {
             <Pressable style={[styles.shareBtn, styles.shareBtnFacebook]} onPress={shareToFacebook}>
               <Text style={styles.shareBtnText}>📘 Facebook</Text>
             </Pressable>
+            <Pressable style={[styles.shareBtn, styles.shareBtnLinkedIn]} onPress={shareToLinkedIn} testID="share-linkedin">
+              <Text style={styles.shareBtnText}>💼 LinkedIn</Text>
+            </Pressable>
           </View>
 
           <Text style={styles.description}>{product.description}</Text>
@@ -471,10 +481,12 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   shareRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginTop: 12 },
-  shareLabel: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 12 },
+  // « Partager : » sur sa propre ligne : les trois boutons (WhatsApp, Facebook, LinkedIn) tiennent côte à côte, même sur un petit téléphone
+  shareLabel: { width: '100%', color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 12 },
   shareBtn: { borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 6 },
   shareBtnWhatsApp: { backgroundColor: '#25D366' },
   shareBtnFacebook: { backgroundColor: '#1877F2' },
+  shareBtnLinkedIn: { backgroundColor: '#0A66C2' },
   shareBtnText: { color: '#ffffff', fontFamily: fonts.bodyBold, fontSize: 12 },
   description: {
     fontFamily: fonts.body,

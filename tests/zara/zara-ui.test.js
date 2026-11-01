@@ -6197,6 +6197,31 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('aucune erreur (Facebook, ordinateur)', v.errs.length === 0, v.errs);
       await v.ctx.close();
     }
+    // LinkedIn, juste a cote de Facebook : la page de partage de LinkedIn s'ouvre dans un nouvel onglet, la fiche reste affichee
+    const linkedin = (u) => 'https://www.linkedin.com/sharing/share-offsite/?url=' + encodeURIComponent(u);
+    for (const [label, device, opts] of [['Android', phone, {}], ['iPhone', { ...devices['iPhone 13'], viewport: { width: 390, height: 800 } }, {}], ['petit telephone (360 px)', { ...phone, viewport: { width: 360, height: 740 } }, {}], ['ordinateur', { viewport: { width: 1280, height: 800 } }, {}]]) {
+      const v = await newVisitor(device, opts);
+      await openProduct(v);
+      const fbBox = await v.page.getByText('📘 Facebook').first().boundingBox();
+      const liBtn = v.page.getByTestId('share-linkedin').first();
+      await liBtn.waitFor({ timeout: 10000 });
+      const liBox = await liBtn.boundingBox();
+      const width = v.page.viewportSize().width;
+      const waBox = await v.page.getByText('💬 WhatsApp').first().boundingBox();
+      const mid = (b) => b.y + b.height / 2;
+      check(`${label} : « 💼 LinkedIn » est A COTE de « 📘 Facebook » (meme rangee, a sa droite), WhatsApp et Facebook avant lui, le tout dans l'ecran`,
+        !!fbBox && !!liBox && !!waBox && Math.abs(mid(liBox) - mid(fbBox)) < 8 && Math.abs(mid(waBox) - mid(fbBox)) < 8 && liBox.x > fbBox.x + fbBox.width && fbBox.x > waBox.x && liBox.x >= 0 && liBox.x + liBox.width <= width, { waBox, fbBox, liBox, width });
+      check(`${label} : le texte du bouton est « 💼 LinkedIn »`, /💼 LinkedIn/.test(await liBtn.innerText()));
+      if (label === 'Android') await v.page.screenshot({ path: path.join(OUT, 'N-linkedin-telephone.png') });
+      const asked = [];
+      v.ctx.on('request', (r) => { if (/linkedin\.com/.test(r.url())) asked.push(r.url()); }); // le test ne laisse rien sortir : on note l'adresse demandee
+      const [popup] = await Promise.all([v.ctx.waitForEvent('page', { timeout: 10000 }), liBtn.click()]);
+      await sleep(900);
+      check(`${label} : la page de partage LinkedIn s'ouvre dans un NOUVEL onglet avec le lien de l'article, la fiche reste affichee`,
+        popup !== v.page && asked.includes(linkedin(pageUrl)) && v.page.url().includes(`/produit/${prod.slug}`), { asked, page: v.page.url() });
+      check(`aucune erreur (LinkedIn, ${label})`, v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
   }
 
   if (PARTS.includes('Q')) {
