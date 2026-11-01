@@ -18,6 +18,8 @@ export interface ScheduledPush {
   sent_at: string | null;
   clicks?: number | null;
   recipients?: number | null;
+  // présent seulement quand add-push-history-cleanup.sql est lancé (l'historique s'efface alors tout seul 24 h après)
+  status_changed_at?: string | null;
   product: { name: string; slug: string; images: string[] | null } | null;
 }
 
@@ -33,9 +35,12 @@ export async function fetchScheduledPushes(): Promise<{ rows: ScheduledPush[]; m
   const query = (columns: string) =>
     supabase.from('scheduled_pushes').select(columns).order('send_at', { ascending: false }).limit(100);
   const base = 'id, product_id, title, message, send_at, status, sent_at, product:products(name, slug, images)';
-  let { data, error } = await query(`${base}, clicks, recipients`);
-  // les colonnes des clics n'existent pas encore (script add-push-clicks.sql pas encore lancé) : la liste s'affiche sans
-  if (error && (error.code === '42703' || /clicks|recipients/.test(error.message ?? ''))) ({ data, error } = await query(base));
+  // une colonne absente (script SQL pas encore lancé) donne l'erreur 42703 : on réessaie avec moins de colonnes, la liste s'affiche quand même
+  const columnProblem = (e: { code?: string; message?: string } | null) => !!e && (e.code === '42703' || /clicks|recipients|status_changed_at/.test(e.message ?? ''));
+  // status_changed_at : add-push-history-cleanup.sql (l'historique s'efface 24 h après) ; clicks, recipients : add-push-clicks.sql
+  let { data, error } = await query(`${base}, clicks, recipients, status_changed_at`);
+  if (columnProblem(error)) ({ data, error } = await query(`${base}, clicks, recipients`));
+  if (columnProblem(error)) ({ data, error } = await query(base));
   if (error) return { rows: [], missing: isMissingTable(error), error: error.message };
   return { rows: (data ?? []) as unknown as ScheduledPush[], missing: false, error: null };
 }

@@ -8,7 +8,7 @@ Chaque ligne de l'historique s'efface **toute seule 24 heures après** le moment
 - Les notifications **programmées** (à venir) ne sont **jamais** effacées.
 - Une notification annulée disparaît 24 h après l'annulation (pas 24 h après sa création).
 - Le **nombre de clics** est gardé sur la ligne : il disparaît avec elle. Un clic qui arrive plus tard n'est plus compté (la notification n'existe plus).
-- Une phrase sous « Historique » l'explique : « Chaque ligne s'efface toute seule 24 h après son envoi ou son annulation (ses clics aussi). »
+- Une phrase sous « Historique » l'explique : « Chaque ligne s'efface toute seule 24 h après son envoi ou son annulation (ses clics aussi). » Elle s'affiche **seulement quand le script SQL est lancé** (le site vérifie que la colonne `status_changed_at` existe) : avant, elle serait fausse.
 
 ## Comment ça marche
 - Une colonne **`status_changed_at`** note le moment du dernier changement d'état (un déclencheur la met à jour tout seul : création, envoi, annulation, « pas envoyée »).
@@ -17,8 +17,8 @@ Chaque ligne de l'historique s'efface **toute seule 24 heures après** le moment
 
 ## Mise en service (dans cet ordre)
 1. Lancer **`add-push-history-cleanup.sql`** une fois dans Supabase › SQL Editor (après `add-scheduled-push.sql`). Sans danger si on le relance. Une colonne en plus, pas de nouvelle table : aucun `grant` à ajouter.
-2. Publier le site (la phrase sous « Historique »).
+2. Publier le site (la phrase sous « Historique »). Le site peut être publié avant ou après le script : tant que le script n'est pas lancé, la phrase est cachée et rien ne change.
 
 ## Tests
 - Base locale jetable : `sh tests/sql/run-push-history.sh` (24 contrôles : lignes anciennes effacées, récentes gardées, programmées jamais touchées, départ des 24 h à l'annulation et à l'envoi, accès administrateur inchangé, relance sans erreur).
-- Navigateur : `PARTS=I` (la phrase de l'historique est affichée).
+- Navigateur : `PARTS=I` (la phrase de l'historique est affichée quand la colonne existe, cachée quand le script n'est pas lancé).

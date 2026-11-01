@@ -4662,8 +4662,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const at = (hoursFromNow) => new Date(Date.now() + hoursFromNow * 3600000).toISOString();
     const rowsOf = () => [
       { id: 'p1', product_id: prod.id, title: '🛍️ ' + prod.name.trim(), message: 'Promo du soir sur cet article', send_at: at(5), status: 'pending', sent_at: null, product: { name: prod.name, slug: prod.slug, images: prod.images } },
-      { id: 'p2', product_id: prod.id, title: '🛍️ ' + prod.name.trim(), message: 'Deja partie hier', send_at: at(-20), status: 'sent', sent_at: at(-20), clicks: 3, recipients: 11, product: { name: prod.name, slug: prod.slug, images: prod.images } },
-      { id: 'p3', product_id: prod.id, title: '🛍️ ' + prod.name.trim(), message: 'Trop en retard', send_at: at(-30), status: 'expired', sent_at: null, product: { name: prod.name, slug: prod.slug, images: prod.images } },
+      { id: 'p2', product_id: prod.id, title: '🛍️ ' + prod.name.trim(), message: 'Deja partie hier', send_at: at(-20), status: 'sent', sent_at: at(-20), status_changed_at: at(-20), clicks: 3, recipients: 11, product: { name: prod.name, slug: prod.slug, images: prod.images } },
+      { id: 'p3', product_id: prod.id, title: '🛍️ ' + prod.name.trim(), message: 'Trop en retard', send_at: at(-30), status: 'expired', sent_at: null, status_changed_at: at(-30), product: { name: prod.name, slug: prod.slug, images: prod.images } },
     ];
     const openAdmin = async (fp, admin = true) => {
       const fu = accountOf({ is_admin: admin });
@@ -4713,6 +4713,16 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await c.page.getByTestId('push-new-products-switch').click();
       await sleep(1500);
       check('script pas lance : « Lancez d’abord le script add-push-new-products-switch.sql dans Supabase. » et l\'interrupteur ne bouge pas', (await c.page.getByText(/Lancez d’abord le script add-push-new-products-switch\.sql dans Supabase\./).count()) >= 1 && /Activé/.test(await c.page.getByTestId('push-new-products-status').innerText()));
+      await c.ctx.close();
+    }
+    // le script add-push-history-cleanup.sql n'est pas encore lance (pas de colonne status_changed_at) : l'historique s'affiche, SANS la phrase d'effacement (elle serait fausse)
+    {
+      const fp = { rows: rowsOf().map(({ status_changed_at, ...r }) => r), products, posts: [], patches: [] };
+      const c = await openAdmin(fp);
+      await section(c).waitFor({ timeout: 25000 });
+      await c.page.getByTestId('push-row-p2').waitFor({ timeout: 15000 });
+      check('script d\'effacement pas lance : l\'historique est la, mais aucune phrase « s\'efface toute seule » (elle serait fausse)', /Historique/.test(await section(c).innerText()) && (await c.page.getByTestId('push-history-note').count()) === 0);
+      check('script d\'effacement pas lance : aucune erreur', c.errs.length === 0, c.errs);
       await c.ctx.close();
     }
     // la vraie utilisation
