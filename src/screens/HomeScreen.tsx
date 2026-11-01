@@ -23,6 +23,7 @@ import { GenderQuestionCard } from '../components/GenderQuestionCard';
 import { fetchOnlineCount, onlineLabel } from '../lib/onlineCount';
 import { coldSeasonActive, coldSeasonPicks } from '../lib/coldSeason';
 import { activeFlash, activePromotions, nextPromoChange } from '../lib/promotions';
+import { articleCount, buildHomeSections, moreLabel } from '../lib/homeSections';
 
 const ONLINE_REFRESH_MS = 30000;
 
@@ -56,6 +57,8 @@ export function HomeScreen() {
   const { items: flashSale, endsAt: flashEndsAt } = activeFlash(products, now);
   const { items: promoAll, endsAt: promoEndsAt } = activePromotions(products, now);
   const promoItems = promoAll.slice(0, 12);
+  // 4 articles par catégorie (dans l'ordre choisi par l'admin) ; le reste est dans la catégorie
+  const sections = buildHomeSections(categories, products);
   const promoEndLabel = promoEndsAt ? new Date(promoEndsAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', timeZone: 'Africa/Ndjamena' }) : '';
   // saison fraîche (jusqu'à fin décembre) : les vrais blousons et manteaux en vente, la plus grande remise réelle d'abord (jamais un porte-manteau)
   const coldPicks = coldSeasonActive() ? coldSeasonPicks(products, (p) => ({ name: p.name, price: p.price, compareAt: p.compare_at_price, stock: p.stock, hasImage: !!p.images?.[0] }), 6) : [];
@@ -298,13 +301,43 @@ export function HomeScreen() {
         <Text style={styles.travelArrow}>→</Text>
       </Pressable>
 
-      <View style={styles.collectionSection}>
-        <Text style={styles.sectionTitle}>Toute la collection</Text>
-        <View style={styles.grid}>
-          {products.map((p) => (
-            <ProductCard key={p.id} product={p} columns={gridColumns} />
-          ))}
-        </View>
+      {/* une section par catégorie : ses 4 premiers articles, puis un bouton vers les autres (demande du patron) */}
+      <View style={styles.collectionSection} testID="home-sections">
+        {sections.map(({ category, items, total, rest }) => (
+          <View key={category.id} style={styles.categorySection} testID={`home-section-${category.slug}`}>
+            <Pressable
+              style={styles.categoryHeader}
+              onPress={() => navigation.navigate('Category', { slug: category.slug })}
+              accessibilityRole="button"
+              accessibilityLabel={`${category.name} : voir les ${total} articles`}
+              testID={`home-section-title-${category.slug}`}
+            >
+              <Text style={styles.categoryTitle} numberOfLines={1}>{category.name}</Text>
+              <Text style={styles.categoryCount}>{articleCount(total)}</Text>
+            </Pressable>
+            <View style={styles.grid}>
+              {items.map((p) => (
+                <ProductCard key={p.id} product={p} columns={gridColumns} />
+              ))}
+            </View>
+            {rest > 0 && (
+              <Pressable
+                style={styles.moreButton}
+                onPress={() => navigation.navigate('Category', { slug: category.slug })}
+                accessibilityRole="button"
+                testID={`home-more-${category.slug}`}
+              >
+                <Text style={styles.moreText}>{moreLabel(rest)}</Text>
+                <Text style={styles.moreArrow}>→</Text>
+              </Pressable>
+            )}
+          </View>
+        ))}
+        {products.length > 0 && (
+          <Pressable style={styles.allButton} onPress={() => navigation.navigate('Category', { slug: 'tous' })} accessibilityRole="button" testID="home-all-articles">
+            <Text style={styles.allText}>{`Voir tous les articles (${products.length})`}</Text>
+          </Pressable>
+        )}
         {isLoading && <Text style={styles.loading}>Chargement…</Text>}
       </View>
 
@@ -434,6 +467,25 @@ const styles = StyleSheet.create({
   coldBadge: { fontFamily: fonts.displayBold, fontSize: 17, color: colors.goldLight, letterSpacing: 1 },
   coldSubtitle: { fontFamily: fonts.body, fontSize: 12, color: colors.creamFaint, marginTop: 4 },
   collectionSection: { marginTop: spacing.md, paddingHorizontal: spacing.md },
+  categorySection: { marginBottom: spacing.lg },
+  categoryHeader: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: spacing.sm, marginBottom: spacing.md },
+  categoryTitle: { flexShrink: 1, fontFamily: fonts.display, fontSize: 20, color: colors.cream },
+  categoryCount: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.creamFaint },
+  moreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: colors.gold,
+    borderRadius: radius.lg,
+    paddingVertical: 12,
+    paddingHorizontal: spacing.md,
+  },
+  moreText: { color: colors.gold, fontFamily: fonts.bodySemiBold, fontSize: 14 },
+  moreArrow: { color: colors.gold, fontFamily: fonts.bodyBold, fontSize: 16 },
+  allButton: { alignItems: 'center', backgroundColor: colors.gold, borderRadius: radius.lg, paddingVertical: 14, paddingHorizontal: spacing.md, marginTop: spacing.sm },
+  allText: { color: colors.background, fontFamily: fonts.bodyBold, fontSize: 15 },
   // les catégories remontent juste sous le bandeau ALBASSE SHOPPING
   categoriesSection: { marginTop: spacing.md, paddingHorizontal: spacing.md },
   mobileAdsSection: { flexDirection: 'row', marginTop: spacing.lg, paddingHorizontal: spacing.md, gap: spacing.md },
