@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable, RefreshControl } from 'r
 import { useAuthStore } from '../../store/authStore';
 import { useSourcePerformance, PERIOD_LABELS, SOURCE_STYLE, type Period } from '../../hooks/useSourcePerformance';
 import { formatDuration } from '../../lib/formatDuration';
+import { sharePercent } from '../../lib/visitStats';
 import { colors, fonts, radius, spacing } from '../../theme';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { DateField } from '../../components/DateField';
@@ -23,9 +24,12 @@ export function AdminSourcePerformanceScreen() {
     rows,
     campaigns,
     leaderboard,
+    totals,
     isLoading,
     refresh,
   } = useSourcePerformance();
+  // les « vrais visiteurs » existent seulement quand add-source-report.sql est lancé (sinon, l'ancien calcul de la page : sans cette partie)
+  const hasReal = rows.some((r) => r.realVisitors !== undefined);
 
   if (!profile?.is_admin) {
     return (
@@ -78,6 +82,11 @@ export function AdminSourcePerformanceScreen() {
           <Text style={styles.loading}>Chargement…</Text>
         ) : (
           <>
+            {totals ? (
+              <Text style={styles.totals} testID="source-totals">
+                {`Sur la période : ${totals.sessions} visites · ${totals.visitors} visiteurs · ${totals.realVisitors} vrais visiteurs (${sharePercent(totals.realVisitors, totals.visitors)}). Un vrai visiteur reste 20 secondes ou plus, voit 2 pages ou plus, ou est connecté.`}
+              </Text>
+            ) : null}
             <Section title="🔥 Classement automatique">
               <RankFact icon="🏆" label="Meilleure source en ventes" value={leaderboard.bestSales} />
               <RankFact icon="👑" label="Meilleur taux de conversion" value={leaderboard.bestConversion} />
@@ -104,6 +113,12 @@ export function AdminSourcePerformanceScreen() {
                       <Metric icon="💳" label="Commandes" value={String(r.orders)} />
                       <Metric icon="💰" label="Chiffre d'affaires" value={formatXAF(r.revenue)} />
                       <Metric icon="📈" label="Conversion" value={`${r.conversionRate.toFixed(1)}%`} highlight />
+                      {r.realVisitors !== undefined ? (
+                        <>
+                          <Metric icon="✅" label="Vrais visiteurs" value={String(r.realVisitors)} testID={`source-real-${r.source}`} />
+                          <Metric icon="🎯" label="Part de vrais" value={sharePercent(r.realVisitors, r.visitors)} />
+                        </>
+                      ) : null}
                     </View>
                   </View>
                 );
@@ -117,6 +132,7 @@ export function AdminSourcePerformanceScreen() {
                     <Text style={[styles.tableHeaderCell, { width: 130 }]}>Source</Text>
                     <Text style={[styles.tableHeaderCell, { width: 70 }]}>Visiteurs</Text>
                     <Text style={[styles.tableHeaderCell, { width: 70 }]}>Nouv.</Text>
+                    {hasReal ? <Text style={[styles.tableHeaderCell, { width: 70 }]}>Vrais</Text> : null}
                     <Text style={[styles.tableHeaderCell, { width: 80 }]}>Vus</Text>
                     <Text style={[styles.tableHeaderCell, { width: 70 }]}>Panier</Text>
                     <Text style={[styles.tableHeaderCell, { width: 80 }]}>Cmds</Text>
@@ -132,6 +148,7 @@ export function AdminSourcePerformanceScreen() {
                         </Text>
                         <Text style={[styles.tableCell, { width: 70 }]}>{r.visitors}</Text>
                         <Text style={[styles.tableCell, { width: 70 }]}>{r.newVisitors}</Text>
+                        {hasReal ? <Text style={[styles.tableCell, { width: 70 }]}>{r.realVisitors ?? 0}</Text> : null}
                         <Text style={[styles.tableCell, { width: 80 }]}>{r.productViews}</Text>
                         <Text style={[styles.tableCell, { width: 70 }]}>{r.cartAdds}</Text>
                         <Text style={[styles.tableCell, { width: 80 }]}>{r.orders}</Text>
@@ -151,20 +168,19 @@ export function AdminSourcePerformanceScreen() {
                 <Text style={styles.emptyText}>Aucune campagne UTM détectée sur cette période.</Text>
               ) : (
                 campaigns.map((c) => (
-                  <View key={c.campaign} style={styles.campaignRow}>
+                  <View key={c.campaign} style={styles.campaignRow} testID={`source-campaign-${c.campaign}`}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.campaignName}>{c.campaign}</Text>
                       <Text style={styles.campaignMeta}>
                         {SOURCE_STYLE[c.source].emoji} {c.source}
                         {c.medium ? ` · ${c.medium}` : ''}
                       </Text>
-                    </View>
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={styles.campaignRevenue}>{formatXAF(c.revenue)}</Text>
                       <Text style={styles.campaignMeta}>
-                        {c.visitors} visiteur(s) · {c.orders} cmd · {c.conversionRate.toFixed(1)}%
+                        {c.visitors} visiteur(s)
+                        {c.realVisitors !== undefined ? ` · ${c.realVisitors} vrai(s) (${sharePercent(c.realVisitors, c.visitors)})` : ''} · {c.orders} cmd · {c.conversionRate.toFixed(1)}%
                       </Text>
                     </View>
+                    <Text style={styles.campaignRevenue}>{formatXAF(c.revenue)}</Text>
                   </View>
                 ))
               )}
@@ -189,9 +205,9 @@ function RankFact({ icon, label, value }: { icon: string; label: string; value: 
   );
 }
 
-function Metric({ icon, label, value, highlight }: { icon: string; label: string; value: string; highlight?: boolean }) {
+function Metric({ icon, label, value, highlight, testID }: { icon: string; label: string; value: string; highlight?: boolean; testID?: string }) {
   return (
-    <View style={styles.metric}>
+    <View style={styles.metric} testID={testID}>
       <Text style={styles.metricIcon}>{icon}</Text>
       <Text style={[styles.metricValue, highlight && { color: colors.goldLight }]}>{value}</Text>
       <Text style={styles.metricLabel}>{label}</Text>
@@ -222,6 +238,7 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
     marginBottom: spacing.md,
   },
+  totals: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 11, lineHeight: 16, backgroundColor: colors.panel, borderRadius: radius.md, padding: spacing.sm, marginBottom: spacing.md },
   periodRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: spacing.sm },
   periodChip: {
     paddingHorizontal: 12,
@@ -281,5 +298,5 @@ const styles = StyleSheet.create({
   },
   campaignName: { color: colors.cream, fontFamily: fonts.bodySemiBold, fontSize: 13 },
   campaignMeta: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 10, marginTop: 2 },
-  campaignRevenue: { color: colors.goldLight, fontFamily: fonts.bodyBold, fontSize: 13 },
+  campaignRevenue: { color: colors.goldLight, fontFamily: fonts.bodyBold, fontSize: 13, marginLeft: spacing.sm },
 });

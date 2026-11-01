@@ -32,10 +32,22 @@ Une part inférieure à 1 % s'écrit « <1 % » (jamais « 0 % » quand il y a a
 
 Tant que le script n'est pas lancé, le site garde son **ancien calcul** (sans « Vraies visites » ni « Qualité des visites »), avec la bonne colonne `viewed_at` : rien ne casse.
 
-## Ce qui n'est pas dans cette étape
-La page **Performance par source** (avec le choix de période) lit encore les visites une par une : ses totaux restent limités à 1 000 lignes pour les longues périodes. À corriger dans une prochaine étape si besoin.
+## Page « Performance par source » (étape suivante : `add-source-report.sql`)
+Cette page (Admin › Rapports › Performance par source, avec le choix de la période) lisait aussi les visites une par une : sur 7 jours (plus de 10 000 visites) ou 30 jours, ses chiffres ne portaient que sur 1 000 visites, et les articles vus et les paniers restaient à zéro (des milliers d'identifiants dans une seule adresse faisaient échouer la demande).
+Maintenant une fonction de la base, **`admin_source_report(depuis, jusqu'à)`** (réservée aux administrateurs), compte tout elle-même avec **les mêmes règles qu'avant** :
+- visiteur = `visitor_id`, sinon le compte connecté, sinon la visite elle-même ; source vide = « Autre » ;
+- **nouveau** = sa toute première visite (depuis toujours) tombe dans la période ; **revenant** = les autres ;
+- temps moyen = temps total / visites ; pages vues = total des pages ;
+- articles vus et paniers = ceux des visites de la période ; commandes et chiffre d'affaires = seulement les commandes **livrées** et non fausses, créées dans la période ; conversion = commandes / visiteurs ;
+- campagnes (`utm_campaign`) : visiteurs, commandes, chiffre d'affaires, triées par chiffre d'affaires puis par visiteurs.
+Nouveau : **vrais visiteurs** (même règle que le tableau de bord) pour chaque source et chaque campagne, une ligne « Sur la période : visites · visiteurs · vrais visiteurs », et une colonne « Vrais » dans le tableau comparatif. Les bornes de la période sont comprises.
+Tant que ce script n'est pas lancé, la page garde son **ancien calcul** (sans les « vrais visiteurs »).
+
+## Mise en service de cette étape
+1. Lancer **`add-source-report.sql`** une fois dans Supabase › SQL Editor (sans danger si on le relance ; aucune table créée, une seule fonction de lecture).
+2. Publier le site.
 
 ## Tests
-- Base locale jetable : `sh tests/sql/run-visit-stats.sh` (1 500 visites en plus de la limite, vraies visites, sources, campagnes, articles les plus vus, commandes livrées seulement, accès réservé aux administrateurs, relance sans erreur).
-- Logique du site : `node --import ./tests/zara/register.mjs tests/email/visit-stats.test.ts`.
-- Navigateur : `PARTS=& SUPABASE_ANON_KEY=... node tests/zara/zara-ui.test.js dist 4333` (fausse base : tableau de bord avec et sans le script SQL, Admin › Clients, plus de 1 000 clients).
+- Base locale jetable : `sh tests/sql/run-visit-stats.sh` et `sh tests/sql/run-source-report.sh` (période du 10 au 16 octobre, bornes comprises, 1 500 visites de plus que la limite, nouveaux / revenants, commandes livrées seulement, vraies visites, campagnes, accès réservé) (1 500 visites en plus de la limite, vraies visites, sources, campagnes, articles les plus vus, commandes livrées seulement, accès réservé aux administrateurs, relance sans erreur).
+- Logique du site : `node --import ./tests/zara/register.mjs tests/email/visit-stats.test.ts` et `tests/email/source-report.test.ts` (lecture du rapport, classement automatique).
+- Navigateur : `PARTS=& SUPABASE_ANON_KEY=... node tests/zara/zara-ui.test.js dist 4333` (fausse base : tableau de bord avec et sans le script SQL, Admin › Clients, plus de 1 000 clients, Performance par source avec et sans le script SQL, changement de période).
