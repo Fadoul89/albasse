@@ -2,8 +2,6 @@ export type RootStackParamList = {
   Tabs: undefined;
   Category: { slug: string };
   Product: { slug: string };
-  // page unique « Café Homme » (adresse cachée /cafe)
-  Cafe: undefined;
   Checkout: undefined;
   Travel: undefined;
   Install: undefined;

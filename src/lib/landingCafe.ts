@@ -10,7 +10,7 @@ import { DEFAULT_AGENCIES, DELIVERY_HOURS, HOME_CITY } from '../constants/shopRu
 export const CAFE_PAGE = {
   // le nom de la page (celui de la catégorie), affiché en haut et dans l'onglet du navigateur
   name: 'Vitalité & Énergie Homme',
-  // l'adresse de la page (albasseshopping.com/cafe, et aussi /vitalite-energie-homme) : voir RootNavigator
+  // les adresses de la page sur le site à part (« / », /cafe et /vitalite-energie-homme) : voir RootNavigator ; albasseshopping.com n'a plus cette page
   path: 'cafe',
   // la fiche de l'article vendu sur cette page
   slug: 'cafe-homme',
