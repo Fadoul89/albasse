@@ -16,7 +16,7 @@ const port = process.argv[3] || '4333';
 // BASE_URL=https://www.albasseshopping.com : teste le VRAI site en ligne (les commandes et comptes restent simules, rien n'est enregistre)
 const BASE = (process.env.BASE_URL || `http://localhost:${port}`).replace(/\/$/, '');
 const BASE_HOST = new URL(BASE).hostname;
-const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI0123456789TOFBCDE+=^~%&').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI0123456789TOFBCDE+=^~%&@').toUpperCase();
 // saison fraiche (blousons et manteaux) : le bouton du menu de Zara n'existe que jusqu'au 31 decembre 2026 a 23h59 (N'Djamena)
 const COLD_ON = Date.now() < Date.parse('2027-01-01T00:00:00+01:00');
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
@@ -934,8 +934,9 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const notPromoted = [flashGone, promoGone, ...others].map((p) => p.slug);
     check('ancien prix barre + « -X % » : les 5 articles en vraie promotion les ont', promoted.every((s) => slugsWithOld.has(s)) && cards.filter((c) => promoted.includes(c.slug)).every((c) => c.old && c.badge), promoted.filter((s) => !slugsWithOld.has(s)));
     check('AUCUN ancien prix barre ni « -X % » sur les autres articles (meme si la base en garde un)', notPromoted.every((s) => !cards.some((c) => c.slug === s && (c.old || c.badge))), notPromoted.filter((s) => cards.some((c) => c.slug === s && c.old)));
-    const priced = await home.page.evaluate((slug) => document.querySelector(`[data-testid="product-card-${slug}"]`)?.innerText || '', others[0].slug);
-    check('les prix de vente ne changent pas : le prix de l\'article normal est toujours affiche', priced.replace(/[\s  ]/g, '').includes(String(Math.round(Number(others[0].price))).replace(/\B(?=(\d{3})+(?!\d))/g, '')) , priced);
+    const shownOther = others.find((p) => cards.some((c) => c.slug === p.slug)) || others[0]; // l'accueil montre 4 articles par categorie
+    const priced = await home.page.evaluate((slug) => document.querySelector(`[data-testid="product-card-${slug}"]`)?.innerText || '', shownOther.slug);
+    check('les prix de vente ne changent pas : le prix de l\'article normal est toujours affiche', priced.replace(/[\s  ]/g, '').includes(String(Math.round(Number(shownOther.price))).replace(/\B(?=(\d{3})+(?!\d))/g, '')) , priced);
     await home.page.screenshot({ path: path.join(OUT, '8a-accueil-flash-promos.png') });
     await home.page.getByTestId('home-flash').scrollIntoViewIfNeeded();
     await home.page.getByTestId('home-flash').screenshot({ path: path.join(OUT, '8a-vente-flash.png') });
@@ -971,7 +972,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     // --- d. sans aucune promotion : ni section Vente flash, ni section Promotions, ni ancien prix
     const none = await visit8(others);
     await none.page.goto(`${BASE}/`, { waitUntil: 'load' });
-    await none.page.getByText('Toute la collection').waitFor({ timeout: 25000 });
+    await none.page.getByTestId('home-sections').waitFor({ timeout: 25000 });
     await sleep(1500);
     const noneCards = await oldPrices(none.page);
     check('aucune promotion en cours : pas de section Vente flash ni Promotions', (await none.page.getByTestId('home-flash').count()) === 0 && (await none.page.getByTestId('home-promotions').count()) === 0);
@@ -4244,7 +4245,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         await v.ctx.clock.install({ time: new Date('2027-01-05T09:00:00Z') }); // l'heure avance normalement a partir de cette date (Zara a besoin que le temps passe pour repondre)
         await openZara(v);
         await sleep(3000); // les articles de l'accueil sont charges : la bande aurait deja du apparaitre
-        check('apres le 31 decembre : plus de bande « Saison fraiche » sur l\'accueil', (await v.page.getByTestId('home-cold-season').count()) === 0 && (await v.page.getByText('Toute la collection').count()) === 1);
+        check('apres le 31 decembre : plus de bande « Saison fraiche » sur l\'accueil', (await v.page.getByTestId('home-cold-season').count()) === 0 && (await v.page.getByTestId('home-sections').count()) === 1);
         check('apres le 31 decembre : ni ligne d\'ouverture ni bouton dans le menu', (await panelOf(v.page).getByText(/La saison fraîche arrive/).count()) === 0 && !(await chipLabels(v.page)).includes('🧥 Blousons & manteaux'), await chipLabels(v.page));
         // (ecrire « manteau » apres cette date n'est pas testable ici : avec une fausse horloge Zara ne repond plus ; la regle « coldSeasonActive = faux apres le 31 decembre » est testee dans tests/email/cold-season.test.ts)
         await v.ctx.close();
@@ -9192,6 +9193,154 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('script pas lancé : ni total, ni « Vrais visiteurs », ni colonne « Vrais », ni « vrai(s) » (rien d\'inventé)',
         (await v.page.getByTestId('source-totals').count()) === 0 && (await v.page.getByTestId('source-real-TikTok').count()) === 0 && !/Vrais visiteurs|vrai\(s\)/.test(body) && (await v.page.getByText('Vrais', { exact: true }).count()) === 0);
       check('script pas lancé : aucune erreur', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+  }
+
+  // -----------------------------------------------------------------------------------------------------------------------------
+  // @ Accueil : 4 articles par categorie (ordre de l'admin), le reste dans la categorie (docs/accueil-par-categorie.md)
+  // -----------------------------------------------------------------------------------------------------------------------------
+  if (PARTS.includes('@')) {
+    console.log('\n== @ accueil : 4 articles par categorie (dans l\'ordre de l\'admin), le reste dans la categorie, « Voir les N autres articles » et « Voir tous les articles » (fausse liste d\'articles : lecture seule)');
+    const HDRA = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+    const cats = await get('categories?select=id,name,slug');
+    check('la base a au moins 3 categories', cats.length >= 3, cats.length);
+    const [cA, cB, cC] = cats;
+    const catalog = (await get('products?select=*&is_active=eq.true&stock=gt.0&limit=80&order=created_at.desc')).filter((p) => (p.images || [])[0] && Number(p.price) > 0);
+    const uniq = []; const seen = new Set();
+    for (const p of catalog) { const key = p.name.replace(/\s+/g, ' ').trim().toLowerCase(); if (!seen.has(key)) { seen.add(key); uniq.push(p); } }
+    check('le catalogue a assez d\'articles pour le test', uniq.length >= 20, uniq.length);
+    const calm = (p, over) => ({ ...p, compare_at_price: null, is_flash_sale: false, flash_sale_ends_at: null, promo_ends_at: null, ...over });
+    // A : 10 articles dont les 2 premiers epuises ; B : 4 articles + 1 retire de la vente ; C : 2 articles ; 1 article d'une categorie inconnue
+    const inA = uniq.slice(0, 10).map((p, i) => calm(p, { category_id: cA.id, stock: i < 2 ? 0 : 5 }));
+    const inB = uniq.slice(10, 14).map((p) => calm(p, { category_id: cB.id, stock: 5 }));
+    const inC = uniq.slice(14, 16).map((p) => calm(p, { category_id: cC.id, stock: 5 }));
+    const hidden = calm(uniq[16], { category_id: cB.id, is_active: false });
+    const orphan = calm(uniq[17], { category_id: '99999999-9999-4999-8999-999999999999' });
+    const rows = [...inA, ...inB, hidden, ...inC, orphan];
+    const forSale = rows.filter((p) => p.is_active !== false);
+    const order = { [cA.slug]: 1, [cB.slug]: 2, [cC.slug]: 3 };
+    const open = async (ctxOpts) => {
+      const v = await newVisitor(ctxOpts, { fakeCats: { order: { ...order } } });
+      await v.page.route(/\/rest\/v1\/products\?/, (route) => (route.request().method() === 'OPTIONS' ? route.fulfill({ status: 204, headers: HDRA }) : route.fulfill({ status: 200, headers: { ...HDRA, 'content-type': 'application/json' }, body: JSON.stringify(rows) })));
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
+      await v.page.getByTestId(`home-section-${cA.slug}`).waitFor({ timeout: 30000 });
+      await v.page.locator(`[data-testid="home-section-${cC.slug}"] [data-testid="product-card-${inC[0].slug}"]`).waitFor({ timeout: 30000 });
+      await sleep(800);
+      return v;
+    };
+    const cardSlugs = (pg, section) => pg.evaluate((sel) => [...document.querySelectorAll(`${sel} [data-testid^="product-card-"]`)].map((c) => c.getAttribute('data-testid').slice('product-card-'.length)), section ? `[data-testid="home-section-${section}"]` : '[data-testid="home-sections"]');
+    // l'accueil reste monte sous la categorie ouverte (et la « saison fraiche » y montre aussi des cartes) : on ne compte que les cartes visibles
+    const shown = (pg) => pg.evaluate(() => [...document.querySelectorAll('[data-testid^="product-card-"]')].filter((c) => c.getClientRects().length > 0).map((c) => c.getAttribute('data-testid').slice('product-card-'.length)));
+    const cardNow = (pg, slug) => pg.locator(`[data-testid="product-card-${slug}"]:visible`).first();
+
+    {
+      const v = await open(phone);
+      const secs = await v.page.evaluate(() => [...document.querySelectorAll('[data-testid^="home-section-"]')].map((e) => e.getAttribute('data-testid')).filter((t) => !t.startsWith('home-section-title-')).map((t) => t.slice('home-section-'.length)));
+      check('une section par categorie qui a des articles, dans l\'ordre choisi par l\'admin (1, 2, 3) ; plus de « Toute la collection »', secs.join() === [cA.slug, cB.slug, cC.slug].join() && (await v.page.getByText('Toute la collection').count()) === 0, secs);
+
+      const a = await cardSlugs(v.page, cA.slug);
+      const expectA = inA.filter((p) => p.stock > 0).slice(0, 4).map((p) => p.slug);
+      check(`« ${cA.name} » : 10 articles en vente, 4 montres : les 4 premiers EN STOCK (les 2 epuises ne prennent pas les places)`, a.join() === expectA.join(), { a, expectA });
+      const aTitle = (await v.page.getByTestId(`home-section-title-${cA.slug}`).innerText()).replace(/\s+/g, ' ').trim();
+      check('titre de la categorie + nombre d\'articles : « ' + cA.name + ' 10 articles »', aTitle === `${cA.name} 10 articles`, aTitle);
+      const moreA = await v.page.getByTestId(`home-more-${cA.slug}`).innerText();
+      check('bouton sous les 4 articles : « Voir les 6 autres articles → »', /Voir les 6 autres articles/.test(moreA), moreA);
+
+      const b = await cardSlugs(v.page, cB.slug);
+      check(`« ${cB.name} » : 4 articles en vente (le 5e est retire de la vente) : les 4 sont montres`, b.join() === inB.map((p) => p.slug).join() && !b.includes(hidden.slug), b);
+      check(`« ${cB.name} » : exactement 4, donc aucun bouton « autres articles » inutile`, (await v.page.getByTestId(`home-more-${cB.slug}`).count()) === 0);
+      check(`« ${cB.name} » : « 4 articles »`, /4 articles/.test(await v.page.getByTestId(`home-section-title-${cB.slug}`).innerText()));
+
+      const c = await cardSlugs(v.page, cC.slug);
+      check(`« ${cC.name} » : 2 articles montres, « 2 articles », aucun bouton`, c.join() === inC.map((p) => p.slug).join() && /2 articles/.test(await v.page.getByTestId(`home-section-title-${cC.slug}`).innerText()) && (await v.page.getByTestId(`home-more-${cC.slug}`).count()) === 0, c);
+
+      const every = await cardSlugs(v.page, null);
+      check('sur toute la section « collection » : 10 articles seulement (4 + 4 + 2), aucun en double', every.length === 10 && new Set(every).size === 10, every.length);
+      check('ni les articles epuises de la 1re categorie, ni l\'article retire de la vente, ni l\'article sans categorie connue ne sont sur l\'accueil', ![inA[0].slug, inA[1].slug, hidden.slug, orphan.slug].some((sl) => every.includes(sl)));
+
+      const allBtn = await v.page.getByTestId('home-all-articles').innerText();
+      check(`bouton final : « Voir tous les articles (${forSale.length}) » (tous les articles en vente, meme sans categorie connue)`, allBtn.trim() === `Voir tous les articles (${forSale.length})`, allBtn);
+
+      // mise en page telephone : 2 colonnes, 2 lignes de 2 cartes, rien ne depasse
+      const geo = await v.page.evaluate((sel) => {
+        const cards = [...document.querySelectorAll(`${sel} [data-testid^="product-card-"]`)].map((c) => { const r = c.getBoundingClientRect(); return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width) }; });
+        return { cards, scrollW: document.documentElement.scrollWidth };
+      }, `[data-testid="home-section-${cA.slug}"]`);
+      const rowsY = [...new Set(geo.cards.map((c) => c.y))];
+      check('telephone : les 4 articles sont sur 2 lignes de 2, dans la largeur de l\'ecran, sans defilement de cote', geo.cards.length === 4 && rowsY.length === 2 && geo.cards.every((c) => c.x >= 0 && c.x + c.w <= 390) && geo.scrollW <= 390, geo);
+
+      // « Voir les 6 autres articles » ouvre la categorie : les 10 articles y sont (les epuises aussi)
+      await v.page.getByTestId(`home-more-${cA.slug}`).click();
+      await cardNow(v.page, inA[9].slug).waitFor({ timeout: 25000 });
+      const inCat = await shown(v.page);
+      check('« Voir les 6 autres articles » : la categorie s\'ouvre avec ses 10 articles (les 4 de l\'accueil + les 6 autres, epuises compris)', v.page.url().includes(`/categorie/${cA.slug}`) && inCat.length === 10 && inA.every((p) => inCat.includes(p.slug)), { url: v.page.url(), n: inCat.length });
+      check('aucune erreur (accueil par categorie)', v.errs.length === 0, v.errs);
+      check('aucune ecriture reelle', v.writes.every((w) => /visitor_sessions/.test(w)), v.writes);
+      await v.ctx.close();
+    }
+
+    // le titre de la categorie ouvre aussi la categorie ; « Voir tous les articles » ouvre le catalogue complet
+    {
+      const v = await open(phone);
+      await v.page.getByTestId(`home-section-title-${cB.slug}`).click();
+      await cardNow(v.page, inB[3].slug).waitFor({ timeout: 25000 });
+      check('toucher le titre d\'une categorie l\'ouvre', v.page.url().includes(`/categorie/${cB.slug}`));
+      await v.ctx.close();
+    }
+    {
+      const v = await open(phone);
+      await v.page.getByTestId('home-all-articles').scrollIntoViewIfNeeded();
+      await v.page.getByTestId('home-all-articles').click();
+      await cardNow(v.page, orphan.slug).waitFor({ timeout: 25000 });
+      const tous = await shown(v.page);
+      check(`« Voir tous les articles » : le catalogue complet (${forSale.length} articles en vente, meme celui sans categorie), rien d'autre`, v.page.url().includes('/categorie/tous') && tous.length === forSale.length && forSale.every((p) => tous.includes(p.slug)) && !tous.includes(hidden.slug), { url: v.page.url(), n: tous.length });
+      await v.ctx.close();
+    }
+
+    // ordinateur : 4 colonnes, les 4 articles sur une seule ligne
+    {
+      const v = await open({ ...devices['Desktop Chrome'], viewport: { width: 1280, height: 900 } });
+      const geo = await v.page.evaluate((sel) => [...document.querySelectorAll(`${sel} [data-testid^="product-card-"]`)].map((c) => Math.round(c.getBoundingClientRect().y)), `[data-testid="home-section-${cA.slug}"]`);
+      check('ordinateur : les 4 articles d\'une categorie sont sur UNE seule ligne', geo.length === 4 && new Set(geo).size === 1, geo);
+      await v.page.getByTestId(`home-section-${cA.slug}`).scrollIntoViewIfNeeded();
+      await v.page.screenshot({ path: path.join(OUT, '@2-accueil-par-categorie-ordinateur.png') });
+      await v.ctx.close();
+    }
+
+    // avec le VRAI catalogue (lecture seule) : memes regles, dans l'ordre reel des categories ; et l'image exemple (ecran de telephone tres haut : tout l'accueil d'un coup)
+    {
+      const realCats = await get('categories?select=id,name,slug,sort_order');
+      const catsOk = Array.isArray(realCats) ? realCats : await get('categories?select=id,name,slug');
+      const rank = (c) => (typeof c.sort_order === 'number' ? c.sort_order : Infinity);
+      const sorted = [...catsOk].sort((x, y) => (rank(x) !== rank(y) ? (rank(x) < rank(y) ? -1 : 1) : x.name.localeCompare(y.name, 'fr')));
+      const realProducts = await get('products?select=id,category_id,is_active&is_active=eq.true&limit=1000');
+      const totals = {};
+      for (const p of realProducts) totals[p.category_id] = (totals[p.category_id] || 0) + 1;
+      const expected = sorted.filter((c) => totals[c.id] > 0);
+      const v = await newVisitor({ ...phone, viewport: { width: 390, height: 3600 }, deviceScaleFactor: 1.5 });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
+      await v.page.locator('[data-testid^="home-section-"]').first().waitFor({ timeout: 40000 });
+      await sleep(5000);
+      const got = await v.page.evaluate(() => [...document.querySelectorAll('[data-testid^="home-section-"]')].filter((e) => !e.getAttribute('data-testid').startsWith('home-section-title-')).map((e) => ({ slug: e.getAttribute('data-testid').slice('home-section-'.length), cards: e.querySelectorAll('[data-testid^="product-card-"]').length, title: (e.querySelector('[data-testid^="home-section-title-"]') || {}).innerText || '', more: (e.querySelector('[data-testid^="home-more-"]') || {}).innerText || '' })));
+      check(`VRAI catalogue : une section par categorie qui a des articles (${expected.length}), dans l'ordre reel des categories`, got.map((g) => g.slug).join() === expected.map((c) => c.slug).join(), { got: got.map((g) => g.slug), expected: expected.map((c) => c.slug) });
+      check('VRAI catalogue : chaque section montre exactement min(4, total) articles', got.every((g) => { const c = expected.find((e) => e.slug === g.slug); return c && g.cards === Math.min(4, totals[c.id]); }), got.map((g) => [g.slug, g.cards]));
+      check('VRAI catalogue : le nombre d\'articles affiche est le vrai total, et « Voir les N autres articles » = total - 4 (seulement s\'il en reste)', got.every((g) => { const c = expected.find((e) => e.slug === g.slug); const t = totals[c.id]; return g.title.replace(/\s+/g, ' ').includes(`${t} article${t > 1 ? 's' : ''}`) && (t > 4 ? new RegExp(`Voir (?:les ${t - 4} autres articles|l’autre article)`).test(g.more) : g.more === ''); }), got);
+      const box = await v.page.getByTestId('home-sections').boundingBox();
+      await v.page.screenshot({ path: path.join(OUT, '@3-accueil-reel-sections.png'), clip: { x: 0, y: Math.max(0, box.y - 6), width: 390, height: Math.min(box.height + 12, 3500 - box.y) } });
+      await v.page.screenshot({ path: path.join(OUT, '@3-accueil-reel-complet.png') });
+      check('aucune erreur (vrai catalogue)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+
+    // aucune categorie ne s'affiche tant que la base n'a pas repondu ; une base sans article = seulement la zone vide, pas d'erreur
+    {
+      const v = await newVisitor(phone, { fakeCats: { order: { ...order } } });
+      await v.page.route(/\/rest\/v1\/products\?/, (route) => (route.request().method() === 'OPTIONS' ? route.fulfill({ status: 204, headers: HDRA }) : route.fulfill({ status: 200, headers: { ...HDRA, 'content-type': 'application/json' }, body: '[]' })));
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
+      await v.page.getByTestId('home-sections').waitFor({ timeout: 30000 });
+      await sleep(2000);
+      check('aucun article en vente : pas de section, pas de bouton « Voir tous », pas d\'erreur', (await v.page.locator('[data-testid^="home-section-"]').count()) === 0 && (await v.page.getByTestId('home-all-articles').count()) === 0 && v.errs.length === 0, v.errs);
       await v.ctx.close();
     }
   }
