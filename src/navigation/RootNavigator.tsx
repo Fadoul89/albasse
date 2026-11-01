@@ -23,6 +23,7 @@ import { AccountWall } from '../components/AccountWall';
 import { TabNavigator } from './TabNavigator';
 import { CategoryScreen } from '../screens/CategoryScreen';
 import { ProductScreen } from '../screens/ProductScreen';
+import { CafeScreen } from '../screens/CafeScreen';
 import { CheckoutScreen } from '../screens/CheckoutScreen';
 import { TravelScreen } from '../screens/TravelScreen';
 import { LoginScreen } from '../screens/auth/LoginScreen';
@@ -96,6 +97,8 @@ const linking: LinkingOptions<RootStackParamList> = {
       },
       Category: 'categorie/:slug',
       Product: 'produit/:slug',
+      // page unique « Café Homme » : adresse cachée (aucun lien depuis le site, hors plan du site, noindex)
+      Cafe: 'cafe',
       Checkout: 'commande',
       Travel: 'voyage',
       // le lien à donner dans les publicités : albasseshopping.com/installer (ou /app)
@@ -244,6 +247,7 @@ export function RootNavigator() {
             <Stack.Screen name="Tabs" component={TabNavigator} />
             <Stack.Screen name="Category" component={CategoryScreen} />
             <Stack.Screen name="Product" component={ProductScreen} />
+            <Stack.Screen name="Cafe" component={CafeScreen} />
             <Stack.Screen name="Checkout" component={CheckoutScreen} />
             <Stack.Screen name="Travel" component={TravelScreen} />
             <Stack.Screen name="Install" component={InstallScreen} />
