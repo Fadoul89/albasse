@@ -16,6 +16,7 @@ import { filterOrders, orderNumberLabel, ordersToCsv, type PeriodFilter } from '
 import { countsAsSale, salesTotal } from '../../lib/salesRules';
 import { flagDeadlineIso, formatSlot, waitsForAppointment } from '../../lib/scheduledDelivery';
 import { SCHEDULED_DELIVERY } from '../../constants/shopRules';
+import { GIFT_ADMIN_BADGE, hasChatGift } from '../../lib/assistantWords';
 import type { Order, OrderStatus } from '../../types';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
@@ -229,6 +230,7 @@ export function AdminOrdersScreen() {
                 {`📅 Livraison programmée : ${formatSlot(item.scheduled_for)} · Zara vous prévient sur Telegram ${SCHEDULED_DELIVERY.reminderMinutes} min avant`}
               </Text>
             ) : null}
+            {hasChatGift(item) && <Text style={styles.giftBadge} testID="admin-order-chat-gift">{GIFT_ADMIN_BADGE}</Text>}
             {item.gift_wrap && <Text style={styles.giftBadge}>🎁 À emballer : emballage cadeau (2 000 FCFA inclus dans le total)</Text>}
             {!!item.loyalty_discount && (
               <Text style={styles.giftBadge}>{`⭐ Remise fidélité −10 % : −${item.loyalty_discount.toLocaleString('fr-FR')} FCFA (déjà déduite du total)`}</Text>

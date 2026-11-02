@@ -228,7 +228,8 @@ async function main() {
   ok("Abeche : par l'agence Abou Aziza", /par l'agence Abou Aziza/.test(ab) && !/STTL/.test(ab), ab);
   const mg = b.cityReply(find('Mongo'));
   ok("Mongo : par l'agence Liberté", /par l'agence Liberté/.test(mg) && !/Abou Aziza/.test(mg), mg);
-  const unknownFee = cities.find((c) => c.fee == null)!;
+  // la vraie base n'a plus de ville sans tarif : on en invente une pour vérifier le texte « à confirmer »
+  const unknownFee = cities.find((c) => c.fee == null) ?? { name: 'Ville sans tarif', fee: null, agency: null };
   const uf = b.cityReply(unknownFee);
   ok(`${unknownFee.name} (tarif non fixe) : « a confirmer » + paiement a l'avance`, /à confirmer/.test(uf) && /à l'avance/.test(uf) && /60 60 51 51/.test(uf) && !/STTL/.test(uf), uf);
   ok("toute ville hors N'Djamena : paiement a l'avance avec les deux numeros (fr et ar)", cities.filter((c) => !b.isHomeCity(c.name)).every((c) => ['fr', 'ar'].every((lg) => { const r = b.cityReply(c, lg as l.Lang); return /Airtel Money 60 60 51 51/.test(r) && /Moov Money 99 22 10 17/.test(r); })));

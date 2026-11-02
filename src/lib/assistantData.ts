@@ -4,6 +4,7 @@ import { currentDevice, type DeviceLabel } from './assistantAttribution';
 import { buildZaraStats, classifyStatsError, periodBounds, type StatsPeriod, type StatsFailure, type ZaraStats } from './assistantStats';
 import { buildBrowsingOverview, type BrowsingOverview } from './browsingOverview';
 import { buildSalesMap, SALES_WINDOW_DAYS, type SalesMap } from './assistantSales';
+import { parseAffinity, type Affinity } from './assistantWords';
 import { sortCategories } from './categoryOrder';
 import type { Product } from '../types';
 import { applyPromotionRules, shownOldPrice } from './promotions';
@@ -320,6 +321,25 @@ export async function getProductSales(): Promise<SalesMap> {
   } catch {
     return new Map();
   }
+}
+
+// « X % des clients ont aussi acheté ceci » : les vrais totaux d'un article (fonction `product_affinity`, aucune donnée de client).
+// Gardés 5 minutes par article. Sans la fonction de la base (script pas encore appliqué), ou en cas de panne : null, et Zara ne dit AUCUN pourcentage.
+const affinityCache = new Map<string, { at: number; value: Affinity | null }>();
+export async function fetchAffinity(productId: string): Promise<Affinity | null> {
+  if (!productId) return null;
+  const hit = affinityCache.get(productId);
+  if (hit && Date.now() - hit.at < TTL_MS) return hit.value;
+  let value: Affinity | null = null;
+  try {
+    const { data, error } = await withTimeout(Promise.resolve(supabase.rpc('product_affinity', { p_product_id: productId })), TIMEOUT_MS);
+    value = error ? null : parseAffinity(data);
+  } catch {
+    value = null;
+  }
+  if (affinityCache.size > 200) affinityCache.clear();
+  affinityCache.set(productId, { at: Date.now(), value });
+  return value;
 }
 
 // « Me rappeler sur WhatsApp » : la demande part à l'équipe (fonction `assistant_request_callback`, qui vérifie le numéro).

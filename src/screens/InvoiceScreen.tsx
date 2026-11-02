@@ -12,6 +12,7 @@ import { useStoreSettings } from '../hooks/useStoreSettings';
 import { useCities } from '../hooks/useCities';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { PAYMENT_LABELS, STATUS_LABELS, formatXAF, invoiceBreakdown, invoiceNumber, orderNumberLabel } from '../lib/invoice';
+import { GIFT_INVOICE, hasChatGift } from '../lib/assistantWords';
 import type { Order } from '../types';
 
 const LOGO = require('../../assets/logo.jpg');
@@ -158,6 +159,7 @@ export function InvoiceScreen() {
                 <TotalLine label="Articles" value={formatXAF(b.itemsTotal)} />
                 {b.loyaltyDiscount > 0 ? <TotalLine label="Remise fidélité −10 %" value={`−${formatXAF(b.loyaltyDiscount)}`} /> : null}
                 {b.giftWrap > 0 ? <TotalLine label="Emballage cadeau" value={formatXAF(b.giftWrap)} /> : null}
+                {hasChatGift(order) ? <TotalLine label={GIFT_INVOICE.label} value={GIFT_INVOICE.value} testID="invoice-chat-gift" /> : null}
                 <TotalLine label="Livraison" value={deliveryText} testID="invoice-delivery" />
                 <TotalLine label="TOTAL À PAYER" value={formatXAF(b.total)} strong testID="invoice-total" />
               </View>

@@ -161,6 +161,8 @@ export interface Order {
   referrer_source: string | null;
   is_flagged_fake: boolean;
   gift_wrap?: boolean;
+  // appareil du client quand la commande a été passée DANS le chat de Zara (rempli par createOrder({ viaAssistant })) : donne droit au cadeau surprise
+  assistant_device?: string | null;
   // remise fidélité (−10 % des articles) déjà déduite du total ; absente tant que add-loyalty-discount.sql n'est pas lancé
   loyalty_discount?: number;
   // livraison programmée (N'Djamena) : rendez-vous choisi par le client ; absentes tant que add-scheduled-delivery.sql n'est pas lancé
