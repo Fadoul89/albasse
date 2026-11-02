@@ -9000,6 +9000,77 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('base sans la colonne : pas de carte « par genre », pas de filtres Hommes / Femmes, pas de ligne genre', (await v.page.getByTestId('gender-stats').count()) === 0 && (await v.page.getByTestId('customers-filter-men').count()) === 0 && (await v.page.getByTestId('customer-gender').count()) === 0);
       await v.ctx.close();
     }
+    // la liste des clients est découpée en pages numérotées : 75 clients, 20 par page = « 1 2 3 4 » (docs/clients-pages.md)
+    {
+      const customers = Array.from({ length: 75 }, (_, i) => ({ ...mkCust(1, `Client${String(i + 1).padStart(2, '0')}`, null), id: `aaaaaaaa-0000-4000-8000-${String(i + 1).padStart(12, '0')}`, phone: `66${String(i + 1).padStart(6, '0')}` }));
+      const { v } = await openAdminG({ customers });
+      await v.page.getByText('75 client(s)', { exact: true }).waitFor({ timeout: 25000 });
+      const rows = () => v.page.getByTestId('admin-customer-row');
+      // la liste s'affiche par morceaux : on attend que le nombre de lignes ne bouge plus
+      const stable = async () => { let last = -1; for (let i = 0; i < 60; i++) { const n = await rows().count(); if (n === last && n > 0) return n; last = n; await sleep(250); } return last; };
+      const names = async () => { await stable(); return (await rows().allInnerTexts()).map((t) => (t.match(/Client\d\d/) || [''])[0]); };
+      const info = (prefix = 'customers-pages-top') => v.page.getByTestId(`${prefix}-info`).innerText();
+      check('75 clients : les boutons « 1 2 3 4 » (pas de 5), dessus et dessous la liste', (await v.page.getByTestId('customers-pages-top-4').count()) === 1 && (await v.page.getByTestId('customers-pages-top-5').count()) === 0 && (await v.page.getByTestId('customers-pages-4').count()) === 1 && (await v.page.getByTestId('customers-pages-5').count()) === 0);
+      check('page 1 : 20 clients (les 20 premiers), « Page 1 sur 4 · clients 1–20 sur 75 »', (await stable()) === 20 && (await names())[0] === 'Client01' && (await names())[19] === 'Client20' && (await info()) === 'Page 1 sur 4 · clients 1–20 sur 75', await info());
+      check('page 1 : « ‹ » désactivé, « › » actif, la page 1 est marquée', (await v.page.getByTestId('customers-pages-top-prev').getAttribute('aria-disabled')) === 'true' && (await v.page.getByTestId('customers-pages-top-next').getAttribute('aria-disabled')) !== 'true' && (await v.page.getByTestId('customers-pages-top-1').getAttribute('aria-selected')) === 'true');
+      check('plus de bouton « Charger plus » : la liste est en pages', (await v.page.getByText(/Charger plus/).count()) === 0);
+      const seen = new Set(await names());
+      await v.page.getByTestId('customers-pages-top-2').click();
+      await v.page.getByText('Page 2 sur 4 · clients 21–40 sur 75', { exact: true }).first().waitFor({ timeout: 8000 });
+      const p2 = await names();
+      check('page 2 : les clients 21 à 40, la page 2 est marquée', p2.length === 20 && p2[0] === 'Client21' && p2[19] === 'Client40' && (await v.page.getByTestId('customers-pages-top-2').getAttribute('aria-selected')) === 'true' && (await v.page.getByTestId('customers-pages-top-1').getAttribute('aria-selected')) !== 'true', p2.slice(0, 2));
+      p2.forEach((n) => seen.add(n));
+      // le bouton du bas : « › » passe à la page 3
+      await v.page.getByTestId('customers-pages-next').scrollIntoViewIfNeeded();
+      await v.page.screenshot({ path: path.join(OUT, '%6-pages-liste-clients.png') });
+      await v.page.getByTestId('customers-pages-next').click();
+      await v.page.getByText('Page 3 sur 4 · clients 41–60 sur 75', { exact: true }).first().waitFor({ timeout: 8000 });
+      const p3 = await names();
+      check('bouton « › » du bas : page 3, les clients 41 à 60', p3.length === 20 && p3[0] === 'Client41' && p3[19] === 'Client60', p3.slice(0, 2));
+      p3.forEach((n) => seen.add(n));
+      await v.page.getByTestId('customers-pages-4').click();
+      await v.page.getByText('Page 4 sur 4 · clients 61–75 sur 75', { exact: true }).first().waitFor({ timeout: 8000 });
+      const p4 = await names();
+      check('page 4 : les 15 derniers clients (61 à 75), « › » désactivé', p4.length === 15 && p4[0] === 'Client61' && p4[14] === 'Client75' && (await v.page.getByTestId('customers-pages-top-next').getAttribute('aria-disabled')) === 'true', p4.slice(0, 2));
+      p4.forEach((n) => seen.add(n));
+      check('les 4 pages montrent les 75 clients, sans doublon ni oubli', seen.size === 75, seen.size);
+      // une recherche qui ne laisse qu'un client : plus de boutons de pages ; on revient à la page 1
+      await v.page.getByPlaceholder(/Rechercher par nom/).fill('Client07');
+      await v.page.getByText('1 client(s)', { exact: true }).waitFor({ timeout: 8000 });
+      check('recherche : 1 client, aucun bouton de pages (tout tient sur une page)', (await stable()) === 1 && (await v.page.getByTestId('customers-pages-top').count()) === 0 && (await v.page.getByTestId('customers-pages').count()) === 0);
+      await v.page.getByPlaceholder(/Rechercher par nom/).fill('');
+      await v.page.getByText('75 client(s)', { exact: true }).waitFor({ timeout: 8000 });
+      check('recherche effacée : retour à la page 1 (et non la page 4)', (await names())[0] === 'Client01' && (await info()) === 'Page 1 sur 4 · clients 1–20 sur 75', await info());
+      // changer de filtre revient aussi à la page 1
+      await v.page.getByTestId('customers-pages-top-3').click();
+      await v.page.getByText('Page 3 sur 4 · clients 41–60 sur 75', { exact: true }).first().waitFor({ timeout: 8000 });
+      await v.page.getByTestId('customers-filter-withoutOrders').click();
+      await v.page.getByText('Page 1 sur 4 · clients 1–20 sur 75', { exact: true }).first().waitFor({ timeout: 8000 });
+      check('changer de filtre : retour à la page 1', (await names())[0] === 'Client01');
+      const overflow = await v.page.evaluate(() => { const el = document.querySelector('[data-testid="customers-pages-top"]'); return el ? el.scrollWidth - el.clientWidth : -1; });
+      check('téléphone : les boutons de pages tiennent dans la largeur (pas de défilement de côté)', overflow >= 0 && overflow <= 1, overflow);
+      check('aucune erreur (Admin › Clients, pages)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+    {
+      // beaucoup de clients : « 1 2 3 4 5 … 12 » puis « 1 … 5 6 7 … 12 » (jamais plus de 7 boutons)
+      const customers = Array.from({ length: 230 }, (_, i) => ({ ...mkCust(1, `Client${String(i + 1).padStart(3, '0')}`, null), id: `aaaaaaaa-0000-4000-8000-${String(i + 1).padStart(12, '0')}`, phone: `66${String(i + 1).padStart(6, '0')}` }));
+      const { v } = await openAdminG({ customers });
+      await v.page.getByText('230 client(s)', { exact: true }).waitFor({ timeout: 25000 });
+      const labels = async () => (await v.page.getByTestId('customers-pages-top').locator('[role="button"], div').allInnerTexts()).join('|');
+      const btns = async () => v.page.getByTestId('customers-pages-top').getByRole('button').allInnerTexts();
+      const rows230 = () => v.page.getByTestId('admin-customer-row');
+      const stable230 = async () => { let last = -1; for (let i = 0; i < 60; i++) { const n = await rows230().count(); if (n === last && n > 0) return n; last = n; await sleep(250); } return last; };
+      check('230 clients : 12 pages, « ‹ 1 2 3 4 5 … 12 › » au début', (await btns()).join(' ') === '‹ 1 2 3 4 5 12 ›' && /Page 1 sur 12/.test(await v.page.getByTestId('customers-pages-top-info').innerText()), await btns());
+      await v.page.getByTestId('customers-pages-top-5').click();
+      await v.page.getByText(/Page 5 sur 12/).first().waitFor({ timeout: 8000 });
+      check('page 5 : « ‹ 1 4 5 6 12 › » (la page courante et ses voisines)', (await btns()).join(' ') === '‹ 1 4 5 6 12 ›', await btns());
+      await v.page.getByTestId('customers-pages-top-12').click();
+      await v.page.getByText(/Page 12 sur 12 · clients 221–230 sur 230/).first().waitFor({ timeout: 8000 });
+      check('dernière page : les 10 derniers clients, « ‹ 1 8 9 10 11 12 › »', (await stable230()) === 10 && (await btns()).join(' ') === '‹ 1 8 9 10 11 12 ›', await btns());
+      check('aucune erreur (Admin › Clients, beaucoup de pages)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
     // fiche du client : l'administrateur choisit, corrige, remet « non précisé »
     {
       const customers = [mkCust(1, 'Aicha', null)];

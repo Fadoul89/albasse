@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TextInput, StyleSheet, FlatList, Pressable, Linking } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -24,6 +24,7 @@ import { ScreenHeader } from '../../components/ScreenHeader';
 import { StoreSettingToggle } from '../../components/StoreSettingToggle';
 import { GenderStatsCard } from '../../components/GenderStatsCard';
 import { GENDER_ICON, genderOf, hasGenderColumn } from '../../lib/clientGender';
+import { clampPage, pageCount, pageItems, pageRange, pageSlice } from '../../lib/pagination';
 import type { CustomerSummary } from '../../types';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
@@ -107,7 +108,10 @@ export function AdminCustomersScreen() {
 
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<FilterKey>('all');
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  // la liste est découpée en pages numérotées (1 2 3 4…) de PAGE_SIZE clients
+  const [page, setPage] = useState(1);
+  const listRef = useRef<FlatList<CustomerSummary>>(null);
+  const listTopY = useRef(0); // où commence la liste (sous les statistiques et les filtres) : on y revient quand on change de page
   const [hideTestAccounts, setHideTestAccounts] = useState(true);
   // comptes que Zara a notés « Intérêt élevé » (30 derniers jours) : le suivi donne « C- » + 8 premiers caractères du compte
   const [highInterest, setHighInterest] = useState<Set<string>>(new Set());
@@ -220,7 +224,13 @@ export function AdminCustomersScreen() {
     }
   }, [customers, query, filter, hideTestAccounts, highInterest, likesByUser]);
 
-  const visible = filtered.slice(0, visibleCount);
+  const pages = pageCount(filtered.length, PAGE_SIZE);
+  const currentPage = clampPage(page, filtered.length, PAGE_SIZE);
+  const visible = pageSlice(filtered, currentPage, PAGE_SIZE);
+  const goToPage = useCallback((n: number) => {
+    setPage(n);
+    setTimeout(() => listRef.current?.scrollToOffset({ offset: Math.max(0, listTopY.current - 8), animated: true }), 30);
+  }, []);
 
   // pour chaque client : l'article regardé de près qu'on peut encore lui proposer (en vente, en stock, pas déjà commandé)
   const picks = useMemo(() => {
@@ -237,6 +247,7 @@ export function AdminCustomersScreen() {
     <View style={styles.screen}>
       <ScreenHeader title="Gestion des clients" showBack />
       <FlatList
+        ref={listRef}
         data={visible}
         keyExtractor={(item) => item.profile.id}
         contentContainerStyle={{ padding: spacing.md }}
@@ -300,7 +311,7 @@ export function AdminCustomersScreen() {
               value={query}
               onChangeText={(t) => {
                 setQuery(t);
-                setVisibleCount(PAGE_SIZE);
+                setPage(1);
               }}
               placeholder="Rechercher par nom, téléphone, profession, ville, pays…"
               placeholderTextColor={colors.creamFaint}
@@ -315,7 +326,7 @@ export function AdminCustomersScreen() {
                   style={[styles.filterChip, filter === f.key && styles.filterChipActive]}
                   onPress={() => {
                     setFilter(f.key);
-                    setVisibleCount(PAGE_SIZE);
+                    setPage(1);
                   }}
                 >
                   <Text style={[styles.filterText, filter === f.key && styles.filterTextActive]}>{f.label}</Text>
@@ -323,18 +334,65 @@ export function AdminCustomersScreen() {
               ))}
             </View>
 
-            <Text style={styles.tableTitle}>{filtered.length} client(s)</Text>
+            <View onLayout={(e) => { listTopY.current = e.nativeEvent.layout.y + spacing.md; }}>
+              <Text style={styles.tableTitle}>{filtered.length} client(s)</Text>
+              <PageBar testIDPrefix="customers-pages-top" current={currentPage} count={pages} total={filtered.length} onGo={goToPage} />
+            </View>
           </View>
         }
-        ListFooterComponent={
-          visibleCount < filtered.length ? (
-            <Pressable style={styles.loadMoreBtn} onPress={() => setVisibleCount((v) => v + PAGE_SIZE)}>
-              <Text style={styles.loadMoreText}>Charger plus ({filtered.length - visibleCount} restants)</Text>
-            </Pressable>
-          ) : null
-        }
+        ListFooterComponent={<PageBar testIDPrefix="customers-pages" current={currentPage} count={pages} total={filtered.length} onGo={goToPage} />}
         ListEmptyComponent={!isLoading ? <Text style={styles.denied}>Aucun client trouvé.</Text> : null}
       />
+    </View>
+  );
+}
+
+// Les pages de la liste : « ‹ 1 2 3 4 › » et « 21–40 sur 75 ». Rien ne s'affiche quand tout tient sur une seule page.
+function PageBar({ testIDPrefix, current, count, total, onGo }: { testIDPrefix: string; current: number; count: number; total: number; onGo: (page: number) => void }) {
+  if (count <= 1) return null;
+  const range = pageRange(current, total, PAGE_SIZE);
+  return (
+    <View style={styles.pageBar} testID={testIDPrefix}>
+      <View style={styles.pageRow}>
+        <Pressable
+          testID={`${testIDPrefix}-prev`}
+          accessibilityRole="button"
+          accessibilityLabel="Page précédente"
+          disabled={current <= 1}
+          style={[styles.pageBtn, current <= 1 && styles.pageBtnOff]}
+          onPress={() => onGo(current - 1)}
+        >
+          <Text style={styles.pageBtnText}>‹</Text>
+        </Pressable>
+        {pageItems(current, count).map((it, i) =>
+          typeof it === 'number' ? (
+            <Pressable
+              key={it}
+              testID={`${testIDPrefix}-${it}`}
+              accessibilityRole="button"
+              accessibilityLabel={`Page ${it}`}
+              aria-selected={it === current}
+              style={[styles.pageBtn, it === current && styles.pageBtnActive]}
+              onPress={() => onGo(it)}
+            >
+              <Text style={[styles.pageBtnText, it === current && styles.pageBtnTextActive]}>{it}</Text>
+            </Pressable>
+          ) : (
+            <Text key={`${it}-${i}`} style={styles.pageGap}>…</Text>
+          )
+        )}
+        <Pressable
+          testID={`${testIDPrefix}-next`}
+          accessibilityRole="button"
+          accessibilityLabel="Page suivante"
+          disabled={current >= count}
+          style={[styles.pageBtn, current >= count && styles.pageBtnOff]}
+          onPress={() => onGo(current + 1)}
+        >
+          <Text style={styles.pageBtnText}>›</Text>
+        </Pressable>
+      </View>
+      {range ? <Text style={styles.pageInfo} testID={`${testIDPrefix}-info`}>{`Page ${current} sur ${count} · clients ${range.from}–${range.to} sur ${range.total}`}</Text> : null}
     </View>
   );
 }
@@ -536,6 +594,13 @@ const styles = StyleSheet.create({
   rowMeta: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11, marginTop: 2 },
   rowFooter: { flexDirection: 'row', gap: 14, marginTop: 8 },
   rowFooterText: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 11 },
-  loadMoreBtn: { alignItems: 'center', paddingVertical: spacing.md },
-  loadMoreText: { color: colors.gold, fontFamily: fonts.bodyMedium, fontSize: 13 },
+  pageBar: { alignItems: 'center', paddingVertical: spacing.md },
+  pageRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: 6 },
+  pageBtn: { minWidth: 40, height: 40, paddingHorizontal: 10, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panel, alignItems: 'center', justifyContent: 'center' },
+  pageBtnActive: { borderColor: colors.gold, backgroundColor: colors.gold },
+  pageBtnOff: { opacity: 0.35 },
+  pageBtnText: { color: colors.cream, fontFamily: fonts.bodySemiBold, fontSize: 14 },
+  pageBtnTextActive: { color: colors.background },
+  pageGap: { color: colors.creamFaint, fontFamily: fonts.bodyMedium, fontSize: 14, paddingHorizontal: 2 },
+  pageInfo: { color: colors.creamFaint, fontFamily: fonts.bodyMedium, fontSize: 11.5, marginTop: spacing.sm },
 });
