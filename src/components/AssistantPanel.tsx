@@ -285,7 +285,7 @@ export function AssistantPanel() {
 
   const openProduct = (slug: string) => go(() => navigationRef.navigate('Product', { slug }));
 
-  // « Terminer ma commande » : Zara vérifie l'article (prix, stock, compte) puis finalise la commande avec le client, dans la conversation.
+  // « Finalisez votre commande » : Zara vérifie l'article (prix, stock, compte) puis finalise la commande avec le client, dans la conversation.
   const checkout = () => {
     void startCheckout();
   };

@@ -71,10 +71,11 @@ import {
   type Parsed,
   type Range,
 } from '../lib/assistantMarketing';
-import { fetchCartStatus, fetchLoyaltyPoints, fetchPaymentNumbers, fetchProductForCart, getCatalog, getCategories, getCities, getProductSales, getStoreInfo, logAssistantEvent, requestCallback, startChatToday, toCard, type AssistantProduct, type CallbackSource } from '../lib/assistantData';
+import { fetchAffinity, fetchCartStatus, fetchLoyaltyPoints, fetchPaymentNumbers, fetchProductForCart, getCatalog, getCategories, getCities, getProductSales, getStoreInfo, logAssistantEvent, requestCallback, startChatToday, toCard, type AssistantProduct, type CallbackSource } from '../lib/assistantData';
 import { compareFacts, declaredStyle, jobFrom, jobKindOfProfession, rankForStyle, styleOrder, threeRanges, toneOf, type JobKind, type StyleKey } from '../lib/assistantPersona';
 import { callbackDays, callbackNote, dayFromText, LOW_STOCK_MAX, provenSales, type CallbackDay } from '../lib/assistantSales';
 import { adFacts, adLine, isSeniorProfession } from '../lib/zaraAds';
+import { alsoLine, confirmBecauseLine, giftOfferLine, giftPlacedLine, giftRecapLine, pickAlsoBought, productUrgencyLine, receivedLine, riskFreeLine, validityLine } from '../lib/assistantWords';
 import { clearIntent, currentDevice, markIntent } from '../lib/assistantAttribution';
 import { pushReminderNow, recordPushReminder } from '../lib/pushReminder';
 import { getWebPushIssue, isWebPushBlocked, PUSH_PERMISSION_NOT_GRANTED, subscribeToWebPush } from '../lib/webPushSubscription';
@@ -261,7 +262,7 @@ interface AssistantState {
   // (le bouton « Commander » des fiches produit du chat : voir orderProduct)
   // « Commander » sous un article : Zara prend la commande de cet article (une commande = un article)
   orderProduct: (slug: string) => void;
-  // « Terminer ma commande » : Zara vérifie l'article (prix, stock, compte) puis finalise la commande avec le client, dans la conversation
+  // « Finalisez votre commande » : Zara vérifie l'article (prix, stock, compte) puis finalise la commande avec le client, dans la conversation
   startCheckout: () => Promise<void>;
   // les boutons d'un ancien message qui restent affichés (aucun pendant une commande ou une demande de rappel)
   oldChips: (actions: ChatAction[]) => ChatAction[];
@@ -1465,7 +1466,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     const items = useCartStore.getState().items;
     return { count: items.reduce((n, i) => n + i.quantity, 0), total: items.reduce((sum, i) => sum + i.product.price * i.quantity, 0) };
   };
-  // « Terminer ma commande » : l'article choisi (avec « Commander ») attend encore la confirmation
+  // « Finalisez votre commande » : l'article choisi (avec « Commander ») attend encore la confirmation
   const checkoutChip = (): ChatAction => ({ label: T().chip.checkout, kind: 'checkout', highlight: true });
   // l'article de la commande, en une ligne (nom, taille / couleur, quantité, total)
   const currentOrderLine = () => {
@@ -1580,8 +1581,26 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     // comme à l'ouverture de la page de commande : le début de la commande est signalé à TikTok (publicités)
     const cartItems = useCartStore.getState().items;
     trackTikTokEvent('InitiateCheckout', { value: cartTotals().total, currency: 'XAF', content_id: cartItems.map((i) => i.product.id), contents: cartItems.map((i) => ({ content_id: i.product.id, quantity: i.quantity })) });
-    await say(T().checkout.intro, { fast: true });
+    // mots qui vendent : le cadeau surprise du chat (GRATUIT, EXCLUSIF) et, si c'est VRAI, « X % des clients ont aussi acheté ceci »
+    const intro = [T().checkout.intro, giftOfferLine(get().lang)];
+    const also = await alsoBoughtLine();
+    if (also) intro.push(also);
+    await say(intro.join('\n\n'), { fast: true });
     await nextCheckoutStep();
+  }
+
+  // « 👥 40 % des clients qui ont acheté « A » ont aussi acheté « B » » : seulement avec de vrais chiffres (assez de clients), sinon rien.
+  async function alsoBoughtLine(): Promise<string | null> {
+    try {
+      const first = useCartStore.getState().items[0]?.product;
+      if (!first) return null;
+      const [aff, catalog] = await Promise.all([fetchAffinity(first.id), getCatalog()]);
+      const sellable = new Map(catalog.filter((c) => c.stock > 0).map((c) => [c.id, c.name]));
+      const pick = pickAlsoBought(aff, first.id, (id) => sellable.has(id));
+      return pick ? alsoLine(pick, shortName(first.name), shortName(sellable.get(pick.productId) ?? ''), get().lang) : null;
+    } catch {
+      return null; // panne ou script pas encore appliqué : Zara ne dit aucun pourcentage
+    }
   }
 
   // La première information qui manque est demandée ; quand tout est là : le récapitulatif.
@@ -1719,7 +1738,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     const actions: ChatAction[] = [];
     if (home) actions.push({ label: chips.payCash, kind: 'orderPay', payload: 'cash_on_delivery' });
     actions.push({ label: chips.payAirtel, kind: 'orderPay', payload: 'airtel_money' }, { label: chips.payMoov, kind: 'orderPay', payload: 'moov_money' }, cancelOrderChip());
-    await say(T().checkout.askPay(home), { fast: true, actions });
+    await say(`${T().checkout.askPay(home)}\n\n${riskFreeLine(get().lang, home)}`, { fast: true, actions });
   }
 
   async function setOrderCity(text: string) {
@@ -1759,8 +1778,12 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     setStep('co_confirm');
     const { items, total, discount } = orderTotals(d);
     const chips = T().chip;
+    const lang = get().lang;
+    // mots qui vendent : le cadeau (GRATUIT), « parce que » (IMMÉDIAT), la vraie échéance (COURTE DURÉE : fin de la promotion, sinon les 48 h de validité)
+    const urgency = productUrgencyLine(items[0]?.product, lang);
+    const sellLines = [giftRecapLine(lang), confirmBecauseLine(lang), urgency ?? validityLine(lang)];
     await say(
-      T().checkout.recap({
+      [T().checkout.recap({
         lines: items.map((i) => ({ name: shortName(i.product.name), variant: variantText(i.size, i.color), qty: i.quantity, subtotal: i.product.price * i.quantity })),
         city: d.city.name,
         fee: d.city.fee,
@@ -1772,7 +1795,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         phone: d.phone,
         address: d.address,
         method: d.method,
-      }),
+      }), ...sellLines].join('\n\n'),
       { actions: [{ label: chips.confirmOrder, kind: 'orderConfirm', highlight: true }, { label: chips.editOrder, kind: 'orderEdit', payload: '?' }, cancelOrderChip()] }
     );
   }
@@ -1877,7 +1900,8 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       }
     }
     const home = isHomeCity(d.city.name);
-    const lines = [c.placed(firstNameOfFullName(d.name) ?? d.name, created.order.id.slice(0, 8)), c.totalToPay(total), instructions];
+    const lines = [c.placed(firstNameOfFullName(d.name) ?? d.name, created.order.id.slice(0, 8)), receivedLine(get().lang), c.totalToPay(total), instructions];
+    lines.push(giftPlacedLine(get().lang)); // le cadeau surprise du chat : écrit sur la facture (commande passée avec Zara)
     if (d.giftWrap) lines.push(c.giftIncluded);
     if (scheduledFor) lines.push(c.slotLine(formatSlot(scheduledFor, Date.now(), get().lang)));
     const points = Math.floor(total / LOYALTY_FCFA_PER_POINT); // la base ajoute floor(total / 5000) points quand la commande est livrée

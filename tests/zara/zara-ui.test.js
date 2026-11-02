@@ -5,6 +5,7 @@
 //           D (panne), E (clavier, fiche produit, admin cache, ordinateur), M (client avec compte reconnu et salue par son prenom).
 //           T (personnalite : politesse, compliments, adresse et numero personnels), O (Zara finalise l'achat dans le chat).
 //           F (programme de fidelite : grade, points, comment gagner). Y (conclure la vente, preuves vraies, packs), Z (rappel WhatsApp avec jour choisi et page admin), H (bouton de Zara : milieu de l'ecran, vibration, lumiere).
+//           § (Zara apprend les « mots qui vendent » : cadeau surprise du chat, sans risque, echeance vraie, vrai pourcentage).
 //           Choisir avec PARTS=ABCDEMTOF.
 const { chromium, devices } = require('playwright');
 const { spawn } = require('child_process');
@@ -48,7 +49,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   // rank : rang du jour renvoye par la fonction de la base (null : fonction pas installee). fakeUser : compte simule (token : reponse a une connexion par mot de passe ; delay : lenteur du profil en ms). fakeOrders : { list: [...], patches: [] } = fausse table des commandes.
   // zaraInstall : par defaut, le visiteur a deja repondu « Plus tard » a l'installation (Zara ne la propose pas) ; null = vrai nouveau
   // visiteur, pour les parties qui testent l'installation
-  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, fakeSales = null, fakeCallbacks = null, fakePushes = null, fakeStore = null, fakeCats = null, fakeOnline = null, fakeRecent = null, fakeUnsub = null, initScripts = [], zaraInstall = 'dismissed', zaraPush = 'later', installAfterSignUp = '1', pushPerm = null, pushAnswer = 'granted', fakeAi = null, autoOpen = false, fakePromos = null, fakeTelegram = null } = {}) {
+  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, fakeSales = null, fakeAffinity = null, fakeCallbacks = null, fakePushes = null, fakeStore = null, fakeCats = null, fakeOnline = null, fakeRecent = null, fakeUnsub = null, initScripts = [], zaraInstall = 'dismissed', zaraPush = 'later', installAfterSignUp = '1', pushPerm = null, pushAnswer = 'granted', fakeAi = null, autoOpen = false, fakePromos = null, fakeTelegram = null } = {}) {
     // Zara s'ouvre seule sur l'Accueil apres 8 s : par defaut c'est deja « fait » pour ce visiteur (les autres tests gardent leur deroulement) ; autoOpen: true = vrai nouveau visiteur
     if (!autoOpen) session = { albasse_assistant_autoopen_seen: '1', ...session };
     const ctx = await b.newContext(opts);
@@ -185,6 +186,12 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
           (fakeSales.calls = fakeSales.calls || []).push(JSON.parse(req.postData() || '{}'));
           if (fakeSales.status && fakeSales.status >= 400) return json(route, fakeSales.body || { code: 'PGRST202', message: 'Could not find the function public.assistant_product_sales' }, fakeSales.status);
           return json(route, fakeSales.rows);
+        }
+        // « X % des clients ont aussi acheté » : fakeAffinity.body = la reponse de la fonction product_affinity ; sans fakeAffinity, le script SQL n'est « pas applique »
+        if (u.pathname === '/rest/v1/rpc/product_affinity' && m === 'POST') {
+          if (!fakeAffinity) return json(route, { code: 'PGRST202', message: 'Could not find the function public.product_affinity(p_product_id) in the schema cache' }, 404);
+          (fakeAffinity.calls = fakeAffinity.calls || []).push(JSON.parse(req.postData() || '{}'));
+          return json(route, fakeAffinity.body, fakeAffinity.status || 200);
         }
         // rappel WhatsApp : fakeCallbacks.calls = ce que la base aurait recu ; replies = reponses dans l'ordre (la derniere se repete, vrai par defaut) ;
         // table = la liste de l'admin { rows, error } ; patches = les « Fait »
@@ -1193,7 +1200,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await sleep(2500);
       await g.page.getByRole('button', { name: FAB_NAME }).click();
       await waitText(g.page, /Votre commande n’est pas terminée/);
-      await chip(g.page, 'Terminer ma commande').click();
+      await chip(g.page, 'Finalisez votre commande').click();
       await waitText(g.page, /créez votre compte ou connectez-vous/);
       check('compte obligatoire active : Zara demande de creer un compte / se connecter (pas « Pas besoin de compte »)', (await chipLabels(g.page)).join('|') === '👤 Créer mon compte|Me connecter|🏠 Menu' && (await panelOf(g.page).getByText(/Pas besoin de compte pour commander/).count()) === 0, await chipLabels(g.page));
       await g.ctx.close();
@@ -1936,7 +1943,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     check('puis elle prend la commande tout de suite (nom et telephone du compte deja connus : elle demande l\'adresse), dans le chat', (await panelOf(page).count()) === 1 && !/\/commande/.test(page.url()));
     await page.screenshot({ path: path.join(OUT, 'K2-commande-directe.png') });
     await cancelOrder(page);
-    check('« Annuler la commande » : l\'article reste choisi, « Terminer ma commande » pour reprendre', (await chipLabels(page)).join('|') === '✅ Terminer ma commande|🎯 Conseil|🏠 Menu' && (await orderItems(page))[0]?.product.id === A.id, await chipLabels(page));
+    check('« Annuler la commande » : l\'article reste choisi, « Finalisez votre commande » pour reprendre', (await chipLabels(page)).join('|') === '✅ Finalisez votre commande|🎯 Conseil|🏠 Menu' && (await orderItems(page))[0]?.product.id === A.id, await chipLabels(page));
 
     // --- un autre article pendant la commande : il remplace le premier (une commande = un article)
     await showProduct(B);
@@ -2018,7 +2025,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await g.page.getByRole('button', { name: FAB_NAME }).click();
       await waitText(g.page, new RegExp(`Votre commande n’est pas terminée : « ${A.name.trim()} »`));
       await waitText(g.page, /Créez votre compte gratuit/);
-      check('commande commencee : le menu propose « Terminer ma commande »', (await chipLabels(g.page)).includes('✅ Terminer ma commande'), await chipLabels(g.page));
+      check('commande commencee : le menu propose « Finalisez votre commande »', (await chipLabels(g.page)).includes('✅ Finalisez votre commande'), await chipLabels(g.page));
       await ask(g.page, 'je veux commander', /Pas besoin de compte pour commander/);
       check('« je veux commander » sans compte : Zara dit qu\'il n\'y a pas besoin de compte et propose la page de commande, l\'article reste choisi', g.page.url().endsWith('/') && (await chipLabels(g.page)).join('|') === '📄 Page de commande|Me connecter|🏠 Menu' && (await orderItems(g.page)).length === 1, await chipLabels(g.page));
       check('rien n\'est enregistre', g.writes.every((w) => !/\/orders/.test(w)));
@@ -2042,10 +2049,10 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const guide = await panelOf(c.page).getByText(/Le prix de « .* » a changé/).last().innerText();
       const sp = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '\\s?');
       check('prix de la base plus recent : Zara l\'annonce (ancien → nouveau) et montre la commande au bon prix (2 × prix)', new RegExp(`${sp(Number(dbA.price) - 1000)}\\s?FCFA → ${sp(Number(dbA.price))}`).test(guide) && new RegExp(`× 2 · ${sp(2 * Number(dbA.price))}`).test(guide), guide);
-      check('rien n\'est demande tant que le client n\'a pas revu le prix (pas de question d\'adresse)', (await panelOf(c.page).getByText(ADDRESS).count()) === 0 && (await chipLabels(c.page)).join('|') === '✅ Terminer ma commande|🏠 Menu', await chipLabels(c.page));
-      await chip(c.page, 'Terminer ma commande').click();
+      check('rien n\'est demande tant que le client n\'a pas revu le prix (pas de question d\'adresse)', (await panelOf(c.page).getByText(ADDRESS).count()) === 0 && (await chipLabels(c.page)).join('|') === '✅ Finalisez votre commande|🏠 Menu', await chipLabels(c.page));
+      await chip(c.page, 'Finalisez votre commande').click();
       await waitText(c.page, ADDRESS);
-      check('« Terminer ma commande » : Zara finalise DANS le chat (la page de commande ne s\'ouvre pas)', !/\/commande/.test(c.page.url()));
+      check('« Finalisez votre commande » : Zara finalise DANS le chat (la page de commande ne s\'ouvre pas)', !/\/commande/.test(c.page.url()));
       check('aucune ecriture reelle de commande', c.writes.every((w) => !/\/orders/.test(w)), c.writes);
       check('aucune erreur (client connecte)', c.errs.length === 0, c.errs);
       await c.ctx.close();
@@ -4339,7 +4346,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const later = await panelOf(v.page).getByText(/Prenez votre temps/).last().innerText();
       check('« je reflechis » avec une commande commencee : l\'article reste choisi, la preuve vraie (9), la commande valable 48 h, l\'offre de rappel', /L’article choisi reste enregistré sur cet appareil\./.test(later) && /commandé 9 fois ces 7 derniers jours/.test(later) && /la commande reste valable 48 h/.test(later) && /l’équipe peut vous écrire sur WhatsApp/.test(later), later);
       const chips2 = await chipLabels(v.page);
-      check('boutons : « Terminer ma commande » (en tete), « Me rappeler sur WhatsApp » (plus de « Voir mon panier »)', /Terminer ma commande/.test(chips2[0]) && chips2.some((c) => /Me rappeler sur WhatsApp/.test(c)) && !chips2.some((c) => /panier/i.test(c)), chips2);
+      check('boutons : « Finalisez votre commande » (en tete), « Me rappeler sur WhatsApp » (plus de « Voir mon panier »)', /Finalisez votre commande/.test(chips2[0]) && chips2.some((c) => /Me rappeler sur WhatsApp/.test(c)) && !chips2.some((c) => /panier/i.test(c)), chips2);
       check('aucune erreur (preuve, conclusion)', v.errs.length === 0, v.errs);
       await v.ctx.close();
     }
@@ -7006,7 +7013,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   }
 
   // =============================================== O. ZARA FINALISE L'ACHAT DANS LE CHAT ===============================================
-  if (PARTS.includes('O') || PARTS.includes('F')) {
+  if (PARTS.includes('O') || PARTS.includes('F') || PARTS.includes('§')) {
     console.log('\n== O/F. Zara finalise l\'achat dans le chat et repond sur la fidelite (fausse base : aucune vraie commande)');
     const UID = '11111111-1111-4111-8111-111111111111';
     const JWT_FAKE = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMTExMTExMS0xMTExLTQxMTEtODExMS0xMTExMTExMTExMTEiLCJleHAiOjQxMDI0NDQ4MDAsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.c2ln';
@@ -7323,7 +7330,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const recap2 = await panelOf(c.page).getByText(/Récapitulatif de votre commande/).last().innerText();
       check('apres la modification : nouveau recapitulatif avec la nouvelle adresse (le reste ne change pas)', /📍 Quartier Chagoua, rue 5,/.test(recap2) && /📞 66123456/.test(recap2) && !/Moursal/.test(recap2), recap2);
       await tapExact(c.page, 'Annuler la commande', /j’ai arrêté la commande/);
-      check('annuler : l\'article reste choisi, rien n\'est enregistre, « Terminer ma commande » pour reprendre', (await cartCount(c.page)) === 1 && db.attempts.length === 0 && (await chipLabels(c.page)).includes('✅ Terminer ma commande'), await chipLabels(c.page));
+      check('annuler : l\'article reste choisi, rien n\'est enregistre, « Finalisez votre commande » pour reprendre', (await cartCount(c.page)) === 1 && db.attempts.length === 0 && (await chipLabels(c.page)).includes('✅ Finalisez votre commande'), await chipLabels(c.page));
       check('aucune erreur (controles)', c.errs.length === 0, c.errs);
       await c.ctx.close();
     }
@@ -7583,6 +7590,117 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         await c.ctx.close();
       }
     }
+
+    // --- § Zara apprend les « mots qui vendent » (docs/zara-mots-qui-vendent.md) : cadeau surprise du chat, sans risque, vraie echeance, vrai pourcentage
+    if (PARTS.includes('§')) {
+      console.log('\n== § mots qui vendent : cadeau surprise (chat seulement), sans risque, parce que, immediat, courte duree vraie, « X % » vrai');
+      const others = await get('products?select=id,name,stock&is_active=eq.true&stock=gt.0&limit=6');
+      const other = others.find((p) => p.id !== realProduct.id);
+      const shortOf = (n) => { const t = String(n).trim(); return t.length > 40 ? `${t.slice(0, 39).trimEnd()}…` : t; };
+      const startOrder = async (c, re = /Quelle est votre adresse de livraison|Quel est votre nom/) => {
+        await openOrderChat(c);
+        await ask(c.page, 'je veux commander', re);
+        return panelOf(c.page).innerText();
+      };
+
+      // §1. sans le script SQL (aucun pourcentage) : cadeau + reserve au chat, aucun chiffre invente
+      {
+        const fu = mkMember('Ahmed Hassan');
+        const db = newDb();
+        const c = await orderVisitor(fu, db, { qty: 1 });
+        const all = await startOrder(c);
+        const intro = await panelOf(c.page).getByText(/finalisons votre commande ensemble/).last().innerText();
+        check('debut de la commande : le cadeau surprise est annonce (GRATUIT, EXCLUSIF : reserve au chat)', /Cadeau surprise offert/.test(intro) && /toute commande confirmée ici, dans le chat avec moi/.test(intro) && /Offre réservée au chat/.test(intro) && /écrit sur votre facture/.test(intro), intro);
+        check('script SQL pas lance : AUCUN pourcentage (ni « ont aussi acheté » ni « ont aussi regardé »)', !/ont aussi (acheté|regardé)/.test(all) && !/\d\s?%/.test(intro), intro);
+        await c.page.setViewportSize({ width: 390, height: 1500 });
+        await sleep(400);
+        await c.page.screenshot({ path: path.join(OUT, 'S1-debut-cadeau.png') });
+        // paiement : « sans risque » selon la ville (hors N'Djamena : retour sous 72 h)
+        await typeIn(c.page, 'Quartier Farcha, rue 12, près du marché');
+        await waitText(c.page, /Dans quelle ville doit-on vous livrer/);
+        await tapExact(c.page, farCity.name, /Dans votre ville, le paiement se fait à l’avance/);
+        const pay = await panelOf(c.page).getByText(/Sans risque/).last().innerText();
+        check(`hors N'Djamena : « Sans risque » = la vraie regle (retour sous 72 h, frais de retour a notre charge), pas « paiement a la livraison »`, /Sans risque : si vous recevez un article incorrect ou défectueux/.test(pay) && /72 heures/.test(pay) && /frais de retour sont à notre charge/.test(pay) && !/vous payez seulement quand vous recevez/.test(pay), pay);
+        await tapExact(c.page, '📱 Airtel Money', /Souhaitez-vous l’emballage cadeau/);
+        await tapExact(c.page, 'Non, merci', /Récapitulatif de votre commande/);
+        const recapBlock = await panelOf(c.page).getByText(/Récapitulatif de votre commande/).last().innerText();
+        check('recapitulatif : cadeau surprise (commande passee avec Zara), « Finalisez votre commande maintenant » avec sa raison (PARCE QUE, IMMEDIAT)', /Cadeau surprise offert \(commande passée avec moi\)/.test(recapBlock) && /Finalisez votre commande maintenant : elle est enregistrée tout de suite, et votre cadeau surprise/.test(recapBlock), recapBlock);
+        // COURTE DUREE : une vraie echeance (fin de promotion) OU, sinon, les 48 h de validite. Jamais un compte a rebours invente.
+        const isoMs = (v) => (v ? Date.parse(v) : 0);
+        const realDeadline = Math.max(realProduct.is_flash_sale ? isoMs(realProduct.flash_sale_ends_at) : 0, isoMs(realProduct.promo_ends_at)) > Date.now() && !!realProduct.compare_at_price;
+        const hasUrgency = /Ce prix se termine/.test(recapBlock);
+        const hasValidity = /Votre commande reste valable 48 heures/.test(recapBlock);
+        check(`courte duree : ${realDeadline ? 'une promotion est en cours sur cet article' : 'aucune promotion en cours'} -> ${realDeadline ? '« Ce prix se termine… » est permis' : 'seulement les 48 h de validite, aucune fausse urgence'}`, (hasUrgency || hasValidity) && (!hasUrgency || realDeadline) && !(hasUrgency && hasValidity), recapBlock);
+        await c.page.setViewportSize({ width: 390, height: 1500 });
+        await sleep(400);
+        await c.page.screenshot({ path: path.join(OUT, 'S2-recapitulatif.png') });
+        check('aucune fausse rarete ni fausse urgence dans la commande (pas de « dernière chance », « stock limité », « dépêchez-vous »)', !/dernière chance|stock limité|dépêchez|ne ratez|offre limitée/i.test(await panelOf(c.page).innerText()));
+        await tapExact(c.page, '✅ Confirmer la commande', /a bien été enregistrée/);
+        const b = db.created[0];
+        const done = await panelOf(c.page).getByText(/a bien été enregistrée/).last().innerText();
+        check('confirmation : IMMEDIAT (« Notre équipe vient de recevoir votre commande ») et le cadeau surprise ecrit sur la facture', /Notre équipe vient de recevoir votre commande/.test(done) && /Votre cadeau surprise sera dans votre colis \(il est écrit sur votre facture\)/.test(done), done);
+        check('le cadeau est lie a la commande du chat : l\'appareil est note (c\'est ce qui met « Cadeau surprise » sur la facture et dans l\'admin)', !!b && typeof b.assistant_device === 'string' && b.assistant_device.trim() !== '', b && b.assistant_device);
+        await c.page.setViewportSize({ width: 390, height: 1500 });
+        await sleep(400);
+        await c.page.screenshot({ path: path.join(OUT, 'S3-confirmation.png') });
+        check('« Terminer ma commande » n\'existe plus nulle part dans le chat (« Finalisez votre commande »)', !/Terminer ma commande/.test(await panelOf(c.page).innerText()));
+        await c.ctx.close();
+      }
+
+      // §2. N'Djamena : « Sans risque » = on paie seulement a la reception
+      {
+        const fu = mkMember('Ahmed Hassan');
+        const c = await orderVisitor(fu, newDb(), { qty: 1 });
+        await startOrder(c);
+        await typeIn(c.page, 'Quartier Farcha, rue 12, près du marché');
+        await waitText(c.page, /Dans quelle ville doit-on vous livrer/);
+        await tapHomeSkip(c.page);
+        const pay = await panelOf(c.page).getByText(/Sans risque/).last().innerText();
+        check('a N\'Djamena : « Sans risque : … vous payez seulement quand vous recevez votre commande »', /Sans risque : à N’Djamena, vous payez seulement quand vous recevez votre commande/.test(pay) && !/72 heures/.test(pay), pay);
+        await c.ctx.close();
+      }
+
+      // §3. le vrai pourcentage : seulement avec de vrais chiffres assez solides
+      if (other) {
+        const sceneAlso = async (label, body, expectRe, { status } = {}) => {
+          const fu = mkMember('Ahmed Hassan');
+          const fa = { body, status, calls: [] };
+          const c = await newVisitor(phone, { lang: 'fr', storage: { 'sb-xtitsmmccpkelxfjyqyh-auth-token': fu.session, 'albasse-cart': cartOf(1) }, session: seedOf('fr'), fakeUser: fu, fakeOrders: newDb(), fakeAffinity: fa });
+          await startOrder(c);
+          const intro = await panelOf(c.page).getByText(/finalisons votre commande ensemble/).last().innerText();
+          const asked = fa.calls.length === 1 && fa.calls[0].p_product_id === realProduct.id;
+          const m = intro.match(/(?:👥|👀) \d+ %[^\n]*/);
+          const pass = expectRe ? !!m && expectRe.test(m[0]) : !m;
+          check(`${label} : ${expectRe ? 'la phrase est dite, avec le vrai pourcentage' : 'aucune phrase de pourcentage'}${asked ? '' : ' (la base est interrogee pour l\'article choisi)'}`, pass && asked, { m: m && m[0], calls: fa.calls });
+          if (/^8 clients/.test(label)) { await c.page.setViewportSize({ width: 390, height: 1500 }); await sleep(400); await c.page.screenshot({ path: path.join(OUT, 'S4-pourcentage.png') }); }
+          await c.ctx.close();
+          return m && m[0];
+        };
+        const name1 = shortOf(realProduct.name);
+        const name2 = shortOf(other.name);
+        const line = await sceneAlso('8 clients, 4 ont aussi achete l\'autre article = 50 %', { customers: 8, bought_with: [{ product_id: other.id, n: 4 }], viewers: 0, viewed_with: [] }, new RegExp(`^👥 50 % des clients qui ont acheté « ${esc(name1)} » ont aussi acheté « ${esc(name2)} »\\.$`));
+        await sceneAlso('seulement 4 clients (sous le seuil de 5)', { customers: 4, bought_with: [{ product_id: other.id, n: 3 }], viewers: 0, viewed_with: [] }, null);
+        await sceneAlso('1 client sur 10 = 10 % (sous le seuil de 20 %)', { customers: 10, bought_with: [{ product_id: other.id, n: 1 }], viewers: 0, viewed_with: [] }, null);
+        await sceneAlso('l\'autre article n\'existe plus dans la boutique', { customers: 10, bought_with: [{ product_id: '00000000-0000-4000-8000-000000000000', n: 8 }], viewers: 0, viewed_with: [] }, null);
+        await sceneAlso('navigation seulement (2 acheteurs, 40 visiteurs dont 20 ont regarde l\'autre) : « regardé », JAMAIS « acheté »', { customers: 2, bought_with: [], viewers: 40, viewed_with: [{ product_id: other.id, n: 20 }] }, new RegExp(`^👀 50 % des visiteurs qui ont regardé « ${esc(name1)} » ont aussi regardé « ${esc(name2)} »\\.$`));
+        await sceneAlso('reponse illisible de la base', { oops: true }, null);
+        await sceneAlso('la base refuse (erreur 500)', { message: 'boom' }, null, { status: 500 });
+        check('le pourcentage dit est un entier calcule (4 sur 8 = 50), jamais un nombre arrondi vers le haut ou invente', line !== null && /^👥 50 %/.test(line), line);
+      } else {
+        console.log('SAUTE  pourcentage : pas de deuxieme article en stock dans la vraie base');
+      }
+
+      // §4. arabe
+      {
+        const fu = mkMember('علي');
+        const c = await orderVisitor(fu, newDb(), { qty: 1, lg: 'ar' });
+        await openOrderChat(c);
+        await ask(c.page, 'أريد أن أطلب', /ما عنوان التوصيل|ما هو اسمك/);
+        const t = await panelOf(c.page).innerText();
+        check('en arabe : la commande annonce la hedia moufaja\'a (هدية مفاجأة مجانية) reservee au chat', /هدية مفاجأة مجانية/.test(t) && /العرض خاص بالمحادثة فقط/.test(t), t.slice(-400));
+        await c.ctx.close();
+      }
+    }
   }
 
   // =============================================== B. CONTEXTE : FICHE PRODUIT ET PANIER ===============================================
@@ -7612,10 +7730,10 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await c.page.getByRole('button', { name: FAB_NAME }).click();
       await waitText(c.page, /🛍️ Votre commande n’est pas terminée : « Rolex » pour 25\s?000 FCFA/);
       await waitText(c.page, /Créez votre compte gratuit(?:, Ali)?/);
-      check('commande commencee : Zara la rappelle (article, total pour la quantite choisie) et propose « Terminer ma commande »', (await chipLabels(c.page)).includes('✅ Terminer ma commande') && !(await chipLabels(c.page)).some((l) => /panier/i.test(l)), await chipLabels(c.page));
-      await chip(c.page, 'Terminer ma commande').click();
+      check('commande commencee : Zara la rappelle (article, total pour la quantite choisie) et propose « Finalisez votre commande »', (await chipLabels(c.page)).includes('✅ Finalisez votre commande') && !(await chipLabels(c.page)).some((l) => /panier/i.test(l)), await chipLabels(c.page));
+      await chip(c.page, 'Finalisez votre commande').click();
       await waitText(c.page, /Pas besoin de compte pour commander/);
-      check('« Terminer ma commande » sans compte : pas besoin de compte, la page de commande est proposee (l\'article reste choisi)', (await c.page.evaluate(() => JSON.parse(localStorage.getItem('albasse-cart') || '{}').state?.items?.length ?? 0)) === 1);
+      check('« Finalisez votre commande » sans compte : pas besoin de compte, la page de commande est proposee (l\'article reste choisi)', (await c.page.evaluate(() => JSON.parse(localStorage.getItem('albasse-cart') || '{}').state?.items?.length ?? 0)) === 1);
       check('aucune erreur (commande commencee)', c.errs.length === 0, c.errs);
       await c.ctx.close();
     }
@@ -7654,7 +7772,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await waitText(c.page, /À savoir avant de commander/);
       await waitText(c.page, 'Que souhaitez-vous découvrir aujourd’hui ? 🛍️');
       const labels = await chipLabels(c.page);
-      check('client connecte : pas d\'invitation a creer un compte ; « Terminer ma commande » et commandes proposes', !labels.some((l) => /Créer mon compte/.test(l)) && labels.includes('✅ Terminer ma commande') && labels.includes('📦 Mes commandes'), labels);
+      check('client connecte : pas d\'invitation a creer un compte ; « Finalisez votre commande » et commandes proposes', !labels.some((l) => /Créer mon compte/.test(l)) && labels.includes('✅ Finalisez votre commande') && labels.includes('📦 Mes commandes'), labels);
       await c.page.screenshot({ path: path.join(OUT, 'C1-connecte.png') });
       check('aucune erreur (client connecte)', c.errs.length === 0, c.errs);
       await c.ctx.close();

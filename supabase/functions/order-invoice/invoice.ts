@@ -3,6 +3,10 @@
 // Les calculs (numéro de facture, remise, emballage, livraison = le reste du total) répètent src/lib/invoice.ts : le test compare les deux.
 
 export const GIFT_WRAP_FEE = 2000; // = src/constants/shopRules.ts
+// Cadeau surprise des commandes passées dans le chat de Zara : écrit sur la facture (mêmes mots que src/lib/assistantWords.ts, comparés par un test)
+export const CHAT_GIFT_LABEL = "Cadeau surprise (Zara)";
+export const CHAT_GIFT_VALUE = "Offert";
+export const hasChatGift = (order: { assistant_device?: string | null }): boolean => typeof order.assistant_device === "string" && order.assistant_device.trim() !== "";
 
 export const STATUS_LABELS: Record<string, string> = {
   pending: "En attente",
@@ -34,6 +38,8 @@ export interface InvoiceOrder {
   shipping_city?: string | null;
   gift_wrap?: boolean | null;
   loyalty_discount?: number | null;
+  // appareil du client quand la commande a été passée dans le chat de Zara : donne droit au cadeau surprise (= src/lib/assistantWords.ts)
+  assistant_device?: string | null;
   created_at: string;
 }
 
@@ -303,6 +309,7 @@ export async function buildInvoicePdf(lib: PdfLib, data: InvoiceData, logoImage:
   const lines: { label: string; value: string }[] = [{ label: "Articles", value: formatXAF(b.itemsTotal) }];
   if (b.loyaltyDiscount > 0) lines.push({ label: "Remise fidélité -10 %", value: `-${formatXAF(b.loyaltyDiscount)}` });
   if (b.giftWrap > 0) lines.push({ label: "Emballage cadeau", value: formatXAF(b.giftWrap) });
+  if (hasChatGift(data.order)) lines.push({ label: CHAT_GIFT_LABEL, value: CHAT_GIFT_VALUE });
   lines.push({ label: "Livraison", value: deliveryText });
   const boxLeft = right - 250;
   for (const l of lines) {

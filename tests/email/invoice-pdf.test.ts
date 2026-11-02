@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { invoiceBreakdown, invoiceNumber, orderNumberLabel, PAYMENT_LABELS, STATUS_LABELS, formatXAF as screenXAF } from '../../src/lib/invoice.ts';
 import { GIFT_WRAP_FEE } from '../../src/constants/shopRules.ts';
+import { GIFT_INVOICE, hasChatGift } from '../../src/lib/assistantWords.ts';
 import * as pdf from '../../supabase/functions/order-invoice/invoice.ts';
 import type { Order } from '../../src/types';
 
@@ -147,6 +148,16 @@ if (!lib) {
   check('70 articles : plusieurs pages', bigPages > 1, bigPages);
   const tBig = text(big, 'f5.pdf');
   if (tBig !== null) check('70 articles : première et dernière ligne et total présents', tBig.includes('Article numéro 1 ') && tBig.includes('Article numéro 70 ') && tBig.includes('70 000 FCFA'));
+
+  // cadeau surprise : écrit sur la facture SEULEMENT pour une commande passée dans le chat de Zara
+  const chat = text(await pdf.buildInvoicePdf(lib, { order: mk({ total: 90000, assistant_device: 'Android' }), shop, cityFeeUndefined: false }, logo), 'f-chat.pdf');
+  const site = text(await pdf.buildInvoicePdf(lib, { order: mk({ total: 90000, assistant_device: null }), shop, cityFeeUndefined: false }, logo), 'f-site.pdf');
+  if (chat !== null && site !== null) {
+    check('commande du chat : « Cadeau surprise (Zara) … Offert » écrit sur la facture, sans changer le total', /Cadeau surprise \(Zara\)\s+Offert/.test(chat) && chat.includes('90 000 FCFA'), chat.slice(-400));
+    check('commande du site : aucune ligne « Cadeau surprise »', !site.includes('Cadeau surprise'));
+  }
+  check('les mots du cadeau sont les mêmes sur la facture PDF et sur l\'écran', pdf.CHAT_GIFT_LABEL === GIFT_INVOICE.label && pdf.CHAT_GIFT_VALUE === GIFT_INVOICE.value);
+  check('droit au cadeau : appareil rempli = oui ; vide, espaces, absent = non (même règle sur l\'écran et dans la fonction)', [['Android', true], [' iPhone ', true], ['', false], ['   ', false], [null, false], [undefined, false]].every(([v, want]) => pdf.hasChatGift({ assistant_device: v as string | null | undefined }) === want && hasChatGift({ assistant_device: v as string | null | undefined }) === want));
 
   // très long mot sans espace (ne dépasse pas, ne plante pas)
   const longWord = await pdf.buildInvoicePdf(lib, { order: mk({ items: [{ product_name: 'X'.repeat(300), unit_price: 100, quantity: 1, color: null, size: null }], total: 100 }), shop, cityFeeUndefined: false }, logo);

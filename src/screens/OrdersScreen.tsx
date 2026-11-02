@@ -20,6 +20,7 @@ import { flagDeadlineIso, formatSlot, waitsForAppointment } from '../lib/schedul
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
+import { GIFT_CLIENT_LINE, hasChatGift } from '../lib/assistantWords';
 import type { Order, OrderStatus } from '../types';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
@@ -252,6 +253,8 @@ function OrderCard({
       {order.delivery_type === 'scheduled' && order.scheduled_for ? (
         <Text style={styles.scheduledLine} testID="order-scheduled">{`📅 Livraison programmée : ${formatSlot(order.scheduled_for)}`}</Text>
       ) : null}
+
+      {hasChatGift(order) ? <Text style={styles.scheduledLine} testID="order-chat-gift">{GIFT_CLIENT_LINE}</Text> : null}
 
       {order.gift_wrap ? (
         <View style={[styles.giftRow, styles.giftRowOn]} testID="order-gift-on">
