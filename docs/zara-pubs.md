@@ -14,6 +14,8 @@ Tant que le script n'est pas lancé, ou que l'interrupteur est éteint, le site 
   Jusqu'à 3 articles qui tournent toutes les 7 secondes ; les choix changent chaque heure.
 - **Fenêtre de promotion** : quand l'offre concerne un article, Zara ajoute une phrase sous le message de l'offre.
 
+- **Annonce ciblée** : la même option affiche aussi, dans le fil de l'accueil, une carte « Annonce » qui ressemble à une vraie pub et qui est choisie pour chaque client (article regardé, catégorie explorée, vraie promotion, genre, ville) : voir `docs/zara-annonce-ciblee.md`.
+
 ## Règle d'or : seulement des faits vrais
 | Phrase | Condition vraie |
 | --- | --- |

@@ -883,6 +883,200 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     await noCol.ctx.close();
   }
 
+  // =============================================== € . « ANNONCE » CIBLÉE DE ZARA (UNE PUB COMME UNE VRAIE ADS, DE VRAIES RAISONS) ===============================================
+  if (PARTS.includes('€')) {
+    console.log("\n== € « Annonce » ciblée de Zara dans l'accueil (article regardé, catégorie explorée, vraie promotion, ville, « Pourquoi cette annonce ? »)");
+    const uidE = '11111111-1111-4111-8111-111111111111';
+    const JWTE = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMTExMTExMS0xMTExLTQxMTEtODExMS0xMTExMTExMTExMTEiLCJleHAiOjQxMDI0NDQ4MDAsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.c2ln';
+    const SKE = 'sb-xtitsmmccpkelxfjyqyh-auth-token';
+    const memberE = (extra = {}) => {
+      const auth = { id: uidE, aud: 'authenticated', role: 'authenticated', email: 'test@example.com', app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' };
+      const token = { access_token: JWTE, refresh_token: 'fake-refresh', token_type: 'bearer', expires_in: 3600, expires_at: 4102444800, user: auth };
+      return { auth, token, session: JSON.stringify(token), editable: false, patches: [], profile: { id: uidE, email: 'test@example.com', full_name: 'Ahmed Hassan', phone: '66123456', whatsapp_number: null, profession: null, region: null, country: 'Tchad', address: null, loyalty_points: 0, banned: false, role: 'customer', is_admin: false, is_affiliate: false, ...extra } };
+    };
+    const DAY = 24 * 3600 * 1000;
+    const nowE = Date.now();
+    const catsE = await get('categories?select=id,name,slug');
+    const liveE = await get('products?select=id,name,slug,price,compare_at_price,stock,images,category_id,is_flash_sale,flash_sale_ends_at,promo_ends_at,created_at&is_active=eq.true&stock=gt.0&limit=2000');
+    const okP = (p) => Number(p.price) > 0 && (p.images || [])[0];
+    const genderish = (cid) => /femme|homme|dame|fille|monsieur/i.test((catsE.find((c) => c.id === cid) || {}).name || '');
+    const pool = liveE.filter((p) => okP(p) && !genderish(p.category_id));
+    // la vraie promotion en cours (mêmes règles que lib/promotions : ancien prix, remise de 5 à 60 %, échéance à venir)
+    const realPromo = (p) => {
+      const old = Number(p.compare_at_price);
+      if (!old || old <= Number(p.price)) return null;
+      const ends = [p.is_flash_sale ? Date.parse(p.flash_sale_ends_at) : 0, Date.parse(p.promo_ends_at) || 0].filter((t) => t > nowE);
+      if (!ends.length) return null;
+      const pct = (1 - Number(p.price) / old) * 100;
+      return pct >= 5 && pct <= 60 ? Math.round(pct) : null;
+    };
+    const livePromos = liveE.filter((p) => okP(p) && realPromo(p) !== null);
+    const byCat = new Map();
+    for (const p of pool) byCat.set(p.category_id, [...(byCat.get(p.category_id) || []), p]);
+    const bigCat = [...byCat.entries()].find(([, list]) => list.length >= 4);
+    const viewedP = pool.find((p) => realPromo(p) === null) || pool[0];
+    console.log('info  annonce : article regardé du test :', viewedP && viewedP.name.trim(), '| vraies promotions en cours :', livePromos.length, '| catégorie à 4 articles :', bigCat && (catsE.find((c) => c.id === bigCat[0]) || {}).name);
+    check('le catalogue a des articles pour tester l’annonce', !!viewedP);
+
+    const rec = (p, o = {}) => {
+      const cat = catsE.find((c) => c.id === p.category_id) || {};
+      return { id: p.id, name: p.name, slug: p.slug, categoryId: p.category_id, categorySlug: cat.slug || null, categoryName: cat.name || null, views: 3, sessions: 2, activeSeconds: 45, lastDurationSeconds: 20, firstViewedAt: nowE - 3 * DAY, lastViewedAt: nowE - 3600_000, lastSessionKey: 'k', imageClicks: 2, sizeClicks: 0, colorClicks: 0, sizes: [], colors: [], returnsAfterOthers: 1, cartStatus: 'none', cartChangedAt: null, orderedAt: null, lastSuggestionAt: null, lastSuggestionKind: null, ...o };
+    };
+    const profileJson = (recs, categories = {}) => JSON.stringify({ version: 1, visitorId: 'v-annonce', createdAt: nowE - 5 * DAY, updatedAt: nowE, products: Object.fromEntries(recs.map((r) => [r.id, r])), order: recs.map((r) => r.id), categories, searches: [], suggestions: [], quietUntil: 0, lastStart: null, lastActivityAt: nowE, sessionKey: 'sk', sessionStartedAt: nowE, synced: {}, searchesSyncedAt: 0 });
+    const homeE = async ({ store = { zaraAds: true, zaraDelay: 60 }, profile = null, user = null, lang = 'fr', extraStorage = {} } = {}) => {
+      const storage = { albasse_zara_name: 'Ahmed', ...(user ? { [SKE]: user.session } : {}), ...(profile ? { albasse_browsing_profile_v1: profile } : {}), ...extraStorage };
+      const v = await newVisitor(phone, { lang, storage, ...(user ? { fakeUser: user } : {}), fakeStore: store });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
+      return v;
+    };
+    const waitAdE = async (pg) => { await pg.getByTestId('targeted-ad').waitFor({ timeout: 25000 }); await sleep(900); };
+    const txt = async (pg, id) => ((await pg.getByTestId(id).innerText()) || '').trim();
+
+    // a. interrupteur éteint ou colonne absente : aucune annonce
+    {
+      const off = await homeE({ store: { zaraAds: false }, profile: profileJson([rec(viewedP)]) });
+      await sleep(5000);
+      check('interrupteur éteint : aucune annonce', (await off.page.getByTestId('targeted-ad').count()) === 0);
+      await off.ctx.close();
+      const noCol = await homeE({ store: {}, profile: profileJson([rec(viewedP)]) });
+      await sleep(5000);
+      check('colonne absente (script SQL pas lancé) : aucune annonce', (await noCol.page.getByTestId('targeted-ad').count()) === 0);
+      await noCol.ctx.close();
+    }
+
+    // b. un article regardé de près : « Vous avez regardé cet article »
+    {
+      const user = memberE({ region: 'Moundou' });
+      const v = await homeE({ user, profile: profileJson([rec(viewedP)]) });
+      await waitAdE(v.page);
+      check('annonce « regardé » : « Albasse Shopping » + « Annonce · Zara »', /Albasse Shopping/.test(await txt(v.page, 'targeted-ad')) && (await txt(v.page, 'targeted-ad-label')) === 'Annonce · Zara', await txt(v.page, 'targeted-ad-label'));
+      check('la phrase : « Vous avez regardé cet article. Il vous attend toujours. »', (await txt(v.page, 'targeted-ad-headline')) === 'Vous avez regardé cet article. Il vous attend toujours.');
+      check('le VRAI article regardé, avec son vrai nom et son vrai prix', (await txt(v.page, 'targeted-ad-name')) === viewedP.name.trim() && (await txt(v.page, 'targeted-ad-price')).replace(/\D/g, '') === String(Math.round(Number(viewedP.price))), { name: await txt(v.page, 'targeted-ad-name'), price: await txt(v.page, 'targeted-ad-price') });
+      check('« Pourquoi cette annonce ? Vous avez regardé « nom » récemment. »', (await txt(v.page, 'targeted-ad-why')).includes(`Pourquoi cette annonce ? Vous avez regardé « ${viewedP.name.trim()} » récemment.`), await txt(v.page, 'targeted-ad-why'));
+      check('les deux boutons : « Acheter maintenant » et « Demander à Zara », et le ✕', (await txt(v.page, 'targeted-ad-buy')) === 'Acheter maintenant' && /Demander à Zara/.test(await txt(v.page, 'targeted-ad-ask')) && (await v.page.getByTestId('targeted-ad-close').count()) === 1);
+      // la vraie livraison vers la ville du client (table des villes)
+      const cityRows = await get('cities?select=name,delivery_fee&is_active=eq.true');
+      const moundou = cityRows.find((c) => /moundou/i.test(c.name));
+      if (moundou && moundou.delivery_fee != null) {
+        const fee = Number(moundou.delivery_fee).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '[\\s\\u00a0\\u202f]');
+        check('client de Moundou : la vraie livraison, paiement à l’avance (jamais « payez à la réception »)', new RegExp(`Livraison à ${moundou.name} : ${fee}[\\s\\u00a0\\u202f]FCFA · paiement à l’avance`).test(await txt(v.page, 'targeted-ad-delivery')) && !/réception/.test(await txt(v.page, 'targeted-ad-delivery')), await txt(v.page, 'targeted-ad-delivery'));
+      } else console.log('SAUTE  livraison Moundou : ville ou tarif absent de la vraie base');
+      // placée dans le fil : après la première catégorie, avant la deuxième, dans la largeur du téléphone
+      const sections = v.page.locator('[data-testid^="home-section-"]:not([data-testid^="home-section-title-"])');
+      const first = await sections.nth(0).boundingBox();
+      const second = await sections.nth(1).boundingBox();
+      const adBox = await v.page.getByTestId('targeted-ad').boundingBox();
+      check('l’annonce est dans le fil : sous la 1re catégorie, au-dessus de la 2e, dans la largeur du téléphone', !!first && !!second && !!adBox && adBox.y >= first.y + first.height - 2 && adBox.y + adBox.height <= second.y + 2 && adBox.x >= 0 && adBox.x + adBox.width <= 390, { first, second, adBox });
+      const over = await v.page.evaluate(() => { const el = document.querySelector('[data-testid="targeted-ad"]'); return el ? el.scrollWidth - el.clientWidth : -1; });
+      check('rien ne dépasse de la carte sur téléphone', over >= 0 && over <= 1, over);
+      await v.page.getByTestId('targeted-ad').scrollIntoViewIfNeeded();
+      await v.page.screenshot({ path: path.join(OUT, '€1-annonce-regardee.png') });
+      // « Demander à Zara » : le chat présente CET article
+      await v.page.getByTestId('targeted-ad-ask').click();
+      await waitText(v.page, /Je suis Zara, votre conseillère/);
+      check('« Demander à Zara » : le chat de Zara s’ouvre sur cet article', (await panelOf(v.page).innerText()).includes(viewedP.name.trim().slice(0, 18)));
+      await v.ctx.close();
+      // « Acheter maintenant » : la fiche de l'article
+      const v2 = await homeE({ user, profile: profileJson([rec(viewedP)]) });
+      await waitAdE(v2.page);
+      await v2.page.getByTestId('targeted-ad-buy').click();
+      await v2.page.waitForURL(new RegExp(`/produit/${viewedP.slug}`), { timeout: 15000 });
+      check('« Acheter maintenant » : la fiche de l’article', true);
+      await v2.ctx.close();
+      // ✕ : l'annonce disparaît, et reste cachée après un rechargement (24 h)
+      const v3 = await homeE({ user, profile: profileJson([rec(viewedP)]) });
+      await waitAdE(v3.page);
+      await v3.page.getByTestId('targeted-ad-close').click();
+      await sleep(900);
+      const afterClose = await v3.page.getByTestId('targeted-ad').count();
+      if (afterClose !== 0) await v3.page.screenshot({ path: path.join(OUT, '€-debug-close.png') });
+      check('« ✕ » : l’annonce disparaît', afterClose === 0, { afterClose, stored: await v3.page.evaluate(() => localStorage.getItem('albasse_targeted_ad_closed_at')), url: v3.page.url() });
+      await v3.page.reload({ waitUntil: 'load' });
+      await sleep(5000);
+      check('après un rechargement : toujours cachée (24 h)', (await v3.page.getByTestId('targeted-ad').count()) === 0);
+      await v3.ctx.close();
+    }
+
+    // c. article déjà commandé : jamais rappelé
+    {
+      const v = await homeE({ user: memberE(), profile: profileJson([rec(viewedP, { cartStatus: 'purchased', orderedAt: nowE - DAY })]) });
+      await sleep(5000);
+      const shown = await v.page.getByTestId('targeted-ad').count();
+      const nm = shown ? await txt(v.page, 'targeted-ad-name') : null;
+      check('un article déjà commandé n’est jamais rappelé', shown === 0 || (nm !== viewedP.name.trim() && /Prix réduit/.test(await txt(v.page, 'targeted-ad-headline'))), nm);
+      await v.ctx.close();
+    }
+
+    // d. catégorie explorée : un autre article de la catégorie, jamais un article déjà regardé
+    if (bigCat) {
+      const [cid, list] = bigCat;
+      const cat = catsE.find((c) => c.id === cid);
+      const seen2 = list.slice(0, 2);
+      const recs = seen2.map((p) => rec(p, { views: 1, sessions: 1, activeSeconds: 5, imageClicks: 0, returnsAfterOthers: 0 }));
+      const v = await homeE({ user: memberE(), profile: profileJson(recs, { [cat.slug]: { key: cat.slug, name: cat.name, views: 2, productIds: seen2.map((p) => p.id), lastViewedAt: nowE - 3600_000 } }) });
+      await waitAdE(v.page);
+      const nm = await txt(v.page, 'targeted-ad-name');
+      const chosen = list.find((p) => p.name.trim() === nm);
+      check(`catégorie « ${cat.name} » explorée : un autre article de cette catégorie, pas un des 2 déjà regardés`, !!chosen && !seen2.some((p) => p.id === chosen.id), nm);
+      await v.page.getByTestId('targeted-ad').scrollIntoViewIfNeeded();
+      await v.page.screenshot({ path: path.join(OUT, '€3-annonce-categorie.png') });
+      check('la phrase et la raison citent la catégorie', (await txt(v.page, 'targeted-ad-headline')) === `Vous aimez « ${cat.name.trim()} » ? Voici un article à découvrir.` && (await txt(v.page, 'targeted-ad-why')).includes(`« ${cat.name.trim()} »`), { h: await txt(v.page, 'targeted-ad-headline'), w: await txt(v.page, 'targeted-ad-why') });
+      await v.ctx.close();
+    } else console.log('SAUTE  catégorie explorée : aucune catégorie à 4 articles dans la vraie base');
+
+    // e. sans historique : seulement une VRAIE promotion, sinon rien
+    {
+      const v = await homeE({});
+      await sleep(6000);
+      const shown = await v.page.getByTestId('targeted-ad').count();
+      if (livePromos.length === 0) {
+        check('aucune vraie promotion en cours et aucun historique : aucune annonce (jamais de raison inventée)', shown === 0);
+      } else {
+        await waitAdE(v.page);
+        const head = await txt(v.page, 'targeted-ad-headline');
+        const nm = await txt(v.page, 'targeted-ad-name');
+        const p = livePromos.find((x) => x.name.trim() === nm);
+        check('une vraie promotion en cours : « Prix réduit : -N % » avec la vraie remise', !!p && head.startsWith(`Prix réduit : -${realPromo(p)} %`), { head, nm });
+        check('l’ancien prix barré est le vrai ancien prix', !!p && (await txt(v.page, 'targeted-ad-old-price')).replace(/\D/g, '') === String(Math.round(Number(p.compare_at_price))), await txt(v.page, 'targeted-ad-old-price'));
+        await v.page.getByTestId('targeted-ad').scrollIntoViewIfNeeded();
+        await v.page.screenshot({ path: path.join(OUT, '€4-annonce-promotion.png') });
+        check('« Pourquoi cette annonce ? C’est une vraie promotion en cours »', /C’est une vraie promotion en cours/.test(await txt(v.page, 'targeted-ad-why')));
+      }
+      await v.ctx.close();
+    }
+
+    // f. arabe
+    {
+      const v = await homeE({ lang: 'ar', user: memberE(), profile: profileJson([rec(viewedP)]) });
+      await waitAdE(v.page);
+      check('en arabe : « إعلان · Zara », accroche, boutons et raison en arabe', (await txt(v.page, 'targeted-ad-label')) === 'إعلان · Zara' && /ما زال ينتظرك/.test(await txt(v.page, 'targeted-ad-headline')) && (await txt(v.page, 'targeted-ad-buy')) === 'اشترِ الآن' && /^ⓘ لماذا هذا الإعلان/.test(await txt(v.page, 'targeted-ad-why')), await txt(v.page, 'targeted-ad-label'));
+      await v.page.getByTestId('targeted-ad').scrollIntoViewIfNeeded();
+      await v.page.screenshot({ path: path.join(OUT, '€2-annonce-arabe.png') });
+      await v.ctx.close();
+    }
+
+    // g. suivi coupé (signal « Ne pas me suivre ») : l'article regardé n'est pas utilisé
+    {
+      const store = { zaraAds: true, zaraDelay: 60 };
+      const v = await newVisitor(phone, { lang: 'fr', storage: { albasse_zara_name: 'Ali', albasse_browsing_profile_v1: profileJson([rec(viewedP)]) }, fakeStore: store, initScripts: ["Object.defineProperty(navigator, 'doNotTrack', { get: () => '1' });"] });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
+      await sleep(6000);
+      const shown = await v.page.getByTestId('targeted-ad').count();
+      const head = shown ? await txt(v.page, 'targeted-ad-headline') : '';
+      check('signal « Ne pas me suivre » : jamais l’annonce « Vous avez regardé » (seule une vraie promotion peut s’afficher)', shown === 0 ? livePromos.length === 0 : /^Prix réduit/.test(head), head);
+      await v.ctx.close();
+    }
+
+    // h. aucune fausse urgence
+    {
+      const v = await homeE({ user: memberE(), profile: profileJson([rec(viewedP)]) });
+      await waitAdE(v.page);
+      check('aucune fausse rareté, fausse urgence ni pression dans l’annonce', !/dernier|plus que|stock limité|dépêch|ne ratez|offre limitée|exclusi|rare\b/i.test(await txt(v.page, 'targeted-ad')), await txt(v.page, 'targeted-ad'));
+      check('aucune erreur (annonce ciblée)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+  }
+
   // =============================================== 8. VENTE FLASH 24 H, ANCIEN PRIX SEULEMENT EN PROMOTION, ZARA CHOISIT LES ARTICLES ===============================================
   if (PARTS.includes('8')) {
     console.log("\n== 8. vente flash qui disparait apres 24 h, ancien prix seulement en promotion, Zara choisit les articles (fausse base : rien n'est ecrit)");
