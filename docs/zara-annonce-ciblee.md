@@ -32,7 +32,7 @@ Dans cet ordre, la première raison vraie gagne :
 | 4 | **Public du genre** : femme ou homme | la catégorie de son genre (« Vêtements pour femmes », « Vitalité & Énergie Homme »), la vraie promotion puis le plus récent d'abord | « Choisi pour vous : « Vêtements pour femmes ». » |
 | 5 | **Vraie promotion en cours** | ancien prix barré seulement pendant une vente flash ou une promotion de Zara, remise réelle de 5 à 60 % (`lib/promotions`) | « Prix réduit : -20 % jusqu'au 10 novembre » |
 
-Sans raison vraie : **aucune annonce** (Zara n'invente jamais).
+Sans raison vraie : **aucune annonce** (Zara n'invente jamais). Une 6ᵉ raison existe **seulement après un ✕** : une vraie nouveauté (voir plus bas).
 
 Ce qui ajuste le choix et la carte :
 - **Genre** (seulement si le client l'a choisi : Homme / Femme) : un homme ne reçoit pas un article d'une catégorie « pour femmes » (et l'inverse). Genre non précisé : aucun filtre.
@@ -48,7 +48,8 @@ Un public sans annonce vraie (par exemple aucune femme en vente dans la catégor
 
 ## Ce que le client peut faire
 - **Acheter maintenant** : la fiche de l'article. **Demander à Zara** : le chat de Zara présente cet article.
-- **✕** : l'annonce disparaît pendant **24 heures** (gardé sur le téléphone).
+- **✕** : l'annonce disparaît, et **15 secondes plus tard Zara en propose une autre** : un **autre article**, jamais celui qui vient d'être fermé (il n'est plus proposé pendant 24 h). L'annonce suivante a la même allure (boutons, « Pourquoi cette annonce ? ») et **une vraie raison** : un autre article regardé, une catégorie explorée, le public du client, une vraie promotion, ou, si Zara n'a rien d'autre, une **vraie nouveauté** (article ajouté à la boutique depuis moins de 30 jours, d'après sa date dans la base : « Une nouveauté à découvrir. — Cet article a été ajouté à la boutique il y a 5 jours. »). S'il n'y a aucune vraie raison, Zara ne montre rien (elle n'invente jamais). La nouveauté ne sert **que** pour l'annonce qui suit un ✕, jamais pour la première.
+- **Pas d'harcèlement** : au plus **3 ✕ sur 24 heures**. Au 3ᵉ ✕, Zara s'arrête ; elle reprend quand le plus ancien des 3 ✕ a 24 h. Les ✕ (article fermé + heure) sont gardés sur le téléphone ; si le visiteur recharge la page pendant les 15 secondes, l'attente continue (rien ne s'affiche tout de suite).
 - Arabe : la carte, l'accroche, les boutons et la raison existent aussi en arabe.
 
 ## Honnêteté
@@ -58,5 +59,5 @@ Un public sans annonce vraie (par exemple aucune femme en vente dans la catégor
 
 ## Code et tests
 - Règles (fonctions pures) : `src/lib/adTargeting.ts`, `src/lib/adAudiences.ts` (les publics) ; écran de l'administrateur : `src/components/ZaraAdsAudiences.tsx` ; carte : `src/components/TargetedAdCard.tsx` ; place dans l'accueil : `src/screens/HomeScreen.tsx`.
-- `node --import ./tests/zara/register.mjs tests/email/ad-targeting.test.ts` (71 contrôles : publics, métiers, genre, rotation de 6 h, écran de l'administrateur).
+- `node --import ./tests/zara/register.mjs tests/email/ad-targeting.test.ts` (101 contrôles : publics, métiers, genre, rotation de 6 h, écran de l'administrateur, ✕ et annonce suivante après 15 secondes, nouveautés).
 - Navigateur : `PARTS='€' node tests/zara/zara-ui.test.js <dist> <port>`.

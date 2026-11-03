@@ -45,7 +45,8 @@ export type AdReason =
   | { kind: 'promo'; pct: number; endsAt: number | null }
   | { kind: 'gender'; gender: Gender; categoryName: string }
   | { kind: 'student'; level: 'eleve' | 'etudiant' }
-  | { kind: 'executive' };
+  | { kind: 'executive' }
+  | { kind: 'new'; days: number }; // seulement pour l'annonce qui suit un « ✕ » : un article vraiment ajouté à la boutique il y a `days` jours
 
 export interface TargetedAd {
   product: AdProduct;
@@ -54,7 +55,10 @@ export interface TargetedAd {
 
 const DAY_MS = 24 * 3600 * 1000;
 export const VIEWED_WITHIN_DAYS = 30; // un article regardé de près il y a plus d'un mois n'est plus rappelé
-export const AD_CLOSED_HOURS = 24; // « ✕ » : plus d'annonce pendant 24 h
+export const AD_CLOSED_HOURS = 24; // « ✕ » : un article fermé n'est plus proposé pendant 24 h (et on compte les « ✕ » sur 24 h)
+export const AD_NEXT_SECONDS = 15; // « ✕ » : Zara propose un AUTRE article 15 secondes plus tard
+export const NEW_WITHIN_DAYS = 30; // « Nouveauté » : un article ajouté à la boutique depuis moins de 30 jours (date vraie de la base)
+export const AD_MAX_CLOSES = 3; // …mais au plus 3 fois sur 24 h : au 3ᵉ « ✕ » Zara s'arrête (pas d'harcèlement), elle reprend quand le plus ancien « ✕ » a 24 h
 export const AD_ROTATE_HOURS = 6; // Zara change les annonces 4 fois par jour, jour et nuit (24 h sur 24)
 export const POOL_SIZE = 5; // parmi les 5 meilleurs choix, un par jour (les choix tournent sans jamais sortir de la liste vraie)
 
@@ -105,6 +109,7 @@ export interface AdInput {
   browsing?: BrowsingProfile | null; // le suivi de navigation de ce téléphone (null : suivi coupé ou rien encore)
   now?: number;
   seed?: number; // fait tourner les choix (par défaut : la tranche de 6 heures en cours)
+  exclude?: readonly string[]; // les articles à ne PAS proposer (ceux que le visiteur vient de fermer avec « ✕ »)
 }
 
 // Un article marqué pour adultes (« 🔞 », « 18+ », « +18 », « 18 ans », « adulte », « delay spray ») n'est JAMAIS utilisé dans une annonce de l'accueil :
@@ -123,7 +128,8 @@ export function pickTargetedAd(input: AdInput): TargetedAd | null {
   const catById = new Map(input.categories.map((c) => [c.id, c]));
   const catBySlug = new Map(input.categories.map((c) => [c.slug, c]));
   const audienceOfProduct = (p: AdProduct) => audienceOf(catById.get(p.category_id ?? '')?.name ?? catById.get(p.category_id ?? '')?.slug ?? '');
-  const ok = (p: AdProduct) => eligible(p) && audienceAllows(input.customer?.gender, audienceOfProduct(p));
+  const excluded = new Set(input.exclude ?? []);
+  const ok = (p: AdProduct) => eligible(p) && !excluded.has(p.id) && audienceAllows(input.customer?.gender, audienceOfProduct(p));
   const pool = input.products.filter(ok);
   const byId = new Map(pool.map((p) => [p.id, p]));
   const rotate = <T,>(list: T[], offset = 0): T | null => {
@@ -188,6 +194,17 @@ export function pickTargetedAd(input: AdInput): TargetedAd | null {
     .sort((a, b) => b.pct - a.pct || a.p.name.localeCompare(b.p.name));
   const chosen = rotate(promos);
   if (chosen) return { product: chosen.p, reason: { kind: 'promo', pct: chosen.pct, endsAt: promoEndsAt(chosen.p, now) } };
+  // 5. seulement APRÈS un « ✕ » (le visiteur a fermé une annonce : Zara lui en propose une autre) et sans autre raison : une vraie nouveauté de la boutique
+  if (excluded.size > 0) {
+    const fresh = pool
+      .filter((p) => {
+        const t = ms(p.created_at);
+        return t > 0 && t <= now && now - t < NEW_WITHIN_DAYS * DAY_MS;
+      })
+      .sort((a, b) => ms(b.created_at) - ms(a.created_at) || a.name.localeCompare(b.name));
+    const p = rotate(fresh);
+    if (p) return { product: p, reason: { kind: 'new', days: Math.floor((now - ms(p.created_at)) / DAY_MS) } };
+  }
   return null;
 }
 
@@ -208,6 +225,7 @@ export function adHeadline(reason: AdReason, lang: AdLang = 'fr'): string {
   if (reason.kind === 'gender') return lang === 'ar' ? `اخترنا ${reason.gender === 'femme' ? 'لكِ' : 'لك'}: «${reason.categoryName}».` : `Choisi pour vous : « ${reason.categoryName} ».`;
   if (reason.kind === 'student') return lang === 'ar' ? `${reason.level === 'eleve' ? 'للتلاميذ' : 'للطلاب'}: منتج بسعر صغير.` : `Pour les ${reason.level === 'eleve' ? 'élèves' : 'étudiants'} : un article à petit prix.`;
   if (reason.kind === 'executive') return lang === 'ar' ? 'مجموعة راقية مختارة لك.' : 'Une sélection haut de gamme pour vous.';
+  if (reason.kind === 'new') return lang === 'ar' ? 'جديد يستحق الاكتشاف.' : 'Une nouveauté à découvrir.';
   const end = reason.endsAt ? (lang === 'ar' ? ` حتى ${dateLabel(reason.endsAt, lang)}` : ` jusqu’au ${dateLabel(reason.endsAt, lang)}`) : '';
   return lang === 'ar' ? `سعر مخفّض: -${reason.pct}%${end}` : `Prix réduit : -${reason.pct} %${end}`;
 }
@@ -220,6 +238,7 @@ export function adWhy(reason: AdReason, lang: AdLang = 'fr'): string {
     if (reason.kind === 'gender') return `لماذا هذا الإعلان؟ لأنك اخترت «${reason.gender === 'femme' ? 'أنثى' : 'ذكر'}» في حسابك: هذا منتج من «${reason.categoryName}».`;
     if (reason.kind === 'student') return `لماذا هذا الإعلان؟ لأنك كتبت «${reason.level === 'eleve' ? 'تلميذ' : 'طالب'}» في حسابك، وهذا المنتج من الأقل سعراً في المتجر.`;
     if (reason.kind === 'executive') return 'لماذا هذا الإعلان؟ لأنك كتبت مهنة إدارية أو قيادية في حسابك، وهذا المنتج من الأرقى في المتجر.';
+    if (reason.kind === 'new') return `لماذا هذا الإعلان؟ أُضيف هذا المنتج إلى المتجر ${reason.days === 0 ? 'اليوم' : reason.days === 1 ? 'أمس' : `منذ ${reason.days} ${reason.days <= 10 ? 'أيام' : 'يوماً'}`}.`;
     return 'لماذا هذا الإعلان؟ إنه تخفيض حقيقي جارٍ الآن (السعر القديم مشطوب).';
   }
   if (reason.kind === 'viewed') return `Pourquoi cette annonce ? Vous avez regardé « ${reason.productName} » récemment.`;
@@ -227,6 +246,7 @@ export function adWhy(reason: AdReason, lang: AdLang = 'fr'): string {
   if (reason.kind === 'gender') return `Pourquoi cette annonce ? Vous avez choisi « ${reason.gender === 'femme' ? 'Femme' : 'Homme'} » dans votre compte : voici un article de « ${reason.categoryName} ».`;
   if (reason.kind === 'student') return `Pourquoi cette annonce ? Vous avez indiqué « ${reason.level === 'eleve' ? 'élève' : 'étudiant'} » dans votre compte, et cet article fait partie des moins chers de la boutique.`;
   if (reason.kind === 'executive') return 'Pourquoi cette annonce ? Vous avez indiqué un métier d’administration ou de direction dans votre compte, et cet article fait partie des plus haut de gamme de la boutique.';
+  if (reason.kind === 'new') return `Pourquoi cette annonce ? Cet article a été ajouté à la boutique ${reason.days === 0 ? 'aujourd’hui' : reason.days === 1 ? 'hier' : `il y a ${reason.days} jours`}.`;
   return 'Pourquoi cette annonce ? C’est une vraie promotion en cours (l’ancien prix est barré).';
 }
 
@@ -247,9 +267,50 @@ export function deliveryLine(region: string | null | undefined, cities: City[] |
   return `🚚 Livraison à ${city.name} : ${fcfa(city.fee)} · paiement à l’avance (Airtel Money ou Moov Money).`;
 }
 
-// « ✕ » : l'annonce reste cachée 24 h
-export const adClosed = (closedAt: number | null | undefined, now: number = Date.now()): boolean =>
-  typeof closedAt === 'number' && Number.isFinite(closedAt) && now - closedAt >= 0 && now - closedAt < AD_CLOSED_HOURS * 3600 * 1000;
+// --- « ✕ » : Zara propose un AUTRE article 15 secondes plus tard ---------------------------------------------------------------------------------
+// Chaque « ✕ » est noté sur le téléphone (l'article fermé et l'heure). L'article fermé n'est plus proposé pendant 24 h ; 15 secondes après le « ✕ »
+// Zara en montre un autre (toujours avec de vraies raisons : rien n'est inventé pour remplir). Au plus 3 « ✕ » sur 24 h, puis Zara s'arrête.
+export interface ClosedAd {
+  id: string; // l'article fermé
+  at: number; // quand (millisecondes)
+}
+
+// Ce que le téléphone a gardé (texte JSON) : seulement les « ✕ » des dernières 24 h et valides ; tout ce qui n'est pas clair est ignoré.
+export function parseClosedAds(raw: string | null | undefined, now: number = Date.now()): ClosedAd[] {
+  try {
+    const list = JSON.parse(String(raw ?? ''));
+    if (!Array.isArray(list)) return [];
+    const out: ClosedAd[] = [];
+    for (const x of list) {
+      const id = typeof x?.id === 'string' ? x.id : '';
+      const at = Number(x?.at);
+      if (id && Number.isFinite(at) && now - at >= 0 && now - at < AD_CLOSED_HOURS * 3600 * 1000) out.push({ id, at });
+    }
+    return out.sort((a, b) => a.at - b.at).slice(-AD_MAX_CLOSES * 4);
+  } catch {
+    return [];
+  }
+}
+
+// Où en est le visiteur ? stopped : 3 « ✕ » sur 24 h, Zara ne montre plus rien ; waitMs : temps à attendre avant l'annonce suivante (0 : on peut la montrer) ;
+// excluded : les articles à ne pas remontrer.
+export interface ClosedState {
+  stopped: boolean;
+  waitMs: number;
+  excluded: string[];
+}
+export function closedState(closed: readonly ClosedAd[], now: number = Date.now()): ClosedState {
+  const recent = closed.filter((c) => Number.isFinite(c.at) && now - c.at >= 0 && now - c.at < AD_CLOSED_HOURS * 3600 * 1000);
+  const excluded = [...new Set(recent.map((c) => c.id))];
+  if (recent.length >= AD_MAX_CLOSES) return { stopped: true, waitMs: 0, excluded };
+  const last = recent.reduce((m, c) => Math.max(m, c.at), 0);
+  const waitMs = last > 0 ? Math.max(0, last + AD_NEXT_SECONDS * 1000 - now) : 0;
+  return { stopped: false, waitMs, excluded };
+}
+
+// Le « ✕ » qui vient d'être touché : ajouté à la liste (les plus anciens hors des 24 h partent)
+export const addClosedAd = (closed: readonly ClosedAd[], id: string, now: number = Date.now()): ClosedAd[] =>
+  [...closed.filter((c) => now - c.at >= 0 && now - c.at < AD_CLOSED_HOURS * 3600 * 1000), { id, at: now }].slice(-AD_MAX_CLOSES * 4);
 
 // L'annonce que Zara montre en ce moment à chaque public (écran de l'administrateur) : un client « type » par public, sans historique de navigation.
 // Un public sans annonce vraie vaut null (Zara n'invente rien).
