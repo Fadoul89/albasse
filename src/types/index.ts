@@ -63,9 +63,6 @@ export interface Profile {
   profession: string | null;
   // « homme » ou « femme » ; absent (clé inconnue) tant que add-client-gender.sql n'est pas lancé, null tant que le client n'a pas choisi
   gender?: 'homme' | 'femme' | null;
-  // « 1998-03-25 » et « celibataire » / « marie » ; absents (clés inconnues) tant que add-client-birth-marital.sql n'est pas lancé, null tant que le client n'a pas répondu
-  birth_date?: string | null;
-  marital_status?: 'celibataire' | 'marie' | null;
   region: string | null;
   country: string | null;
   address: string | null;

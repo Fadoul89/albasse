@@ -1,4 +1,4 @@
-// Le formulaire « Créer un compte » : nom, Homme / Femme, date de naissance, célibataire / marié, téléphone et mot de passe obligatoires, le reste facultatif. Sur la page Inscription et
+// Le formulaire « Créer un compte » : nom, Homme / Femme, téléphone et mot de passe obligatoires, le reste facultatif. Sur la page Inscription et
 // en premier sur l'écran d'entrée quand le compte est obligatoire.
 import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet, Pressable } from 'react-native';
@@ -13,16 +13,12 @@ import { navigationRef } from '../navigation/navigationRef';
 import { GoldButton } from './GoldButton';
 import { CityPicker } from './CityPicker';
 import { GenderPicker } from './GenderPicker';
-import { MaritalPicker } from './MaritalPicker';
 import type { Gender } from '../lib/clientGender';
-import { BIRTH_EXAMPLE, checkBirthMarital, formatBirthInput, type MaritalStatus } from '../lib/clientBirthMarital';
 
 export function RegisterForm({ onSuccess, onPrivacy }: { onSuccess: () => void; onPrivacy: () => void }) {
   const signUp = useAuthStore((s) => s.signUp);
   const [fullName, setFullName] = useState('');
   const [gender, setGender] = useState<'' | Gender>('');
-  const [birthDate, setBirthDate] = useState(''); // « 25/03/1998 », mis en forme pendant la frappe
-  const [marital, setMarital] = useState<'' | MaritalStatus>('');
   const [phone, setPhone] = useState('');
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [profession, setProfession] = useState('');
@@ -50,12 +46,6 @@ export function RegisterForm({ onSuccess, onPrivacy }: { onSuccess: () => void; 
     }
     if (!gender) {
       showToast('Merci de choisir « Homme » ou « Femme ».', { title: 'Choix manquant', type: 'error' });
-      return;
-    }
-    // date de naissance et célibataire / marié : obligatoires (add-client-birth-marital.sql les garde dans le profil)
-    const extras = checkBirthMarital({ birth: birthDate, marital }, Date.now());
-    if (!extras.ok) {
-      showToast(extras.message, { title: extras.title, type: 'error' });
       return;
     }
     if (!phoneDigits(phone)) {
@@ -94,8 +84,6 @@ export function RegisterForm({ onSuccess, onPrivacy }: { onSuccess: () => void; 
       whatsappNumber: whatsappNumber.trim(),
       profession: profession.trim(),
       gender,
-      birthDate: extras.birthDate,
-      maritalStatus: extras.marital,
       email: email.trim(),
       region,
       country,
@@ -139,20 +127,6 @@ export function RegisterForm({ onSuccess, onPrivacy }: { onSuccess: () => void; 
       />
       <Text style={styles.fieldLabel}>Vous êtes * </Text>
       <GenderPicker value={gender} onChange={setGender} testIDPrefix="register-gender" light />
-      <Text style={styles.fieldLabel}>🎂 Date de naissance * </Text>
-      <TextInput
-        testID="register-birth"
-        autoComplete="birthdate-full"
-        value={birthDate}
-        onChangeText={(v) => setBirthDate(formatBirthInput(v))}
-        placeholder={`Jour / mois / année (ex. ${BIRTH_EXAMPLE})`}
-        placeholderTextColor={accountFieldPlaceholder}
-        keyboardType="number-pad"
-        maxLength={10}
-        style={accountField}
-      />
-      <Text style={styles.fieldLabel}>💍 Situation * </Text>
-      <MaritalPicker value={marital} onChange={setMarital} testIDPrefix="register-marital" light />
       <TextInput
         testID="register-phone"
         autoComplete="tel"

@@ -28,6 +28,3 @@ Le genre est ajouté à la liste des données de la politique de confidentialit�
 - Base : `sh tests/sql/run-client-gender.sh` (18 contrôles : le client choisit pour lui-même seulement, valeurs refusées hors homme / femme, l'administrateur passe par la fonction, l'anonyme n'a aucun accès, script rejouable).
 - Règles : `node --import ./tests/zara/register.mjs tests/email/client-gender.test.ts` (35 contrôles : libellés, statistiques par genre, quand Zara demande, formulaire du profil).
 - Navigateur : partie `%` de `tests/zara/zara-ui.test.js` (inscription obligatoire, profil, carte de Zara et ses 3 demandes, Admin › Clients : carte, filtres, fiche).
-
-## Voir aussi
-La **date de naissance** et **Célibataire / Marié(e)** suivent le même modèle (obligatoires à l'inscription, modifiables dans le profil, visibles dans Admin › Clients) : voir `docs/naissance-situation-client.md`.

@@ -5881,13 +5881,11 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.ctx.close();
     }
     // 5) inscription depuis le mur : nom, numero, mot de passe ; on revient sur la fiche demandee
-    const register = async (v, { name = 'Ali Mahamat', phoneNo = '66 12 34 56', password = 'secret12', email = '', terms = true, gender = 'homme', birth = '25/03/1998', marital = 'celibataire' } = {}) => {
+    const register = async (v, { name = 'Ali Mahamat', phoneNo = '66 12 34 56', password = 'secret12', email = '', terms = true, gender = 'homme' } = {}) => {
       await v.page.getByTestId('register-phone').waitFor({ timeout: 15000 });
       await sleep(800);
       if (name) await v.page.getByTestId('register-name').locator('visible=true').fill(name);
       if (gender) await v.page.getByTestId(`register-gender-${gender}`).locator('visible=true').click();
-      if (birth) await v.page.getByTestId('register-birth').locator('visible=true').fill(birth);
-      if (marital) await v.page.getByTestId(`register-marital-${marital}`).locator('visible=true').click();
       if (phoneNo) await v.page.getByTestId('register-phone').locator('visible=true').fill(phoneNo);
       if (password) await v.page.getByTestId('register-password').locator('visible=true').fill(password);
       if (email) await v.page.getByTestId('register-email').locator('visible=true').fill(email);
@@ -5908,8 +5906,6 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       // il manque le numero : rien n'est envoye
       await v.page.getByTestId('register-name').locator('visible=true').fill('Ali Mahamat');
       await v.page.getByTestId('register-gender-homme').locator('visible=true').click();
-      await v.page.getByTestId('register-birth').locator('visible=true').fill('25/03/1998');
-      await v.page.getByTestId('register-marital-celibataire').locator('visible=true').click();
       await v.page.getByTestId('register-password').locator('visible=true').fill('secret12');
       await v.page.getByTestId('register-terms').locator('visible=true').click();
       await shown(v.page, 'Créer mon compte').click();
@@ -9023,7 +9019,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
 
   // =============================================== % HOMME / FEMME : INSCRIPTION, PROFIL, CARTE DE ZARA, ADMIN › CLIENTS ===============================================
   if (PARTS.includes('%')) {
-    console.log('\n== % Homme / Femme + date de naissance + celibataire / marie : inscription obligatoire, profil, carte de Zara (anciens clients), Admin › Clients (fausse base)');
+    console.log('\n== % Homme / Femme : choix obligatoire a l\'inscription, profil, carte de Zara (anciens clients), Admin › Clients (fausse base)');
     const SKG = 'sb-xtitsmmccpkelxfjyqyh-auth-token';
     const HDRG = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
     const jsonG = (route, body, status = 200) => route.fulfill({ status, headers: { 'content-type': 'application/json', ...HDRG }, body: JSON.stringify(body) });
@@ -9059,8 +9055,6 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     };
     const fillSignupG = async (v) => {
       await v.page.getByTestId('register-name').locator('visible=true').fill('Aïcha Moussa');
-      await v.page.getByTestId('register-birth').locator('visible=true').fill('14/07/2005');
-      await v.page.getByTestId('register-marital-celibataire').locator('visible=true').click();
       await v.page.getByTestId('register-phone').locator('visible=true').fill('66 12 34 56');
       await v.page.getByTestId('register-password').locator('visible=true').fill('secret12');
       await v.page.getByTestId('register-terms').locator('visible=true').click();
@@ -9415,190 +9409,6 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const { v } = await openAdminG({ customers, route: `clients/${customers[0].id}` });
       await v.page.getByText('Identité').first().waitFor({ timeout: 25000 });
       check('fiche d\'un client dont la base n\'a pas la colonne : pas de section genre', (await v.page.getByTestId('admin-gender-section').count()) === 0);
-      await v.ctx.close();
-    }
-
-    // ---------- 5. Date de naissance + Célibataire / Marié(e) (docs/naissance-situation-client.md)
-    const FULL_B = { gender: null, birth_date: null, marital_status: null }; // le script add-client-birth-marital.sql est lancé : colonnes vides
-    const birthPatches = (fu) => fu.patches.filter((x) => 'birth_date' in x || 'marital_status' in x);
-    const toastNow = (v, re) => v.page.getByText(re).first().waitFor({ timeout: 8000 });
-    {
-      const { v, fu } = await signupG({}, FULL_B);
-      const body = await v.page.locator('body').innerText();
-      check('inscription : « Date de naissance * » et « Situation * » avec Célibataire et Marié(e), rien de choisi',
-        /Date de naissance \*/.test(body) && /Situation \*/.test(body) && (await v.page.getByTestId('register-birth').locator('visible=true').count()) === 1
-        && (await v.page.getByTestId('register-marital-celibataire').count()) === 1 && (await v.page.getByTestId('register-marital-marie').count()) === 1
-        && !(await selected(v.page, 'register-marital-celibataire')) && !(await selected(v.page, 'register-marital-marie')));
-      check('le champ date dit comment l\'écrire (jour / mois / année, exemple 25/03/1998)', /Jour \/ mois \/ année \(ex\. 25\/03\/1998\)/.test((await v.page.getByTestId('register-birth').locator('visible=true').getAttribute('placeholder')) || ''));
-      const pos = async (id) => (await v.page.getByTestId(id).locator('visible=true').boundingBox()) || { y: -1 };
-      const ys = [await pos('register-gender-homme'), await pos('register-birth'), await pos('register-marital-celibataire'), await pos('register-phone')].map((p) => p.y);
-      check('ordre : genre, date de naissance, situation, puis téléphone (tous dans « obligatoire »)', ys[0] > 0 && ys[1] > ys[0] && ys[2] > ys[1] && ys[3] > ys[2], ys);
-      const birth = v.page.getByTestId('register-birth').locator('visible=true');
-      await birth.pressSequentially('25031998');
-      check('la frappe « 25031998 » devient « 25/03/1998 » toute seule', (await birth.inputValue()) === '25/03/1998', await birth.inputValue());
-      await birth.fill('');
-      await v.page.getByTestId('register-name').locator('visible=true').fill('Aïcha Moussa');
-      await v.page.getByTestId('register-gender-femme').locator('visible=true').click();
-      await v.page.getByTestId('register-phone').locator('visible=true').fill('66 12 34 56');
-      await v.page.getByTestId('register-password').locator('visible=true').fill('secret12');
-      await v.page.getByTestId('register-terms').locator('visible=true').click();
-      await v.page.screenshot({ path: path.join(OUT, '%7-inscription-naissance-vide.png') });
-      await submitG(v);
-      await toastNow(v, /Date de naissance manquante/);
-      check('sans date : « Date de naissance manquante », aucun compte créé', !(fu.signups || []).length);
-      await birth.fill('31/02/1998');
-      await submitG(v);
-      await toastNow(v, /Cette date n’existe pas/);
-      check('31/02/1998 : « Cette date n’existe pas », aucun compte créé', !(fu.signups || []).length);
-      await birth.fill('01/01/2999');
-      await submitG(v);
-      await toastNow(v, /ne peut pas être dans le futur/);
-      check('une date dans le futur : refusée, aucun compte créé', !(fu.signups || []).length);
-      await birth.fill('01/01/1900');
-      await submitG(v);
-      await toastNow(v, /Date de naissance à vérifier/);
-      check('année 1900 (126 ans) : « à vérifier », aucun compte créé', !(fu.signups || []).length);
-      await birth.fill('25/03/1998');
-      await submitG(v);
-      await toastNow(v, /Choix manquant/);
-      check('date juste mais sans situation : « Merci de choisir Célibataire ou Marié(e) », aucun compte créé', /Célibataire.*Marié\(e\)/.test(await v.page.locator('body').innerText()) && !(fu.signups || []).length);
-      await v.page.getByTestId('register-marital-marie').locator('visible=true').click();
-      check('Marié(e) choisi : coché, pas Célibataire', (await selected(v.page, 'register-marital-marie')) && !(await selected(v.page, 'register-marital-celibataire')));
-      await v.page.getByTestId('register-marital-celibataire').locator('visible=true').click();
-      check('on peut changer d\'avis : Célibataire coché, plus Marié(e)', (await selected(v.page, 'register-marital-celibataire')) && !(await selected(v.page, 'register-marital-marie')));
-      await v.page.getByTestId('register-marital-marie').locator('visible=true').click();
-      await v.page.screenshot({ path: path.join(OUT, '%8-inscription-naissance-situation.png') });
-      await submitG(v);
-      await v.page.getByText('Bienvenue ✓').waitFor({ timeout: 15000 });
-      await sleep(1500);
-      const main = fu.patches.find((x) => 'full_name' in x) || {};
-      check('compte créé UNE fois, avec la date et la situation', (fu.signups || []).length === 1);
-      check('le profil principal ne porte NI la date NI la situation (demande à part : une colonne absente ne casse jamais l\'inscription)', main.full_name === 'Aïcha Moussa' && !('birth_date' in main) && !('marital_status' in main), main);
-      check('une demande à part enregistre exactement { birth_date: "1998-03-25", marital_status: "marie" }', birthPatches(fu).length === 1 && JSON.stringify(birthPatches(fu)[0]) === '{"birth_date":"1998-03-25","marital_status":"marie"}', fu.patches);
-      check('le genre garde sa propre demande, inchangée', genderPatches(fu).length === 1 && genderPatches(fu)[0].gender === 'femme', fu.patches);
-      check('aucune erreur (inscription avec date et situation)', v.errs.length === 0, v.errs);
-      await v.ctx.close();
-    }
-    {
-      // le script n'est pas encore lancé : la base répond « colonne introuvable » ; l'inscription réussit quand même
-      const { v, fu } = await signupG({ rejectColumn: 'birth_date' }, {});
-      await fillSignupG(v);
-      await v.page.getByTestId('register-gender-homme').locator('visible=true').click();
-      await submitG(v);
-      await v.page.getByText('Bienvenue ✓').waitFor({ timeout: 15000 });
-      await sleep(1200);
-      check('colonnes absentes de la base : l\'inscription réussit quand même, aucun message d\'erreur', (fu.signups || []).length === 1 && (await v.page.getByText(/Inscription impossible/).count()) === 0 && !('birth_date' in fu.profile) && !('marital_status' in fu.profile));
-      await v.ctx.close();
-    }
-
-    // ---------- 6. profil du client : date de naissance et situation (seulement quand la base a les colonnes)
-    {
-      const fu = clientG({ ...FULL_B });
-      const c = await openEditorG(fu);
-      const birth = c.page.getByTestId('profile-input-birth');
-      check('profil : « Date de naissance » vide et « Situation » (Célibataire / Marié(e)) rien de choisi', (await birth.count()) === 1 && (await birth.inputValue()) === '' && (await c.page.getByTestId('profile-marital-group').count()) === 1 && !(await selected(c.page, 'profile-marital-celibataire')) && !(await selected(c.page, 'profile-marital-marie')));
-      await saveG(c);
-      await sleep(600);
-      check('rien changé : « Enregistrer » ne fait rien', fu.patches.length === 0);
-      await birth.fill('31021998');
-      await c.page.getByTestId('profile-marital-marie').click();
-      check('la date s\'écrit « 31/02/1998 » toute seule', (await birth.inputValue()) === '31/02/1998');
-      await saveG(c);
-      await c.page.getByText(/Cette date n’existe pas/).first().waitFor({ timeout: 8000 });
-      check('date qui n\'existe pas : message sous le champ, rien envoyé', fu.patches.length === 0 && (await c.page.getByTestId('profile-error').count()) === 1);
-      await birth.fill('25/03/1998');
-      await c.page.screenshot({ path: path.join(OUT, '%9-profil-naissance-situation.png') });
-      await saveG(c);
-      await c.page.getByText('Profil mis à jour ✓').waitFor({ timeout: 10000 });
-      check('une seule demande : les 7 informations + { birth_date: "1998-03-25", marital_status: "marie" } (jamais de genre vide)',
-        fu.patches.length === 1 && JSON.stringify(fu.patches[0]) === JSON.stringify({ full_name: 'Ahmed Hassan', phone: '66123456', whatsapp_number: null, profession: null, region: null, country: 'Tchad', address: null, birth_date: '1998-03-25', marital_status: 'marie' }), fu.patches);
-      await c.ctx.close();
-    }
-    {
-      // client qui a déjà répondu : le formulaire montre ses réponses ; il peut les changer mais pas effacer la date
-      const fu = clientG({ gender: null, birth_date: '1998-03-25', marital_status: 'marie' });
-      const c = await openEditorG(fu);
-      const birth = c.page.getByTestId('profile-input-birth');
-      check('client qui a répondu : « 25/03/1998 » et Marié(e) coché dans le formulaire', (await birth.inputValue()) === '25/03/1998' && (await selected(c.page, 'profile-marital-marie')) && !(await selected(c.page, 'profile-marital-celibataire')));
-      await birth.fill('');
-      await saveG(c);
-      await c.page.getByText(/Merci d’écrire votre date de naissance/).first().waitFor({ timeout: 8000 });
-      check('effacer la date : refusé (obligatoire depuis l\'inscription), rien envoyé', fu.patches.length === 0);
-      await birth.fill('25/03/1998');
-      await c.page.getByTestId('profile-marital-celibataire').click();
-      await saveG(c);
-      await c.page.getByText('Profil mis à jour ✓').waitFor({ timeout: 10000 });
-      check('changer pour Célibataire : enregistré avec la même date', fu.patches.length === 1 && fu.patches[0].marital_status === 'celibataire' && fu.patches[0].birth_date === '1998-03-25', fu.patches);
-      await c.ctx.close();
-    }
-    {
-      // script SQL pas lancé : rien à remplir, et jamais envoyé
-      const fu = clientG({});
-      const c = await openEditorG(fu);
-      check('base sans les colonnes : ni date de naissance ni situation dans le profil', (await c.page.getByTestId('profile-input-birth').count()) === 0 && (await c.page.getByTestId('profile-marital-group').count()) === 0);
-      await c.page.getByTestId('profile-input-fullName').fill('Ahmed Hassan Ali');
-      await saveG(c);
-      await c.page.getByText('Profil mis à jour ✓').waitFor({ timeout: 10000 });
-      check('...et le profil s\'enregistre sans jamais envoyer date ni situation', fu.patches.length === 1 && !('birth_date' in fu.patches[0]) && !('marital_status' in fu.patches[0]), fu.patches);
-      await c.ctx.close();
-    }
-
-    // ---------- 7. Admin › Clients : sur chaque ligne et sur la fiche
-    {
-      const customers = [
-        mkCust(1, 'Aicha', 'femme', { birth_date: '1998-03-25', marital_status: 'marie' }),
-        mkCust(2, 'Mahamat', 'homme', { birth_date: '2001-12-01', marital_status: 'celibataire' }),
-        mkCust(3, 'Hawa', 'femme', { birth_date: null, marital_status: null }),
-      ];
-      const { v } = await openAdminG({ customers });
-      await v.page.getByText('3 client(s)', { exact: true }).waitFor({ timeout: 25000 });
-      await v.page.getByTestId('customer-birth-marital').first().waitFor({ timeout: 10000 });
-      const rowsB = await v.page.getByTestId('customer-birth-marital').allInnerTexts();
-      const byName = async (name) => (await v.page.getByTestId('admin-customer-row').filter({ hasText: name }).getByTestId('customer-birth-marital').innerText());
-      check('chaque ligne a sa ligne « 🎂 date · âge · situation » (3 lignes)', rowsB.length === 3, rowsB);
-      const a = await byName('Aicha');
-      check('Aicha : « 🎂 25/03/1998 · 28 ou 29 ans · 💍 Marié(e) »', /🎂 25\/03\/1998 · (28|29) ans · 💍 Marié\(e\)/.test(a), a);
-      const m = await byName('Mahamat');
-      check('Mahamat : « 🎂 01/12/2001 · 24 ou 25 ans · 🙋 Célibataire »', /🎂 01\/12\/2001 · (24|25) ans · 🙋 Célibataire/.test(m), m);
-      const hw = await byName('Hawa');
-      check('Hawa (pas répondu) : « 🎂 Non précisée · ❔ Non précisé »', /🎂 Non précisée · ❔ Non précisé/.test(hw), hw);
-      await v.page.getByTestId('customer-birth-marital').first().scrollIntoViewIfNeeded();
-      await v.page.evaluate(() => window.scrollBy(0, 120));
-      await sleep(400);
-      await v.page.screenshot({ path: path.join(OUT, '%10-admin-ligne-naissance.png') });
-      await v.ctx.close();
-    }
-    {
-      const customers = [mkCust(1, 'Aicha', 'femme', { birth_date: '1998-03-25', marital_status: 'marie' })];
-      const { v } = await openAdminG({ customers, route: `clients/${customers[0].id}` });
-      await v.page.getByText('Identité').first().waitFor({ timeout: 25000 });
-      const t = await v.page.locator('body').innerText();
-      check('fiche du client : « Date de naissance 25/03/1998 · 28 ou 29 ans » et « Situation Marié(e) »', /Date de naissance\s*25\/03\/1998 · (28|29) ans/.test(t) && /Situation\s*Marié\(e\)/.test(t), t.slice(t.indexOf('Identité'), t.indexOf('Identité') + 300));
-      await v.page.getByText('Situation', { exact: true }).first().scrollIntoViewIfNeeded();
-      await sleep(400);
-      await v.page.screenshot({ path: path.join(OUT, '%11-admin-fiche-naissance.png') });
-      await v.ctx.close();
-    }
-    {
-      // base sans les colonnes : ni ligne ni rubrique
-      const customers = [mkCust(1, 'Aicha', undefined)];
-      const { v } = await openAdminG({ customers });
-      await v.page.getByText('1 client(s)', { exact: true }).waitFor({ timeout: 25000 });
-      check('liste d\'une base sans les colonnes : aucune ligne « 🎂 »', (await v.page.getByTestId('customer-birth-marital').count()) === 0);
-      await v.ctx.close();
-      const w = await openAdminG({ customers, route: `clients/${customers[0].id}` });
-      await w.v.page.getByText('Identité').first().waitFor({ timeout: 25000 });
-      check('fiche d\'une base sans les colonnes : ni « Date de naissance » ni « Situation »', !/Date de naissance|Situation/.test(await w.v.page.locator('body').innerText()));
-      await w.v.ctx.close();
-    }
-
-    // ---------- 8. politique de confidentialité
-    {
-      const v = await newVisitor(phone, { lang: 'fr' });
-      await v.page.goto(`${BASE}/confidentialite`, { waitUntil: 'load' });
-      await v.page.getByText('1. Données que nous collectons').waitFor({ timeout: 25000 });
-      const t = (await v.page.locator('body').innerText()).replace(/\s+/g, ' ');
-      check('confidentialité : la date de naissance et la situation (célibataire ou marié) sont dans la liste des données', /votre date de naissance, votre situation \(célibataire ou marié\)/.test(t), t.slice(t.indexOf('Données que nous collectons'), 400));
       await v.ctx.close();
     }
   }
