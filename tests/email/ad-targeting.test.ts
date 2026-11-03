@@ -15,6 +15,8 @@ const check = (label: string, cond: unknown, detail?: unknown) => {
   }
 };
 
+// Airtel / Moov retirés « pour le moment » : EXPO_PUBLIC_MOBILE_MONEY=on lance les anciens contrôles
+const MM = process.env.EXPO_PUBLIC_MOBILE_MONEY === 'on';
 const NOW = Date.parse('2026-11-03T09:00:00Z');
 const DAY = 24 * 3600 * 1000;
 const iso = (t: number) => new Date(t).toISOString();
@@ -127,10 +129,11 @@ check('un même jour : le même choix (pas de scintillement)', pickTargetedAd({ 
 // --- la livraison (vraie) ----------------------------------------------------------------------------------------------------------------------
 const cities = [{ name: "N'Djamena", fee: 0, agency: null }, { name: 'Moundou', fee: 2500, agency: 'STTL ou Sud Voyage' }, { name: 'Faya', fee: null, agency: null }];
 check('N\'Djamena : « Livraison à N\'Djamena : gratuite · vous payez à la réception. »', deliveryLine("N'Djamena", cities) === "🚚 Livraison à N'Djamena : gratuite · vous payez à la réception.", deliveryLine("N'Djamena", cities));
-check('Moundou : le vrai tarif, paiement à l\'avance (pas de paiement à la livraison)', deliveryLine('Moundou', cities) === '🚚 Livraison à Moundou : 2 500 FCFA · paiement à l’avance (Airtel Money ou Moov Money).');
+check(MM ? 'Moundou : le vrai tarif, paiement à l\'avance (pas de paiement à la livraison)' : 'Moundou : le vrai tarif, commande sur WhatsApp (plus d\'Airtel ni de Moov)', deliveryLine('Moundou', cities) === (MM ? '🚚 Livraison à Moundou : 2 500 FCFA · paiement à l’avance (Airtel Money ou Moov Money).' : '🚚 Livraison à Moundou : 2 500 FCFA · commande sur WhatsApp.'));
 check('ville écrite autrement (« ndjamena », « moundou ») : retrouvée', deliveryLine('ndjamena', cities)?.includes("N'Djamena") === true && deliveryLine('moundou ', cities)?.includes('Moundou') === true);
 check('ville sans tarif, inconnue, vide ou villes non chargées : aucune ligne (rien d\'inventé)', deliveryLine('Faya', cities) === null && deliveryLine('Paris', cities) === null && deliveryLine('', cities) === null && deliveryLine(null, cities) === null && deliveryLine('Moundou', []) === null && deliveryLine('Moundou', null) === null);
 check('arabe : la ligne de livraison existe aussi', /^🚚 التوصيل إلى Moundou: 2 500 FCFA/.test(deliveryLine('Moundou', cities, 'ar') ?? ''), deliveryLine('Moundou', cities, 'ar'));
+check(MM ? 'arabe : paiement à l\'avance' : 'arabe : commande sur WhatsApp, jamais Airtel ni Moov', MM ? /الدفع مسبقاً/.test(deliveryLine('Moundou', cities, 'ar') ?? '') : /واتساب/.test(deliveryLine('Moundou', cities, 'ar') ?? '') && !/Airtel|Moov/.test(deliveryLine('Moundou', cities, 'ar') ?? ''));
 
 // --- arabe ---------------------------------------------------------------------------------------------------------------------------------------
 check('arabe : accroche et raison pour chaque cas', [{ kind: 'viewed', productName: 'x' }, { kind: 'category', categoryName: 'ساعات' }, { kind: 'promo', pct: 30, endsAt: null }].every((r) => /[؀-ۿ]/.test(adHeadline(r as never, 'ar')) && /^لماذا هذا الإعلان/.test(adWhy(r as never, 'ar'))));

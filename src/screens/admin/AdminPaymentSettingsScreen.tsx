@@ -7,6 +7,7 @@ import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { colors, fonts, radius, spacing } from '../../theme';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { GoldButton } from '../../components/GoldButton';
+import { MOBILE_MONEY_ENABLED } from '../../constants/shopRules';
 
 export function AdminPaymentSettingsScreen() {
   const profile = useAuthStore((s) => s.profile);
@@ -72,6 +73,14 @@ export function AdminPaymentSettingsScreen() {
     <View style={styles.screen}>
       <ScreenHeader title="Moyens de paiement" showBack />
       <ScrollView contentContainerStyle={styles.content}>
+        {!MOBILE_MONEY_ENABLED ? (
+          <View style={styles.pausedBox} testID="payment-paused-note">
+            <Text style={styles.pausedTitle}>⏸️ Airtel Money et Moov Money sont retirés pour le moment</Text>
+            <Text style={styles.pausedText}>
+              Le site ne propose plus que le paiement à la livraison (N'Djamena). Les autres villes commandent sur WhatsApp. Les numéros ci-dessous sont gardés pour le jour où vous les remettrez (docs/airtel-moov-retires.md).
+            </Text>
+          </View>
+        ) : null}
         <Text style={styles.intro}>
           Renseignez vos numéros Mobile Money et/ou vos liens de paiement en ligne. Ils seront
           affichés au client lors de la confirmation de commande.
@@ -122,6 +131,9 @@ function Field({
 }
 
 const styles = StyleSheet.create({
+  pausedBox: { backgroundColor: colors.panel, borderRadius: radius.md, borderWidth: 1, borderColor: colors.gold, padding: spacing.md, marginBottom: spacing.md, gap: 6 },
+  pausedTitle: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 14 },
+  pausedText: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 12.5, lineHeight: 18 },
   screen: { flex: 1, backgroundColor: colors.background },
   denied: { color: colors.creamFaint, fontFamily: fonts.body, textAlign: 'center', marginTop: 40 },
   content: { padding: spacing.md, paddingBottom: 60 },

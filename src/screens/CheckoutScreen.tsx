@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, TextInput, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { View, Text, TextInput, StyleSheet, ScrollView, Pressable, Linking } from 'react-native';
 import { Image } from 'expo-image';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -25,13 +25,19 @@ import { useStoreSettings } from '../hooks/useStoreSettings';
 import { guestOrderAllowed } from '../lib/accountWall';
 import { CHAD_PHONE_REGEX, generateTempPassword, guestFullName, guestInfoProblem, type NewAccountNotice } from '../lib/guestAccount';
 import { fetchLoyaltyStatus, loyaltyDiscount, ordersBeforeDiscount, type LoyaltyStatus } from '../lib/loyaltyDiscount';
-import { DELIVERY_HOURS, GIFT_WRAP_FEE, HOME_CITY, ORDER_VALIDITY_HOURS } from '../constants/shopRules';
+import { DELIVERY_HOURS, GIFT_WRAP_FEE, HOME_CITY, MOBILE_MONEY_ENABLED, ORDER_VALIDITY_HOURS } from '../constants/shopRules';
+import { OUTSIDE_TEXT, outsideOrderUrl } from '../lib/outsideCityOrder';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
 
+// Airtel Money et Moov Money sont retirés « pour le moment » (shopRules.MOBILE_MONEY_ENABLED) : il reste le paiement à la livraison, à N'Djamena.
 const PAYMENT_OPTIONS: { value: PaymentMethod; label: string; icon: string }[] = [
-  { value: 'airtel_money', label: 'Airtel Money', icon: '📱' },
-  { value: 'moov_money', label: 'Moov Money', icon: '📲' },
+  ...(MOBILE_MONEY_ENABLED
+    ? [
+        { value: 'airtel_money' as const, label: 'Airtel Money', icon: '📱' },
+        { value: 'moov_money' as const, label: 'Moov Money', icon: '📲' },
+      ]
+    : []),
   { value: 'cash_on_delivery', label: 'Paiement à la livraison', icon: '💵' },
 ];
 
@@ -73,7 +79,7 @@ export function CheckoutScreen() {
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
   const [selectedCity, setSelectedCity] = useState<City | null>(null);
-  const [method, setMethod] = useState<PaymentMethod>('airtel_money');
+  const [method, setMethod] = useState<PaymentMethod>(MOBILE_MONEY_ENABLED ? 'airtel_money' : 'cash_on_delivery');
   const [submitting, setSubmitting] = useState(false);
   const showToast = useToastStore((s) => s.show);
   const { settings: paymentSettings } = usePaymentSettings();
@@ -91,8 +97,10 @@ export function CheckoutScreen() {
   // Paiement a la livraison : seulement pour les clients de N'Djamena. Ailleurs : a l'avance (Airtel Money, Moov Money).
   const cashOnDeliveryAllowed = isHomeCity(city);
   useEffect(() => {
-    if (!cashOnDeliveryAllowed && method === 'cash_on_delivery') setMethod('airtel_money');
+    if (MOBILE_MONEY_ENABLED && !cashOnDeliveryAllowed && method === 'cash_on_delivery') setMethod('airtel_money');
   }, [cashOnDeliveryAllowed, method]);
+  // Sans Mobile Money : une ville hors N'Djamena ne peut pas commander ici (aucun paiement possible) : la commande se prend sur WhatsApp
+  const whatsappOnly = !MOBILE_MONEY_ENABLED && !!city.trim() && !cashOnDeliveryAllowed;
 
   // Livraison programmée : à N'Djamena le client peut choisir un jour et une heure de rendez-vous. La livraison normale n'est pas affichée dans la liste :
   // sans jour ni heure choisis, la commande est prise comme une livraison normale. Dans les autres villes : rien ne change.
@@ -106,8 +114,9 @@ export function CheckoutScreen() {
     }
   }, [scheduledAllowed]);
 
-  const paymentInfo =
-    method === 'airtel_money'
+  const paymentInfo = !MOBILE_MONEY_ENABLED
+    ? null
+    : method === 'airtel_money'
       ? { number: paymentSettings?.airtel_number, url: paymentSettings?.airtel_payment_url }
       : method === 'moov_money'
       ? { number: paymentSettings?.moov_number, url: paymentSettings?.moov_payment_url }
@@ -128,6 +137,10 @@ export function CheckoutScreen() {
     }
     if (!shippingName || !phone || !address || !city) {
       showToast('Merci de remplir toutes les informations de livraison.', { title: 'Champs manquants', type: 'error' });
+      return;
+    }
+    if (!MOBILE_MONEY_ENABLED && !cashOnDeliveryAllowed) {
+      showToast(`Pour le moment, les commandes hors de ${HOME_CITY} se prennent sur WhatsApp. Touchez « Commander sur WhatsApp ».`, { title: 'Commande', type: 'error' });
       return;
     }
     if (method === 'cash_on_delivery' && !cashOnDeliveryAllowed) {
@@ -417,8 +430,36 @@ export function CheckoutScreen() {
           );
         })}
         <Text style={styles.paymentRule}>
-          {`💵 Paiement à la livraison : seulement à ${HOME_CITY}. Dans les autres villes, le paiement se fait à l'avance (Airtel Money ou Moov Money).`}
+          {MOBILE_MONEY_ENABLED
+            ? `💵 Paiement à la livraison : seulement à ${HOME_CITY}. Dans les autres villes, le paiement se fait à l'avance (Airtel Money ou Moov Money).`
+            : `💵 Paiement à la livraison : à ${HOME_CITY}. Dans les autres villes, la commande se prend sur WhatsApp pour le moment.`}
         </Text>
+
+        {whatsappOnly ? (
+          <View style={styles.whatsappBox} testID="checkout-wa-outside">
+            <Text style={styles.whatsappTitle}>{`💬 ${OUTSIDE_TEXT.fr.title}`}</Text>
+            <Text style={styles.whatsappBody}>{OUTSIDE_TEXT.fr.body(city.trim())}</Text>
+            <Pressable
+              style={styles.whatsappBtn}
+              testID="checkout-wa-outside-btn"
+              accessibilityRole="button"
+              onPress={() =>
+                Linking.openURL(
+                  outsideOrderUrl({
+                    productName: item.product.name,
+                    price: item.product.price,
+                    quantity: item.quantity,
+                    variant,
+                    city: city.trim(),
+                    siteUrl: `https://www.albasseshopping.com/produit/${item.product.slug}`,
+                  })
+                )
+              }
+            >
+              <Text style={styles.whatsappBtnText}>{OUTSIDE_TEXT.fr.button}</Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         {paymentInfo && (paymentInfo.number || paymentInfo.url) && (
           <View style={styles.paymentInfoBox}>
@@ -478,13 +519,15 @@ export function CheckoutScreen() {
           {`🕗 Nos services de livraison sont ouverts de ${DELIVERY_HOURS}.\n⏳ Pour éviter les fausses commandes, chaque commande est valable ${ORDER_VALIDITY_HOURS} h.`}
         </Text>
 
-        <GoldButton
-          label="Confirmer la commande"
-          onPress={handleSubmit}
-          loading={submitting}
-          disabled={items.length === 0}
-          style={{ marginTop: spacing.md }}
-        />
+        {whatsappOnly ? null : (
+          <GoldButton
+            label="Confirmer la commande"
+            onPress={handleSubmit}
+            loading={submitting}
+            disabled={items.length === 0}
+            style={{ marginTop: spacing.md }}
+          />
+        )}
       </ScrollView>
     </View>
   );
@@ -555,6 +598,19 @@ const styles = StyleSheet.create({
   paymentOptionActive: { borderColor: colors.gold },
   paymentOptionDisabled: { opacity: 0.5 },
   paymentLabelWrap: { flex: 1 },
+  whatsappBox: {
+    backgroundColor: colors.panel,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: '#25d366',
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    gap: 8,
+  },
+  whatsappTitle: { color: colors.cream, fontFamily: fonts.bodyBold, fontSize: 15 },
+  whatsappBody: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 13, lineHeight: 19 },
+  whatsappBtn: { backgroundColor: '#25d366', borderRadius: radius.pill, paddingVertical: 13, alignItems: 'center', marginTop: 4 },
+  whatsappBtnText: { color: '#ffffff', fontFamily: fonts.bodyBold, fontSize: 15 },
   paymentHint: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 12, marginTop: 2 },
   paymentRule: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 12.5, lineHeight: 18, marginBottom: spacing.sm },
   serviceNote: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 12.5, lineHeight: 19, marginTop: spacing.md },

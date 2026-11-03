@@ -18,6 +18,7 @@ import { estimateInterest, topCategories, type BrowsingProfile, type ProductReco
 import { genderOf, type Gender } from './clientGender';
 import { professionAudience, AUDIENCES, type Audience } from './adAudiences';
 import { isHomeCity } from './deliveryRules';
+import { MOBILE_MONEY_ENABLED } from '../constants/shopRules';
 import { flashActive, promoActive, realDiscountPct, shownOldPrice, type PromoFields } from './promotions';
 
 export type AdLang = 'fr' | 'ar';
@@ -261,10 +262,14 @@ export function deliveryLine(region: string | null | undefined, cities: City[] |
   const home = isHomeCity(city.name);
   if (lang === 'ar') {
     if (home) return city.fee === 0 ? `🚚 التوصيل إلى ${city.name}: مجاني · تدفع عند الاستلام.` : `🚚 التوصيل إلى ${city.name}: ${fcfa(city.fee)} · تدفع عند الاستلام.`;
-    return `🚚 التوصيل إلى ${city.name}: ${fcfa(city.fee)} · الدفع مسبقاً (Airtel Money أو Moov Money).`;
+    return MOBILE_MONEY_ENABLED
+      ? `🚚 التوصيل إلى ${city.name}: ${fcfa(city.fee)} · الدفع مسبقاً (Airtel Money أو Moov Money).`
+      : `🚚 التوصيل إلى ${city.name}: ${fcfa(city.fee)} · الطلب عبر واتساب.`;
   }
   if (home) return city.fee === 0 ? `🚚 Livraison à ${city.name} : gratuite · vous payez à la réception.` : `🚚 Livraison à ${city.name} : ${fcfa(city.fee)} · vous payez à la réception.`;
-  return `🚚 Livraison à ${city.name} : ${fcfa(city.fee)} · paiement à l’avance (Airtel Money ou Moov Money).`;
+  return MOBILE_MONEY_ENABLED
+    ? `🚚 Livraison à ${city.name} : ${fcfa(city.fee)} · paiement à l’avance (Airtel Money ou Moov Money).`
+    : `🚚 Livraison à ${city.name} : ${fcfa(city.fee)} · commande sur WhatsApp.`;
 }
 
 // --- « ✕ » : Zara propose un AUTRE article 15 secondes plus tard ---------------------------------------------------------------------------------

@@ -36,7 +36,7 @@ Sans raison vraie : **aucune annonce** (Zara n'invente jamais). Une 6ᵉ raison 
 
 Ce qui ajuste le choix et la carte :
 - **Genre** (seulement si le client l'a choisi : Homme / Femme) : un homme ne reçoit pas un article d'une catégorie « pour femmes » (et l'inverse). Genre non précisé : aucun filtre.
-- **Ville** (profil du client) : la vraie livraison. N'Djamena : « Livraison à N'Djamena : gratuite · vous payez à la réception. » Une autre ville : son vrai tarif et « paiement à l'avance (Airtel Money ou Moov Money) ». Ville inconnue ou sans tarif : aucune ligne.
+- **Ville** (profil du client) : la vraie livraison. N'Djamena : « Livraison à N'Djamena : gratuite · vous payez à la réception. » Une autre ville : son vrai tarif et « commande sur WhatsApp » (tant qu'Airtel Money et Moov Money sont retirés ; sinon « paiement à l'avance (Airtel Money ou Moov Money) »). Ville inconnue ou sans tarif : aucune ligne.
 - **Jamais** : un article épuisé, retiré de la vente, sans photo, déjà commandé ; une promotion finie ; une remise absurde (-90 %).
 - Le choix **tourne toutes les 6 heures** parmi les 5 meilleurs (et reste le même pendant ces 6 heures).
 - Suivi coupé (signal « Ne pas me suivre » du navigateur) : jamais l'annonce « Vous avez regardé » ; seule une vraie promotion peut s'afficher.

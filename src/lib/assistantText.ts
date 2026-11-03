@@ -1,5 +1,5 @@
 import { ASSISTANT_NAME, ASSISTANT_ROLE } from '../constants/assistant';
-import { DEFAULT_AGENCIES, DELIVERY_HOURS, GIFT_WRAP_FEE, HOME_CITY, ORDER_VALIDITY_HOURS, PAYMENT } from '../constants/shopRules';
+import { DEFAULT_AGENCIES, DELIVERY_HOURS, GIFT_WRAP_FEE, HOME_CITY, MOBILE_MONEY_ENABLED, ORDER_VALIDITY_HOURS, PAYMENT } from '../constants/shopRules';
 import { LOYALTY_FCFA_PER_POINT, LOYALTY_TIERS, type LoyaltyTier } from './loyalty';
 import { CATEGORY_AR, type GoodbyeKind, type GreetingKind, type Lang, type PayMethodKey, type PersonalKind, type Who } from './assistantLang';
 
@@ -98,6 +98,7 @@ export interface Texts {
     payCash: string;
     payAirtel: string;
     payMoov: string;
+    orderWhatsApp: string;
     giftYes: string;
     giftNo: string;
     confirmOrder: string;
@@ -195,6 +196,8 @@ export interface Texts {
     slotLost: string;
     slotLine(label: string): string;
     askPay(home: boolean): string;
+    payCashAuto: string;
+    outsideCity(city: string): string;
     askGift: string;
     methodLabel(method: PayMethodKey): string;
     recap(d: RecapData): string;
@@ -509,6 +512,7 @@ const FR: Texts = {
     payCash: '💵 À la livraison',
     payAirtel: '📱 Airtel Money',
     payMoov: '📲 Moov Money',
+    orderWhatsApp: '💬 Commander sur WhatsApp',
     giftYes: `🎁 Oui (+${fcfa(GIFT_WRAP_FEE)})`,
     giftNo: 'Non, merci',
     confirmOrder: '✅ Confirmer la commande',
@@ -567,7 +571,9 @@ const FR: Texts = {
   info: [
     'ℹ️ À savoir avant de commander :',
     `🚚 Nos services de livraison sont ouverts de ${DELIVERY_HOURS}.`,
-    `💵 Paiement à la livraison : seulement à ${HOME_CITY}. Dans les autres villes, le paiement se fait à l'avance (Airtel Money ou Moov Money).`,
+    MOBILE_MONEY_ENABLED
+      ? `💵 Paiement à la livraison : seulement à ${HOME_CITY}. Dans les autres villes, le paiement se fait à l'avance (Airtel Money ou Moov Money).`
+      : `💵 Paiement à la livraison : à ${HOME_CITY}. Dans les autres villes, la commande se prend sur WhatsApp pour le moment.`,
     `⏳ Pour éviter les fausses commandes, chaque commande est valable ${ORDER_VALIDITY_HOURS} h.`,
   ].join('\n'),
   accountInvite: 'Créez votre compte gratuit{nom} : suivez vos commandes, retrouvez vos favoris ❤️, gagnez des points fidélité et tournez la roue de la chance 🎡 !',
@@ -695,9 +701,14 @@ const FR: Texts = {
     slotLost: 'Ce rendez-vous n’est plus possible (il doit avoir lieu au moins 2 h après votre commande). Choisissons un autre jour et une autre heure 📅',
     slotLine: (label) => `📅 Livraison programmée : ${label}`,
     askPay: (home) =>
-      home
+      !MOBILE_MONEY_ENABLED
+        ? `💵 Vous payez en espèces à la livraison (${HOME_CITY}).`
+        : home
         ? `Comment souhaitez-vous payer ? 💳\n💵 À la livraison (${HOME_CITY}), ou à l’avance par Airtel Money ou Moov Money.`
         : 'Dans votre ville, le paiement se fait à l’avance par Mobile Money 📱 Choisissez Airtel Money ou Moov Money.',
+    payCashAuto: `💵 Paiement : en espèces à la livraison, à ${HOME_CITY}. Vous ne payez qu’en recevant votre commande.`,
+    outsideCity: (city) =>
+      `Pour le moment, les commandes pour ${city} se prennent sur WhatsApp 💬 Touchez le bouton : votre commande est déjà écrite, il ne reste qu’à l’envoyer. Nous la confirmons avec vous et vous disons comment payer. À ${HOME_CITY}, je finalise votre commande ici et vous payez à la livraison.`,
     askGift: `🎁 Souhaitez-vous l’emballage cadeau ? C’est ${fcfa(GIFT_WRAP_FEE)}.`,
     methodLabel: (m) => (m === 'airtel_money' ? 'Airtel Money' : m === 'moov_money' ? 'Moov Money' : 'Paiement à la livraison'),
     recap: (d) =>
@@ -719,7 +730,9 @@ const FR: Texts = {
     cancelled: 'D’accord, j’ai arrêté la commande. L’article reste choisi : touchez « Finalisez votre commande » quand vous voulez 🙂',
     resumeLost: 'Je ne retrouve plus les informations de cette commande. Touchez « Finalisez votre commande » pour la reprendre 🙂',
     priceChanged: 'Les prix ou le stock ont changé : voici le nouveau récapitulatif. Vérifiez, puis confirmez à nouveau 👇',
-    codOnlyHome: `Le paiement à la livraison est possible seulement à ${HOME_CITY}. Choisissez Airtel Money ou Moov Money 📱`,
+    codOnlyHome: MOBILE_MONEY_ENABLED
+      ? `Le paiement à la livraison est possible seulement à ${HOME_CITY}. Choisissez Airtel Money ou Moov Money 📱`
+      : `Le paiement à la livraison est possible seulement à ${HOME_CITY}. Pour une autre ville, commandez sur WhatsApp 💬`,
     placed: (name, id) => `🎉 Merci ${name} ! Votre commande #${id} a bien été enregistrée.`,
     invoiceReady: '🧾 Votre facture est prête : touchez « Télécharger ma facture ».',
     totalToPay: (total) => `💰 Total à régler : ${fcfa(total)}`,
@@ -824,7 +837,9 @@ const FR: Texts = {
   cityHome: `À ${HOME_CITY}, la livraison est gratuite 🚚 et vous payez à la livraison 💵 : vous ne payez qu'en recevant votre commande.`,
   cityFee: (city, fee, agency) => `Pour ${city}, la livraison coûte ${fee}, ${agency ? `par l'agence ${agency}` : `par agence de transport (${DEFAULT_AGENCIES})`}. 🚚`,
   cityNoFee: (city, agency) => `Pour ${city}, le tarif de livraison est à confirmer avec notre équipe sur WhatsApp${agency ? `, par l'agence ${agency}` : ''}.`,
-  cityPay: `Le paiement se fait à l'avance :\n📱 Airtel Money ${PAYMENT.airtel}\n📲 Moov Money ${PAYMENT.moov}`,
+  cityPay: MOBILE_MONEY_ENABLED
+    ? `Le paiement se fait à l'avance :\n📱 Airtel Money ${PAYMENT.airtel}\n📲 Moov Money ${PAYMENT.moov}`
+    : 'Pour le moment, les commandes pour cette ville se prennent sur WhatsApp 💬 Écrivez-nous : nous notons votre commande et vous disons comment payer.',
   serviceNote: (home) =>
     `🕗 Nos services de livraison sont ouverts de ${DELIVERY_HOURS}.\n⏳ Pour éviter les fausses commandes, chaque commande est valable ${ORDER_VALIDITY_HOURS} h${home ? '.' : ' : réglez dans ce délai.'}`,
   rules: `⏳ Pour éviter les fausses commandes, chaque commande est valable ${ORDER_VALIDITY_HOURS} h. Passé ce délai, une commande restée en attente (non réglée) est signalée comme fausse commande.\nHors ${HOME_CITY}, réglez à l'avance : Airtel Money ${PAYMENT.airtel} ou Moov Money ${PAYMENT.moov}.`,
@@ -1091,6 +1106,7 @@ const AR: Texts = {
     payCash: '💵 عند الاستلام',
     payAirtel: '📱 Airtel Money',
     payMoov: '📲 Moov Money',
+    orderWhatsApp: '💬 اطلب عبر واتساب',
     giftYes: `🎁 نعم (+${fcfa(GIFT_WRAP_FEE)})`,
     giftNo: 'لا، شكراً',
     confirmOrder: '✅ تأكيد الطلب',
@@ -1149,7 +1165,9 @@ const AR: Texts = {
   info: [
     'ℹ️ معلومات مهمة قبل الطلب:',
     `🚚 خدمات التوصيل لدينا تعمل ${AR_HOURS}.`,
-    '💵 الدفع عند الاستلام فقط في إنجامينا. في المدن الأخرى، الدفع مسبقا (Airtel Money أو Moov Money).',
+    MOBILE_MONEY_ENABLED
+      ? '💵 الدفع عند الاستلام فقط في إنجامينا. في المدن الأخرى، الدفع مسبقا (Airtel Money أو Moov Money).'
+      : '💵 الدفع عند الاستلام في إنجامينا. في المدن الأخرى، يتم الطلب عبر واتساب حالياً.',
     `⏳ لتجنب الطلبات الوهمية، كل طلب صالح لمدة ${ORDER_VALIDITY_HOURS} ساعة.`,
   ].join('\n'),
   accountInvite: 'أنشئ حسابك المجاني{nom}: تابع طلباتك، احتفظ بمفضلاتك ❤️، اجمع نقاط الولاء وأدر عجلة الحظ 🎡!',
@@ -1279,9 +1297,14 @@ const AR: Texts = {
     slotLost: 'لم يعد هذا الموعد ممكناً (يجب أن يكون بعد ساعتين على الأقل من طلبك). لنختر يوماً وساعة أخرى 📅',
     slotLine: (label) => `📅 توصيل بموعد محدد: ${label}`,
     askPay: (home) =>
-      home
+      !MOBILE_MONEY_ENABLED
+        ? '💵 تدفع نقداً عند الاستلام (إنجامينا).'
+        : home
         ? 'كيف تريد الدفع؟ 💳\n💵 عند الاستلام (إنجامينا)، أو مسبقاً عبر Airtel Money أو Moov Money.'
         : 'في مدينتك، يتم الدفع مسبقاً عبر Airtel Money أو Moov Money 📱 اختر إحداهما.',
+    payCashAuto: '💵 الدفع: نقداً عند الاستلام في إنجامينا. لا تدفع إلا عند استلام طلبك.',
+    outsideCity: (city) =>
+      `حالياً، تُؤخذ الطلبات إلى ${city} عبر واتساب 💬 اضغط الزر: طلبك مكتوب مسبقاً، يكفي إرساله. نؤكده معك ونشرح لك طريقة الدفع. في إنجامينا، أُتمّ طلبك هنا وتدفع عند الاستلام.`,
     askGift: `🎁 هل تريد تغليف الهدية؟ التكلفة ${fcfa(GIFT_WRAP_FEE)}.`,
     methodLabel: (m) => (m === 'airtel_money' ? 'Airtel Money' : m === 'moov_money' ? 'Moov Money' : 'الدفع عند الاستلام'),
     recap: (d) =>
@@ -1303,7 +1326,9 @@ const AR: Texts = {
     cancelled: 'حسناً، أوقفت الطلب. المنتج الذي اخترته محفوظ: اضغط «أكمل طلبي» متى شئت 🙂',
     resumeLost: 'لم أعد أجد معلومات هذا الطلب. اضغط «أكمل طلبي» للمتابعة 🙂',
     priceChanged: 'تغيّرت الأسعار أو المخزون: هذا هو الملخص الجديد. راجعه ثم أكّد من جديد 👇',
-    codOnlyHome: 'الدفع عند الاستلام ممكن فقط في إنجامينا. اختر Airtel Money أو Moov Money 📱',
+    codOnlyHome: MOBILE_MONEY_ENABLED
+      ? 'الدفع عند الاستلام ممكن فقط في إنجامينا. اختر Airtel Money أو Moov Money 📱'
+      : 'الدفع عند الاستلام ممكن فقط في إنجامينا. لمدينة أخرى، اطلب عبر واتساب 💬',
     placed: (name, id) => `🎉 شكراً ${name}! تم تسجيل طلبك رقم #${id} بنجاح.`,
     invoiceReady: '🧾 فاتورتك جاهزة: اضغط على «تحميل فاتورتي».',
     totalToPay: (total) => `💰 المبلغ المطلوب: ${fcfa(total)}`,
@@ -1405,7 +1430,9 @@ const AR: Texts = {
   cityHome: 'في إنجامينا، التوصيل مجاني 🚚 والدفع عند الاستلام 💵: لا تدفع إلا عند استلام طلبك.',
   cityFee: (city, fee, agency) => `إلى ${city}، التوصيل بـ ${fee}، ${agency ? `عبر وكالة ${agency}` : `عبر وكالة نقل (${DEFAULT_AGENCIES})`}. 🚚`,
   cityNoFee: (city, agency) => `تعرفة التوصيل إلى ${city} تُؤكَّد مع فريقنا عبر واتساب${agency ? `، عبر وكالة ${agency}` : ''}.`,
-  cityPay: `الدفع مسبقا:\n📱 Airtel Money ${PAYMENT.airtel}\n📲 Moov Money ${PAYMENT.moov}`,
+  cityPay: MOBILE_MONEY_ENABLED
+    ? `الدفع مسبقا:\n📱 Airtel Money ${PAYMENT.airtel}\n📲 Moov Money ${PAYMENT.moov}`
+    : 'حالياً، تُؤخذ الطلبات إلى هذه المدينة عبر واتساب 💬 راسلنا: نسجّل طلبك ونشرح لك طريقة الدفع.',
   serviceNote: (home) =>
     `🕗 خدمات التوصيل لدينا تعمل ${AR_HOURS}.\n⏳ لتجنب الطلبات الوهمية، كل طلب صالح لمدة ${ORDER_VALIDITY_HOURS} ساعة${home ? '.' : ': ادفع خلال هذه المدة.'}`,
   rules: `⏳ لتجنب الطلبات الوهمية، كل طلب صالح لمدة ${ORDER_VALIDITY_HOURS} ساعة. بعد هذه المدة، يُبلَّغ عن الطلب المتروك قيد الانتظار (غير المدفوع) على أنه طلب وهمي.\nخارج إنجامينا، ادفع مسبقا: Airtel Money ${PAYMENT.airtel} أو Moov Money ${PAYMENT.moov}.`,

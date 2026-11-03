@@ -4,7 +4,7 @@
 // pas de fausse urgence ; « il n'en reste que N » seulement quand le stock est vraiment bas.
 // Fonctions pures, sans écran ni réseau : testées dans tests/relance/relance.test.ts.
 
-import { HOME_CITY } from '../constants/shopRules';
+import { HOME_CITY, MOBILE_MONEY_ENABLED } from '../constants/shopRules';
 
 export const SITE_URL = 'https://www.albasseshopping.com';
 // En dessous de ce stock, on dit au client combien il en reste (c'est vrai, donc honnête)
@@ -110,7 +110,7 @@ export const productLink = (p: Pick<RelanceProduct, 'slug'>): string => (p.slug 
 // La ligne sur la livraison : exacte selon la ville du client (livraison sans frais et paiement à la livraison seulement à N'Djamena).
 export function deliveryLine(region: unknown): string {
   if (isHomeCity(region)) return `🚚 Livraison à ${HOME_CITY} sans frais, et paiement à la livraison.`;
-  if (cityKey(region)) return '🚚 Livraison partout au Tchad, paiement à l’avance par Airtel Money ou Moov Money.';
+  if (cityKey(region)) return MOBILE_MONEY_ENABLED ? '🚚 Livraison partout au Tchad, paiement à l’avance par Airtel Money ou Moov Money.' : '🚚 Livraison partout au Tchad : écrivez-nous sur WhatsApp, nous prenons votre commande avec vous.';
   // ville inconnue (13 comptes sur 30 n'ont pas rempli la leur) : on ne promet rien qui ne soit pas sûr
   return `🚚 Livraison partout au Tchad. À ${HOME_CITY} : sans frais et paiement à la livraison.`;
 }
