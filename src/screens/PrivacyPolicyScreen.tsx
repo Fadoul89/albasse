@@ -17,7 +17,7 @@ export function PrivacyPolicyScreen() {
         <Section title="1. Données que nous collectons">
           <Text style={styles.p}>
             Lors de la création d'un compte et de l'utilisation de la boutique, nous collectons : votre nom, votre genre
-            (homme ou femme), numéro de téléphone, profession, adresse e-mail, ville et adresse de livraison. Lors d'une commande, nous
+            (homme ou femme), votre date de naissance, votre situation (célibataire ou marié), numéro de téléphone, profession, adresse e-mail, ville et adresse de livraison. Lors d'une commande, nous
             collectons également les détails de livraison et de paiement nécessaires à son traitement.
           </Text>
           <Text style={styles.p}>
