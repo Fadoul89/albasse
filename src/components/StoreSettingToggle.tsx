@@ -84,9 +84,9 @@ const SETTINGS: Record<'whatsappOrder' | 'accountRequired' | 'orderEmails' | 'in
     script: 'add-zara-ads.sql',
     testID: 'zara-ads',
     title: '🤖 Zara gère les publicités à l’écran',
-    onText: '🟢 Activé : Zara choisit l’article et écrit le message (vrais chiffres seulement)',
+    onText: '🟢 Activé : Zara choisit l’article et écrit le message (vrais chiffres seulement), et affiche une « Annonce » ciblée dans l’accueil',
     offText: '⚪ Désactivé : aucune publicité de Zara à l’écran',
-    onToast: { title: '🤖 Zara gère les publicités', message: 'Sur l’accueil et dans les promotions, Zara met en avant vos articles avec des chiffres vrais (commandes réelles, stock réel).' },
+    onToast: { title: '🤖 Zara gère les publicités', message: 'Sur l’accueil et dans les promotions, Zara met en avant vos articles avec des chiffres vrais (commandes réelles, stock réel), et elle affiche une « Annonce » ciblée pour chaque client.' },
     offToast: { title: '⚪ Publicités de Zara coupées', message: 'Zara n’affiche plus de publicité à l’écran.' },
   },
   zaraAutoFlash: {

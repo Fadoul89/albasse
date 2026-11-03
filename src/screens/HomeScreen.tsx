@@ -18,6 +18,7 @@ import { SideAdBanner } from '../components/SideAdBanner';
 import { ChadFlag } from '../components/ChadFlag';
 import { CityClock } from '../components/CityClock';
 import { ZaraAdCard } from '../components/ZaraAdCard';
+import { TargetedAdCard } from '../components/TargetedAdCard';
 import { WebPushBanner } from '../components/WebPushBanner';
 import { GenderQuestionCard } from '../components/GenderQuestionCard';
 import { fetchOnlineCount, onlineLabel } from '../lib/onlineCount';
@@ -303,8 +304,9 @@ export function HomeScreen() {
 
       {/* une section par catégorie : ses 4 premiers articles, puis un bouton vers les autres (demande du patron) */}
       <View style={styles.collectionSection} testID="home-sections">
-        {sections.map(({ category, items, total, rest }) => (
-          <View key={category.id} style={styles.categorySection} testID={`home-section-${category.slug}`}>
+        {sections.map(({ category, items, total, rest }, sectionIndex) => (
+          <React.Fragment key={category.id}>
+          <View style={styles.categorySection} testID={`home-section-${category.slug}`}>
             <Pressable
               style={styles.categoryHeader}
               onPress={() => navigation.navigate('Category', { slug: category.slug })}
@@ -332,6 +334,9 @@ export function HomeScreen() {
               </Pressable>
             )}
           </View>
+          {/* « Annonce » ciblée de Zara, comme une vraie pub dans le fil (si l'admin lui confie les publicités) : après la première catégorie */}
+          {sectionIndex === 0 && <TargetedAdCard products={products} categories={categories} />}
+          </React.Fragment>
         ))}
         {products.length > 0 && (
           <Pressable style={styles.allButton} onPress={() => navigation.navigate('Category', { slug: 'tous' })} accessibilityRole="button" testID="home-all-articles">
