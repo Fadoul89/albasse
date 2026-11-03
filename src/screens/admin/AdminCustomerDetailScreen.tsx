@@ -28,6 +28,7 @@ import { adminResetError, recoveryMessage, recoveryPhone } from '../../lib/passw
 import { whatsappLink } from '../../lib/relanceMessage';
 import { GenderPicker } from '../../components/GenderPicker';
 import { genderLabel, genderOf, hasGenderColumn, type Gender } from '../../lib/clientGender';
+import { birthLabel, hasBirthColumn, hasMaritalColumn, maritalLabel } from '../../lib/clientBirthMarital';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
 
@@ -253,6 +254,8 @@ export function AdminCustomerDetailScreen({ route }: Props) {
               ) : null}
             </View>
           ) : null}
+          {hasBirthColumn(profile) ? <Row label="Date de naissance" value={birthLabel(profile.birth_date, Date.now())} /> : null}
+          {hasMaritalColumn(profile) ? <Row label="Situation" value={maritalLabel(profile.marital_status)} /> : null}
           <Row label="Téléphone" value={profile.phone ?? '—'} />
           <Row label="Profession" value={profile.profession ?? '—'} />
           <Row label="Ville" value={profile.region ?? '—'} />

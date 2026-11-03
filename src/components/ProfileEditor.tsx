@@ -6,7 +6,9 @@ import { useToastStore } from '../store/toastStore';
 import { GoldButton } from './GoldButton';
 import { CityPicker } from './CityPicker';
 import { GenderPicker } from './GenderPicker';
+import { MaritalPicker } from './MaritalPicker';
 import { hasGenderColumn } from '../lib/clientGender';
+import { BIRTH_EXAMPLE, formatBirthInput, hasBirthColumn, hasMaritalColumn } from '../lib/clientBirthMarital';
 import { checkProfileForm, formFromProfile, profileFormChanged, type ProfileField, type ProfileForm } from '../lib/profileEdit';
 import type { Profile } from '../types';
 import { visibleEmail } from '../lib/phoneAuth';
@@ -25,13 +27,13 @@ export function ProfileEditor({ profile, onClose }: Props) {
   const [saving, setSaving] = useState(false);
   const [problem, setProblem] = useState<{ field: ProfileField; message: string } | null>(null);
 
-  const change = (key: Exclude<ProfileField, 'gender'>) => (value: string) => {
+  const change = (key: Exclude<ProfileField, 'gender' | 'marital'>) => (value: string) => {
     setForm((f) => ({ ...f, [key]: value }));
     if (problem?.field === key) setProblem(null);
   };
 
   const save = async () => {
-    const check = checkProfileForm(form);
+    const check = checkProfileForm(form, profile);
     if (!check.ok) {
       setProblem({ field: check.field, message: check.message });
       showToast(check.message, { title: check.title, type: 'error' });
@@ -49,7 +51,7 @@ export function ProfileEditor({ profile, onClose }: Props) {
     onClose();
   };
 
-  const field = (key: Exclude<ProfileField, 'gender'>, label: string, extra: { keyboardType?: 'phone-pad'; testID: string }) => (
+  const field = (key: Exclude<ProfileField, 'gender' | 'marital'>, label: string, extra: { keyboardType?: 'phone-pad'; testID: string }) => (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
       <TextInput
@@ -78,6 +80,32 @@ export function ProfileEditor({ profile, onClose }: Props) {
         <View style={styles.field}>
           <Text style={styles.label}>Vous êtes</Text>
           <GenderPicker value={form.gender} onChange={(g) => setForm((f) => ({ ...f, gender: g }))} testIDPrefix="profile-gender" />
+        </View>
+      ) : null}
+      {hasBirthColumn(profile) ? (
+        <View style={styles.field}>
+          <Text style={styles.label}>🎂 Date de naissance</Text>
+          <TextInput
+            value={form.birthDate}
+            onChangeText={(v) => change('birthDate')(formatBirthInput(v))}
+            placeholder={`Jour / mois / année (ex. ${BIRTH_EXAMPLE})`}
+            placeholderTextColor={colors.creamFaint}
+            keyboardType="number-pad"
+            maxLength={10}
+            testID="profile-input-birth"
+            style={[styles.input, problem?.field === 'birthDate' && styles.inputError]}
+          />
+          {problem?.field === 'birthDate' ? (
+            <Text style={styles.error} testID="profile-error">
+              {problem.message}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
+      {hasMaritalColumn(profile) ? (
+        <View style={styles.field}>
+          <Text style={styles.label}>💍 Situation</Text>
+          <MaritalPicker value={form.marital} onChange={(m) => setForm((f) => ({ ...f, marital: m }))} testIDPrefix="profile-marital" />
         </View>
       ) : null}
       {field('phone', 'Numéro de téléphone', { keyboardType: 'phone-pad', testID: 'profile-input-phone' })}
