@@ -25,6 +25,7 @@ import { StoreSettingToggle } from '../../components/StoreSettingToggle';
 import { GenderStatsCard } from '../../components/GenderStatsCard';
 import { GENDER_ICON, genderOf, hasGenderColumn } from '../../lib/clientGender';
 import { clampPage, pageCount, pageItems, pageRange, pageSlice } from '../../lib/pagination';
+import { isTestEmail } from '../../lib/testAccounts';
 import type { CustomerSummary } from '../../types';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
@@ -88,18 +89,6 @@ function emailUrl(c: CustomerSummary): string | null {
   return `mailto:${email}?subject=${encodeURIComponent('Albasse Shopping')}&body=${encodeURIComponent(body)}`;
 }
 
-function isTestEmail(email: string | null | undefined): boolean {
-  if (!email) return false;
-  const lower = email.toLowerCase();
-  return (
-    lower.includes('test') ||
-    lower.includes('@mailinator.') ||
-    lower.includes('@yopmail.') ||
-    lower.includes('@guerrillamail.') ||
-    lower.includes('@example.') ||
-    lower.includes('@fake.')
-  );
-}
 
 export function AdminCustomersScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
