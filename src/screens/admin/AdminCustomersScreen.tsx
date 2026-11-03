@@ -24,6 +24,7 @@ import { ScreenHeader } from '../../components/ScreenHeader';
 import { StoreSettingToggle } from '../../components/StoreSettingToggle';
 import { GenderStatsCard } from '../../components/GenderStatsCard';
 import { GENDER_ICON, genderOf, hasGenderColumn } from '../../lib/clientGender';
+import { birthLabel, hasBirthColumn, hasMaritalColumn, maritalLabel, maritalOf, MARITAL_ICON } from '../../lib/clientBirthMarital';
 import { clampPage, pageCount, pageItems, pageRange, pageSlice } from '../../lib/pagination';
 import { isTestEmail } from '../../lib/testAccounts';
 import type { CustomerSummary } from '../../types';
@@ -460,6 +461,18 @@ function CustomerRow({
       {hasGenderColumn(customer.profile) && (
         <Text style={styles.rowMeta} testID="customer-gender">
           {genderOf(customer.profile.gender) ? `${GENDER_ICON[genderOf(customer.profile.gender)!]} ${genderOf(customer.profile.gender) === 'homme' ? 'Homme' : 'Femme'}` : '❔ Genre non précisé'}
+        </Text>
+      )}
+      {(hasBirthColumn(customer.profile) || hasMaritalColumn(customer.profile)) && (
+        <Text style={styles.rowMeta} testID="customer-birth-marital">
+          {[
+            hasBirthColumn(customer.profile) ? `🎂 ${birthLabel(customer.profile.birth_date, Date.now())}` : null,
+            hasMaritalColumn(customer.profile)
+              ? `${maritalOf(customer.profile.marital_status) ? MARITAL_ICON[maritalOf(customer.profile.marital_status)!] : '❔'} ${maritalLabel(customer.profile.marital_status)}`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
         </Text>
       )}
       <Text style={styles.rowMeta}>

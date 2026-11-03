@@ -6,6 +6,7 @@ import { useToastStore } from './toastStore';
 import { useFavoritesStore } from './favoritesStore';
 import type { Profile } from '../types';
 import type { Gender } from '../lib/clientGender';
+import type { MaritalStatus } from '../lib/clientBirthMarital';
 import type { ProfileChanges } from '../lib/profileEdit';
 import { clearIntent, readIntent } from '../lib/assistantAttribution';
 import { isMissingColumn } from '../lib/dbErrors';
@@ -18,6 +19,8 @@ export interface SignUpDetails {
   whatsappNumber?: string;
   profession?: string;
   gender?: Gender;
+  birthDate?: string; // « 1998-03-25 »
+  maritalStatus?: MaritalStatus;
   email?: string;
   region?: string;
   country?: string;
@@ -312,6 +315,19 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         if (details.gender) {
           const { error: genderError } = await supabase.from('profiles').update({ gender: details.gender }).eq('id', data.user.id);
           if (genderError && !isMissingColumn(genderError, 'gender')) console.warn('albasse: genre non enregistré', genderError.message);
+        }
+        // Date de naissance et célibataire / marié : même principe, une demande à part (add-client-birth-marital.sql). Colonnes absentes = on laisse passer.
+        if (details.birthDate || details.maritalStatus) {
+          const { error: extraError } = await supabase
+            .from('profiles')
+            .update({
+              ...(details.birthDate ? { birth_date: details.birthDate } : {}),
+              ...(details.maritalStatus ? { marital_status: details.maritalStatus } : {}),
+            })
+            .eq('id', data.user.id);
+          if (extraError && !isMissingColumn(extraError, 'birth_date') && !isMissingColumn(extraError, 'marital_status')) {
+            console.warn('albasse: date de naissance / situation non enregistrées', extraError.message);
+          }
         }
         await recordLogin(data.user.id);
       }
