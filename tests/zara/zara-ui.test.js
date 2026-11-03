@@ -984,18 +984,62 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v2.page.waitForURL(new RegExp(`/produit/${viewedP.slug}`), { timeout: 15000 });
       check('« Acheter maintenant » : la fiche de l’article', true);
       await v2.ctx.close();
-      // ✕ : l'annonce disparaît, et reste cachée après un rechargement (24 h)
-      const v3 = await homeE({ user, profile: profileJson([rec(viewedP)]) });
+      // ✕ : l'annonce disparaît, et 15 secondes plus tard Zara propose un AUTRE article (jamais celui qui vient d'être fermé)
+      const viewedQ = pool.find((p) => p.id !== viewedP.id && p.category_id !== viewedP.category_id && realPromo(p) === null) || pool.find((p) => p.id !== viewedP.id);
+      check('le catalogue a un 2ᵉ article (autre catégorie) pour tester l’annonce suivante', !!viewedQ && viewedQ.id !== viewedP.id);
+      const twoViews = () => profileJson([rec(viewedP), rec(viewedQ, { lastViewedAt: nowE - 2 * 3600_000 })]);
+      const closedKey = 'albasse_targeted_ad_closed_v2';
+      const v3 = await homeE({ user, profile: twoViews() });
       await waitAdE(v3.page);
+      check('1ʳᵉ annonce : l’article regardé le plus récemment', (await txt(v3.page, 'targeted-ad-name')) === viewedP.name.trim(), await txt(v3.page, 'targeted-ad-name'));
+      const tClose = Date.now();
       await v3.page.getByTestId('targeted-ad-close').click();
       await sleep(900);
       const afterClose = await v3.page.getByTestId('targeted-ad').count();
       if (afterClose !== 0) await v3.page.screenshot({ path: path.join(OUT, '€-debug-close.png') });
-      check('« ✕ » : l’annonce disparaît', afterClose === 0, { afterClose, stored: await v3.page.evaluate(() => localStorage.getItem('albasse_targeted_ad_closed_at')), url: v3.page.url() });
+      check('« ✕ » : l’annonce disparaît tout de suite', afterClose === 0, { afterClose, stored: await v3.page.evaluate((k) => localStorage.getItem(k), closedKey), url: v3.page.url() });
+      const stored1 = JSON.parse((await v3.page.evaluate((k) => localStorage.getItem(k), closedKey)) || '[]');
+      check('le « ✕ » est noté sur le téléphone : l’article fermé et l’heure', stored1.length === 1 && stored1[0].id === viewedP.id && Math.abs(stored1[0].at - tClose) < 5000, stored1);
+      await sleep(7000);
+      check('7 secondes après le « ✕ » : rien (Zara attend 15 secondes)', (await v3.page.getByTestId('targeted-ad').count()) === 0);
+      await v3.page.getByTestId('targeted-ad').waitFor({ timeout: 20000 });
+      const waited = Date.now() - tClose;
+      check('l’annonce suivante arrive après environ 15 secondes (entre 14 et 22 s)', waited >= 14000 && waited <= 22000, waited);
+      await sleep(600);
+      check('c’est un AUTRE article : le 2ᵉ article regardé, pas celui qui a été fermé', (await txt(v3.page, 'targeted-ad-name')) === viewedQ.name.trim() && (await txt(v3.page, 'targeted-ad-name')) !== viewedP.name.trim(), await txt(v3.page, 'targeted-ad-name'));
+      check('avec sa vraie raison : « Vous avez regardé « nom » récemment. »', (await txt(v3.page, 'targeted-ad-why')).includes(`Vous avez regardé « ${viewedQ.name.trim()} » récemment.`), await txt(v3.page, 'targeted-ad-why'));
+      check('l’annonce suivante a ses boutons (Acheter maintenant, Demander à Zara, ✕)', (await txt(v3.page, 'targeted-ad-buy')) === 'Acheter maintenant' && (await v3.page.getByTestId('targeted-ad-ask').count()) === 1 && (await v3.page.getByTestId('targeted-ad-close').count()) === 1);
+      await v3.page.getByTestId('targeted-ad').scrollIntoViewIfNeeded();
+      await v3.page.screenshot({ path: path.join(OUT, '€15-annonce-suivante.png') });
+      // 2ᵉ « ✕ », puis un rechargement tout de suite : l'attente continue (rien pendant ce temps), l'article P et Q ne reviennent pas
+      await v3.page.getByTestId('targeted-ad-close').click();
+      await sleep(600);
       await v3.page.reload({ waitUntil: 'load' });
-      await sleep(5000);
-      check('après un rechargement : toujours cachée (24 h)', (await v3.page.getByTestId('targeted-ad').count()) === 0);
+      await sleep(4000);
+      check('rechargement 5 secondes après le 2ᵉ « ✕ » : toujours rien (l’attente de 15 secondes continue)', (await v3.page.getByTestId('targeted-ad').count()) === 0);
+      const stored2 = JSON.parse((await v3.page.evaluate((k) => localStorage.getItem(k), closedKey)) || '[]');
+      check('2 « ✕ » notés : les deux articles fermés', stored2.length === 2 && stored2.map((x) => x.id).sort().join() === [viewedP.id, viewedQ.id].sort().join(), stored2);
+      await sleep(12000);
+      const afterWait = (await v3.page.getByTestId('targeted-ad').count()) ? await txt(v3.page, 'targeted-ad-name') : null;
+      check('15 secondes passées : ni l’un ni l’autre article fermé ne revient (autre article ou rien)', afterWait === null || (afterWait !== viewedP.name.trim() && afterWait !== viewedQ.name.trim()), afterWait);
       await v3.ctx.close();
+
+      // 3 « ✕ » sur 24 h : Zara s'arrête (aucune annonce, même 20 secondes plus tard)
+      const nowS = Date.now();
+      const v4 = await homeE({ user, profile: twoViews(), extraStorage: { [closedKey]: JSON.stringify([{ id: 'a1', at: nowS - 3600_000 }, { id: 'a2', at: nowS - 1800_000 }, { id: 'a3', at: nowS - 60_000 }]) } });
+      await sleep(8000);
+      check('3 « ✕ » dans les dernières 24 h : Zara ne montre plus aucune annonce', (await v4.page.getByTestId('targeted-ad').count()) === 0);
+      await v4.ctx.close();
+      // des « ✕ » vieux de plus de 24 h sont oubliés : l'annonce revient, et l'article autrefois fermé peut revenir
+      const v5 = await homeE({ user, profile: twoViews(), extraStorage: { [closedKey]: JSON.stringify([{ id: viewedP.id, at: nowS - 25 * 3600_000 }, { id: 'a2', at: nowS - 26 * 3600_000 }, { id: 'a3', at: nowS - 30 * 3600_000 }]) } });
+      await waitAdE(v5.page);
+      check('« ✕ » vieux de plus de 24 h : oubliés, l’annonce revient (l’article regardé)', (await txt(v5.page, 'targeted-ad-name')) === viewedP.name.trim(), await txt(v5.page, 'targeted-ad-name'));
+      await v5.ctx.close();
+      // un « ✕ » d'il y a 5 minutes : l'article fermé est exclu, l'autre (Q) est proposé tout de suite (les 15 secondes sont passées)
+      const v6 = await homeE({ user, profile: twoViews(), extraStorage: { [closedKey]: JSON.stringify([{ id: viewedP.id, at: nowS - 300_000 }]) } });
+      await waitAdE(v6.page);
+      check('« ✕ » d’il y a 5 minutes sur P : Zara montre directement l’autre article regardé (Q)', (await txt(v6.page, 'targeted-ad-name')) === viewedQ.name.trim(), await txt(v6.page, 'targeted-ad-name'));
+      await v6.ctx.close();
     }
 
     // c. article déjà commandé : jamais rappelé

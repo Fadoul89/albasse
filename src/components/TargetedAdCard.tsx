@@ -12,35 +12,36 @@ import { useAssistantStore } from '../store/assistantStore';
 import { getCities } from '../lib/assistantData';
 import type { City } from '../lib/assistantBrain';
 import { getBrowsingProfile } from '../lib/browsingTracker';
-import { AD_ADVERTISER, AD_CTA, AD_LABEL, adClosed, adHeadline, adWhy, deliveryLine, pickTargetedAd } from '../lib/adTargeting';
+import { AD_ADVERTISER, AD_CTA, AD_LABEL, addClosedAd, adHeadline, adWhy, closedState, deliveryLine, parseClosedAds, pickTargetedAd, type ClosedAd } from '../lib/adTargeting';
 import { shownOldPrice } from '../lib/promotions';
 import { colors, fonts, radius, spacing } from '../theme';
 
 const LOGO = require('../../assets/logo.jpg');
-const CLOSED_KEY = 'albasse_targeted_ad_closed_at';
+const CLOSED_KEY = 'albasse_targeted_ad_closed_v2'; // les « ✕ » des dernières 24 h : [{ id de l'article, heure }]
 
 const formatXAF = (n: number) => `${Math.round(n).toLocaleString('fr-FR')} FCFA`;
 
 // « Annonce » de Zara dans le fil de l'accueil : une publicité qui ressemble à une vraie pub (photo, nom, prix, bouton « Acheter maintenant »),
 // choisie pour CE client avec de vraies raisons (article regardé, catégorie explorée, vraie promotion, genre, ville) et qui dit « Pourquoi cette annonce ? ».
-// Même interrupteur que les publicités de Zara (Admin › Promotions intelligentes). Sans raison vraie : rien. « ✕ » la cache 24 h. (lib/adTargeting, docs/zara-annonce-ciblee.md)
+// Même interrupteur que les publicités de Zara (Admin › Promotions intelligentes). Sans raison vraie : rien.
+// « ✕ » : l'annonce disparaît et, 15 secondes plus tard, Zara propose un AUTRE article (jamais celui qui vient d'être fermé) ; au 3ᵉ « ✕ » sur 24 h elle s'arrête.
+// (lib/adTargeting, docs/zara-annonce-ciblee.md)
 export function TargetedAdCard({ products, categories }: { products: Product[]; categories: Category[] }) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { settings, isLoading } = useStoreSettings();
   const profile = useAuthStore((s) => s.profile);
   const lang = useAssistantStore((s) => s.lang) === 'ar' ? 'ar' : 'fr';
   const enabled = settings.zara_ads_enabled === true;
-  const [now] = useState(() => Date.now());
-  const [closedAt, setClosedAt] = useState<number | null | undefined>(undefined); // undefined : pas encore lu
-  const [dismissed, setDismissed] = useState(false); // « ✕ » touché pendant cette visite
+  const [clock, setClock] = useState(() => Date.now()); // « maintenant » : change quand les 15 secondes d'attente sont finies
+  const [closed, setClosed] = useState<ClosedAd[] | undefined>(undefined); // les « ✕ » des dernières 24 h ; undefined : pas encore lu
   const [cities, setCities] = useState<City[]>([]);
 
   useEffect(() => {
     if (!enabled) return;
     let alive = true;
     AsyncStorage.getItem(CLOSED_KEY)
-      .then((v) => alive && setClosedAt(v ? Number(v) : null))
-      .catch(() => alive && setClosedAt(null));
+      .then((v) => alive && setClosed(parseClosedAds(v, Date.now())))
+      .catch(() => alive && setClosed([]));
     getCities()
       .then((c) => alive && setCities(c))
       .catch(() => {});
@@ -49,22 +50,33 @@ export function TargetedAdCard({ products, categories }: { products: Product[]; 
     };
   }, [enabled]);
 
+  const state = useMemo(() => (closed === undefined ? null : closedState(closed, clock)), [closed, clock]);
+
+  // « ✕ » touché : on attend la fin des 15 secondes, puis l'annonce suivante apparaît toute seule
+  const waitMs = state?.waitMs ?? 0;
+  useEffect(() => {
+    if (!enabled || waitMs <= 0) return;
+    const t = setTimeout(() => setClock(Date.now()), waitMs + 50);
+    return () => clearTimeout(t);
+  }, [enabled, waitMs]);
+
   const ad = useMemo(() => {
-    if (!enabled || isLoading || dismissed || closedAt === undefined || adClosed(closedAt, Date.now()) || products.length === 0) return null;
-    return pickTargetedAd({ products, categories, customer: profile, browsing: getBrowsingProfile(), now });
-  }, [enabled, isLoading, dismissed, closedAt, products, categories, profile, now]);
+    if (!enabled || isLoading || !state || state.stopped || state.waitMs > 0 || products.length === 0) return null;
+    return pickTargetedAd({ products, categories, customer: profile, browsing: getBrowsingProfile(), now: clock, exclude: state.excluded });
+  }, [enabled, isLoading, state, products, categories, profile, clock]);
 
   if (!ad) return null;
   const p = ad.product as Product;
   const text = AD_CTA[lang];
-  const oldPrice = shownOldPrice(p, now);
+  const oldPrice = shownOldPrice(p, clock);
   const delivery = deliveryLine(profile?.region, cities, lang);
   const align = lang === 'ar' ? ({ textAlign: 'right', writingDirection: 'rtl' } as const) : undefined;
   const close = () => {
     const at = Date.now();
-    setDismissed(true);
-    setClosedAt(at);
-    AsyncStorage.setItem(CLOSED_KEY, String(at)).catch(() => {});
+    const next = addClosedAd(closed ?? [], p.id, at);
+    setClosed(next);
+    setClock(at);
+    AsyncStorage.setItem(CLOSED_KEY, JSON.stringify(next)).catch(() => {});
   };
 
   return (

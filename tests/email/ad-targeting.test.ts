@@ -1,6 +1,6 @@
 // « Annonce » ciblée de Zara : choix de l'article, raison vraie, genre, ville, fermeture. Aucun réseau.
 // Lancer : node --import ./tests/zara/register.mjs tests/email/ad-targeting.test.ts
-import { AD_ROTATE_HOURS, adClosed, isAdultItem, adHeadline, adSeed, adWhy, audienceAllows, audienceOf, deliveryLine, nextAdChange, pickTargetedAd, previewAudiences, promoEndsAt, realPromoPct, type AdCategory, type AdProduct } from '../../src/lib/adTargeting.ts';
+import { AD_MAX_CLOSES, AD_NEXT_SECONDS, AD_ROTATE_HOURS, addClosedAd, closedState, parseClosedAds, isAdultItem, adHeadline, adSeed, adWhy, audienceAllows, audienceOf, deliveryLine, nextAdChange, pickTargetedAd, previewAudiences, promoEndsAt, realPromoPct, type AdCategory, type AdProduct } from '../../src/lib/adTargeting.ts';
 import { AUDIENCES, audiencesOf, professionAudience } from '../../src/lib/adAudiences.ts';
 import { applyCategoryView, applyProductView, applyCartEvent, emptyProfile, type BrowsingProfile, type ProductMeta } from '../../src/lib/browsingInsights.ts';
 
@@ -135,10 +135,64 @@ check('arabe : la ligne de livraison existe aussi', /^🚚 التوصيل إلى
 // --- arabe ---------------------------------------------------------------------------------------------------------------------------------------
 check('arabe : accroche et raison pour chaque cas', [{ kind: 'viewed', productName: 'x' }, { kind: 'category', categoryName: 'ساعات' }, { kind: 'promo', pct: 30, endsAt: null }].every((r) => /[؀-ۿ]/.test(adHeadline(r as never, 'ar')) && /^لماذا هذا الإعلان/.test(adWhy(r as never, 'ar'))));
 
-// --- le bouton ✕ ----------------------------------------------------------------------------------------------------------------------------------
-check('« ✕ » : cachée 24 h, puis revient', adClosed(NOW - 3600_000, NOW) && adClosed(NOW - 23 * 3600_000, NOW) && !adClosed(NOW - 24 * 3600_000, NOW) && !adClosed(NOW - 3 * DAY, NOW));
-check('jamais fermée / valeur illisible / date dans le futur : l\'annonce s\'affiche', !adClosed(null, NOW) && !adClosed(undefined, NOW) && !adClosed(NaN, NOW) && !adClosed(NOW + 3600_000, NOW));
-
+// --- le bouton ✕ : un AUTRE article 15 secondes plus tard ---------------------------------------------------------------------------------------------
+check('« ✕ » : 15 secondes d\'attente, au plus 3 fois sur 24 h', AD_NEXT_SECONDS === 15 && AD_MAX_CLOSES === 3);
+check('jamais fermée : rien à attendre, rien d\'exclu, pas arrêtée', (() => { const st = closedState([], NOW); return !st.stopped && st.waitMs === 0 && st.excluded.length === 0; })());
+const c1 = addClosedAd([], 'wa', NOW);
+check('« ✕ » touché : on attend 15 secondes, l\'article fermé est exclu', (() => { const st = closedState(c1, NOW); return !st.stopped && st.waitMs === 15_000 && st.excluded.join() === 'wa'; })());
+check('5 secondes plus tard : il reste 10 secondes', closedState(c1, NOW + 5_000).waitMs === 10_000);
+check('15 secondes plus tard : l\'annonce suivante peut s\'afficher (waitMs = 0), l\'article fermé reste exclu', (() => { const st = closedState(c1, NOW + 15_000); return st.waitMs === 0 && !st.stopped && st.excluded.join() === 'wa'; })());
+check('une minute plus tard : toujours exclu (pour 24 h), rien à attendre', (() => { const st = closedState(c1, NOW + 60_000); return st.waitMs === 0 && st.excluded.join() === 'wa'; })());
+check('24 h plus tard : le « ✕ » est oublié, l\'article peut revenir', (() => { const st = closedState(c1, NOW + 24 * 3600_000); return st.waitMs === 0 && st.excluded.length === 0 && !st.stopped; })());
+const c2 = addClosedAd(c1, 'wb', NOW + 20_000);
+check('2ᵉ « ✕ » : 15 secondes de plus, deux articles exclus, pas encore arrêtée', (() => { const st = closedState(c2, NOW + 20_000); return !st.stopped && st.waitMs === 15_000 && st.excluded.join() === 'wa,wb'; })());
+const c3 = addClosedAd(c2, 'pa', NOW + 40_000);
+check('3ᵉ « ✕ » sur 24 h : Zara s\'arrête (plus aucune annonce)', (() => { const st = closedState(c3, NOW + 40_000); return st.stopped && st.excluded.join() === 'wa,wb,pa'; })());
+check('arrêtée toute la journée (23 h plus tard encore), puis elle reprend quand le plus ancien « ✕ » a 24 h', closedState(c3, NOW + 23 * 3600_000).stopped && !closedState(c3, NOW + 24 * 3600_000 + 1_000).stopped && closedState(c3, NOW + 24 * 3600_000 + 1_000).excluded.join() === 'wb,pa');
+check('le même article fermé deux fois n\'est exclu qu\'une fois (mais compte deux fois)', (() => { const st = closedState(addClosedAd(c1, 'wa', NOW + 20_000), NOW + 20_000); return st.excluded.join() === 'wa' && !st.stopped; })());
+check('addClosedAd ne modifie pas la liste reçue', c1.length === 1 && c2.length === 2);
+check('texte du téléphone : « ✕ » valides gardés, vieux, futurs et illisibles ignorés', (() => {
+  const raw = JSON.stringify([{ id: 'wa', at: NOW - 3600_000 }, { id: 'old', at: NOW - 2 * DAY }, { id: 'future', at: NOW + 3600_000 }, { id: '', at: NOW - 1000 }, { id: 'nan', at: 'x' }, null, 5]);
+  const list = parseClosedAds(raw, NOW);
+  return list.length === 1 && list[0].id === 'wa';
+})());
+check('texte illisible, vide ou pas une liste : aucun « ✕ »', parseClosedAds('pas du json', NOW).length === 0 && parseClosedAds('', NOW).length === 0 && parseClosedAds(null, NOW).length === 0 && parseClosedAds(undefined, NOW).length === 0 && parseClosedAds('{"id":"wa"}', NOW).length === 0);
+// l'autre article : jamais celui qui vient d'être fermé, et toujours avec une vraie raison
+const firstAd = pickTargetedAd({ products: all, categories: cats, browsing: prof, now: NOW, seed: 0 });
+const nextAd = pickTargetedAd({ products: all, categories: cats, browsing: prof, now: NOW, seed: 0, exclude: ['wa'] });
+check('après « ✕ » sans autre vraie raison (et aucune nouveauté) : Zara ne propose rien plutôt que d\'inventer', firstAd?.product.id === 'wa' && nextAd === null, { firstAd: firstAd?.product.id, nextAd: nextAd?.product.id });
+// une vraie nouveauté : ajoutée à la boutique depuis moins de 30 jours (date de la base)
+const fresh = mk('nw', 'c-perfume', { created_at: iso(NOW - 2 * DAY) });
+const withFresh = [...all, fresh];
+const afterClose = pickTargetedAd({ products: withFresh, categories: cats, browsing: prof, now: NOW, seed: 0, exclude: ['wa'] });
+check('après « ✕ » : Zara propose une VRAIE nouveauté (ajoutée il y a 2 jours), pas l\'article fermé', afterClose?.product.id === 'nw' && afterClose.reason.kind === 'new' && afterClose.reason.days === 2, afterClose);
+check('la nouveauté n\'est JAMAIS utilisée pour la première annonce (sans « ✕ ») : sans raison vraie, aucune annonce', pickTargetedAd({ products: withFresh, categories: cats, browsing: null, now: NOW, seed: 0 }) === null);
+check('la nouveauté : seulement les articles de moins de 30 jours (33 jours = non ; 29 jours = oui)', pickTargetedAd({ products: [mk('old', 'c-perfume', { created_at: iso(NOW - 33 * DAY) })], categories: cats, browsing: null, now: NOW, seed: 0, exclude: ['x'] }) === null && pickTargetedAd({ products: [mk('ok', 'c-perfume', { created_at: iso(NOW - 29 * DAY) })], categories: cats, browsing: null, now: NOW, seed: 0, exclude: ['x'] })?.product.id === 'ok');
+check('la nouveauté : date absente, illisible ou dans le futur = jamais une nouveauté', [null, undefined, 'n\'importe quoi', iso(NOW + DAY)].every((d) => pickTargetedAd({ products: [mk('z', 'c-perfume', { created_at: d as never })], categories: cats, browsing: null, now: NOW, seed: 0, exclude: ['x'] }) === null));
+check('la nouveauté : la plus récente d\'abord', pickTargetedAd({ products: [mk('n10', 'c-perfume', { created_at: iso(NOW - 10 * DAY) }), mk('n1', 'c-watch', { created_at: iso(NOW - 1 * DAY) })], categories: cats, browsing: null, now: NOW, seed: 0, exclude: ['x'] })?.product.id === 'n1');
+check('la nouveauté respecte le genre : un homme ne reçoit pas une nouveauté « pour femmes »', pickTargetedAd({ products: [mk('nf', 'c-women', { created_at: iso(NOW - DAY) })], categories: cats, customer: { gender: 'homme' }, browsing: null, now: NOW, seed: 0, exclude: ['x'] }) === null);
+check('la nouveauté exclut les articles pour adultes, sans stock ou sans photo', pickTargetedAd({ products: [mk('adult', 'c-perfume', { name: 'Delay spray 🔞', created_at: iso(NOW - DAY) }), mk('nostock', 'c-perfume', { stock: 0, created_at: iso(NOW - DAY) }), mk('noimg', 'c-perfume', { images: [], created_at: iso(NOW - DAY) })], categories: cats, browsing: null, now: NOW, seed: 0, exclude: ['x'] }) === null);
+check('textes de la nouveauté : aujourd\'hui, hier, il y a N jours (français) ; اليوم، أمس، منذ N أيام (arabe)', (() => {
+  const w = (days: number, lang: 'fr' | 'ar') => adWhy({ kind: 'new', days }, lang);
+  return w(0, 'fr') === 'Pourquoi cette annonce ? Cet article a été ajouté à la boutique aujourd’hui.' && w(1, 'fr').endsWith('hier.') && w(5, 'fr').endsWith('il y a 5 jours.')
+    && w(0, 'ar').includes('اليوم') && w(1, 'ar').includes('أمس') && w(5, 'ar').includes('منذ 5 أيام') && w(12, 'ar').includes('منذ 12 يوماً')
+    && adHeadline({ kind: 'new', days: 3 }) === 'Une nouveauté à découvrir.' && /[؀-ۿ]/.test(adHeadline({ kind: 'new', days: 3 }, 'ar'));
+})());
+let prof2 = viewMany(viewMany(emptyProfile('v2', NOW - 5 * DAY), watchA, 3, NOW - 2 * DAY), perfume, 3, NOW - 3 * DAY);
+const first2 = pickTargetedAd({ products: all, categories: cats, browsing: prof2, now: NOW, seed: 0 });
+const second2 = pickTargetedAd({ products: all, categories: cats, browsing: prof2, now: NOW, seed: 0, exclude: [first2!.product.id] });
+check('deux articles regardés : le 1er fermé, le 2ᵉ regardé est proposé (« viewed »), puis plus rien de « regardé »', first2?.product.id === 'wa' && second2?.product.id === 'pa' && second2.reason.kind === 'viewed');
+const third2 = pickTargetedAd({ products: all, categories: cats, browsing: prof2, now: NOW, seed: 0, exclude: ['wa', 'pa'] });
+check('les deux fermés : ni l\'un ni l\'autre ne revient', !third2 || (third2.product.id !== 'wa' && third2.product.id !== 'pa'), third2?.product.id);
+check('tout est fermé ou rien de vrai à proposer : aucune annonce (Zara n\'invente rien)', pickTargetedAd({ products: all, categories: cats, browsing: null, now: NOW, seed: 0, exclude: all.map((p) => p.id) }) === null);
+check('exclude vide ou absent : le choix est exactement le même qu\'avant', JSON.stringify(pickTargetedAd({ products: all, categories: cats, browsing: prof, now: NOW, seed: 0, exclude: [] })) === JSON.stringify(firstAd));
+check('l\'article exclu n\'est jamais choisi, quel que soit le public (femme, homme, élève, étudiant, administrateur)', (['femme', 'homme', 'eleve', 'etudiant', 'admin'] as const).every((a) => {
+  const cust = { femme: { gender: 'femme' }, homme: { gender: 'homme' }, eleve: { profession: 'élève' }, etudiant: { profession: 'étudiant' }, admin: { profession: 'administrateur' } }[a];
+  const first = pickTargetedAd({ products: all, categories: cats, customer: cust, browsing: null, now: NOW, seed: 0 });
+  if (!first) return true;
+  const next = pickTargetedAd({ products: all, categories: cats, customer: cust, browsing: null, now: NOW, seed: 0, exclude: [first.product.id] });
+  return !next || next.product.id !== first.product.id;
+}));
 
 // =============================================== LES PUBLICS : femmes, hommes, élèves, étudiants, administrateurs ===============================================
 // --- le métier écrit par le client ----------------------------------------------------------------------------------------------------------------
