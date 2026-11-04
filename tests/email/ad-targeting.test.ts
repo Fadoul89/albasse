@@ -1,5 +1,6 @@
 // « Annonce » ciblée de Zara : choix de l'article, raison vraie, genre, ville, fermeture. Aucun réseau.
 // Lancer : node --import ./tests/zara/register.mjs tests/email/ad-targeting.test.ts
+import { isVitalityCategory, vitalityAllowed, adAllowedProducts, VITALITY_MIN_AGE } from '../../src/lib/adSensitive.ts';
 import { AD_MAX_CLOSES, AD_NEXT_SECONDS, AD_ROTATE_HOURS, addClosedAd, closedState, parseClosedAds, isAdultItem, adHeadline, adSeed, adWhy, audienceAllows, audienceOf, deliveryLine, nextAdChange, pickTargetedAd, previewAudiences, promoEndsAt, realPromoPct, type AdCategory, type AdProduct } from '../../src/lib/adTargeting.ts';
 import { AUDIENCES, audiencesOf, professionAudience } from '../../src/lib/adAudiences.ts';
 import { applyCategoryView, applyProductView, applyCartEvent, emptyProfile, type BrowsingProfile, type ProductMeta } from '../../src/lib/browsingInsights.ts';
@@ -26,6 +27,7 @@ const cats: AdCategory[] = [
   { id: 'c-perfume', slug: 'parfum', name: 'Parfum' },
   { id: 'c-women', slug: 'vetements-pour-femmes', name: 'Vêtements pour femmes' },
   { id: 'c-men', slug: 'vitalite-energie-homme', name: 'Vitalité & Énergie Homme' },
+  { id: 'c-menwear', slug: 'vetements-pour-hommes', name: 'Vêtements pour hommes' },
 ];
 const mk = (id: string, category_id: string, extra: Partial<AdProduct> = {}): AdProduct => ({ id, slug: `slug-${id}`, name: `Article ${id}`, price: 20000, compare_at_price: null, stock: 8, images: [`https://img/${id}.jpg`], category_id, is_active: true, created_at: '2026-10-01T00:00:00Z', ...extra });
 const meta = (p: AdProduct): ProductMeta => ({ id: p.id, name: p.name, slug: p.slug, categoryId: p.category_id, categorySlug: cats.find((c) => c.id === p.category_id)?.slug ?? null, categoryName: cats.find((c) => c.id === p.category_id)?.name ?? null });
@@ -212,7 +214,7 @@ const shop: AdProduct[] = [
   ...Array.from({ length: 12 }, (_, i) => mk(`s${String(i + 1).padStart(2, '0')}`, i % 2 ? 'c-watch' : 'c-perfume', { price: 2000 * (i + 1), created_at: `2026-10-${String(i + 1).padStart(2, '0')}T00:00:00Z` })), // 2 000 … 24 000
   mk('w1', 'c-women', { price: 15000, created_at: '2026-10-20T00:00:00Z' }),
   mk('w2', 'c-women', { price: 9000, created_at: '2026-10-25T00:00:00Z' }),
-  mk('m1', 'c-men', { price: 11000, created_at: '2026-10-22T00:00:00Z' }),
+  mk('m1', 'c-menwear', { price: 11000, created_at: '2026-10-22T00:00:00Z' }), // la catégorie des hommes SANS « Vitalité & Énergie » (réservée aux mariés de 32 ans et plus : voir plus bas)
 ];
 const price = (ad: { product: AdProduct } | null) => Number(ad?.product.price);
 
@@ -236,7 +238,7 @@ check('un directeur (métier haut placé de la liste de Zara) reçoit aussi l\'a
 const her = pickTargetedAd({ products: shop, categories: cats, customer: { gender: 'femme' }, browsing: null, now: NOW, seed: 0 });
 check('femme : un article de la catégorie « Vêtements pour femmes » (le plus récent d\'abord), raison « gender »', her?.reason.kind === 'gender' && her.product.category_id === 'c-women' && her.product.id === 'w2' && (her.reason as { categoryName: string }).categoryName === 'Vêtements pour femmes', her);
 const him = pickTargetedAd({ products: shop, categories: cats, customer: { gender: 'homme' }, browsing: null, now: NOW, seed: 0 });
-check('homme : un article de la catégorie « Vitalité & Énergie Homme », jamais une catégorie pour femmes', him?.reason.kind === 'gender' && him.product.category_id === 'c-men', him);
+check('homme : un article de la catégorie « Vêtements pour hommes » (jamais « Vitalité & Énergie », jamais une catégorie pour femmes)', him?.reason.kind === 'gender' && him.product.category_id === 'c-menwear', him);
 check('« Choisi pour vous : « Vêtements pour femmes ». » et « Vous avez choisi « Femme » dans votre compte… »', !!her && adHeadline(her.reason) === 'Choisi pour vous : « Vêtements pour femmes ».' && adWhy(her.reason).startsWith('Pourquoi cette annonce ? Vous avez choisi « Femme » dans votre compte'));
 const noWomen = shop.filter((p) => p.category_id !== 'c-women');
 check('une femme sans article de sa catégorie en vente : pas d\'annonce de genre inventée (promotion seulement, sinon rien)', pickTargetedAd({ products: noWomen, categories: cats, customer: { gender: 'femme' }, browsing: null, now: NOW, seed: 0 }) === null);
@@ -271,5 +273,54 @@ check('aucune fausse rareté, fausse urgence ni pression dans les textes', !/der
 const before = JSON.stringify(all);
 pickTargetedAd({ products: all, categories: cats, browsing: prof, now: NOW, seed: 0 });
 check('la liste des articles n\'est pas modifiée', JSON.stringify(all) === before);
+
+// =============================================== « VITALITÉ & ÉNERGIE » : seulement pour les mariés de 32 ans et plus ===============================================
+console.log('\n== Vitalité & Énergie : jamais dans une annonce, sauf pour un client marié de 32 ans et plus');
+check('la catégorie : « Vitalité & Énergie Homme », son adresse, en majuscules, sans accents', [{ name: 'Vitalité & Énergie Homme' }, { slug: 'vitalite-energie-homme' }, { name: 'VITALITE ET ENERGIE' }, { name: 'vitalité énergie' }].every((c) => isVitalityCategory(c)));
+check('pas la catégorie : Montres, Parfum, « Énergie solaire », « Vitalité » seule, vide, absente', [{ name: 'Montres' }, { name: 'Parfum' }, { name: 'Énergie solaire' }, { name: 'Vitalité' }, { name: '' }, null, undefined].every((c) => !isVitalityCategory(c as never)));
+check('l\'âge minimum est 32 ans', VITALITY_MIN_AGE === 32);
+const married40 = { birth_date: '1986-05-10', marital_status: 'marie' };
+check('marié de 40 ans : autorisé', vitalityAllowed(married40, NOW));
+check('marié le jour de ses 32 ans (né le 3 novembre 1994, nous sommes le 3 novembre 2026) : autorisé', vitalityAllowed({ birth_date: '1994-11-03', marital_status: 'marie' }, NOW));
+check('marié la veille de ses 32 ans (né le 4 novembre 1994) : PAS autorisé (31 ans)', !vitalityAllowed({ birth_date: '1994-11-04', marital_status: 'marie' }, NOW));
+check('marié de 30 ans : pas autorisé', !vitalityAllowed({ birth_date: '1996-06-01', marital_status: 'marie' }, NOW));
+check('célibataire de 40 ans : pas autorisé', !vitalityAllowed({ birth_date: '1986-05-10', marital_status: 'celibataire' }, NOW));
+check('marié sans date de naissance, date illisible ou date dans le futur : pas autorisé (Zara ne devine rien)', [null, undefined, '', 'n\'importe quoi', '2030-01-01'].every((d) => !vitalityAllowed({ birth_date: d, marital_status: 'marie' }, NOW)));
+check('âgé mais situation non répondue (null, absente, texte inconnu) : pas autorisé', [null, undefined, '', 'divorce', 'Marié'].every((m) => !vitalityAllowed({ birth_date: '1980-01-01', marital_status: m }, NOW)));
+check('visiteur, client sans les colonnes, objet vide : pas autorisé', !vitalityAllowed(null, NOW) && !vitalityAllowed(undefined, NOW) && !vitalityAllowed({}, NOW));
+
+const vit1 = mk('v1', 'c-men', { price: 9500, created_at: iso(NOW - 3 * DAY) });
+const vit2 = mk('v2', 'c-men', { price: 60000, created_at: iso(NOW - 40 * DAY) });
+const watchX = mk('wx', 'c-watch', { price: 20000, created_at: iso(NOW - 50 * DAY) });
+const filtered = (c: unknown) => adAllowedProducts([vit1, vit2, watchX, { ...watchX, id: 'nc', category_id: null }], cats, c as never, NOW).map((p) => p.id).join();
+check('la liste des articles d\'une annonce : visiteur, célibataire, marié de 30 ans = sans « Vitalité & Énergie »', [null, { birth_date: '1980-01-01', marital_status: 'celibataire' }, { birth_date: '1996-06-01', marital_status: 'marie' }].every((c) => filtered(c) === 'wx,nc'));
+check('la liste des articles : marié de 40 ans = tout, « Vitalité & Énergie » compris', filtered(married40) === 'v1,v2,wx,nc');
+check('aucune catégorie « Vitalité & Énergie » dans la boutique : la liste reste la même', adAllowedProducts([watchA, perfume], [{ id: 'c-watch', name: 'Montres' }, { id: 'c-perfume', name: 'Parfum' }], null, NOW).length === 2);
+check('adAllowedProducts ne modifie pas la liste reçue', (() => { const list = [vit1, watchX]; adAllowedProducts(list, cats, null, NOW); return list.length === 2; })());
+
+// l'annonce de l'accueil : jamais « Vitalité & Énergie » sans les deux conditions
+const onlyVit = [vit1, vit2];
+const vitAd = (customer: object | null, extra: Partial<Parameters<typeof pickTargetedAd>[0]> = {}) => pickTargetedAd({ products: onlyVit, categories: cats, customer, browsing: null, now: NOW, seed: 0, ...extra });
+check('homme célibataire : AUCUNE annonce « Vitalité & Énergie » (c\'était sa catégorie avant)', vitAd({ gender: 'homme', birth_date: '1986-05-10', marital_status: 'celibataire' }) === null);
+check('homme marié de 30 ans : aucune annonce « Vitalité & Énergie »', vitAd({ gender: 'homme', birth_date: '1996-06-01', marital_status: 'marie' }) === null);
+check('homme sans réponses (ancien compte) : aucune annonce « Vitalité & Énergie »', vitAd({ gender: 'homme' }) === null && vitAd({ gender: 'homme', birth_date: null, marital_status: null }) === null);
+const vitMan = vitAd({ gender: 'homme', birth_date: '1986-05-10', marital_status: 'marie' });
+check('homme marié de 40 ans : l\'annonce « Vitalité & Énergie » est permise (raison « gender », catégorie Vitalité & Énergie Homme)', vitMan?.reason.kind === 'gender' && vitMan.product.category_id === 'c-men', vitMan);
+check('une femme mariée de 40 ans ne voit jamais « Vitalité & Énergie Homme » (la catégorie reste pour les hommes)', vitAd({ gender: 'femme', birth_date: '1986-05-10', marital_status: 'marie' }) === null);
+check('visiteur sans compte : aucune annonce « Vitalité & Énergie »', vitAd(null) === null);
+// article regardé de près : le rappel obéit à la même règle
+const viewedVit = viewMany(emptyProfile('v20', NOW - 5 * DAY), vit1, 3, NOW - 2 * DAY);
+check('« Vous avez regardé » : un article « Vitalité & Énergie » regardé 3 fois n\'est PAS rappelé à un client célibataire ou sans réponses', [{ gender: 'homme', marital_status: 'celibataire', birth_date: '1980-01-01' }, { gender: 'homme' }, null].every((c) => pickTargetedAd({ products: onlyVit, categories: cats, customer: c, browsing: viewedVit, now: NOW, seed: 0 }) === null));
+const viewedOk = pickTargetedAd({ products: onlyVit, categories: cats, customer: { gender: 'homme', marital_status: 'marie', birth_date: '1986-05-10' }, browsing: viewedVit, now: NOW, seed: 0 });
+check('« Vous avez regardé » : le même article est rappelé à un marié de 40 ans', viewedOk?.product.id === 'v1' && viewedOk.reason.kind === 'viewed', viewedOk);
+// promotion et nouveauté (après un « ✕ ») : même règle
+const promoVit = mk('v3', 'c-men', { price: 5000, compare_at_price: 10000, promo_ends_at: iso(NOW + 2 * DAY) });
+check('une vraie promotion « Vitalité & Énergie » : pas pour un visiteur, oui pour un marié de 40 ans', pickTargetedAd({ products: [promoVit], categories: cats, customer: null, browsing: null, now: NOW, seed: 0 }) === null && pickTargetedAd({ products: [promoVit], categories: cats, customer: married40, browsing: null, now: NOW, seed: 0 })?.reason.kind === 'promo');
+check('la nouveauté après un « ✕ » : pas un article « Vitalité & Énergie » pour un visiteur, oui pour un marié de 40 ans', pickTargetedAd({ products: [vit1], categories: cats, customer: null, browsing: null, now: NOW, seed: 0, exclude: ['x'] }) === null && pickTargetedAd({ products: [vit1], categories: cats, customer: married40, browsing: null, now: NOW, seed: 0, exclude: ['x'] })?.reason.kind === 'new');
+// l'écran de l'administrateur (aperçu par public) : jamais « Vitalité & Énergie », même le plus cher ou le moins cher de la boutique
+const richCheap = [mk('c1', 'c-men', { price: 500 }), mk('c2', 'c-men', { price: 900000 }), ...shop];
+const previews = previewAudiences({ products: richCheap, categories: cats, now: NOW, seed: 0 });
+check('aperçu de l\'administrateur : aucun des 5 publics ne reçoit un article « Vitalité & Énergie » (même le moins cher ou le plus cher de la boutique)', AUDIENCES.every((a) => !previews[a] || previews[a]!.product.category_id !== 'c-men'), AUDIENCES.map((a) => [a, previews[a]?.product.id]));
+check('élève et administrateur gardent leur annonce (avec la boutique d\'exemple) : le moins cher et le plus cher sont des articles NORMAUX', previews.eleve?.reason.kind === 'student' && previews.admin?.reason.kind === 'executive', AUDIENCES.map((a) => [a, previews[a]?.product.id]));
 
 console.log(`\n${ok} contrôles réussis`);

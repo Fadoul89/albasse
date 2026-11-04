@@ -963,7 +963,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const moundou = cityRows.find((c) => /moundou/i.test(c.name));
       if (moundou && moundou.delivery_fee != null) {
         const fee = Number(moundou.delivery_fee).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '[\\s\\u00a0\\u202f]');
-        check('client de Moundou : la vraie livraison, paiement à l’avance (jamais « payez à la réception »)', new RegExp(`Livraison à ${moundou.name} : ${fee}[\\s\\u00a0\\u202f]FCFA · paiement à l’avance`).test(await txt(v.page, 'targeted-ad-delivery')) && !/réception/.test(await txt(v.page, 'targeted-ad-delivery')), await txt(v.page, 'targeted-ad-delivery'));
+        check(MM ? 'client de Moundou : la vraie livraison, paiement à l’avance (jamais « payez à la réception »)' : 'client de Moundou : la vraie livraison, commande sur WhatsApp (jamais « payez à la réception »)', new RegExp(`Livraison à ${moundou.name} : ${fee}[\\s\\u00a0\\u202f]FCFA · ${MM ? 'paiement à l’avance' : 'commande sur WhatsApp'}`).test(await txt(v.page, 'targeted-ad-delivery')) && !/réception/.test(await txt(v.page, 'targeted-ad-delivery')), await txt(v.page, 'targeted-ad-delivery'));
       } else console.log('SAUTE  livraison Moundou : ville ou tarif absent de la vraie base');
       // placée dans le fil : après la première catégorie, avant la deuxième, dans la largeur du téléphone
       const sections = v.page.locator('[data-testid^="home-section-"]:not([data-testid^="home-section-title-"])');
@@ -1043,6 +1043,55 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await waitAdE(v6.page);
       check('« ✕ » d’il y a 5 minutes sur P : Zara montre directement l’autre article regardé (Q)', (await txt(v6.page, 'targeted-ad-name')) === viewedQ.name.trim(), await txt(v6.page, 'targeted-ad-name'));
       await v6.ctx.close();
+    }
+
+    // b3. « Vitalité & Énergie » (docs/zara-annonce-ciblee.md) : jamais dans une annonce, sauf pour un client MARIÉ de 32 ans ET plus
+    const vitCat = catsE.find((c) => /vitalit/i.test(c.name) && /energ|énerg/i.test(c.name));
+    const vitProds = vitCat ? liveE.filter((p) => p.category_id === vitCat.id && okP(p)) : [];
+    const vitNames = new Set(liveE.filter((p) => vitCat && p.category_id === vitCat.id).map((p) => p.name.trim()));
+    const vitP = vitProds[0];
+    check('le catalogue a un article « Vitalité & Énergie » (non adulte, avec photo) pour tester la règle', !!vitCat && !!vitP, { cat: vitCat && vitCat.name, n: vitProds.length });
+    if (vitP) {
+      const yearsAgo = (y) => new Date(Date.now() - y * 365.25 * DAY - 40 * DAY).toISOString().slice(0, 10); // y ans et un mois et demi : l'anniversaire est passé
+      const adNameFor = async (extra, shot = null) => {
+        const user = memberE({ gender: 'homme', ...extra });
+        const v = await homeE({ user, profile: profileJson([rec(vitP)]) });
+        let name = null;
+        try {
+          await v.page.getByTestId('targeted-ad').waitFor({ timeout: 9000 });
+          await sleep(500);
+          name = await txt(v.page, 'targeted-ad-name');
+          if (shot) { await v.page.getByTestId('targeted-ad').scrollIntoViewIfNeeded(); await sleep(300); await v.page.screenshot({ path: path.join(OUT, shot) }); }
+        } catch {
+          name = null; // aucune annonce
+          if (shot) await v.page.screenshot({ path: path.join(OUT, shot) });
+        }
+        const reason = name ? await txt(v.page, 'targeted-ad-why') : null;
+        await v.ctx.close();
+        return { name, reason };
+      };
+      const approved = await adNameFor({ marital_status: 'marie', birth_date: yearsAgo(40) }, '€V1-marie-40-ans.png');
+      check('homme marié de 40 ans qui a regardé l\'article « Vitalité & Énergie » : l\'annonce le rappelle', approved.name === vitP.name.trim() && /Vous avez regardé/.test(approved.reason || ''), approved);
+      const approved32 = await adNameFor({ marital_status: 'marie', birth_date: yearsAgo(32) });
+      check('homme marié de 32 ans : l\'annonce le rappelle aussi', approved32.name === vitP.name.trim(), approved32);
+      for (const [label, extra] of [['marié de 30 ans', { marital_status: 'marie', birth_date: yearsAgo(30) }], ['célibataire de 40 ans', { marital_status: 'celibataire', birth_date: yearsAgo(40) }], ['marié sans date de naissance', { marital_status: 'marie', birth_date: null }], ['ancien compte (sans les colonnes)', {}]]) {
+        const r = await adNameFor(extra, label === 'célibataire de 40 ans' ? '€V2-celibataire-40-ans.png' : null);
+        check(`homme ${label} qui a regardé le même article : jamais un article « Vitalité & Énergie » dans l'annonce`, r.name === null || !vitNames.has(r.name), r);
+      }
+      // l'autre carte de Zara (« Zara vous conseille ») : jamais un article « Vitalité & Énergie » pour un client non autorisé
+      {
+        const user = memberE({ gender: 'homme', marital_status: 'celibataire', birth_date: yearsAgo(40) });
+        const v = await homeE({ user, store: { zaraAds: true, zaraDelay: 3, waOrder: true, patches: [] } });
+        const seen = new Set();
+        const t0 = Date.now();
+        while (Date.now() - t0 < 24000) {
+          if ((await v.page.getByTestId('zara-ad').count()) === 1) seen.add((await v.page.getByTestId('zara-ad').innerText()).replace(/\s+/g, ' '));
+          await sleep(1500);
+        }
+        const leaked = [...seen].filter((t) => [...vitNames].some((n) => t.includes(n)));
+        check(`carte « Zara vous conseille » (célibataire de 40 ans) : aucun article « Vitalité & Énergie » (${seen.size} message(s) vu(s))`, leaked.length === 0, leaked);
+        await v.ctx.close();
+      }
     }
 
     // c. article déjà commandé : jamais rappelé
@@ -1140,18 +1189,27 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await boss.page.getByTestId('targeted-ad').scrollIntoViewIfNeeded();
       await boss.page.screenshot({ path: path.join(OUT, '€7-annonce-administrateur.png') });
       await boss.ctx.close();
-      // homme : un article de la catégorie réservée aux hommes (« Vitalité & Énergie Homme »), jamais la catégorie des femmes
+      // homme : « Vitalité & Énergie Homme » est réservée aux mariés de 32 ans et plus (lib/adSensitive) ; un homme ordinaire reçoit autre chose, jamais la catégorie des femmes
       const menCat = catsE.find((c) => /homme/i.test(c.name));
       const menItems = menCat ? liveE.filter((p) => p.category_id === menCat.id && okP(p)) : [];
       const him = await homeE({ user: memberE({ gender: 'homme' }) });
       await sleep(6000);
-      if (menItems.length > 0) {
-        await waitAdE(him.page);
+      if (await him.page.getByTestId('targeted-ad').count()) {
         const nmHim = await txt(him.page, 'targeted-ad-name');
-        check(`homme : un article de la catégorie « ${menCat.name} »`, menItems.some((p) => p.name.trim() === nmHim) && (await txt(him.page, 'targeted-ad-headline')) === `Choisi pour vous : « ${menCat.name.trim()} ».`, nmHim);
-        check('la raison dit « Homme » choisi dans le compte', /Vous avez choisi « Homme » dans votre compte/.test(await txt(him.page, 'targeted-ad-why')), await txt(him.page, 'targeted-ad-why'));
+        check('homme sans réponses « marié » et « âge » : jamais un article « Vitalité & Énergie » dans l\'annonce', !vitNames.has(nmHim), nmHim);
         await him.page.getByTestId('targeted-ad').scrollIntoViewIfNeeded();
-        await him.page.screenshot({ path: path.join(OUT, '€8-annonce-homme.png') });
+      }
+      if (menItems.length > 0) {
+        const born40 = new Date(Date.now() - 40 * 365.25 * DAY - 40 * DAY).toISOString().slice(0, 10);
+        const mhim = await homeE({ user: memberE({ gender: 'homme', marital_status: 'marie', birth_date: born40 }) });
+        await sleep(6000);
+        await waitAdE(mhim.page);
+        const nmHim = await txt(mhim.page, 'targeted-ad-name');
+        check(`homme marié de 40 ans : un article de la catégorie « ${menCat.name} »`, menItems.some((p) => p.name.trim() === nmHim) && (await txt(mhim.page, 'targeted-ad-headline')) === `Choisi pour vous : « ${menCat.name.trim()} ».`, nmHim);
+        check('la raison dit « Homme » choisi dans le compte', /Vous avez choisi « Homme » dans votre compte/.test(await txt(mhim.page, 'targeted-ad-why')), await txt(mhim.page, 'targeted-ad-why'));
+        await mhim.page.getByTestId('targeted-ad').scrollIntoViewIfNeeded();
+        await mhim.page.screenshot({ path: path.join(OUT, '€8-annonce-homme.png') });
+        await mhim.ctx.close();
       } else console.log('SAUTE  homme : aucun article en vente dans une catégorie « homme »');
       const womenCat = catsE.find((c) => /femme/i.test(c.name));
       if (await him.page.getByTestId('targeted-ad').count()) {
@@ -1193,13 +1251,15 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('admin : « Annonces de Zara · 24 h sur 24 » avec les 5 publics (femmes, hommes, élèves, étudiants, administrateurs)', (await v.page.locator('[data-testid^="zara-audience-"][data-testid$="-count"]').count()) === 5);
       const cnt = async (k) => (await txt(v.page, `zara-audience-${k}-count`));
       check('admin : les vrais nombres de clients par public (compte test non compté) : femmes 2, hommes 2, élèves 2, étudiants 3, administrateurs 2', (await cnt('femme')) === '2 clients' && (await cnt('homme')) === '2 clients' && (await cnt('eleve')) === '2 clients' && (await cnt('etudiant')) === '3 clients' && (await cnt('admin')) === '2 clients', [await cnt('femme'), await cnt('homme'), await cnt('eleve'), await cnt('etudiant'), await cnt('admin')]);
-      check('admin : « Allumé » quand l’interrupteur est allumé, et « changement toutes les 6 heures, jour et nuit »', /Allumé/.test(await txt(v.page, 'zara-audiences-status')) && /toutes les 6 heures, jour et nuit \(00 h, 06 h, 12 h, 18 h\)\. Prochain changement : \d\d h \d\d/.test(await txt(v.page, 'zara-audiences-next')), await txt(v.page, 'zara-audiences-next'));
+      await v.page.getByTestId('zara-audiences-status').filter({ hasText: /Allumé/ }).waitFor({ timeout: 10000 }).catch(() => {}); // l'écran dit « Éteint » un instant, le temps de lire le réglage
+      check('admin : « Allumé » quand l’interrupteur est allumé, et « changement toutes les 6 heures, jour et nuit »', /Allumé/.test(await txt(v.page, 'zara-audiences-status')) && /toutes les 6 heures, jour et nuit \(00 h, 06 h, 12 h, 18 h\)\. Prochain changement : \d\d h \d\d/.test(await txt(v.page, 'zara-audiences-next')), [await txt(v.page, 'zara-audiences-status'), await txt(v.page, 'zara-audiences-next')]);
       const names = [];
       for (const k of ['femme', 'homme', 'eleve', 'etudiant', 'admin']) {
         const has = (await v.page.getByTestId(`zara-audience-${k}-name`).count()) === 1;
         names.push([k, has ? await txt(v.page, `zara-audience-${k}-name`) : null]);
       }
       check('admin : chaque public montre son annonce (nom de l’article, accroche) ou dit que Zara n’invente rien', names.every(([, n]) => n !== null) || (await v.page.locator('[data-testid$="-none"]').count()) > 0, names);
+      check('admin : aucun des 5 publics ne reçoit un article « Vitalité & Énergie » (réservé aux mariés de 32 ans et plus)', names.every(([, n]) => !n || !vitNames.has(n)), names);
       check('admin : accroches des publics (élèves, étudiants, administrateurs)', /Pour les élèves/.test(await txt(v.page, 'zara-audience-eleve-headline')) && /Pour les étudiants/.test(await txt(v.page, 'zara-audience-etudiant-headline')) && /haut de gamme/.test(await txt(v.page, 'zara-audience-admin-headline')));
       await sleep(6500); // le message d'un autre bloc de la page (statistiques) disparaît tout seul
       await v.page.getByText('Annonces de Zara · 24 h sur 24').scrollIntoViewIfNeeded();

@@ -190,7 +190,7 @@ export function HomeScreen() {
       </View>
 
       {/* publicité de Zara (si l'admin lui confie les publicités) : un vrai article, des faits vrais seulement */}
-      <ZaraAdCard products={products} />
+      <ZaraAdCard products={products} categories={categories} />
 
       {showMobileAds && (
         // téléphone : chaque bande de publicité prend toute la largeur, plus haute (les photos se voient en grand)

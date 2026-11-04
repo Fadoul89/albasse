@@ -29,10 +29,20 @@ Dans cet ordre, la première raison vraie gagne :
 | 1 | **Article regardé de près**, pas commandé | le suivi de navigation de ce téléphone (plusieurs consultations, retours, variantes essayées, temps passé) ; regardé il y a moins de 30 jours | « Vous avez regardé cet article. Il vous attend toujours. » |
 | 2 | **Catégorie explorée** (au moins 2 articles regardés dedans) | le suivi de navigation : un article de cette catégorie que le client n'a pas encore vu (une vraie promotion passe en premier) | « Vous aimez « Montres » ? Voici un article à découvrir. » |
 | 3 | **Public du métier** : élève, étudiant, administrateur | le métier écrit dans le compte ; les prix viennent du catalogue | Élève : « Pour les élèves : un article à petit prix. » (un article du quart le moins cher de la boutique). Étudiant : « Pour les étudiants : … » (parmi les 40 % les moins chers, donc une autre annonce que celle des élèves). Administrateur : « Une sélection haut de gamme pour vous. » (le quart le plus cher). Une vraie promotion passe d'abord pour les élèves et étudiants. |
-| 4 | **Public du genre** : femme ou homme | la catégorie de son genre (« Vêtements pour femmes », « Vitalité & Énergie Homme »), la vraie promotion puis le plus récent d'abord | « Choisi pour vous : « Vêtements pour femmes ». » |
+| 4 | **Public du genre** : femme ou homme | la catégorie de son genre (« Vêtements pour femmes », « Vêtements pour hommes » ; « Vitalité & Énergie Homme » seulement pour les mariés de 32 ans et plus, voir plus bas), la vraie promotion puis le plus récent d'abord | « Choisi pour vous : « Vêtements pour femmes ». » |
 | 5 | **Vraie promotion en cours** | ancien prix barré seulement pendant une vente flash ou une promotion de Zara, remise réelle de 5 à 60 % (`lib/promotions`) | « Prix réduit : -20 % jusqu'au 10 novembre » |
 
 Sans raison vraie : **aucune annonce** (Zara n'invente jamais). Une 6ᵉ raison existe **seulement après un ✕** : une vraie nouveauté (voir plus bas).
+
+## « Vitalité & Énergie » : seulement pour les mariés de 32 ans et plus
+Demande du patron (4 novembre 2026) : **les annonces de Zara n'affichent pas les articles « Vitalité & Énergie » (catégorie « Vitalité & Énergie Homme »), sauf aux clients mariés âgés de 32 ans et plus.**
+- Vrai pour **toutes** les annonces de Zara : la carte **« Annonce »** (article regardé, catégorie explorée, public du genre, promotion, nouveauté après un ✕) **et** la carte **« Zara vous conseille »** de l'accueil. Même un article « Vitalité & Énergie » regardé 3 fois n'est pas rappelé dans une annonce à un client non autorisé.
+- Un client est autorisé **seulement** s'il a lui-même écrit sa **date de naissance** (âge de 32 ans ou plus, calculé avec le jour de N'Djamena) **et** choisi **« Marié(e) »** (Compte › Modifier mon profil, ou à l'inscription). Le jour des 32 ans, il est autorisé ; la veille, non.
+- Pas autorisé : visiteur sans compte, célibataire, marié de moins de 32 ans, ancien compte qui n'a pas répondu, date illisible. Zara ne devine rien.
+- La catégorie reste « pour les hommes » : une femme, mariée ou non, ne voit jamais ces articles dans une annonce (comme avant).
+- L'écran de l'administrateur (« Annonces de Zara · 24 h sur 24 ») n'en montre jamais non plus : il prend un client « type » sans réponses.
+- **Ces articles restent en vente normalement** dans leur catégorie, sur leur fiche et dans la recherche : seule la publicité change. Les messages de promotion de l'administrateur (fenêtre « Promotions intelligentes ») ne sont pas touchés : c'est son choix.
+- Code : `src/lib/adSensitive.ts` (règle), utilisée par `src/lib/adTargeting.ts` et `src/components/ZaraAdCard.tsx`.
 
 Ce qui ajuste le choix et la carte :
 - **Genre** (seulement si le client l'a choisi : Homme / Femme) : un homme ne reçoit pas un article d'une catégorie « pour femmes » (et l'inverse). Genre non précisé : aucun filtre.
@@ -59,5 +69,5 @@ Un public sans annonce vraie (par exemple aucune femme en vente dans la catégor
 
 ## Code et tests
 - Règles (fonctions pures) : `src/lib/adTargeting.ts`, `src/lib/adAudiences.ts` (les publics) ; écran de l'administrateur : `src/components/ZaraAdsAudiences.tsx` ; carte : `src/components/TargetedAdCard.tsx` ; place dans l'accueil : `src/screens/HomeScreen.tsx`.
-- `node --import ./tests/zara/register.mjs tests/email/ad-targeting.test.ts` (101 contrôles : publics, métiers, genre, rotation de 6 h, écran de l'administrateur, ✕ et annonce suivante après 15 secondes, nouveautés).
+- `node --import ./tests/zara/register.mjs tests/email/ad-targeting.test.ts` (129 contrôles : publics, métiers, genre, rotation de 6 h, écran de l'administrateur, ✕ et annonce suivante après 15 secondes, nouveautés, « Vitalité & Énergie » réservé aux mariés de 32 ans et plus).
 - Navigateur : `PARTS='€' node tests/zara/zara-ui.test.js <dist> <port>`.
