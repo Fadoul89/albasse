@@ -46,7 +46,8 @@ check('le message est encodé et parle du Café Homme', decodeURIComponent(wa('6
 // textes : vrais, sans promesse
 const all = [...CAFE_POINTS.map((p) => p.text), ...CAFE_FACTS.map((f) => `${f.title} ${f.text}`), CAFE_PAGE.subtitle].join(' | ');
 check('livraison : N\'Djamena + heures de livraison de la boutique', CAFE_FACTS[0].text.includes(HOME_CITY) && CAFE_FACTS[0].text.includes(DELIVERY_HOURS));
-check('paiement : à la livraison seulement à N\'Djamena, Mobile Money ailleurs', CAFE_FACTS[1].text.includes(`À la livraison à ${HOME_CITY}`) && /Airtel Money ou Moov Money/.test(CAFE_FACTS[1].text));
+const MM = process.env.EXPO_PUBLIC_MOBILE_MONEY === 'on'; // Airtel / Moov retirés « pour le moment »
+check(MM ? 'paiement : à la livraison seulement à N\'Djamena, Mobile Money ailleurs' : 'paiement : à la livraison à N\'Djamena, WhatsApp ailleurs (plus d\'Airtel ni de Moov)', CAFE_FACTS[1].text.includes(`À la livraison à ${HOME_CITY}`) && (MM ? /Airtel Money ou Moov Money/.test(CAFE_FACTS[1].text) : /WhatsApp/.test(CAFE_FACTS[1].text) && !/Airtel|Moov/.test(CAFE_FACTS[1].text)));
 check('retour : 72 heures (comme la page « Conditions de retour »)', /72 heures/.test(CAFE_FACTS[2].text));
 check('aucune promesse de santé, d\'effet ou de résultat sur la page', !/effet|santé|soigne|guéri|garanti|performance|virilité|énergie garantie|sans danger|aucun/i.test(all), all);
 check('le lot : 5 sachets (comme la fiche)', /5 sachets/.test(CAFE_PAGE.subtitle) && CAFE_POINTS.some((p) => /5 sachets/.test(p.text)));

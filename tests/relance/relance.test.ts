@@ -128,7 +128,8 @@ const slip = relanceMessage({ firstName: 'Aïcha', product: product({ id: 's', n
 check('stock bas (6) : « Il n’en reste que 6 » (vrai)', slip.includes("Il n'en reste que 6."), slip);
 check('stock = 10 : mentionné ; stock = 11 : non', relanceMessage({ firstName: '', product: product({ id: 'x', stock: 10 }) }).includes("Il n'en reste que 10.") && !relanceMessage({ firstName: '', product: product({ id: 'x', stock: 11 }) }).includes("Il n'en reste"));
 check('nom : espaces en trop retirés', slip.includes('« Chaussures homme slip-on sport »'), slip);
-check('autre ville : paiement à l’avance, aucune promesse de livraison gratuite', slip.includes('paiement à l’avance par Airtel Money ou Moov Money') && !/sans frais|gratuit|à la livraison\./.test(slip), slip);
+const MM = process.env.EXPO_PUBLIC_MOBILE_MONEY === 'on'; // Airtel / Moov retirés « pour le moment »
+check(MM ? 'autre ville : paiement à l’avance, aucune promesse de livraison gratuite' : 'autre ville : commande sur WhatsApp (plus d’Airtel ni de Moov), aucune promesse de livraison gratuite', (MM ? slip.includes('paiement à l’avance par Airtel Money ou Moov Money') : slip.includes('WhatsApp') && !/Airtel|Moov/.test(slip)) && !/sans frais|gratuit|à la livraison\./.test(slip), slip);
 
 const bague = relanceMessage({ firstName: 'Moussa', product: product({ id: 'b', name: 'Bague Homme NR01', slug: 'bague-homme-nr01', price: 17500, compare_at_price: 22500, stock: 80 }), region: null });
 check('vraie promotion : ancien prix indiqué', bague.includes('17 500 FCFA (au lieu de 22 500 FCFA)'), bague);

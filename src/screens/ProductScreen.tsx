@@ -36,6 +36,7 @@ import { FavoriteButton } from '../components/FavoriteButton';
 import { useStoreSettings } from '../hooks/useStoreSettings';
 import { guestOrderAllowed } from '../lib/accountWall';
 import { WebPushBanner } from '../components/WebPushBanner';
+import { ORDER_WHATSAPP } from '../constants/shopRules'; // numéro WhatsApp qui reçoit les commandes (chiffres uniquement)
 
 // badges de confiance (fond transparent, réduits pour le téléphone)
 const BADGE_VERIFIED = require('../../assets/badge-vendeur-verifie.png');
@@ -44,8 +45,6 @@ const BADGE_YEARS = require('../../assets/badge-13-ans.png');
 const { width } = Dimensions.get('window');
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
 const SITE_URL = 'https://www.albasseshopping.com';
-// Numéro WhatsApp qui reçoit les commandes (format international, chiffres uniquement)
-const ORDER_WHATSAPP = '23599221017';
 
 interface Props {
   route: RouteProp<RootStackParamList, 'Product'>;

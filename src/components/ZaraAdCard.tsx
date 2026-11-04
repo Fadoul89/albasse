@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, Animated, Easing } from 'react-native';
 import { Image } from 'expo-image';
-import type { Product } from '../types';
+import type { Category, Product } from '../types';
 import { useStoreSettings } from '../hooks/useStoreSettings';
 import { useAuthStore } from '../store/authStore';
 import { getProductSales } from '../lib/assistantData';
 import type { SalesMap } from '../lib/assistantSales';
 import { isSeniorProfession, pickAds, zaraAdsDelaySeconds } from '../lib/zaraAds';
+import { adAllowedProducts } from '../lib/adSensitive';
 import { useAssistantStore } from '../store/assistantStore';
 import { useZaraAdSignal } from '../store/zaraAdSignal';
 import { colors, fonts, radius, spacing } from '../theme';
@@ -20,9 +21,11 @@ const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
 // Publicité de Zara sur l'accueil (si l'admin la laisse gérer les publicités) : un article réel, avec un message qui ne dit que des faits VRAIS ; un toucher ouvre le chat de Zara sur cet article
 // (commandes réelles, stock réel : lib/zaraAds). Un client haut placé (métier du compte) lit « Article rare » quand le stock est vraiment petit.
 // Sans fait vrai à dire, la carte reste cachée.
-export function ZaraAdCard({ products }: { products: Product[] }) {
+// Les articles « Vitalité & Énergie » n'y sont jamais, sauf pour un client marié de 32 ans et plus (lib/adSensitive).
+export function ZaraAdCard({ products, categories = [] }: { products: Product[]; categories?: Category[] }) {
   const { settings, isLoading } = useStoreSettings();
-  const profession = useAuthStore((s) => s.profile?.profession);
+  const profile = useAuthStore((s) => s.profile);
+  const profession = profile?.profession;
   const enabled = settings.zara_ads_enabled === true;
   const delaySeconds = zaraAdsDelaySeconds(settings.zara_ads_delay_seconds);
   // la publicité apparaît après le délai choisi par l'admin (compté dès l'ouverture de l'accueil)
@@ -53,9 +56,9 @@ export function ZaraAdCard({ products }: { products: Product[] }) {
   const ads = useMemo(
     () =>
       enabled && sales
-        ? pickAds(products, (p) => ({ id: p.id, name: p.name, price: p.price, stock: p.stock, hasImage: !!p.images?.[0] }), sales, { senior, limit: MAX_ADS, seed })
+        ? pickAds(adAllowedProducts(products, categories, profile), (p) => ({ id: p.id, name: p.name, price: p.price, stock: p.stock, hasImage: !!p.images?.[0] }), sales, { senior, limit: MAX_ADS, seed })
         : [],
-    [enabled, sales, products, senior, seed]
+    [enabled, sales, products, categories, profile?.birth_date, profile?.marital_status, senior, seed]
   );
 
   // Zara sait quand la carte va apparaître : elle n'ouvre pas son chat avant que la carte ait eu le temps de se montrer

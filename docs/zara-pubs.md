@@ -45,3 +45,6 @@ Les faits sont les mêmes pour tous : un article abondant n'est jamais présent�
 ## Tests
 - `node --import ./tests/zara/register.mjs tests/email/zara-ads.test.ts` (54 contrôles, dont l'heure d'ouverture du chat)
 - navigateur : `PARTS=7E … node tests/zara/zara-ui.test.js <dist> <port>` (7 : publicité puis chat chez un client connecté ; E : fenêtre du bas et clavier)
+
+## Articles « Vitalité & Énergie »
+La carte « Zara vous conseille » ne propose jamais un article « Vitalité & Énergie » (sauf à un client marié de 32 ans et plus, d'après son compte) : voir `docs/zara-annonce-ciblee.md` (rubrique « Vitalité & Énergie »).

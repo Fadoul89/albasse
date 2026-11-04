@@ -5,7 +5,7 @@
 // Les phrases viennent de la fiche de l'article (préparation rapide, 5 sachets, format à emporter, destiné aux hommes) et des vraies règles
 // de la boutique (constants/shopRules). Aucune promesse de santé ni d'effet : seulement ce qui est vrai et écrit sur la fiche.
 // Des fonctions pures, sans réseau : tests/email/landing-cafe.test.ts.
-import { DEFAULT_AGENCIES, DELIVERY_HOURS, HOME_CITY } from '../constants/shopRules';
+import { DEFAULT_AGENCIES, DELIVERY_HOURS, HOME_CITY, MOBILE_MONEY_ENABLED } from '../constants/shopRules';
 
 export const CAFE_PAGE = {
   // le nom de la page (celui de la catégorie), affiché en haut et dans l'onglet du navigateur
@@ -31,7 +31,7 @@ export const CAFE_POINTS: { icon: string; text: string }[] = [
 
 export const CAFE_FACTS: { icon: string; title: string; text: string }[] = [
   { icon: '🚚', title: 'Livraison', text: `Votre commande est livrée dans une enveloppe kaki, à ${HOME_CITY} et dans les villes de province (${DEFAULT_AGENCIES}). Les services de livraison travaillent de ${DELIVERY_HOURS}.` },
-  { icon: '💵', title: 'Paiement', text: `À la livraison à ${HOME_CITY}. Dans les autres villes : Airtel Money ou Moov Money, à l’avance.` },
+  { icon: '💵', title: 'Paiement', text: MOBILE_MONEY_ENABLED ? `À la livraison à ${HOME_CITY}. Dans les autres villes : Airtel Money ou Moov Money, à l’avance.` : `À la livraison à ${HOME_CITY}. Dans les autres villes : commande sur WhatsApp, pour le moment.` },
   { icon: '↩️', title: 'Retour', text: 'Article incorrect ou défectueux : écrivez-nous dans les 72 heures après la réception, avec une photo ou une vidéo.' },
 ];
 

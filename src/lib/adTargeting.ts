@@ -18,6 +18,8 @@ import { estimateInterest, topCategories, type BrowsingProfile, type ProductReco
 import { genderOf, type Gender } from './clientGender';
 import { professionAudience, AUDIENCES, type Audience } from './adAudiences';
 import { isHomeCity } from './deliveryRules';
+import { MOBILE_MONEY_ENABLED } from '../constants/shopRules';
+import { isVitalityCategory, vitalityAllowed } from './adSensitive';
 import { flashActive, promoActive, realDiscountPct, shownOldPrice, type PromoFields } from './promotions';
 
 export type AdLang = 'fr' | 'ar';
@@ -105,7 +107,7 @@ export function realPromoPct(p: PromoFields, now: number): number | null {
 export interface AdInput {
   products: AdProduct[];
   categories: AdCategory[];
-  customer?: { gender?: unknown; profession?: string | null } | null;
+  customer?: { gender?: unknown; profession?: string | null; birth_date?: unknown; marital_status?: unknown } | null; // birth_date + marital_status : seulement pour les articles « Vitalité & Énergie » (lib/adSensitive)
   browsing?: BrowsingProfile | null; // le suivi de navigation de ce téléphone (null : suivi coupé ou rien encore)
   now?: number;
   seed?: number; // fait tourner les choix (par défaut : la tranche de 6 heures en cours)
@@ -129,7 +131,10 @@ export function pickTargetedAd(input: AdInput): TargetedAd | null {
   const catBySlug = new Map(input.categories.map((c) => [c.slug, c]));
   const audienceOfProduct = (p: AdProduct) => audienceOf(catById.get(p.category_id ?? '')?.name ?? catById.get(p.category_id ?? '')?.slug ?? '');
   const excluded = new Set(input.exclude ?? []);
-  const ok = (p: AdProduct) => eligible(p) && !excluded.has(p.id) && audienceAllows(input.customer?.gender, audienceOfProduct(p));
+  // « Vitalité & Énergie » : jamais dans une annonce, sauf pour un client marié de 32 ans et plus (lib/adSensitive)
+  const vitalityOk = vitalityAllowed(input.customer, now);
+  const vitalityHidden = (p: AdProduct) => !vitalityOk && isVitalityCategory(catById.get(p.category_id ?? ''));
+  const ok = (p: AdProduct) => eligible(p) && !excluded.has(p.id) && !vitalityHidden(p) && audienceAllows(input.customer?.gender, audienceOfProduct(p));
   const pool = input.products.filter(ok);
   const byId = new Map(pool.map((p) => [p.id, p]));
   const rotate = <T,>(list: T[], offset = 0): T | null => {
@@ -261,10 +266,14 @@ export function deliveryLine(region: string | null | undefined, cities: City[] |
   const home = isHomeCity(city.name);
   if (lang === 'ar') {
     if (home) return city.fee === 0 ? `🚚 التوصيل إلى ${city.name}: مجاني · تدفع عند الاستلام.` : `🚚 التوصيل إلى ${city.name}: ${fcfa(city.fee)} · تدفع عند الاستلام.`;
-    return `🚚 التوصيل إلى ${city.name}: ${fcfa(city.fee)} · الدفع مسبقاً (Airtel Money أو Moov Money).`;
+    return MOBILE_MONEY_ENABLED
+      ? `🚚 التوصيل إلى ${city.name}: ${fcfa(city.fee)} · الدفع مسبقاً (Airtel Money أو Moov Money).`
+      : `🚚 التوصيل إلى ${city.name}: ${fcfa(city.fee)} · الطلب عبر واتساب.`;
   }
   if (home) return city.fee === 0 ? `🚚 Livraison à ${city.name} : gratuite · vous payez à la réception.` : `🚚 Livraison à ${city.name} : ${fcfa(city.fee)} · vous payez à la réception.`;
-  return `🚚 Livraison à ${city.name} : ${fcfa(city.fee)} · paiement à l’avance (Airtel Money ou Moov Money).`;
+  return MOBILE_MONEY_ENABLED
+    ? `🚚 Livraison à ${city.name} : ${fcfa(city.fee)} · paiement à l’avance (Airtel Money ou Moov Money).`
+    : `🚚 Livraison à ${city.name} : ${fcfa(city.fee)} · commande sur WhatsApp.`;
 }
 
 // --- « ✕ » : Zara propose un AUTRE article 15 secondes plus tard ---------------------------------------------------------------------------------

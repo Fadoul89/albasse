@@ -19,6 +19,8 @@ import * as fb from '../../src/lib/facebookShare.ts';
 import { chromeIntentUrl } from '../../src/lib/pwaInstallPrompt.ts';
 import * as sp from '../../src/lib/scheduledPushTime.ts';
 import { isMissingColumn } from '../../src/lib/dbErrors.ts';
+// Airtel Money et Moov Money retirés « pour le moment » (shopRules.MOBILE_MONEY_ENABLED) : EXPO_PUBLIC_MOBILE_MONEY=on lance les anciens contrôles (paiement à l'avance), sans la variable les nouveaux (WhatsApp hors N'Djamena)
+const MM = process.env.EXPO_PUBLIC_MOBILE_MONEY === 'on';
 
 const KEY = process.env.SUPABASE_ANON_KEY!;
 const URL_SB = 'https://xtitsmmccpkelxfjyqyh.supabase.co';
@@ -154,7 +156,8 @@ async function main() {
   const arSample: tx.RecapData = { ...recapSample, lines: [{ name: 'ساعة', variant: '', qty: 2, subtotal: 25000 }], city: 'موندو', name: 'علي', address: 'حي فرشا' };
   const recapAr = ar2.recap(arSample);
   ok('recapitulatif (ar) : articles, livraison, emballage, total, coordonnees, paiement', recapAr.includes('• ساعة × 2: 25 000 FCFA') && recapAr.includes('🚚 التوصيل إلى موندو: 2 500 FCFA') && recapAr.includes('🎁 تغليف الهدية') && recapAr.includes('💰 المجموع: 37 500 FCFA') && recapAr.includes('👤 علي · 📞 66123456') && recapAr.includes('📍 حي فرشا، موندو') && recapAr.includes('الدفع مسبقاً عبر Airtel Money'), recapAr);
-  ok('paiement a la livraison seulement a N\'Djamena : la question change selon la ville (fr et ar)', /À la livraison \(N'Djamena\)/.test(fr2.askPay(true)) && !/À la livraison/.test(fr2.askPay(false)) && /عند الاستلام \(إنجامينا\)/.test(ar2.askPay(true)) && !/عند الاستلام/.test(ar2.askPay(false)) && /seulement à N'Djamena/.test(fr2.codOnlyHome) && /فقط في إنجامينا/.test(ar2.codOnlyHome));
+  if (MM) ok('paiement a la livraison seulement a N\'Djamena : la question change selon la ville (fr et ar)', /À la livraison \(N'Djamena\)/.test(fr2.askPay(true)) && !/À la livraison/.test(fr2.askPay(false)) && /عند الاستلام \(إنجامينا\)/.test(ar2.askPay(true)) && !/عند الاستلام/.test(ar2.askPay(false)) && /seulement à N'Djamena/.test(fr2.codOnlyHome) && /فقط في إنجامينا/.test(ar2.codOnlyHome));
+  else ok('sans Airtel ni Moov : un seul paiement (en espèces a la livraison, N\'Djamena), dit tel quel, jamais « Airtel » ni « Moov » (fr et ar)', /espèces à la livraison \(N'Djamena\)/.test(fr2.askPay(true)) && /نقداً عند الاستلام/.test(ar2.askPay(true)) && /N'Djamena/.test(fr2.payCashAuto) && /espèces/.test(fr2.payCashAuto) && /إنجامينا/.test(ar2.payCashAuto) && !/Airtel|Moov/.test(JSON.stringify([fr2.askPay(true), fr2.askPay(false), fr2.payCashAuto, fr2.codOnlyHome, fr2.outsideCity('Moundou'), ar2.askPay(true), ar2.payCashAuto, ar2.codOnlyHome, ar2.outsideCity('موندو')])) && /WhatsApp/.test(fr2.outsideCity('Moundou')) && /Moundou/.test(fr2.outsideCity('Moundou')) && /واتساب/.test(ar2.outsideCity('موندو')) && /WhatsApp/.test(fr2.codOnlyHome) && /واتساب/.test(ar2.codOnlyHome));
   ok('confirmation : « enregistree » (jamais « payee » ni « confirmee »), numero, total ; instructions de paiement', fr2.placed('Ahmed', 'ABCD1234') === '🎉 Merci Ahmed ! Votre commande #ABCD1234 a bien été enregistrée.' && /تم تسجيل طلبك رقم #ABCD1234/.test(ar2.placed('علي', 'ABCD1234')) && fr2.payNumber(5000, '60 60 51 51', 'Airtel Money') === '📱 Envoyez 5 000 FCFA au 60 60 51 51 (Airtel Money).' && fr2.payUrl('https://pay.example.com') === '📱 Payez ici : https://pay.example.com' && fr2.payCash.includes('espèces') && ![fr2.placed('A', 'B'), fr2.failed, fr2.payCash, fr2.payNumber(1, '2', 'x')].some((t) => /payée|paiement reçu|confirmée/i.test(t)), [fr2.placed('Ahmed', 'ABCD1234'), fr2.payNumber(5000, '60 60 51 51', 'Airtel Money')]);
   ok('echec : Zara dit que la commande n\'est PAS enregistree (fr et ar), sans parler de panier', /pas pu enregistrer votre commande/.test(fr2.failed) && !/panier/.test(fr2.failed) && /لم أستطع تسجيل طلبك/.test(ar2.failed) && !/سلتك/.test(ar2.failed));
 
@@ -219,9 +222,9 @@ async function main() {
   const nd = b.cityReply(find("N'Djamena"));
   ok("N'Djamena : livraison gratuite et paiement a la livraison, aucun numero Mobile Money", /gratuite/.test(nd) && /payez à la livraison/.test(nd) && !/Airtel|Moov|60 60|99 22/.test(nd), nd);
   const mo = b.cityReply(find('Moundou'));
-  ok("Moundou : 2 500 FCFA par l'agence STTL ou Sud Voyage, paiement a l'avance, Airtel 60 60 51 51 et Moov 99 22 10 17", /2\s?500 FCFA/.test(mo) && /par l'agence STTL ou Sud Voyage/.test(mo) && /à l'avance/.test(mo) && /\n📱 Airtel Money 60 60 51 51\n📲 Moov Money 99 22 10 17$/.test(mo), mo);
+  ok(MM ? "Moundou : 2 500 FCFA par l'agence STTL ou Sud Voyage, paiement a l'avance, Airtel 60 60 51 51 et Moov 99 22 10 17" : "Moundou : 2 500 FCFA par l'agence STTL ou Sud Voyage, commande sur WhatsApp, aucun numero Airtel / Moov", /2\s?500 FCFA/.test(mo) && /par l'agence STTL ou Sud Voyage/.test(mo) && (MM ? /à l'avance/.test(mo) && /\n📱 Airtel Money 60 60 51 51\n📲 Moov Money 99 22 10 17$/.test(mo) : /sur WhatsApp/.test(mo) && !/Airtel|Moov|60 60|99 22|à l'avance/.test(mo)), mo);
   const moAr = b.cityReply(find('Moundou'), 'ar');
-  ok('Moundou en arabe : tarif, agence, Airtel et Moov, paiement a l\'avance', /2\s?500 FCFA/.test(moAr) && /STTL ou Sud Voyage/.test(moAr) && /مسبقا/.test(moAr) && /Airtel Money 60 60 51 51/.test(moAr) && /Moov Money 99 22 10 17/.test(moAr), moAr);
+  ok(MM ? 'Moundou en arabe : tarif, agence, Airtel et Moov, paiement a l\'avance' : 'Moundou en arabe : tarif, agence, commande sur WhatsApp, aucun numero Airtel / Moov', /2\s?500 FCFA/.test(moAr) && /STTL ou Sud Voyage/.test(moAr) && (MM ? /مسبقا/.test(moAr) && /Airtel Money 60 60 51 51/.test(moAr) && /Moov Money 99 22 10 17/.test(moAr) : /واتساب/.test(moAr) && !/Airtel|Moov|60 60|99 22|مسبقا/.test(moAr)), moAr);
   const ndAr = b.cityReply(find("N'Djamena"), 'ar');
   ok("N'Djamena en arabe : gratuit + paiement a la livraison, aucun numero", /مجاني/.test(ndAr) && /عند الاستلام/.test(ndAr) && !/Airtel|Moov/.test(ndAr), ndAr);
   const ab = b.cityReply(find('Abéché'));
@@ -231,11 +234,11 @@ async function main() {
   // la vraie base n'a plus de ville sans tarif : on en invente une pour vérifier le texte « à confirmer »
   const unknownFee = cities.find((c) => c.fee == null) ?? { name: 'Ville sans tarif', fee: null, agency: null };
   const uf = b.cityReply(unknownFee);
-  ok(`${unknownFee.name} (tarif non fixe) : « a confirmer » + paiement a l'avance`, /à confirmer/.test(uf) && /à l'avance/.test(uf) && /60 60 51 51/.test(uf) && !/STTL/.test(uf), uf);
-  ok("toute ville hors N'Djamena : paiement a l'avance avec les deux numeros (fr et ar)", cities.filter((c) => !b.isHomeCity(c.name)).every((c) => ['fr', 'ar'].every((lg) => { const r = b.cityReply(c, lg as l.Lang); return /Airtel Money 60 60 51 51/.test(r) && /Moov Money 99 22 10 17/.test(r); })));
+  ok(`${unknownFee.name} (tarif non fixe) : « a confirmer » + ${MM ? "paiement a l'avance" : 'commande sur WhatsApp'}`, /à confirmer/.test(uf) && (MM ? /à l'avance/.test(uf) && /60 60 51 51/.test(uf) : /sur WhatsApp/.test(uf) && !/Airtel|Moov|60 60/.test(uf)) && !/STTL/.test(uf), uf);
+  ok(MM ? "toute ville hors N'Djamena : paiement a l'avance avec les deux numeros (fr et ar)" : "toute ville hors N'Djamena : commande sur WhatsApp, jamais de numero Airtel / Moov (fr et ar)", cities.filter((c) => !b.isHomeCity(c.name)).every((c) => ['fr', 'ar'].every((lg) => { const r = b.cityReply(c, lg as l.Lang); return MM ? /Airtel Money 60 60 51 51/.test(r) && /Moov Money 99 22 10 17/.test(r) : (lg === 'fr' ? /WhatsApp/.test(r) : /واتساب/.test(r)) && !/Airtel|Moov|60 60 51 51|99 22 10 17/.test(r); })));
   ok('note de service : 8h30-16h + 48 h (fr)', /de 8h30 à 16h/.test(b.serviceNote(true)) && /valable 48 h\.$/.test(b.serviceNote(true)) && /réglez dans ce délai\.$/.test(b.serviceNote(false)));
   ok('note de service : 8:30-16:00 + 48 heures (ar)', /8:30/.test(b.serviceNote(true, 'ar')) && /16:00/.test(b.serviceNote(true, 'ar')) && /48 ساعة/.test(b.serviceNote(true, 'ar')) && /ادفع خلال هذه المدة/.test(b.serviceNote(false, 'ar')), b.serviceNote(false, 'ar'));
-  ok('infos importantes (fr + ar) : horaires, paiement par ville, 48 h', [b.importantInfo('fr'), b.importantInfo('ar')].every((s) => /8.30/.test(s) && /48/.test(s) && /Airtel Money/.test(s)) && /seulement à N'Djamena/.test(b.importantInfo('fr')) && /فقط في إنجامينا/.test(b.importantInfo('ar')));
+  ok('infos importantes (fr + ar) : horaires, paiement par ville, 48 h', [b.importantInfo('fr'), b.importantInfo('ar')].every((s) => /8.30/.test(s) && /48/.test(s) && (MM ? /Airtel Money/.test(s) : !/Airtel|Moov/.test(s))) && (MM ? /seulement à N'Djamena/.test(b.importantInfo('fr')) && /فقط في إنجامينا/.test(b.importantInfo('ar')) : /à N'Djamena/.test(b.importantInfo('fr')) && /WhatsApp/.test(b.importantInfo('fr')) && /واتساب/.test(b.importantInfo('ar'))));
 
   console.log('\n== catalogue (vrais produits)');
   const cats = await get('categories?select=id,name,slug');
@@ -533,7 +536,7 @@ async function main() {
     'why.colors': ['أسود'], 'why.sizes': ['40'], cityNotFound: ['سار'], cityFee: ['موندو', '2 500 FCFA', null], cityNoFee: ['موندو', null], serviceNote: [true], 'contact.hours': ['8:00'],
     budgetBest: ['بأقل من 10 000 FCFA'], budgetFallback: ['بأقل من 10 000 FCFA'],
     'loyalty.mine': [{ points: 30, tier: 'argent', next: { key: 'or', missing: 20 } }], 'loyalty.orderPoints': [5],
-    'checkout.askPay': [true], 'checkout.methodLabel': ['airtel_money'], 'checkout.recap': [{ lines: [{ name: 'ساعة', variant: '', qty: 2, subtotal: 25000 }], city: 'موندو', fee: 2500, gift: true, total: 37500, name: 'علي', phone: '66123456', address: 'حي فرشا', method: 'airtel_money' }],
+    'checkout.askPay': [true], 'checkout.outsideCity': ['موندو'], 'checkout.methodLabel': ['airtel_money'], 'checkout.recap': [{ lines: [{ name: 'ساعة', variant: '', qty: 2, subtotal: 25000 }], city: 'موندو', fee: 2500, gift: true, total: 37500, name: 'علي', phone: '66123456', address: 'حي فرشا', method: 'airtel_money' }],
     'checkout.placed': ['علي', '12345678'], 'checkout.totalToPay': [37500], 'checkout.payInitiated': ['Airtel Money', 'تم'], 'checkout.payUrl': ['https://pay.example.com'], 'checkout.payNumber': [37500, '60 60 51 51', 'Airtel Money'], 'checkout.payTeam': ['66123456', 'Airtel Money'], 'chip.useAddress': ['حي فرشا'],
     'cart.picked': ['ساعة', ' (المقاس 41)', '25 000 FCFA'], 'cart.current': ['ساعة', ' (المقاس 41)', 2, '50 000 FCFA'], 'cart.priceChanged': ['ساعة', '10 000 FCFA', '12 000 FCFA'], 'install.iosSteps': [false],
     'interest.sizesReply': ['حذاء', ['40', '41']], 'interest.colorsReply': ['حذاء', ['أسود'], ['40']], 'wholesale.prefill': ['عطر'],
@@ -579,7 +582,7 @@ async function main() {
     'why.colors': ['noir'], 'why.sizes': ['40'], cityNotFound: ['Sarh'], cityFee: ['Moundou', '2 500 FCFA', null], cityNoFee: ['Moundou', null], serviceNote: [true], 'contact.hours': ['8h'],
     budgetBest: ['à moins de 10 000 FCFA'], budgetFallback: ['à moins de 10 000 FCFA'],
     'loyalty.mine': [{ points: 30, tier: 'argent', next: { key: 'or', missing: 20 } }], 'loyalty.orderPoints': [5],
-    'checkout.askPay': [true], 'checkout.methodLabel': ['airtel_money'], 'checkout.recap': [{ lines: [{ name: 'Montre', variant: '', qty: 2, subtotal: 25000 }], city: 'Moundou', fee: 2500, gift: true, total: 37500, name: 'Ali', phone: '66123456', address: 'Farcha', method: 'airtel_money' }],
+    'checkout.askPay': [true], 'checkout.outsideCity': ['Moundou'], 'checkout.methodLabel': ['airtel_money'], 'checkout.recap': [{ lines: [{ name: 'Montre', variant: '', qty: 2, subtotal: 25000 }], city: 'Moundou', fee: 2500, gift: true, total: 37500, name: 'Ali', phone: '66123456', address: 'Farcha', method: 'airtel_money' }],
     'checkout.placed': ['Ali', 'ABCD1234'], 'checkout.totalToPay': [37500], 'checkout.payInitiated': ['Airtel Money', 'ok'], 'checkout.payUrl': ['https://pay.example.com'], 'checkout.payNumber': [37500, '60 60 51 51', 'Airtel Money'], 'checkout.payTeam': ['66123456', 'Airtel Money'], 'chip.useAddress': ['Farcha'],
     'interest.sizesReply': ['Sandale', ['40', '41']], 'interest.colorsReply': ['Sandale', ['Noir'], ['40']], 'wholesale.prefill': ['Parfum'],
     'cart.picked': ['Montre', ' (Taille 41)', '25 000 FCFA'], 'cart.current': ['Montre', ' (Taille 41)', 2, '50 000 FCFA'],

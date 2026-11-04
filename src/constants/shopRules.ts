@@ -1,7 +1,15 @@
 // Regles de la boutique que les clients doivent connaitre (assistante Zara Kings, page de commande).
 export const HOME_CITY = "N'Djamena";
 
-// Paiement : a la livraison seulement a N'Djamena ; dans les autres villes, a l'avance par Mobile Money.
+// Airtel Money et Moov Money sont RETIRES « pour le moment » (demande du patron, 3 novembre 2026) : sur la page de commande et dans le chat de Zara,
+// le seul paiement est « à la livraison », à N'Djamena. Les autres villes : la commande se prend sur WhatsApp.
+// Pour les remettre : mettre EXPO_PUBLIC_MOBILE_MONEY=on au moment de la construction du site (ou changer cette ligne), puis publier. (docs/airtel-moov-retires.md)
+export const MOBILE_MONEY_ENABLED: boolean = process.env.EXPO_PUBLIC_MOBILE_MONEY === 'on';
+
+// Le numéro WhatsApp où les clients envoient leur commande (fiche article, et villes hors N'Djamena quand Airtel / Moov sont retirés).
+export const ORDER_WHATSAPP = '23599221017';
+
+// Paiement : a la livraison seulement a N'Djamena ; dans les autres villes, a l'avance par Mobile Money (quand il est ouvert : voir MOBILE_MONEY_ENABLED).
 export const PAYMENT = {
   airtel: '60 60 51 51',
   moov: '99 22 10 17',

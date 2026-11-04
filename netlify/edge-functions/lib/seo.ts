@@ -76,7 +76,7 @@ export function homeDescription(categories: SeoCategory[]): string {
   const names = categories.map((c) => cleanText(c.name)).filter(Boolean).slice(0, 5);
   const list = names.length > 0 ? `${names.join(', ')} et plus encore. ` : '';
   return cut(
-    `Boutique en ligne au Tchad : ${list}Prix en FCFA, livraison à ${HOME_CITY} et dans les autres villes, paiement à la livraison à ${HOME_CITY}, Airtel Money et Moov Money.`,
+    `Boutique en ligne au Tchad : ${list}Prix en FCFA, livraison à ${HOME_CITY} et dans les autres villes, paiement à la livraison à ${HOME_CITY}.`,
     160
   );
 }

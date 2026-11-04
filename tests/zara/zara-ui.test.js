@@ -17,7 +17,10 @@ const port = process.argv[3] || '4333';
 // BASE_URL=https://www.albasseshopping.com : teste le VRAI site en ligne (les commandes et comptes restent simules, rien n'est enregistre)
 const BASE = (process.env.BASE_URL || `http://localhost:${port}`).replace(/\/$/, '');
 const BASE_HOST = new URL(BASE).hostname;
-const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI0123456789TOFBCDE+=^~%&@?').toUpperCase();
+// MOBILE_MONEY=on : le site a été construit avec EXPO_PUBLIC_MOBILE_MONEY=on (Airtel Money et Moov Money ouverts) : on lance les ANCIENS contrôles.
+// Sans cette variable (le site publié : Airtel / Moov retirés « pour le moment ») : les nouveaux contrôles (partie ¤) et les anciens contrôles de paiement sont remplacés.
+const MM = process.env.MOBILE_MONEY === 'on';
+const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI0123456789TOFBCDE+=^~%&@?¤').toUpperCase();
 // saison fraiche (blousons et manteaux) : le bouton du menu de Zara n'existe que jusqu'au 31 decembre 2026 a 23h59 (N'Djamena)
 const COLD_ON = Date.now() < Date.parse('2027-01-01T00:00:00+01:00');
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
@@ -960,7 +963,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const moundou = cityRows.find((c) => /moundou/i.test(c.name));
       if (moundou && moundou.delivery_fee != null) {
         const fee = Number(moundou.delivery_fee).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '[\\s\\u00a0\\u202f]');
-        check('client de Moundou : la vraie livraison, paiement à l’avance (jamais « payez à la réception »)', new RegExp(`Livraison à ${moundou.name} : ${fee}[\\s\\u00a0\\u202f]FCFA · paiement à l’avance`).test(await txt(v.page, 'targeted-ad-delivery')) && !/réception/.test(await txt(v.page, 'targeted-ad-delivery')), await txt(v.page, 'targeted-ad-delivery'));
+        check(MM ? 'client de Moundou : la vraie livraison, paiement à l’avance (jamais « payez à la réception »)' : 'client de Moundou : la vraie livraison, commande sur WhatsApp (jamais « payez à la réception »)', new RegExp(`Livraison à ${moundou.name} : ${fee}[\\s\\u00a0\\u202f]FCFA · ${MM ? 'paiement à l’avance' : 'commande sur WhatsApp'}`).test(await txt(v.page, 'targeted-ad-delivery')) && !/réception/.test(await txt(v.page, 'targeted-ad-delivery')), await txt(v.page, 'targeted-ad-delivery'));
       } else console.log('SAUTE  livraison Moundou : ville ou tarif absent de la vraie base');
       // placée dans le fil : après la première catégorie, avant la deuxième, dans la largeur du téléphone
       const sections = v.page.locator('[data-testid^="home-section-"]:not([data-testid^="home-section-title-"])');
@@ -1040,6 +1043,55 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await waitAdE(v6.page);
       check('« ✕ » d’il y a 5 minutes sur P : Zara montre directement l’autre article regardé (Q)', (await txt(v6.page, 'targeted-ad-name')) === viewedQ.name.trim(), await txt(v6.page, 'targeted-ad-name'));
       await v6.ctx.close();
+    }
+
+    // b3. « Vitalité & Énergie » (docs/zara-annonce-ciblee.md) : jamais dans une annonce, sauf pour un client MARIÉ de 32 ans ET plus
+    const vitCat = catsE.find((c) => /vitalit/i.test(c.name) && /energ|énerg/i.test(c.name));
+    const vitProds = vitCat ? liveE.filter((p) => p.category_id === vitCat.id && okP(p)) : [];
+    const vitNames = new Set(liveE.filter((p) => vitCat && p.category_id === vitCat.id).map((p) => p.name.trim()));
+    const vitP = vitProds[0];
+    check('le catalogue a un article « Vitalité & Énergie » (non adulte, avec photo) pour tester la règle', !!vitCat && !!vitP, { cat: vitCat && vitCat.name, n: vitProds.length });
+    if (vitP) {
+      const yearsAgo = (y) => new Date(Date.now() - y * 365.25 * DAY - 40 * DAY).toISOString().slice(0, 10); // y ans et un mois et demi : l'anniversaire est passé
+      const adNameFor = async (extra, shot = null) => {
+        const user = memberE({ gender: 'homme', ...extra });
+        const v = await homeE({ user, profile: profileJson([rec(vitP)]) });
+        let name = null;
+        try {
+          await v.page.getByTestId('targeted-ad').waitFor({ timeout: 9000 });
+          await sleep(500);
+          name = await txt(v.page, 'targeted-ad-name');
+          if (shot) { await v.page.getByTestId('targeted-ad').scrollIntoViewIfNeeded(); await sleep(300); await v.page.screenshot({ path: path.join(OUT, shot) }); }
+        } catch {
+          name = null; // aucune annonce
+          if (shot) await v.page.screenshot({ path: path.join(OUT, shot) });
+        }
+        const reason = name ? await txt(v.page, 'targeted-ad-why') : null;
+        await v.ctx.close();
+        return { name, reason };
+      };
+      const approved = await adNameFor({ marital_status: 'marie', birth_date: yearsAgo(40) }, '€V1-marie-40-ans.png');
+      check('homme marié de 40 ans qui a regardé l\'article « Vitalité & Énergie » : l\'annonce le rappelle', approved.name === vitP.name.trim() && /Vous avez regardé/.test(approved.reason || ''), approved);
+      const approved32 = await adNameFor({ marital_status: 'marie', birth_date: yearsAgo(32) });
+      check('homme marié de 32 ans : l\'annonce le rappelle aussi', approved32.name === vitP.name.trim(), approved32);
+      for (const [label, extra] of [['marié de 30 ans', { marital_status: 'marie', birth_date: yearsAgo(30) }], ['célibataire de 40 ans', { marital_status: 'celibataire', birth_date: yearsAgo(40) }], ['marié sans date de naissance', { marital_status: 'marie', birth_date: null }], ['ancien compte (sans les colonnes)', {}]]) {
+        const r = await adNameFor(extra, label === 'célibataire de 40 ans' ? '€V2-celibataire-40-ans.png' : null);
+        check(`homme ${label} qui a regardé le même article : jamais un article « Vitalité & Énergie » dans l'annonce`, r.name === null || !vitNames.has(r.name), r);
+      }
+      // l'autre carte de Zara (« Zara vous conseille ») : jamais un article « Vitalité & Énergie » pour un client non autorisé
+      {
+        const user = memberE({ gender: 'homme', marital_status: 'celibataire', birth_date: yearsAgo(40) });
+        const v = await homeE({ user, store: { zaraAds: true, zaraDelay: 3, waOrder: true, patches: [] } });
+        const seen = new Set();
+        const t0 = Date.now();
+        while (Date.now() - t0 < 24000) {
+          if ((await v.page.getByTestId('zara-ad').count()) === 1) seen.add((await v.page.getByTestId('zara-ad').innerText()).replace(/\s+/g, ' '));
+          await sleep(1500);
+        }
+        const leaked = [...seen].filter((t) => [...vitNames].some((n) => t.includes(n)));
+        check(`carte « Zara vous conseille » (célibataire de 40 ans) : aucun article « Vitalité & Énergie » (${seen.size} message(s) vu(s))`, leaked.length === 0, leaked);
+        await v.ctx.close();
+      }
     }
 
     // c. article déjà commandé : jamais rappelé
@@ -1137,18 +1189,27 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await boss.page.getByTestId('targeted-ad').scrollIntoViewIfNeeded();
       await boss.page.screenshot({ path: path.join(OUT, '€7-annonce-administrateur.png') });
       await boss.ctx.close();
-      // homme : un article de la catégorie réservée aux hommes (« Vitalité & Énergie Homme »), jamais la catégorie des femmes
+      // homme : « Vitalité & Énergie Homme » est réservée aux mariés de 32 ans et plus (lib/adSensitive) ; un homme ordinaire reçoit autre chose, jamais la catégorie des femmes
       const menCat = catsE.find((c) => /homme/i.test(c.name));
       const menItems = menCat ? liveE.filter((p) => p.category_id === menCat.id && okP(p)) : [];
       const him = await homeE({ user: memberE({ gender: 'homme' }) });
       await sleep(6000);
-      if (menItems.length > 0) {
-        await waitAdE(him.page);
+      if (await him.page.getByTestId('targeted-ad').count()) {
         const nmHim = await txt(him.page, 'targeted-ad-name');
-        check(`homme : un article de la catégorie « ${menCat.name} »`, menItems.some((p) => p.name.trim() === nmHim) && (await txt(him.page, 'targeted-ad-headline')) === `Choisi pour vous : « ${menCat.name.trim()} ».`, nmHim);
-        check('la raison dit « Homme » choisi dans le compte', /Vous avez choisi « Homme » dans votre compte/.test(await txt(him.page, 'targeted-ad-why')), await txt(him.page, 'targeted-ad-why'));
+        check('homme sans réponses « marié » et « âge » : jamais un article « Vitalité & Énergie » dans l\'annonce', !vitNames.has(nmHim), nmHim);
         await him.page.getByTestId('targeted-ad').scrollIntoViewIfNeeded();
-        await him.page.screenshot({ path: path.join(OUT, '€8-annonce-homme.png') });
+      }
+      if (menItems.length > 0) {
+        const born40 = new Date(Date.now() - 40 * 365.25 * DAY - 40 * DAY).toISOString().slice(0, 10);
+        const mhim = await homeE({ user: memberE({ gender: 'homme', marital_status: 'marie', birth_date: born40 }) });
+        await sleep(6000);
+        await waitAdE(mhim.page);
+        const nmHim = await txt(mhim.page, 'targeted-ad-name');
+        check(`homme marié de 40 ans : un article de la catégorie « ${menCat.name} »`, menItems.some((p) => p.name.trim() === nmHim) && (await txt(mhim.page, 'targeted-ad-headline')) === `Choisi pour vous : « ${menCat.name.trim()} ».`, nmHim);
+        check('la raison dit « Homme » choisi dans le compte', /Vous avez choisi « Homme » dans votre compte/.test(await txt(mhim.page, 'targeted-ad-why')), await txt(mhim.page, 'targeted-ad-why'));
+        await mhim.page.getByTestId('targeted-ad').scrollIntoViewIfNeeded();
+        await mhim.page.screenshot({ path: path.join(OUT, '€8-annonce-homme.png') });
+        await mhim.ctx.close();
       } else console.log('SAUTE  homme : aucun article en vente dans une catégorie « homme »');
       const womenCat = catsE.find((c) => /femme/i.test(c.name));
       if (await him.page.getByTestId('targeted-ad').count()) {
@@ -1190,13 +1251,15 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('admin : « Annonces de Zara · 24 h sur 24 » avec les 5 publics (femmes, hommes, élèves, étudiants, administrateurs)', (await v.page.locator('[data-testid^="zara-audience-"][data-testid$="-count"]').count()) === 5);
       const cnt = async (k) => (await txt(v.page, `zara-audience-${k}-count`));
       check('admin : les vrais nombres de clients par public (compte test non compté) : femmes 2, hommes 2, élèves 2, étudiants 3, administrateurs 2', (await cnt('femme')) === '2 clients' && (await cnt('homme')) === '2 clients' && (await cnt('eleve')) === '2 clients' && (await cnt('etudiant')) === '3 clients' && (await cnt('admin')) === '2 clients', [await cnt('femme'), await cnt('homme'), await cnt('eleve'), await cnt('etudiant'), await cnt('admin')]);
-      check('admin : « Allumé » quand l’interrupteur est allumé, et « changement toutes les 6 heures, jour et nuit »', /Allumé/.test(await txt(v.page, 'zara-audiences-status')) && /toutes les 6 heures, jour et nuit \(00 h, 06 h, 12 h, 18 h\)\. Prochain changement : \d\d h \d\d/.test(await txt(v.page, 'zara-audiences-next')), await txt(v.page, 'zara-audiences-next'));
+      await v.page.getByTestId('zara-audiences-status').filter({ hasText: /Allumé/ }).waitFor({ timeout: 10000 }).catch(() => {}); // l'écran dit « Éteint » un instant, le temps de lire le réglage
+      check('admin : « Allumé » quand l’interrupteur est allumé, et « changement toutes les 6 heures, jour et nuit »', /Allumé/.test(await txt(v.page, 'zara-audiences-status')) && /toutes les 6 heures, jour et nuit \(00 h, 06 h, 12 h, 18 h\)\. Prochain changement : \d\d h \d\d/.test(await txt(v.page, 'zara-audiences-next')), [await txt(v.page, 'zara-audiences-status'), await txt(v.page, 'zara-audiences-next')]);
       const names = [];
       for (const k of ['femme', 'homme', 'eleve', 'etudiant', 'admin']) {
         const has = (await v.page.getByTestId(`zara-audience-${k}-name`).count()) === 1;
         names.push([k, has ? await txt(v.page, `zara-audience-${k}-name`) : null]);
       }
       check('admin : chaque public montre son annonce (nom de l’article, accroche) ou dit que Zara n’invente rien', names.every(([, n]) => n !== null) || (await v.page.locator('[data-testid$="-none"]').count()) > 0, names);
+      check('admin : aucun des 5 publics ne reçoit un article « Vitalité & Énergie » (réservé aux mariés de 32 ans et plus)', names.every(([, n]) => !n || !vitNames.has(n)), names);
       check('admin : accroches des publics (élèves, étudiants, administrateurs)', /Pour les élèves/.test(await txt(v.page, 'zara-audience-eleve-headline')) && /Pour les étudiants/.test(await txt(v.page, 'zara-audience-etudiant-headline')) && /haut de gamme/.test(await txt(v.page, 'zara-audience-admin-headline')));
       await sleep(6500); // le message d'un autre bloc de la page (statistiques) disparaît tout seul
       await v.page.getByText('Annonces de Zara · 24 h sur 24').scrollIntoViewIfNeeded();
@@ -1848,7 +1911,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     check('2e ville : la meme note (8h30-16h, 48 h) n\'est pas redite', (await noteCount()) === n1, { n1, n2: await noteCount() });
     check('2e ville : les boutons suivent quand meme la reponse', (await chipLabels(page)).includes('🏠 Menu') && (await chipLabels(page)).includes('💬 WhatsApp'), await chipLabels(page));
     const mongo = await panelOf(page).getByText(/par l'agence Abou Aziza/).last().innerText();
-    check("Abeche : par l'agence Abou Aziza, paiement a l'avance Airtel/Moov", /Airtel Money 60 60 51 51/.test(mongo) && /Moov Money 99 22 10 17/.test(mongo), mongo);
+    check(MM ? "Abeche : par l'agence Abou Aziza, paiement a l'avance Airtel/Moov" : "Abeche : par l'agence Abou Aziza, commande sur WhatsApp (plus d'Airtel ni de Moov)", MM ? /Airtel Money 60 60 51 51/.test(mongo) && /Moov Money 99 22 10 17/.test(mongo) : /sur WhatsApp/.test(mongo) && !/Airtel|Moov|60 60 51 51|99 22 10 17/.test(mongo), mongo);
 
     // 10. rechargement au milieu des questions : la question et ses boutons sont gardes
     await ask(page, 'montre', /C’est pour qui \?/);
@@ -1902,7 +1965,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await ask(page, 'فاطمة', /سعدت بمعرفتك يا فاطمة/);
       await waitText(page, /معلومات مهمة قبل الطلب/);
       const infoAr = await panelOf(page).getByText(/معلومات مهمة قبل الطلب/).first().innerText();
-      check("informations importantes en arabe : livraison 8:30-16:00, paiement a la livraison seulement a N'Djamena, 48 heures", /8:30/.test(infoAr) && /16:00/.test(infoAr) && /فقط في إنجامينا/.test(infoAr) && /48 ساعة/.test(infoAr), infoAr);
+      check("informations importantes en arabe : livraison 8:30-16:00, paiement a la livraison seulement a N'Djamena, 48 heures", /8:30/.test(infoAr) && /16:00/.test(infoAr) && (MM ? /فقط في إنجامينا/.test(infoAr) : /في إنجامينا/.test(infoAr) && /واتساب/.test(infoAr) && !/Airtel|Moov/.test(infoAr)) && /48 ساعة/.test(infoAr), infoAr);
       await waitText(page, /أنشئ حسابك المجاني(?:، فاطمة)?/);
       const menuAr = await chipLabels(page);
       check('menu en arabe : compte, connexion, offres, nouveautes, conseil, categories, livraison, WhatsApp, Francais', menuAr.join('|') === `👤 إنشاء حسابي|تسجيل الدخول|🔥 العروض|🆕 الجديد|${COLD_ON ? '🧥 جاكيتات ومعاطف|' : ''}🎯 نصيحة|🛍️ الفئات|🚚 التوصيل والدفع|💬 واتساب|🌐 Français`, menuAr);
@@ -1943,7 +2006,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       // --- L4. livraison en arabe
       await ask(page, 'التوصيل الى مونذو', /عبر وكالة/);
       const moAr = await panelOf(page).getByText(/عبر وكالة/).last().innerText();
-      check('Moundou en arabe : tarif, agence, paiement a l\'avance, Airtel et Moov', /2\s?500 FCFA/.test(moAr) && /STTL/.test(moAr) && /مسبقا/.test(moAr) && /Airtel Money 60 60 51 51/.test(moAr) && /Moov Money 99 22 10 17/.test(moAr), moAr);
+      check(MM ? 'Moundou en arabe : tarif, agence, paiement a l\'avance, Airtel et Moov' : 'Moundou en arabe : tarif, agence, commande sur WhatsApp (plus d\'Airtel ni de Moov)', /2\s?500 FCFA/.test(moAr) && /STTL/.test(moAr) && (MM ? /مسبقا/.test(moAr) && /Airtel Money 60 60 51 51/.test(moAr) && /Moov Money 99 22 10 17/.test(moAr) : /واتساب/.test(moAr) && !/Airtel|Moov|مسبقا/.test(moAr)), moAr);
       await waitText(page, /ادفع خلال هذه المدة/);
       const noteN = async () => panelOf(page).getByText(/ادفع خلال هذه المدة/).count();
       const n1 = await noteN();
@@ -5529,7 +5592,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       // Hassan : Doba, numéro WhatsApp préféré, vraie promotion, stock élevé
       const h = await whatsappOf(v, 'Hassan');
       check('Hassan : WhatsApp utilise son numéro WhatsApp (66222222), pas son téléphone', h.url.startsWith('https://wa.me/23566222222?text='), h.url.slice(0, 60));
-      check('Hassan : vraie promotion « au lieu de 22 500 FCFA », paiement à l\'avance (autre ville), jamais « sans frais » ni stock', h.text.includes('17 500 FCFA (au lieu de 22 500 FCFA)') && h.text.includes('paiement à l’avance par Airtel Money ou Moov Money') && !/sans frais|Il n'en reste/.test(h.text), h.text);
+      check('Hassan : vraie promotion « au lieu de 22 500 FCFA », paiement à l\'avance (autre ville), jamais « sans frais » ni stock', h.text.includes('17 500 FCFA (au lieu de 22 500 FCFA)') && (MM ? h.text.includes('paiement à l’avance par Airtel Money ou Moov Money') : h.text.includes('écrivez-nous sur WhatsApp') && !/Airtel|Moov/.test(h.text)) && !/sans frais|Il n'en reste/.test(h.text), h.text);
 
       // Mariam : article épuisé ; Ali : article déjà commandé → simple bonjour, aucune ligne « A regardé »
       for (const [name, label] of [['Mariam', 'article épuisé'], ['Ali', 'article déjà commandé']]) {
@@ -7359,7 +7422,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   }
 
   // =============================================== O. ZARA FINALISE L'ACHAT DANS LE CHAT ===============================================
-  if (PARTS.includes('O') || PARTS.includes('F') || PARTS.includes('§')) {
+  if ((PARTS.includes('O') && MM) || PARTS.includes('F') || (PARTS.includes('§') && MM) || (PARTS.includes('¤') && !MM)) {
     console.log('\n== O/F. Zara finalise l\'achat dans le chat et repond sur la fidelite (fausse base : aucune vraie commande)');
     const UID = '11111111-1111-4111-8111-111111111111';
     const JWT_FAKE = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMTExMTExMS0xMTExLTQxMTEtODExMS0xMTExMTExMTExMTEiLCJleHAiOjQxMDI0NDQ4MDAsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.c2ln';
@@ -7409,7 +7472,124 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const homeFee = homeCity && homeCity.delivery_fee != null ? Number(homeCity.delivery_fee) : 0;
     console.log('info  commande : article', realProduct.name, price, '| ville loin :', farCity.name, farFee, '| ville de la boutique :', homeCity && homeCity.name, homeFee, '| paiement Airtel :', payRow.airtel_number || '(constante)');
 
-    if (PARTS.includes('O')) {
+    // ¤. Airtel Money et Moov Money retirés « pour le moment » (docs/airtel-moov-retires.md) : N'Djamena = paiement à la livraison, sans question ;
+    //    une autre ville = la commande se prend sur WhatsApp (message déjà écrit). Ne tourne que sur le site construit SANS EXPO_PUBLIC_MOBILE_MONEY=on.
+    if (PARTS.includes('¤') && !MM) {
+      console.log("\n== ¤ Airtel / Moov retires : N'Djamena paie a la livraison (sans question), les autres villes commandent sur WhatsApp");
+      const noMobileMoney = (t) => !/Airtel|Moov/i.test(t);
+      const stubOpen = (p) => p.evaluate(() => { window.__opened = []; window.open = (u) => { window.__opened.push(String(u)); return null; }; });
+
+      // ¤1. N'Djamena : la commande va jusqu'au bout, le paiement est « à la livraison » tout seul
+      {
+        const fu = mkMember('Ahmed Hassan');
+        const db = newDb();
+        const c = await orderVisitor(fu, db, { qty: 1 });
+        await openOrderChat(c);
+        await ask(c.page, 'je veux commander', /Quelle est votre adresse de livraison/);
+        await typeIn(c.page, 'Farcha, face à la pharmacie');
+        await waitText(c.page, /Dans quelle ville doit-on vous livrer/);
+        await typeIn(c.page, homeCity.name);
+        await waitText(c.page, /Voulez-vous choisir le jour et l’heure/);
+        await typeIn(c.page, 'passer');
+        await waitText(c.page, /Paiement : en espèces à la livraison, à N'Djamena/);
+        check("N'Djamena : Zara dit le paiement (en especes a la livraison) sans poser de question de paiement", (await panelOf(c.page).getByText(/Comment souhaitez-vous payer/).count()) === 0);
+        await waitText(c.page, /Souhaitez-vous l’emballage cadeau/);
+        const chipsGift = await chipLabels(c.page);
+        check('aucun bouton Airtel Money ni Moov Money pendant la commande', chipsGift.every(noMobileMoney) && noMobileMoney(await panelOf(c.page).innerText()), chipsGift);
+        await typeIn(c.page, 'non merci');
+        await waitText(c.page, /Récapitulatif de votre commande/);
+        const recap = await panelOf(c.page).getByText(/Récapitulatif de votre commande/).last().innerText();
+        check("recapitulatif : paiement a la livraison, en especes ; le bon total", /💵 Paiement à la livraison, en espèces/.test(recap) && noMobileMoney(recap) && new RegExp(`Total : ${numRe(price + homeFee)} FCFA`).test(recap), recap);
+        await c.page.screenshot({ path: path.join(OUT, '¤1-recapitulatif-ndjamena.png') });
+        await typeIn(c.page, 'oui');
+        await waitText(c.page, /a bien été enregistrée/);
+        const b = db.created[0];
+        const done = await panelOf(c.page).getByText(/a bien été enregistrée/).last().innerText();
+        check('enregistre : paiement a la livraison, bon total ; la confirmation ne parle ni d\'Airtel ni de Moov ni de numero', db.created.length === 1 && b.payment_method === 'cash_on_delivery' && b.total === price + homeFee && /Vous payez en espèces directement à la livraison/.test(done) && noMobileMoney(done) && !/Envoyez .* au /.test(done), { b, done });
+        check('aucune erreur (N\'Djamena sans Airtel ni Moov)', realErrs(c).length === 0, c.errs);
+        await c.ctx.close();
+      }
+
+      // ¤2. une autre ville : Zara envoie sur WhatsApp, rien n'est enregistre, on peut changer de ville
+      {
+        const fu = mkMember('Ahmed Hassan');
+        const db = newDb();
+        const c = await orderVisitor(fu, db, { qty: 2 });
+        await openOrderChat(c);
+        await ask(c.page, 'je veux commander', /Quelle est votre adresse de livraison/);
+        await typeIn(c.page, 'Quartier Farcha, rue 12, près du marché');
+        await waitText(c.page, /Dans quelle ville doit-on vous livrer/);
+        await tapExact(c.page, farCity.name, /Pour le moment, les commandes pour .* se prennent sur WhatsApp/);
+        const out = await panelOf(c.page).getByText(/Pour le moment, les commandes pour .* se prennent sur WhatsApp/).last().innerText();
+        check(`${farCity.name} : Zara explique (commande sur WhatsApp, deja ecrite, a N'Djamena on paie a la livraison), sans Airtel ni Moov`, out.includes(farCity.name) && /déjà écrite/.test(out) && /À N'Djamena/.test(out) && noMobileMoney(out), out);
+        const chips = await chipLabels(c.page);
+        check('boutons : « Commander sur WhatsApp », « Ville » (changer), annuler ; aucun bouton de paiement', chips.join('|') === '💬 Commander sur WhatsApp|🏙️ Ville|Annuler la commande', chips);
+        check('aucune question de paiement, aucune commande enregistree', (await panelOf(c.page).getByText(/Comment souhaitez-vous payer|Souhaitez-vous l’emballage cadeau/).count()) === 0 && db.created.length === 0);
+        await c.page.screenshot({ path: path.join(OUT, '¤2-autre-ville-whatsapp.png') });
+        await stubOpen(c.page);
+        await panelOf(c.page).getByTestId('assistant-chip').filter({ hasText: /^\s*💬 Commander sur WhatsApp\s*$/ }).click();
+        await sleep(400);
+        const opened = await c.page.evaluate(() => window.__opened);
+        const msg = opened[0] ? decodeURIComponent(opened[0].split('?text=')[1] || '') : '';
+        check(`le bouton ouvre WhatsApp (23599221017) avec la commande ecrite : article, prix, quantite 2, ville ${farCity.name}, lien`, opened.length === 1 && opened[0].startsWith('https://wa.me/23599221017?text=') && msg.includes(realProduct.name.trim()) && /Quantité : 2/.test(msg) && msg.includes(`Ville : ${farCity.name}`) && msg.includes(`/produit/${realProduct.slug}`), opened);
+        // changer de ville : on repart vers N'Djamena et la commande continue
+        await tapExact(c.page, '🏙️ Ville', /Dans quelle ville doit-on vous livrer/);
+        await tapExact(c.page, homeCity.name, /Voulez-vous choisir le jour et l’heure/);
+        check("changer pour N'Djamena : la commande continue (rendez-vous, puis paiement a la livraison tout seul)", true);
+        await typeIn(c.page, 'passer');
+        await waitText(c.page, /Paiement : en espèces à la livraison, à N'Djamena/);
+        check('aucune erreur (autre ville)', realErrs(c).length === 0, c.errs);
+        await c.ctx.close();
+      }
+
+      // ¤3. une ville ecrite a la main : meme chose
+      {
+        const fu = mkMember('Ahmed Hassan');
+        const db = newDb();
+        const c = await orderVisitor(fu, db, { qty: 1 });
+        await openOrderChat(c);
+        await ask(c.page, 'je veux commander', /Quelle est votre adresse de livraison/);
+        await typeIn(c.page, 'Quartier Farcha, rue 12, près du marché');
+        await waitText(c.page, /Dans quelle ville doit-on vous livrer/);
+        await typeIn(c.page, farCity.name.toLowerCase());
+        await waitText(c.page, /Pour le moment, les commandes pour .* se prennent sur WhatsApp/);
+        check('ville ecrite a la main : meme message WhatsApp, aucune commande', db.created.length === 0 && (await panelOf(c.page).getByText(/Comment souhaitez-vous payer/).count()) === 0);
+        // un vieux mot « airtel » ecrit par le client : jamais un paiement Airtel
+        await typeIn(c.page, 'airtel money');
+        await sleep(1500);
+        check('« airtel money » ecrit : aucune commande, aucun numero de paiement donne', db.created.length === 0 && !/60 60 51 51|99 22 10 17/.test(await panelOf(c.page).innerText()));
+        await c.ctx.close();
+      }
+
+      // ¤4. en arabe
+      {
+        const fu = mkMember('Ahmed Hassan');
+        const db = newDb();
+        const c = await orderVisitor(fu, db, { qty: 1, lg: 'ar' });
+        await openOrderChat(c);
+        await ask(c.page, 'أريد أن أطلب', /ما هو عنوان التسليم|عنوان/);
+        await typeIn(c.page, 'حي فرشا، شارع 12');
+        await waitText(c.page, /في أي مدينة/);
+        await tapExact(c.page, farCity.name, /تُؤخذ الطلبات إلى/);
+        const outAr = await panelOf(c.page).getByText(/تُؤخذ الطلبات إلى/).last().innerText();
+        check('arabe : la commande se prend sur WhatsApp, sans Airtel ni Moov', /واتساب/.test(outAr) && noMobileMoney(outAr) && (await chipLabels(c.page)).includes('💬 اطلب عبر واتساب') && db.created.length === 0, { outAr, chips: await chipLabels(c.page) });
+        await c.ctx.close();
+      }
+
+      // ¤5. les informations de Zara : plus d'Airtel ni de Moov
+      {
+        const fu = mkMember('Ahmed Hassan');
+        const c = await orderVisitor(fu, newDb(), { qty: 1 });
+        await openOrderChat(c);
+        const before = await panelOf(c.page).innerText();
+        await ask(c.page, `livraison à ${farCity.name}`, /WhatsApp/);
+        const t = (await panelOf(c.page).innerText()).slice(before.length > 0 ? 0 : 0);
+        check(`livraison a ${farCity.name} : Zara parle de WhatsApp, plus d'Airtel ni de Moov ni de numero de paiement`, /WhatsApp/.test(t) && noMobileMoney(t) && !/60 60 51 51|99 22 10 17/.test(t), t.slice(-500));
+        await c.ctx.close();
+      }
+    }
+
+    if (PARTS.includes('O') && MM) {
     // --- O1. parcours complet : adresse, ville avec frais, Airtel Money, emballage cadeau, recapitulatif, confirmation
     {
       const fu = mkMember('Ahmed Hassan');
@@ -7938,7 +8118,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     }
 
     // --- § Zara apprend les « mots qui vendent » (docs/zara-mots-qui-vendent.md) : cadeau surprise du chat, sans risque, vraie echeance, vrai pourcentage
-    if (PARTS.includes('§')) {
+    if (PARTS.includes('§') && MM) {
       console.log('\n== § mots qui vendent : cadeau surprise (chat seulement), sans risque, parce que, immediat, courte duree vraie, « X % » vrai');
       const others = await get('products?select=id,name,stock&is_active=eq.true&stock=gt.0&limit=6');
       const other = others.find((p) => p.id !== realProduct.id);
@@ -8131,8 +8311,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await page.goto(`${BASE}/commande`, { waitUntil: 'load' });
       await sleep(3500);
       const cod = page.getByRole('radio', { name: /Paiement à la livraison/ });
-      const airtel = page.getByRole('radio', { name: /Airtel Money/ });
-      check('commande : 3 modes de paiement', (await page.getByRole('radio').count()) === 3);
+      check(MM ? 'commande : 3 modes de paiement' : 'commande : un seul mode de paiement (a la livraison), plus d\'Airtel Money ni de Moov Money', (await page.getByRole('radio').count()) === (MM ? 3 : 1) && (MM || ((await page.getByRole('radio', { name: /Airtel|Moov/ }).count()) === 0 && (await cod.count()) === 1)));
       check('commande : sans ville choisie, le paiement a la livraison est grise', (await cod.getAttribute('aria-disabled')) === 'true');
       const cityInput = page.getByPlaceholder('📍 Rechercher une ville...');
       const pickCity = async (name) => {
@@ -8144,18 +8323,34 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       };
       await pickCity('Moundou');
       check('Moundou : paiement a la livraison grise avec « Seulement a N\'Djamena »', (await cod.getAttribute('aria-disabled')) === 'true' && (await page.getByText("Seulement à N'Djamena", { exact: true }).count()) === 1);
-      check('Moundou : le numero Airtel Money (paiement a l\'avance) est affiche', (await page.getByText('Numéro : 60 60 51 51').count()) === 1);
-      check('la regle de paiement est ecrite sur la page', (await page.getByText(/Paiement à la livraison : seulement à N'Djamena\. Dans les autres villes, le paiement se fait à l'avance/).count()) === 1);
-      await page.getByRole('radio', { name: /Moov Money/ }).click();
-      check('Moundou : Moov Money choisi, son numero est affiche', (await page.getByText('Numéro : 99 22 10 17').count()) === 1);
+      if (MM) {
+        check('Moundou : le numero Airtel Money (paiement a l\'avance) est affiche', (await page.getByText('Numéro : 60 60 51 51').count()) === 1);
+        check('la regle de paiement est ecrite sur la page', (await page.getByText(/Paiement à la livraison : seulement à N'Djamena\. Dans les autres villes, le paiement se fait à l'avance/).count()) === 1);
+        await page.getByRole('radio', { name: /Moov Money/ }).click();
+        check('Moundou : Moov Money choisi, son numero est affiche', (await page.getByText('Numéro : 99 22 10 17').count()) === 1);
+      } else {
+        // Airtel / Moov retirés : une ville hors N'Djamena commande sur WhatsApp (message déjà écrit), pas de bouton « Confirmer la commande »
+        check('Moundou : aucun numero Airtel ni Moov, aucun lien de paiement', (await page.getByText(/^Numéro : /).count()) === 0 && (await page.getByText(/Airtel|Moov/).count()) === 0);
+        check('la regle de paiement est ecrite sur la page (a la livraison a N\'Djamena, WhatsApp ailleurs)', (await page.getByText(/Paiement à la livraison : à N'Djamena\. Dans les autres villes, la commande se prend sur WhatsApp pour le moment/).count()) === 1);
+        check('Moundou : la carte « Commande sur WhatsApp » est la, avec Moundou et le bouton', (await page.getByTestId('checkout-wa-outside').count()) === 1 && /Moundou/.test(await page.getByTestId('checkout-wa-outside').innerText()) && (await page.getByTestId('checkout-wa-outside-btn').count()) === 1);
+        check('Moundou : le bouton « Confirmer la commande » n\'existe pas (aucun paiement possible ici)', (await page.getByText('Confirmer la commande', { exact: true }).count()) === 0);
+        await page.evaluate(() => { window.__opened = []; window.open = (u) => { window.__opened.push(String(u)); return null; }; });
+        await page.getByTestId('checkout-wa-outside-btn').click();
+        await sleep(400);
+        const opened = await page.evaluate(() => window.__opened);
+        const msg = opened[0] ? decodeURIComponent(opened[0].split('?text=')[1] || '') : '';
+        check('le bouton ouvre WhatsApp (23599221017) avec la commande deja ecrite : article, prix, quantite, ville, lien', opened.length === 1 && opened[0].startsWith('https://wa.me/23599221017?text=') && msg.includes(realProduct.name.trim()) && /Quantité : 1/.test(msg) && /Ville : Moundou/.test(msg) && msg.includes(`/produit/${realProduct.slug}`), opened);
+      }
       await page.screenshot({ path: path.join(OUT, 'C2-commande-moundou.png') });
       await pickCity("N'Djamena");
       check("N'Djamena : le paiement a la livraison est possible", (await cod.getAttribute('aria-disabled')) !== 'true');
       await cod.click();
       check("N'Djamena : paiement a la livraison choisi (plus de numero Mobile Money)", (await page.getByText(/^Numéro : /).count()) === 0);
-      // retour a une autre ville : le mode bascule tout seul vers Airtel Money
+      if (!MM) check("N'Djamena : la carte WhatsApp disparait et « Confirmer la commande » est la", (await page.getByTestId('checkout-wa-outside').count()) === 0 && (await page.getByText('Confirmer la commande', { exact: true }).count()) === 1);
+      // retour a une autre ville : le mode bascule tout seul vers Airtel Money (ou, sans Mobile Money, la commande repart sur WhatsApp)
       await pickCity('Sarh');
-      check('autre ville apres N\'Djamena : le mode passe a Airtel Money automatiquement', (await cod.getAttribute('aria-disabled')) === 'true' && (await page.getByText('Numéro : 60 60 51 51').count()) === 1);
+      if (MM) check('autre ville apres N\'Djamena : le mode passe a Airtel Money automatiquement', (await cod.getAttribute('aria-disabled')) === 'true' && (await page.getByText('Numéro : 60 60 51 51').count()) === 1);
+      else check('autre ville apres N\'Djamena : la carte WhatsApp revient (Sarh), plus de bouton « Confirmer la commande »', (await cod.getAttribute('aria-disabled')) === 'true' && (await page.getByTestId('checkout-wa-outside').count()) === 1 && /Sarh/.test(await page.getByTestId('checkout-wa-outside').innerText()) && (await page.getByText('Confirmer la commande', { exact: true }).count()) === 0);
 
       // emballage cadeau : image cadeau cliquable, +2 000 FCFA au total
       const totalOf = async () => num(await page.evaluate(() => {
@@ -8287,11 +8482,18 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         await page.locator('[data-testid^="sched-day-"]').nth(1).click();
         await page.getByTestId('sched-time-11:30').click();
         await cityPick(page, 'Sarh');
+        if (!MM) {
+          // Airtel / Moov retirés : une autre ville ne peut plus confirmer ici ; le rendez-vous disparaît et la commande part sur WhatsApp
+          await sleep(500);
+          check('programmee puis autre ville (sans Airtel ni Moov) : plus de rendez-vous, plus de bouton « Confirmer », la carte WhatsApp, aucune commande', (await page.locator('[data-testid^="sched-day-"]').count()) === 0 && (await confirmBtn(page).count()) === 0 && (await page.getByTestId('checkout-wa-outside').count()) === 1 && (db.created ?? []).length === 0);
+          await c.ctx.close();
+        } else {
         await confirmBtn(page).click();
         await page.getByText('Merci d\'avoir acheté avec ALBASSE SHOPPING !').waitFor({ timeout: 15000 });
         const sent = (db.created ?? [])[0];
         check('programmee puis autre ville : la commande part sans rendez-vous', sent && sent.shipping_city === 'Sarh' && !('delivery_type' in sent) && !('scheduled_for' in sent), sent);
         await c.ctx.close();
+        }
       }
 
       // la base ne connait pas encore la livraison programmee (script SQL pas lance) : le rendez-vous n'est JAMAIS perdu en silence
@@ -10105,7 +10307,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('les points forts de la fiche : 5 sachets, preparation rapide, a emporter, pour les hommes', /Préparation rapide/.test(pointsText) && /5 sachets/.test(pointsText) && /emporter/.test(pointsText) && /destiné aux hommes/.test(pointsText), pointsText);
       const factsText = await v.page.getByTestId('cafe-facts').innerText();
       check('la livraison dans une enveloppe kaki est dite deux fois : dans « Le café en bref » et dans « Livraison »', /Livraison dans une enveloppe kaki/.test(pointsText) && /livrée dans une enveloppe kaki/.test(factsText), { pointsText, factsText });
-      check('livraison (8h30 a 16h, N\'Djamena et provinces), paiement (a la livraison a N\'Djamena, Airtel / Moov ailleurs), retour (72 heures)', /8h30 à 16h/.test(factsText) && /N'Djamena/.test(factsText) && /Airtel Money ou Moov Money/.test(factsText) && /72 heures/.test(factsText), factsText);
+      check('livraison (8h30 a 16h, N\'Djamena et provinces), paiement (a la livraison a N\'Djamena, Airtel / Moov ailleurs), retour (72 heures)', /8h30 à 16h/.test(factsText) && /N'Djamena/.test(factsText) && (MM ? /Airtel Money ou Moov Money/.test(factsText) : /WhatsApp/.test(factsText) && !/Airtel|Moov/.test(factsText)) && /72 heures/.test(factsText), factsText);
       const bodyText = await v.page.locator('body').innerText();
       check('aucune promesse de sante ou d\'effet sur la page (« aucun effet secondaire » de la fiche n\'est pas repris)', !/effet|santé|soigne|garanti|performance|virilité/i.test(await v.page.getByTestId('cafe-page').innerText()), bodyText.slice(0, 200));
       check('« une seule page » : ni categories, ni sections de l\'accueil, ni barre du bas du site', (await v.page.getByTestId('home-categories').count()) === 0 && (await v.page.getByTestId('home-sections').count()) === 0 && (await v.page.getByText('Recherche', { exact: true }).count()) === 0);

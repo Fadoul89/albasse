@@ -9,7 +9,7 @@ Application e-commerce de mode masculine haut de gamme, construite avec Expo
 - **Navigation** : React Navigation (stack + tabs)
 - **State** : Zustand (panier persistant, authentification)
 - **Backend / DB / Auth** : Supabase (Postgres + Row Level Security)
-- **Paiement** : Mobile Money (Airtel Money, Moov Money) — structure prête pour Stripe
+- **Paiement** : à la livraison à N'Djamena ; Mobile Money (Airtel Money, Moov Money) **retiré pour le moment** (autres villes : commande sur WhatsApp, voir `docs/airtel-moov-retires.md`) — structure prête pour Stripe
 - **Déploiement web** : Netlify · **Mobile** : Expo EAS
 
 ## Démarrage

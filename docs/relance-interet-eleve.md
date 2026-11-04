@@ -28,7 +28,7 @@ Règles (code : `src/lib/relanceMessage.ts`, données : `src/lib/relanceData.ts`
 - **« Il n'en reste que N »** seulement si le stock est vraiment bas (10 ou moins). Aucune fausse urgence, aucune remise inventée.
 - **La livraison dépend de la ville du client** (sans frais et paiement à la livraison seulement à N'Djamena) :
   N'Djamena (écrit de toutes les façons : « Ndjamena », « N’Djaména »…) → sans frais + paiement à la livraison ;
-  autre ville → livraison partout au Tchad, paiement à l'avance (Airtel Money ou Moov Money) ; ville vide → on dit seulement ce qui est vrai pour N'Djamena.
+  autre ville → livraison partout au Tchad, « écrivez-nous sur WhatsApp, nous prenons votre commande avec vous » (Airtel Money et Moov Money retirés ; sinon « paiement à l'avance (Airtel Money ou Moov Money) ») ; ville vide → on dit seulement ce qui est vrai pour N'Djamena.
 - Aucun article vendable trouvé, ou lecture impossible : le message reste le simple bonjour d'avant.
 
 ## Pourquoi la liste complète est lue directement

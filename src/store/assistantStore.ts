@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { GIFT_WRAP_FEE, HOME_CITY, PAYMENT } from '../constants/shopRules';
+import { GIFT_WRAP_FEE, HOME_CITY, MOBILE_MONEY_ENABLED, PAYMENT } from '../constants/shopRules';
+import { outsideOrderUrl } from '../lib/outsideCityOrder';
 import {
   addressFrom,
   cityReply,
@@ -1631,6 +1632,11 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       await askOrderCity();
       return;
     }
+    // Airtel / Moov retirés « pour le moment » : une ville hors N'Djamena ne peut pas payer ici, sa commande se prend sur WhatsApp
+    if (!MOBILE_MONEY_ENABLED && !isHomeCity(d.city.name)) {
+      await outsideCityStop();
+      return;
+    }
     // N'Djamena : rendez-vous de livraison (facultatif, « Passer » = livraison normale) avant le paiement
     if (isHomeCity(d.city.name) && !d.slot?.skip) {
       if (!d.slot?.day) {
@@ -1641,6 +1647,13 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         await askSlotTime();
         return;
       }
+    }
+    if (!d.method && !MOBILE_MONEY_ENABLED) {
+      // un seul paiement possible (à la livraison, N'Djamena) : pas de question, Zara le dit et continue
+      patchOrder({ method: 'cash_on_delivery' });
+      await say(c.payCashAuto, { fast: true });
+      await nextCheckoutStep();
+      return;
     }
     if (!d.method) {
       await askPayment();
@@ -1655,6 +1668,27 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       return;
     }
     await showRecap();
+  }
+
+  // Ville hors N'Djamena sans Mobile Money : le bouton WhatsApp porte la commande déjà écrite (article, prix, quantité, ville)
+  async function outsideCityStop() {
+    const d = get().order;
+    if (!d?.city) return;
+    setStep('co_city');
+    const item = useCartStore.getState().items[0];
+    const variant = item ? [item.size ? `Taille ${item.size}` : null, item.color].filter(Boolean).join(' · ') : '';
+    const url = outsideOrderUrl({
+      productName: item?.product.name ?? '',
+      price: item?.product.price ?? 0,
+      quantity: item?.quantity ?? 1,
+      variant,
+      city: d.city.name,
+      siteUrl: item ? `https://www.albasseshopping.com/produit/${item.product.slug}` : null,
+    });
+    await say(T().checkout.outsideCity(d.city.name), {
+      fast: true,
+      actions: [{ label: T().chip.orderWhatsApp, kind: 'link', payload: url, highlight: true }, { label: T().chip.editCity, kind: 'orderEdit', payload: 'city' }, cancelOrderChip()],
+    });
   }
 
   async function askOrderCity(known?: City[] | null) {
@@ -1732,6 +1766,17 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
   async function askPayment() {
     const d = get().order;
     if (!d?.city) return;
+    if (!MOBILE_MONEY_ENABLED) {
+      // Airtel / Moov retirés : seul le paiement à la livraison existe (N'Djamena) ; une autre ville part sur WhatsApp
+      if (!isHomeCity(d.city.name)) {
+        await outsideCityStop();
+        return;
+      }
+      patchOrder({ method: 'cash_on_delivery' });
+      await say(T().checkout.payCashAuto, { fast: true });
+      await nextCheckoutStep();
+      return;
+    }
     setStep('co_pay');
     const home = isHomeCity(d.city.name);
     const chips = T().chip;
@@ -1835,6 +1880,11 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       await showRecap();
       return;
     }
+    if (!MOBILE_MONEY_ENABLED && !isHomeCity(d.city.name)) {
+      await outsideCityStop(); // jamais d'enregistrement : pas de paiement possible hors N'Djamena pour le moment
+      return;
+    }
+    if (!MOBILE_MONEY_ENABLED && d.method !== 'cash_on_delivery') patchOrder({ method: 'cash_on_delivery' });
     if (d.method === 'cash_on_delivery' && !isHomeCity(d.city.name)) {
       patchOrder({ method: null });
       await say(c.codOnlyHome, { fast: true });
@@ -2016,6 +2066,11 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
 
   async function choosePayment(method: PayMethodKey) {
     const d = get().order;
+    if (!MOBILE_MONEY_ENABLED && method !== 'cash_on_delivery') {
+      // un ancien bouton ou un mot écrit (« airtel ») : Airtel / Moov sont retirés, on continue avec le paiement à la livraison
+      await nextCheckoutStep();
+      return;
+    }
     if (d?.city && method === 'cash_on_delivery' && !isHomeCity(d.city.name)) {
       await say(T().checkout.codOnlyHome, { fast: true });
       await askPayment();
