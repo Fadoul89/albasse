@@ -15,7 +15,8 @@ import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { uploadProductImage } from '../../lib/imageUpload';
 import { addFictionalReview, deleteReview } from '../../lib/reviews';
 import { slugify } from '../../lib/slugify';
-import { flattenTree, mainCategories } from '../../lib/subCategories';
+import { mainCategories } from '../../lib/subCategories';
+import { CategoryPicker } from '../../components/CategoryPicker';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { GoldButton } from '../../components/GoldButton';
 import { StarRating } from '../../components/StarRating';
@@ -239,19 +240,15 @@ export function AdminProductFormScreen({ route }: Props) {
         <Field label="Tailles (séparées par une virgule)" value={sizes} onChangeText={setSizes} />
 
         <Text style={styles.label}>Catégorie</Text>
-        {/* sous-catégories : chaque catégorie principale, puis ses sous-catégories (« ↳ Chemises ») ; l'article se range dans celle qu'on touche */}
-        <View style={styles.chipsRow}>
-          {flattenTree(categories).map(({ category: c, depth }) => (
-            <Pressable
-              key={c.id}
-              testID={`product-category-${c.slug}`}
-              style={[styles.chip, categoryId === c.id && styles.chipActive]}
-              onPress={() => setCategoryId(c.id)}
-            >
-              <Text style={[styles.chipText, categoryId === c.id && styles.chipTextActive]}>{depth === 1 ? `↳ ${c.name}` : c.name}</Text>
-            </Pressable>
-          ))}
-        </View>
+        {/* sous-catégories : on touche d'abord la catégorie principale, puis ses sous-catégories s'affichent en dessous */}
+        <CategoryPicker
+          categories={categories}
+          value={categoryId || null}
+          onChange={(id) => id && setCategoryId(id)}
+          testIDPrefix="product-category"
+          subNoneLabel={(main) => 'Aucune sous-catégorie'}
+          subHint={(main) => `« Aucune » range l’article directement dans « ${main.name} ».`}
+        />
 
         <View style={styles.switchRow}>
           <Text style={styles.label}>Vente flash</Text>

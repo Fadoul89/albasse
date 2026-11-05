@@ -8,7 +8,8 @@ import { colors, fonts, radius, spacing } from '../../theme';
 import { useAuthStore } from '../../store/authStore';
 import { useProducts } from '../../hooks/useProducts';
 import { useCategories } from '../../hooks/useCategories';
-import { familyIds, flattenTree } from '../../lib/subCategories';
+import { familyIds } from '../../lib/subCategories';
+import { CategoryPicker } from '../../components/CategoryPicker';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { useToastStore } from '../../store/toastStore';
 import { ScreenHeader } from '../../components/ScreenHeader';
@@ -175,23 +176,14 @@ export function AdminProductsScreen() {
               style={styles.searchInput}
             />
 
-            <View style={styles.chipsRow}>
-              <Pressable
-                style={[styles.chip, !categoryId && styles.chipActive]}
-                onPress={() => setCategoryId(null)}
-              >
-                <Text style={[styles.chipText, !categoryId && styles.chipTextActive]}>Toutes catégories</Text>
-              </Pressable>
-              {flattenTree(categories).map(({ category: c, depth }) => (
-                <Pressable
-                  key={c.id}
-                  style={[styles.chip, categoryId === c.id && styles.chipActive]}
-                  onPress={() => setCategoryId(c.id)}
-                >
-                  <Text style={[styles.chipText, categoryId === c.id && styles.chipTextActive]}>{depth === 1 ? `↳ ${c.name}` : c.name}</Text>
-                </Pressable>
-              ))}
-            </View>
+            <CategoryPicker
+              categories={categories}
+              value={categoryId}
+              onChange={setCategoryId}
+              testIDPrefix="products-category"
+              allLabel="Toutes catégories"
+              subNoneLabel={(main) => `Toutes les sous-catégories`}
+            />
 
             <View style={styles.chipsRow}>
               {STATUS_FILTERS.map((f) => (

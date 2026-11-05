@@ -300,6 +300,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
                 delete r.sort_order;
                 if (!fakeCats.missing) r.sort_order = fakeCats.order[c.slug] ?? null;
                 if (fakeCats.subs && !fakeCats.noParent && !('parent_id' in r)) r.parent_id = null;
+                if (fakeCats.noParent) delete r.parent_id; // script SQL pas lance : la base n'a pas la colonne
                 return r;
               }), res.status());
             }).catch(() => {}); // page deja fermee pendant la lecture
@@ -905,8 +906,11 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   if (PARTS.includes('$')) {
     console.log('\n== $ sous-categories (docs/sous-categories.md) : une categorie principale + ses sous-categories (fausses categories, faux articles : lecture seule)');
     const HDRA = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
-    const cats = await get('categories?select=id,name,slug');
-    check('la base a au moins 2 categories', cats.length >= 2, cats.length);
+    // la vraie base peut deja avoir de vraies sous-categories (« Parfum feminin »…) : le test prend deux categories principales qui n'en ont PAS
+    const allCats = await get('categories?select=id,name,slug,parent_id');
+    const parents = new Set(allCats.map((c) => c.parent_id).filter(Boolean));
+    const cats = allCats.filter((c) => !c.parent_id && !parents.has(c.id));
+    check('la base a au moins 2 categories principales sans sous-categorie', cats.length >= 2, cats.length);
     const [cA, cB] = cats;
     const catalog = (await get('products?select=*&is_active=eq.true&stock=gt.0&limit=80&order=created_at.desc')).filter((p) => (p.images || [])[0] && Number(p.price) > 0);
     const uniq = []; const seen = new Set();
@@ -1065,11 +1069,72 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('admin avant le script SQL : la liste est celle d\'avant (toutes principales)', (await rowsOfAdmin(v.page)).every((slug) => slug !== SUB1.slug && slug !== SUB2.slug));
       await v.ctx.close();
     }
-    // ---- formulaire d'article : la categorie se choisit parmi les principales ET les sous-categories (« ↳ »)
+    // ---- formulaire d'article : on touche d'abord la categorie principale, ses sous-categories s'affichent ensuite en dessous
     {
       const v = await openSub(phone, '/admin/produits/edition', `product-category-${cA.slug}`, {}, true);
-      const subChip = await v.page.getByTestId(`product-category-${SUB1.slug}`).innerText();
-      check('formulaire d\'article : « ↳ Lotions et crèmes » est proposee sous sa categorie principale', /↳ Lotions et crèmes/.test(subChip) && (await v.page.getByTestId(`product-category-${cA.slug}`).count()) === 1, subChip);
+      const pick = (slug) => v.page.getByTestId(`product-category-${slug}`);
+      const subsBox = v.page.getByTestId('product-category-subs');
+      const checked = async (loc) => (await loc.getAttribute('aria-checked')) === 'true';
+      check('formulaire d\'article : la 1re categorie est choisie et ses sous-categories s\'affichent en dessous (pas melangees aux principales)', (await subsBox.count()) === 1 && (await subsBox.getByTestId(`product-category-${SUB1.slug}`).count()) === 1 && (await pick(SUB1.slug).count()) === 1 && /Sous-catégorie de « /.test(await subsBox.innerText()), await subsBox.innerText().catch(() => ''));
+      check('formulaire d\'article : le nom de la sous-categorie est ecrit tel quel (sans « ↳ ») et « Aucune sous-categorie » est choisi au depart', (await pick(SUB1.slug).innerText()).trim() === 'Lotions et crèmes' && (await checked(v.page.getByTestId('product-category-sub-none'))) && (await checked(pick(cA.slug))));
+      await subsBox.scrollIntoViewIfNeeded();
+      await v.page.evaluate(() => window.scrollBy(0, 120));
+      await sleep(400);
+      await v.page.screenshot({ path: path.join(OUT, '$5-formulaire-article.png') });
+      await pick(SUB1.slug).click();
+      await sleep(400);
+      check('formulaire d\'article : on touche « Lotions et crèmes » : elle est choisie, la categorie principale reste en evidence', (await checked(pick(SUB1.slug))) && (await checked(pick(cA.slug))) && !(await checked(v.page.getByTestId('product-category-sub-none'))));
+      await pick(cB.slug).click();
+      await sleep(400);
+      check('formulaire d\'article : une categorie sans sous-categorie : aucune ligne de sous-categories', (await v.page.getByTestId('product-category-subs').count()) === 0 && (await checked(pick(cB.slug))) && !(await checked(pick(cA.slug))));
+      await pick(cA.slug).click();
+      await sleep(400);
+      check('formulaire d\'article : on revient a la categorie principale : « Aucune sous-categorie » est choisi', (await v.page.getByTestId('product-category-subs').count()) === 1 && (await checked(v.page.getByTestId('product-category-sub-none'))));
+      check('aucune erreur (formulaire d\'article)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+    // ---- avec les VRAIES sous-categories de la boutique (s'il y en a) : on touche la categorie principale, sa sous-categorie s'affiche en dessous
+    {
+      const realSub = allCats.find((c) => c.parent_id && /femme/.test(allCats.find((p) => p.id === c.parent_id)?.slug || '')) || allCats.find((c) => c.parent_id);
+      const realParent = realSub ? allCats.find((c) => c.id === realSub.parent_id) : null;
+      if (realSub && realParent) {
+        const fu = adminSub();
+        const v = await newVisitor(phone, { storage: { [SKA]: fu.session }, fakeUser: fu });
+        await v.page.goto(`${BASE}/admin/produits/edition`, { waitUntil: 'load' });
+        await v.page.getByTestId(`product-category-${realParent.slug}`).waitFor({ timeout: 30000 });
+        await sleep(800);
+        await v.page.getByTestId(`product-category-${realParent.slug}`).scrollIntoViewIfNeeded();
+        await v.page.evaluate(() => window.scrollBy(0, -160));
+        await sleep(300);
+        await v.page.screenshot({ path: path.join(OUT, '$6a-avant.png') });
+        await v.page.getByTestId(`product-category-${realParent.slug}`).click();
+        await v.page.getByTestId('product-category-subs').waitFor({ timeout: 8000 });
+        const box = v.page.getByTestId('product-category-subs');
+        check(`vraie boutique : on touche « ${realParent.name} » et sa sous-categorie « ${realSub.name} » s'affiche en dessous`, (await box.getByTestId(`product-category-${realSub.slug}`).count()) === 1 && (await box.innerText()).includes(realParent.name), await box.innerText());
+        await box.scrollIntoViewIfNeeded();
+        await v.page.evaluate(() => window.scrollBy(0, 160));
+        await sleep(400);
+        await v.page.screenshot({ path: path.join(OUT, '$6-vrai-formulaire.png') });
+        const other = allCats.find((c) => !c.parent_id && c.id !== realParent.id && !parents.has(c.id));
+        if (other) {
+          await v.page.getByTestId(`product-category-${other.slug}`).click();
+          await sleep(400);
+          check('vraie boutique : une autre categorie sans sous-categorie : la ligne des sous-categories disparait', (await v.page.getByTestId('product-category-subs').count()) === 0);
+        }
+        check('aucune erreur (vraies sous-categories)', v.errs.length === 0, v.errs);
+        await v.ctx.close();
+      }
+    }
+    // ---- liste des produits (admin) : le filtre fait de meme
+    {
+      const v = await openSub(phone, '/admin/produits', `products-category-${cA.slug}`, {}, true);
+      check('liste des produits : au depart « Toutes categories », aucune ligne de sous-categories', (await v.page.getByTestId('products-category-subs').count()) === 0 && (await v.page.getByTestId('products-category-all').getAttribute('aria-checked')) === 'true');
+      await v.page.getByTestId(`products-category-${cA.slug}`).click();
+      await v.page.getByTestId('products-category-subs').waitFor({ timeout: 8000 });
+      check('liste des produits : on touche la categorie principale : ses sous-categories s\'affichent et « Toutes les sous-categories » est choisi', (await v.page.getByTestId(`products-category-${SUB2.slug}`).count()) === 1 && /Toutes les sous-catégories/.test(await v.page.getByTestId('products-category-sub-none').innerText()));
+      await v.page.getByTestId(`products-category-${cB.slug}`).click();
+      await sleep(400);
+      check('liste des produits : une categorie sans sous-categorie : la ligne disparait', (await v.page.getByTestId('products-category-subs').count()) === 0);
       await v.ctx.close();
     }
   }
