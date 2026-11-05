@@ -12,7 +12,8 @@ Une **sous-catégorie** est une catégorie qui a une **catégorie principale** :
 - La liste est un arbre : chaque catégorie principale, puis ses sous-catégories (« ↳ », décalées, avec « Sous-catégorie de … »).
 - **▲ ▼** déplacent une catégorie parmi ses « sœurs » : les principales entre elles, les sous-catégories d'une même catégorie entre elles.
 - **Supprimer** une catégorie principale : ses sous-catégories deviennent des catégories principales (leurs articles restent classés). Les articles rangés **directement** dans la catégorie supprimée n'ont plus de catégorie (comme avant). Le message de confirmation le dit.
-- **Formulaire d'un article** : la catégorie se choisit parmi les catégories principales **et** les sous-catégories (« ↳ Chemises » sous « Vêtements »). L'article est rangé dans celle qu'on touche. La liste « Produits » a le même filtre ; une catégorie principale montre aussi les articles de ses sous-catégories.
+- **Formulaire d'un article** : on touche **d'abord la catégorie principale** (« Vêtements pour femmes »), et **ses sous-catégories s'affichent en dessous** (« Pour les filles »). On touche la sous-catégorie voulue, ou **« Aucune sous-catégorie »** pour ranger l'article directement dans la catégorie principale. Une catégorie sans sous-catégorie n'affiche pas cette ligne.
+- **Liste « Produits »** : le même choix en deux temps pour filtrer (« Toutes catégories », puis une catégorie principale, puis « Toutes les sous-catégories » ou une sous-catégorie). Une catégorie principale montre aussi les articles de ses sous-catégories.
 - **Promotions intelligentes** : le choix d'une catégorie montre aussi les sous-catégories.
 - **Affiliés** : une sous-catégorie sans taux de commission à elle prend le taux de sa catégorie principale (puis le taux global). Rien ne change pour les catégories d'aujourd'hui.
 
@@ -41,7 +42,7 @@ Test sur un Postgres local jetable (jamais la vraie base) : `sh tests/sql/run-su
 
 - `src/lib/subCategories.ts` : les règles (pures, sans réseau). Test : `node --import ./tests/zara/register.mjs tests/email/sub-categories.test.ts`.
 - `src/hooks/useCategories.ts` : `categories` (toutes), `mainCategories` (principales), `rootIdOf`.
-- Écrans : `AdminCategoriesScreen`, `AdminProductFormScreen`, `AdminProductsScreen`, `AdminPromotionsScreen`, `HomeScreen`, `CategoryScreen`.
+- Écrans : `AdminCategoriesScreen`, `AdminProductFormScreen` et `AdminProductsScreen` (avec `components/CategoryPicker.tsx`, le choix en deux temps), `AdminPromotionsScreen`, `HomeScreen`, `CategoryScreen`.
 - Zara : `src/lib/assistantData.ts`, `src/lib/assistantBrain.ts`, `supabase/functions/zara-ai/index.ts` (à redéployer). Annonces : `src/lib/adTargeting.ts`, `src/lib/adSensitive.ts`.
 - Google : `netlify/edge-functions/og-preview.ts`.
 - Test dans le navigateur : `PARTS='$' SUPABASE_ANON_KEY=... node tests/zara/zara-ui.test.js dist 4333`.
