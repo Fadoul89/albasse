@@ -1,6 +1,6 @@
 // Le formulaire « Créer un compte » : nom, Homme / Femme, date de naissance, célibataire / marié, téléphone et mot de passe obligatoires, le reste facultatif. Sur la page Inscription et
 // en premier sur l'écran d'entrée quand le compte est obligatoire.
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, StyleSheet, Pressable } from 'react-native';
 import { colors, fonts, radius, spacing, accountField, accountFieldPlaceholder } from '../theme';
 import { useAuthStore } from '../store/authStore';
@@ -16,6 +16,8 @@ import { GenderPicker } from './GenderPicker';
 import { MaritalPicker } from './MaritalPicker';
 import type { Gender } from '../lib/clientGender';
 import { BIRTH_EXAMPLE, checkBirthMarital, formatBirthInput, type MaritalStatus } from '../lib/clientBirthMarital';
+import { inviterFirstName, readStoredInviteCode } from '../lib/friendInvitesApi';
+import { inviterGreeting } from '../lib/friendInvites';
 
 export function RegisterForm({ onSuccess, onPrivacy }: { onSuccess: () => void; onPrivacy: () => void }) {
   const signUp = useAuthStore((s) => s.signUp);
@@ -35,6 +37,15 @@ export function RegisterForm({ onSuccess, onPrivacy }: { onSuccess: () => void; 
   const [acceptsTerms, setAcceptsTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const showToast = useToastStore((s) => s.show);
+  // Parrainage : le code du lien d'invitation, s'il y en a un, dit « Invité(e) par Amina » (rien n'est affiché si le code n'existe pas)
+  const [inviter, setInviter] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    readStoredInviteCode().then((code) => (code ? inviterFirstName(code) : null)).then((name) => alive && setInviter(name));
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const handleSubmit = async () => {
     if (!isSupabaseConfigured) {
@@ -127,6 +138,11 @@ export function RegisterForm({ onSuccess, onPrivacy }: { onSuccess: () => void; 
 
   return (
     <View>
+      {inviter ? (
+        <Text style={styles.invitedBy} testID="register-invited-by">
+          🎁 {inviterGreeting(inviter)}
+        </Text>
+      ) : null}
       <Text style={styles.sectionLabel}>Informations obligatoires</Text>
       <TextInput
         testID="register-name"
@@ -276,6 +292,7 @@ export function RegisterForm({ onSuccess, onPrivacy }: { onSuccess: () => void; 
 }
 
 const styles = StyleSheet.create({
+  invitedBy: { color: '#b45309', fontFamily: fonts.bodySemiBold, fontSize: 14, marginBottom: 10 },
   sectionLabel: {
     color: colors.creamMuted,
     fontFamily: fonts.bodySemiBold,

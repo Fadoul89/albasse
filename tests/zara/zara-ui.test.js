@@ -20,7 +20,7 @@ const BASE_HOST = new URL(BASE).hostname;
 // MOBILE_MONEY=on : le site a été construit avec EXPO_PUBLIC_MOBILE_MONEY=on (Airtel Money et Moov Money ouverts) : on lance les ANCIENS contrôles.
 // Sans cette variable (le site publié : Airtel / Moov retirés « pour le moment ») : les nouveaux contrôles (partie ¤) et les anciens contrôles de paiement sont remplacés.
 const MM = process.env.MOBILE_MONEY === 'on';
-const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI0123456789TOFBCDE+=^~%&@?¤$').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI0123456789TOFBCDE+=^~%&@?¤$#').toUpperCase();
 // saison fraiche (blousons et manteaux) : le bouton du menu de Zara n'existe que jusqu'au 31 decembre 2026 a 23h59 (N'Djamena)
 const COLD_ON = Date.now() < Date.parse('2027-01-01T00:00:00+01:00');
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
@@ -52,7 +52,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   // rank : rang du jour renvoye par la fonction de la base (null : fonction pas installee). fakeUser : compte simule (token : reponse a une connexion par mot de passe ; delay : lenteur du profil en ms). fakeOrders : { list: [...], patches: [] } = fausse table des commandes.
   // zaraInstall : par defaut, le visiteur a deja repondu « Plus tard » a l'installation (Zara ne la propose pas) ; null = vrai nouveau
   // visiteur, pour les parties qui testent l'installation
-  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, fakeSales = null, fakeAffinity = null, fakeCallbacks = null, fakePushes = null, fakeStore = null, fakeCats = null, fakeOnline = null, fakeRecent = null, fakeUnsub = null, initScripts = [], zaraInstall = 'dismissed', zaraPush = 'later', installAfterSignUp = '1', pushPerm = null, pushAnswer = 'granted', fakeAi = null, autoOpen = false, fakePromos = null, fakeTelegram = null } = {}) {
+  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, fakeSales = null, fakeAffinity = null, fakeCallbacks = null, fakePushes = null, fakeStore = null, fakeCats = null, fakeOnline = null, fakeRecent = null, fakeUnsub = null, initScripts = [], zaraInstall = 'dismissed', zaraPush = 'later', installAfterSignUp = '1', pushPerm = null, pushAnswer = 'granted', fakeAi = null, autoOpen = false, fakePromos = null, fakeTelegram = null, fakeInvites = null } = {}) {
     // Zara s'ouvre seule sur l'Accueil apres 8 s : par defaut c'est deja « fait » pour ce visiteur (les autres tests gardent leur deroulement) ; autoOpen: true = vrai nouveau visiteur
     if (!autoOpen) session = { albasse_assistant_autoopen_seen: '1', ...session };
     const ctx = await b.newContext(opts);
@@ -262,6 +262,25 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
           (fakeUnsub.calls = fakeUnsub.calls || []).push(JSON.parse(req.postData() || '{}'));
           if (fakeUnsub.error) return json(route, { message: 'erreur de test' }, 500);
           return json(route, fakeUnsub.result === true);
+        }
+        // parrainage (add-friend-invites.sql) : fakeInvites.missing = fonctions absentes (script pas lance) ; progress = ce que invite_my_progress repond ; lookup = { CODE: 'Amina' } ;
+        // claim = reponse de invite_claim ; overview = ce que admin_invite_overview repond ; setError = refus de admin_invite_reward_set ; calls = tous les appels recus
+        if (fakeInvites && /^\/rest\/v1\/rpc\/(invite_|admin_invite_)/.test(u.pathname) && m === 'POST') {
+          const fn = u.pathname.split('/').pop();
+          const body = JSON.parse(req.postData() || '{}');
+          (fakeInvites.calls = fakeInvites.calls || []).push({ fn, ...body });
+          if (fakeInvites.missing) return json(route, { code: 'PGRST202', message: `Could not find the function public.${fn} in the schema cache` }, 404);
+          if (fn === 'invite_lookup') return json(route, (fakeInvites.lookup || {})[String(body.p_code || '').toUpperCase()] ?? null);
+          if (fn === 'invite_claim') return json(route, fakeInvites.claim || 'ok');
+          if (fn === 'invite_mark_app_opened') return json(route, null);
+          if (fn === 'invite_my_progress') return json(route, fakeInvites.progress ?? null);
+          if (fn === 'admin_invite_overview') return fakeInvites.overviewError ? json(route, { code: '42501', message: 'Accès réservé aux administrateurs' }, 403) : json(route, fakeInvites.overview);
+          if (fn === 'admin_invite_reward_set') {
+            if (fakeInvites.setError) return json(route, { message: fakeInvites.setError }, 400);
+            const r = ((fakeInvites.overview || {}).rewards || []).find((x) => x.id === body.p_reward);
+            if (r) { r.status = body.p_status; r.handled_at = new Date().toISOString(); }
+            return json(route, null);
+          }
         }
         // ordre des categories (add-category-order.sql) : les vraies categories avec un faux sort_order. fakeCats.order = { slug: numero } ;
         // missing = colonne absente (script pas lance) ; patches = numeros recus de la page admin ({ id, sort_order })
@@ -903,6 +922,324 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   }
 
   // =============================================== € . « ANNONCE » CIBLÉE DE ZARA (UNE PUB COMME UNE VRAIE ADS, DE VRAIES RAISONS) ===============================================
+  if (PARTS.includes('#')) {
+    console.log('\n== # parrainage « Invite 5 amis, gagne un parfum » (docs/parrainage.md ; fausse base : lecture seule, aucune vraie ecriture)');
+    const uid = '44444444-4444-4444-8444-444444444444';
+    const JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0NDQ0NDQ0NC00NDQ0LTQ0NDQtODQ0NC00NDQ0NDQ0NDQ0NDQiLCJleHAiOjQxMDI0NDQ4MDAsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.c2ln';
+    const LOGIN_EMAIL = '23566123456@tel.albasseshopping.com';
+    const SKI = 'sb-xtitsmmccpkelxfjyqyh-auth-token';
+    const accountI = ({ is_admin = false, name = 'Ahmed Hassan' } = {}) => {
+      const auth = { id: uid, aud: 'authenticated', role: 'authenticated', email: LOGIN_EMAIL, app_metadata: { provider: 'email' }, user_metadata: {}, identities: [{ id: uid, provider: 'email' }], created_at: '2026-01-01T00:00:00Z' };
+      const token = { access_token: JWT, refresh_token: 'fake-refresh', token_type: 'bearer', expires_in: 3600, expires_at: 4102444800, user: auth };
+      return { auth, token, session: JSON.stringify(token), editable: true, patches: [], profile: { id: uid, email: LOGIN_EMAIL, full_name: name, phone: '66123456', whatsapp_number: null, profession: null, region: null, country: 'Tchad', address: null, loyalty_points: 0, banned: false, role: is_admin ? 'admin' : 'customer', is_admin, is_affiliate: false } };
+    };
+    const walls = (pg) => pg.getByTestId('account-wall');
+    const showI = (pg, text) => pg.getByText(text, { exact: true }).locator('visible=true').first();
+    // l'application « installee » (mode autonome) et la capture des ouvertures de liens (WhatsApp)
+    const STANDALONE = "(() => { const mm = window.matchMedia.bind(window); window.matchMedia = (q) => (/display-mode:\\s*standalone/.test(q) ? { matches: true, media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, onchange: null, dispatchEvent() { return false; } } : mm(q)); })();";
+    const CAPTURE_OPEN = "window.__opened = []; window.open = (u) => { window.__opened.push(String(u)); return null; };";
+    const openedLinks = (pg) => pg.evaluate(() => window.__opened || []);
+    const kept = (pg) => pg.evaluate(() => window.localStorage.getItem('albasse_invite_code'));
+    const registerI = async (v, { name = 'Fatimé Oumar', phoneNo = '66 12 34 56', password = 'secret12' } = {}) => {
+      await v.page.getByTestId('register-phone').waitFor({ timeout: 15000 });
+      await sleep(900);
+      await v.page.getByTestId('register-name').locator('visible=true').fill(name);
+      await v.page.getByTestId('register-gender-femme').locator('visible=true').click();
+      await v.page.getByTestId('register-birth').locator('visible=true').fill('25/03/1998');
+      await v.page.getByTestId('register-marital-celibataire').locator('visible=true').click();
+      await v.page.getByTestId('register-phone').locator('visible=true').fill(phoneNo);
+      await v.page.getByTestId('register-password').locator('visible=true').fill(password);
+      await v.page.getByTestId('register-terms').locator('visible=true').click();
+      await showI(v.page, 'Créer mon compte').click();
+    };
+    const PROGRESS = (extra = {}) => ({ code: 'ABCD2345', goal: 5, joined: 3, installed: 2, friends: [{ name: 'Fatimé', installed: true }, { name: 'Moussa', installed: true }, { name: 'Khadija', installed: false }], rewards: [], ...extra });
+
+    // ---- 1) un ami arrive avec le lien : « Invité(e) par Amina », puis le compte est cree et la base est prevenue
+    {
+      const fu = accountI();
+      const fi = { lookup: { ABCD2345: 'Amina' }, claim: 'ok', calls: [] };
+      const v = await newVisitor(phone, { fakeUser: fu, fakeStore: { waOrder: true, accountRequired: true }, fakeInvites: fi });
+      await v.page.goto(`${BASE}/?invite=abcd2345`, { waitUntil: 'load' });
+      await walls(v.page).waitFor({ timeout: 25000 });
+      await v.page.getByTestId('register-invited-by').waitFor({ timeout: 15000 });
+      check('lien d\'invitation : « Invité(e) par Amina » sur le formulaire d\'inscription', /Invité\(e\) par Amina/.test(await v.page.getByTestId('register-invited-by').innerText()));
+      await v.page.screenshot({ path: path.join(OUT, '#0-inscription-invite.png') });
+      check('lien d\'invitation : le code (remis en majuscules) est gardé sur le telephone', (await kept(v.page)) !== null && /ABCD2345/.test((await kept(v.page)) || ''), await kept(v.page));
+      check('lien d\'invitation : la base est interrogee avec le bon code pour le prenom', fi.calls.some((c) => c.fn === 'invite_lookup' && c.p_code === 'ABCD2345'), fi.calls);
+      await registerI(v);
+      await v.page.getByText('Bienvenue ✓').waitFor({ timeout: 15000 });
+      await sleep(1500);
+      check('inscription avec le lien : la base recoit invite_claim avec le code, une seule fois', fi.calls.filter((c) => c.fn === 'invite_claim').length === 1 && fi.calls.find((c) => c.fn === 'invite_claim').p_code === 'ABCD2345', fi.calls);
+      check('le compte est cree normalement (numero + mot de passe)', (fu.signups || []).length === 1 && fu.signups[0].email === LOGIN_EMAIL);
+      check('apres la reponse « ok » : le code n\'est plus garde (rien ne sera redemande)', (await kept(v.page)) === null, await kept(v.page));
+      check('aucune erreur (inscription avec un lien)', v.errs.length === 0, v.errs);
+      check('aucune ecriture reelle', v.writes.every((w) => /visitor_sessions|profiles|auto_flag_stale_orders/.test(w)), v.writes);
+      await v.ctx.close();
+    }
+    // ---- 2) liens faux ou sans lien : rien n'est garde, rien n'est demande a la base
+    {
+      const fi = { lookup: {}, calls: [] };
+      const v = await newVisitor(phone, { fakeUser: accountI(), fakeStore: { waOrder: true, accountRequired: true }, fakeInvites: fi });
+      await v.page.goto(`${BASE}/?invite=ABC`, { waitUntil: 'load' });
+      await walls(v.page).waitFor({ timeout: 25000 });
+      await v.page.getByTestId('register-phone').waitFor({ timeout: 15000 });
+      await sleep(1200);
+      check('code trop court : rien n\'est garde, aucun « Invité(e) par », la base n\'est pas interrogee', (await kept(v.page)) === null && (await v.page.getByTestId('register-invited-by').count()) === 0 && fi.calls.length === 0, fi.calls);
+      await v.ctx.close();
+      const fi2 = { lookup: {}, claim: 'invalid', calls: [] };
+      const w = await newVisitor(phone, { fakeUser: accountI(), fakeStore: { waOrder: true, accountRequired: true }, fakeInvites: fi2 });
+      await w.page.goto(`${BASE}/?invite=QQQQQQQQ`, { waitUntil: 'load' });
+      await walls(w.page).waitFor({ timeout: 25000 });
+      await w.page.getByTestId('register-phone').waitFor({ timeout: 15000 });
+      await sleep(1200);
+      check('code qui n\'existe pas : aucun « Invité(e) par »', (await w.page.getByTestId('register-invited-by').count()) === 0);
+      await registerI(w);
+      await w.page.getByText('Bienvenue ✓').waitFor({ timeout: 15000 });
+      await sleep(1500);
+      check('code qui n\'existe pas : l\'inscription marche quand meme, la base repond « invalid » et le code est oublie', (await kept(w.page)) === null && fi2.calls.some((c) => c.fn === 'invite_claim'), fi2.calls);
+      await w.ctx.close();
+      const fi3 = { calls: [] };
+      const x = await newVisitor(phone, { fakeUser: accountI(), fakeStore: { waOrder: true, accountRequired: true }, fakeInvites: fi3 });
+      await x.page.goto(`${BASE}/`, { waitUntil: 'load' });
+      await walls(x.page).waitFor({ timeout: 25000 });
+      await x.page.getByTestId('register-phone').waitFor({ timeout: 15000 });
+      await registerI(x);
+      await x.page.getByText('Bienvenue ✓').waitFor({ timeout: 15000 });
+      await sleep(1200);
+      check('sans lien d\'invitation : aucun appel de parrainage a l\'inscription', fi3.calls.length === 0, fi3.calls);
+      await x.ctx.close();
+    }
+    // ---- 3) script SQL pas lance : l'inscription marche, le code reste garde, aucune erreur
+    {
+      const fi = { missing: true, calls: [] };
+      const fu = accountI();
+      const v = await newVisitor(phone, { fakeUser: fu, fakeStore: { waOrder: true, accountRequired: true }, fakeInvites: fi });
+      await v.page.goto(`${BASE}/?invite=ABCD2345`, { waitUntil: 'load' });
+      await walls(v.page).waitFor({ timeout: 25000 });
+      await v.page.getByTestId('register-phone').waitFor({ timeout: 15000 });
+      await sleep(1200);
+      check('script SQL pas lance : pas de « Invité(e) par » (la base ne repond pas)', (await v.page.getByTestId('register-invited-by').count()) === 0);
+      await registerI(v);
+      await v.page.getByText('Bienvenue ✓').waitFor({ timeout: 15000 });
+      await sleep(1500);
+      check('script SQL pas lance : le compte est cree quand meme', (fu.signups || []).length === 1);
+      check('script SQL pas lance : le code reste garde (on reessaiera)', /ABCD2345/.test((await kept(v.page)) || ''));
+      check('aucune erreur (script SQL pas lance, inscription)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+    // ---- 4) l'application installee s'ouvre avec le client connecte : la base le note, une seule fois
+    {
+      const fi = { calls: [] };
+      const fu = accountI();
+      const v = await newVisitor(phone, { storage: { [SKI]: fu.session }, fakeUser: fu, fakeInvites: fi, initScripts: [STANDALONE] });
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
+      await sleep(5000);
+      check('application installee (mode autonome) + client connecte : la base est prevenue (invite_mark_app_opened)', fi.calls.filter((c) => c.fn === 'invite_mark_app_opened').length === 1, fi.calls);
+      await v.page.reload({ waitUntil: 'load' });
+      await sleep(4000);
+      check('2e ouverture : la base n\'est plus prevenue (une seule fois par client)', fi.calls.filter((c) => c.fn === 'invite_mark_app_opened').length === 1, fi.calls);
+      check('aucune erreur (application installee)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+      // un navigateur normal : jamais
+      const fj = { calls: [] };
+      const w = await newVisitor(phone, { storage: { [SKI]: fu.session }, fakeUser: fu, fakeInvites: fj });
+      await w.page.goto(`${BASE}/`, { waitUntil: 'load' });
+      await sleep(5000);
+      check('navigateur normal (pas l\'application installee) : la base n\'est pas prevenue', fj.calls.filter((c) => c.fn === 'invite_mark_app_opened').length === 0, fj.calls);
+      await w.ctx.close();
+      // l'application installee mais personne de connecte : jamais
+      const fk = { calls: [] };
+      const x = await newVisitor(phone, { fakeUser: fu, fakeInvites: fk, fakeStore: { waOrder: true, accountRequired: true }, initScripts: [STANDALONE] });
+      await x.page.goto(`${BASE}/`, { waitUntil: 'load' });
+      await sleep(4000);
+      check('application installee mais personne de connecte : la base n\'est pas prevenue', fk.calls.filter((c) => c.fn === 'invite_mark_app_opened').length === 0, fk.calls);
+      await x.ctx.close();
+      // script SQL pas lance : l'ouverture ne casse rien et sera retentee
+      const fl = { missing: true, calls: [] };
+      const y = await newVisitor(phone, { storage: { [SKI]: fu.session }, fakeUser: fu, fakeInvites: fl, initScripts: [STANDALONE] });
+      await y.page.goto(`${BASE}/`, { waitUntil: 'load' });
+      await sleep(4000);
+      await y.page.reload({ waitUntil: 'load' });
+      await sleep(4000);
+      check('script SQL pas lance : l\'appel est retente a chaque ouverture, sans erreur', fl.calls.filter((c) => c.fn === 'invite_mark_app_opened').length === 2 && y.errs.length === 0, { calls: fl.calls.length, errs: y.errs });
+      await y.ctx.close();
+    }
+    // ---- 5) Mon compte : la carte, puis l'ecran « Inviter mes amis »
+    {
+      const fi = { progress: PROGRESS(), calls: [] };
+      const fu = accountI();
+      const v = await newVisitor(phone, { storage: { [SKI]: fu.session }, fakeUser: fu, fakeInvites: fi, initScripts: [CAPTURE_OPEN] });
+      await v.ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: BASE }).catch(() => {});
+      await v.page.goto(`${BASE}/compte`, { waitUntil: 'load' });
+      await v.page.getByTestId('account-invite-card').waitFor({ timeout: 25000 });
+      const card = await v.page.getByTestId('account-invite-card').innerText();
+      check('Mon compte : la carte « Invite tes amis, gagne un parfum » montre « 2 / 5 amis »', /Invite tes amis, gagne un parfum/.test(card) && /2 \/ 5 amis/.test(card), card);
+      await v.page.screenshot({ path: path.join(OUT, '#1-compte-carte.png') });
+      await v.page.getByTestId('account-invite-card').click();
+      await v.page.getByTestId('invite-link').waitFor({ timeout: 15000 });
+      await sleep(600);
+      check('l\'ecran s\'ouvre sur /inviter-mes-amis', new URL(v.page.url()).pathname === '/inviter-mes-amis', v.page.url());
+      check('ecran : phrase « Encore 3 amis pour gagner un parfum gratuit. » et barre « 2 / 5 amis »', /Encore 3 amis pour gagner un parfum gratuit\./.test(await v.page.getByTestId('invite-headline').innerText()) && /2 \/ 5 amis/.test(await v.page.getByTestId('invite-bar-label').innerText()));
+      check('ecran : le lien est celui du client avec son code', (await v.page.getByTestId('invite-link').innerText()).trim() === 'https://www.albasseshopping.com/?invite=ABCD2345');
+      const body = await v.page.locator('body').innerText();
+      check('ecran : 3 amis listes (2 installes ✅, 1 en attente ⏳), prenoms seulement', /Mes amis \(3\)/.test(body) && /Fatimé/.test(body) && /Khadija/.test(body) && /Compte créé, application pas encore ouverte/.test(body));
+      check('ecran : « 1 ami a cree son compte mais n\'a pas encore ouvert l\'application » (joined 3, installed 2)', /1 ami a créé son compte mais n’a pas encore ouvert l’application/.test(await v.page.getByTestId('invite-waiting').innerText()));
+      check('ecran : les 3 gestes sont expliques et la regle « 5 amis = 1 parfum, l\'equipe verifie »', /Ils créent leur compte avec ton lien/.test(body) && /installent|installer l’application Albasse/.test(body) && /L’équipe vérifie vos amis/.test(body));
+      check('ecran : aucun gain affiche pour l\'instant', (await v.page.getByTestId('invite-earned').count()) === 0 && (await v.page.getByTestId('invite-reward-1').count()) === 0);
+      await v.page.screenshot({ path: path.join(OUT, '#2-ecran-inviter.png') });
+      await v.page.getByTestId('invite-whatsapp').click();
+      await sleep(500);
+      const opened = await openedLinks(v.page);
+      check('« Envoyer a mes amis sur WhatsApp » : ouvre WhatsApp avec le lien et un texte qui ne promet rien a l\'ami', opened.length === 1 && opened[0].startsWith('https://wa.me/?text=') && decodeURIComponent(opened[0]).includes('https://www.albasseshopping.com/?invite=ABCD2345') && !/gratuit|cadeau|gagn/i.test(decodeURIComponent(opened[0])), opened);
+      await v.page.getByTestId('invite-copy').click();
+      await v.page.getByText('Lien copié ✓').waitFor({ timeout: 8000 });
+      const clip = await v.page.evaluate(() => navigator.clipboard.readText()).catch(() => '');
+      check('« Copier le lien » : le lien est dans le presse-papiers', clip === 'https://www.albasseshopping.com/?invite=ABCD2345', clip);
+      check('aucune erreur (ecran Inviter mes amis)', v.errs.length === 0, v.errs);
+      check('aucune ecriture reelle', v.writes.every((w) => /visitor_sessions|profiles|auto_flag_stale_orders/.test(w)), v.writes);
+      await v.ctx.close();
+    }
+    // ---- 6) un parfum gagne : les etats (a valider, valide, remis, refuse)
+    {
+      const fi = { progress: PROGRESS({ joined: 7, installed: 7, friends: Array.from({ length: 7 }, (_, i) => ({ name: `Ami ${i + 1}`, installed: true })), rewards: [{ number: 1, status: 'a_valider' }] }), calls: [] };
+      const fu = accountI();
+      const v = await newVisitor(phone, { storage: { [SKI]: fu.session }, fakeUser: fu, fakeInvites: fi });
+      await v.page.goto(`${BASE}/inviter-mes-amis`, { waitUntil: 'load' });
+      await v.page.getByTestId('invite-earned').waitFor({ timeout: 25000 });
+      check('5 amis ou plus : « 1 parfum gagné », la barre repart a « 2 / 5 amis »', /1 parfum gagné/.test(await v.page.getByTestId('invite-earned').innerText()) && /2 \/ 5 amis/.test(await v.page.getByTestId('invite-bar-label').innerText()));
+      check('gain « a valider » : « L\'equipe verifie vos amis, puis vous contacte sur WhatsApp » (jamais « remis »)', /Parfum gagné ✓ L’équipe vérifie vos amis, puis vous contacte sur WhatsApp\./.test(await v.page.getByTestId('invite-reward-1').innerText()) && !/remis/.test(await v.page.getByTestId('invite-reward-1').innerText()));
+      await v.page.screenshot({ path: path.join(OUT, '#3-parfum-gagne.png') });
+      await v.ctx.close();
+      for (const [status, expect] of [['valide', /Parfum validé ✓ L’équipe vous contacte sur WhatsApp pour le choisir\./], ['remis', /Parfum remis ✓/], ['refuse', /Non validé par l’équipe\./]]) {
+        const f2 = { progress: PROGRESS({ rewards: [{ number: 1, status }] }), calls: [] };
+        const w = await newVisitor(phone, { storage: { [SKI]: fu.session }, fakeUser: fu, fakeInvites: f2 });
+        await w.page.goto(`${BASE}/inviter-mes-amis`, { waitUntil: 'load' });
+        await w.page.getByTestId('invite-reward-1').waitFor({ timeout: 25000 });
+        check(`gain « ${status} » : texte clair`, expect.test(await w.page.getByTestId('invite-reward-1').innerText()), await w.page.getByTestId('invite-reward-1').innerText());
+        await w.ctx.close();
+      }
+      const f3 = { progress: PROGRESS({ joined: 12, installed: 12, friends: [], rewards: [{ number: 1, status: 'remis' }, { number: 2, status: 'a_valider' }] }), calls: [] };
+      const x = await newVisitor(phone, { storage: { [SKI]: fu.session }, fakeUser: fu, fakeInvites: f3 });
+      await x.page.goto(`${BASE}/inviter-mes-amis`, { waitUntil: 'load' });
+      await x.page.getByTestId('invite-earned').waitFor({ timeout: 25000 });
+      check('12 amis : « 2 parfums gagnés », deux lignes de gains, « 2 / 5 amis » pour le 3e', /2 parfums gagnés/.test(await x.page.getByTestId('invite-earned').innerText()) && (await x.page.getByTestId('invite-reward-2').count()) === 1 && /2 \/ 5 amis/.test(await x.page.getByTestId('invite-bar-label').innerText()));
+      await x.ctx.close();
+    }
+    // ---- 7) avant le script SQL : aucune trace du parrainage
+    {
+      const fi = { missing: true, calls: [] };
+      const fu = accountI();
+      const v = await newVisitor(phone, { storage: { [SKI]: fu.session }, fakeUser: fu, fakeInvites: fi });
+      await v.page.goto(`${BASE}/compte`, { waitUntil: 'load' });
+      await v.page.getByTestId('profile-edit-open').waitFor({ timeout: 25000 });
+      await sleep(2500);
+      check('script SQL pas lance : aucune carte « Invite tes amis » dans Mon compte', (await v.page.getByTestId('account-invite-card').count()) === 0 && !/Invite tes amis/.test(await v.page.locator('body').innerText()));
+      await v.page.goto(`${BASE}/inviter-mes-amis`, { waitUntil: 'load' });
+      await v.page.getByTestId('invite-unavailable').waitFor({ timeout: 25000 });
+      check('script SQL pas lance : l\'ecran dit que ce n\'est pas encore disponible', /pas encore disponible/.test(await v.page.getByTestId('invite-unavailable').innerText()));
+      check('aucune erreur (script SQL pas lance, compte)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+    // ---- 8) l'administrateur
+    {
+      const fu = accountI({ is_admin: true, name: 'Admin Albasse' });
+      const overview = {
+        goal: 5,
+        totals: { inviters: 2, joined: 9, installed: 6, to_validate: 1, validated: 0, delivered: 1, refused: 0 },
+        rewards: [
+          {
+            id: 'r-1', number: 1, status: 'a_valider', note: null, created_at: '2026-11-05T10:00:00Z', handled_at: null,
+            user: { id: 'u-1', name: 'Amina Hassan', phone: '66000001', whatsapp: null },
+            friends: [
+              { name: 'Fatimé Oumar', phone: '66000002', installed: true, banned: false },
+              { name: 'Moussa Ali', phone: '66000003', installed: true, banned: false },
+              { name: 'Khadija Idriss', phone: '66000004', installed: true, banned: false },
+              { name: 'Abakar Saleh', phone: '66000005', installed: true, banned: false },
+              { name: 'Zara Mahamat', phone: '66000006', installed: true, banned: false },
+              { name: 'Hawa Brahim', phone: '66000007', installed: false, banned: false },
+            ],
+          },
+          {
+            id: 'r-2', number: 1, status: 'remis', note: 'Parfum remis en main propre', created_at: '2026-10-30T10:00:00Z', handled_at: '2026-10-31T10:00:00Z',
+            user: { id: 'u-2', name: 'Idriss Adam', phone: '66000010', whatsapp: '66000011' },
+            friends: [{ name: 'Ami Un', phone: '66000021', installed: true, banned: false }],
+          },
+        ],
+        inviters: [{ id: 'u-1', name: 'Amina Hassan', phone: '66000001', joined: 6, installed: 5 }, { id: 'u-2', name: 'Idriss Adam', phone: '66000010', joined: 3, installed: 1 }],
+      };
+      const overview0 = JSON.parse(JSON.stringify(overview)); // la fausse base change les etats : les autres essais repartent de l'original
+      const fi = { overview, calls: [] };
+      const v = await newVisitor(phone, { storage: { [SKI]: fu.session }, fakeUser: fu, fakeInvites: fi, initScripts: [CAPTURE_OPEN] });
+      await v.page.goto(`${BASE}/admin/parrainages`, { waitUntil: 'load' });
+      await v.page.getByTestId('invites-totals').waitFor({ timeout: 25000 });
+      const tot = (await v.page.getByTestId('invites-totals').innerText()).replace(/\s+/g, ' ');
+      check('admin : totaux (2 clients qui invitent, 9 amis inscrits, 6 ont ouvert l\'application, 1 parfum a valider, 1 remis)', /2 Clients qui invitent/.test(tot) && /9 Amis inscrits/.test(tot) && /6 Ont ouvert/.test(tot) && /1 Parfums à valider/.test(tot) && /1 Parfums remis/.test(tot), tot);
+      const first = v.page.getByTestId('invite-admin-reward-r-1');
+      const txt = (await first.innerText()).replace(/\s+/g, ' ');
+      check('admin : le gain a valider est en premier, avec le client (nom, telephone) et ses amis', /Amina Hassan/.test(txt) && /66000001/.test(txt) && /Parfum n° 1/.test(txt) && /À valider/.test(txt), txt);
+      check('admin : « 5 amis qui comptent sur 6 invites » et chaque ami (installe ✅ / en attente ⏳) avec son telephone', /5 amis qui comptent sur 6 invités/.test(txt) && /✅ Fatimé Oumar · 66000002/.test(txt) && /⏳ Hawa Brahim · 66000007 \(application pas encore ouverte\)/.test(txt), txt);
+      const ids = await v.page.locator('[data-testid^="invite-admin-reward-"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')));
+      check('admin : l\'ordre : « a valider » d\'abord, « remis » ensuite', ids[0] === 'invite-admin-reward-r-1' && ids[1] === 'invite-admin-reward-r-2', ids);
+      check('admin : la liste des clients qui invitent avec leur progression (5 / 5, 1 / 5)', /5 \/ 5/.test(await v.page.getByTestId('invite-admin-inviter-u-1').innerText()) && /1 \/ 5/.test(await v.page.getByTestId('invite-admin-inviter-u-2').innerText()));
+      await v.page.screenshot({ path: path.join(OUT, '#4-admin-parrainages.png') });
+      // WhatsApp : un message pret, au numero du client
+      await v.page.getByTestId('invite-admin-wa-r-1').click();
+      await sleep(400);
+      const wa = (await openedLinks(v.page))[0] || '';
+      check('admin : « Écrire sur WhatsApp » ouvre WhatsApp au numero du client (+235) avec le message de felicitations', /^https:\/\/wa\.me\/23566000001\?text=/.test(wa) && /Bonjour%20Amina/.test(wa) && /parfum%20gratuit/.test(wa), wa);
+      await v.page.getByTestId('invite-admin-wa-r-2').click();
+      await sleep(400);
+      const wa2 = (await openedLinks(v.page))[1] || '';
+      check('admin : le 2e client a un numero WhatsApp : le message part a CE numero (23566000011), pas a son telephone', /^https:\/\/wa\.me\/23566000011\?text=/.test(wa2), wa2);
+      // valider
+      await v.page.getByTestId('invite-admin-valide-r-1').click();
+      await v.page.getByTestId('invite-admin-status-r-1').filter({ hasText: 'Validé' }).waitFor({ timeout: 10000 });
+      const setCall = fi.calls.filter((c) => c.fn === 'admin_invite_reward_set').pop();
+      check('admin : « Valider » : la base recoit l\'etat « valide » pour ce gain, et l\'ecran affiche « Validé »', !!setCall && setCall.p_reward === 'r-1' && setCall.p_status === 'valide', fi.calls);
+      await v.page.getByTestId('invite-admin-remis-r-1').click();
+      await v.page.getByTestId('invite-admin-status-r-1').filter({ hasText: 'Remis' }).waitFor({ timeout: 10000 });
+      check('admin : « Parfum remis » : etat « remis »', fi.calls.filter((c) => c.fn === 'admin_invite_reward_set').pop().p_status === 'remis');
+      // refuser : demande de confirmation
+      await v.page.getByTestId('invite-admin-refuse-r-1').click();
+      await v.page.getByText('Refuser ce parfum ?').waitFor({ timeout: 8000 });
+      const before = fi.calls.filter((c) => c.fn === 'admin_invite_reward_set').length;
+      await v.page.getByText('Annuler', { exact: true }).first().click();
+      await sleep(500);
+      check('admin : « Refuser » demande confirmation ; « Annuler » ne change rien', fi.calls.filter((c) => c.fn === 'admin_invite_reward_set').length === before);
+      await v.page.getByTestId('invite-admin-refuse-r-1').click();
+      await v.page.getByText('Refuser ce parfum ?').waitFor({ timeout: 8000 });
+      await v.page.getByText('Refuser', { exact: true }).last().click();
+      await v.page.getByTestId('invite-admin-status-r-1').filter({ hasText: 'Refusé' }).waitFor({ timeout: 10000 });
+      check('admin : confirme : etat « refuse » et l\'ecran affiche « Refusé »', fi.calls.filter((c) => c.fn === 'admin_invite_reward_set').pop().p_status === 'refuse');
+      check('aucune erreur (admin parrainages)', v.errs.length === 0, v.errs);
+      check('aucune ecriture reelle (admin parrainages)', v.writes.every((w) => /visitor_sessions|profiles|auto_flag_stale_orders/.test(w)), v.writes);
+      await v.ctx.close();
+      // la base refuse (ex. pas administrateur)
+      const fe = { overview: JSON.parse(JSON.stringify(overview0)), setError: 'Accès réservé aux administrateurs', calls: [] };
+      const w = await newVisitor(phone, { storage: { [SKI]: fu.session }, fakeUser: fu, fakeInvites: fe });
+      await w.page.goto(`${BASE}/admin/parrainages`, { waitUntil: 'load' });
+      await w.page.getByTestId('invite-admin-valide-r-1').waitFor({ timeout: 25000 });
+      await w.page.getByTestId('invite-admin-valide-r-1').click();
+      await w.page.getByText('Accès réservé aux administrateurs').first().waitFor({ timeout: 8000 });
+      check('admin : la base refuse : le message est montre et l\'etat reste « À valider »', /À valider/.test(await w.page.getByTestId('invite-admin-status-r-1').innerText()));
+      await w.ctx.close();
+      // script SQL pas lance
+      const fm = { missing: true, calls: [] };
+      const x = await newVisitor(phone, { storage: { [SKI]: fu.session }, fakeUser: fu, fakeInvites: fm });
+      await x.page.goto(`${BASE}/admin/parrainages`, { waitUntil: 'load' });
+      await x.page.getByTestId('invites-missing').waitFor({ timeout: 25000 });
+      check('admin : script SQL pas lance : « Lancez d\'abord le script add-friend-invites.sql »', /add-friend-invites\.sql/.test(await x.page.getByTestId('invites-missing').innerText()));
+      await x.ctx.close();
+      // client non administrateur
+      const cu = accountI();
+      const y = await newVisitor(phone, { storage: { [SKI]: cu.session }, fakeUser: cu, fakeInvites: { overview: JSON.parse(JSON.stringify(overview0)), calls: [] } });
+      await y.page.goto(`${BASE}/admin/parrainages`, { waitUntil: 'load' });
+      await y.page.getByText('Accès réservé aux administrateurs.').waitFor({ timeout: 25000 });
+      check('client non administrateur : acces refuse, aucun tableau', (await y.page.getByTestId('invites-totals').count()) === 0);
+      await y.ctx.close();
+    }
+  }
+
   if (PARTS.includes('$')) {
     console.log('\n== $ sous-categories (docs/sous-categories.md) : une categorie principale + ses sous-categories (fausses categories, faux articles : lecture seule)');
     const HDRA = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
