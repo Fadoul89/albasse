@@ -39,6 +39,12 @@ export function PrivacyPolicyScreen() {
             uniquement pour vous répondre.
           </Text>
           <Text style={styles.p}>
+            Si vous invitez des amis avec votre lien, ou si vous créez votre compte avec le lien d'un ami, nous retenons
+            qui a invité qui et si l'ami a ouvert l'application installée. Celui qui invite voit seulement le prénom de
+            ses amis et s'ils ont installé l'application ; notre équipe voit leur nom et leur numéro, uniquement pour
+            vérifier le parfum gagné.
+          </Text>
+          <Text style={styles.p}>
             Si vous dites à Zara ce que vous aimez (un style élégant, moderne, sportif ou un petit prix) ou votre métier, elle s'en souvient seulement
             pendant votre visite, dans votre navigateur, pour mieux vous conseiller. Cela ne change jamais les prix, et ne sert pas à deviner votre budget.
           </Text>

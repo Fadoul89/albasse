@@ -23,6 +23,7 @@ export type AdminRoute = Extract<
   | 'AdminAffiliates'
   | 'AdminBestLeads'
   | 'AdminWheel'
+  | 'AdminInvites'
 >;
 
 export interface AdminMenuItem {
@@ -70,6 +71,7 @@ export const ADMIN_MENU_GROUPS: AdminMenuGroup[] = [
       { icon: '🔎', label: 'Zara SEO (Google)', route: 'AdminZaraSeo' },
       { icon: '🎡', label: 'Roue de la chance', route: 'AdminWheel' },
       { icon: '🤝', label: 'Affiliés', route: 'AdminAffiliates' },
+      { icon: '🎁', label: 'Parrainages (5 amis = 1 parfum)', route: 'AdminInvites' },
     ],
   },
   {

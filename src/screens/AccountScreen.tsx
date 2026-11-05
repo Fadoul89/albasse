@@ -17,6 +17,8 @@ import { useToastStore } from '../store/toastStore';
 import { supabase } from '../lib/supabase';
 import { uploadAvatar } from '../lib/imageUpload';
 import { getLoyaltyStatus, LOYALTY_TIERS } from '../lib/loyalty';
+import { useMyInvites } from '../hooks/useMyInvites';
+import { progressView } from '../lib/friendInvites';
 
 type AdminRoute = Extract<
   keyof RootStackParamList,
@@ -42,6 +44,7 @@ type AdminRoute = Extract<
   | 'AdminAffiliates'
   | 'AdminBestLeads'
   | 'AdminWheel'
+  | 'AdminInvites'
 >;
 
 const ADMIN_MENU_ITEMS: { icon: string; label: string; route: AdminRoute }[] = [
@@ -65,11 +68,14 @@ const ADMIN_MENU_ITEMS: { icon: string; label: string; route: AdminRoute }[] = [
   { icon: '🤝', label: 'Affiliés', route: 'AdminAffiliates' },
   { icon: '🎯', label: 'Meilleurs clients potentiels', route: 'AdminBestLeads' },
   { icon: '🎡', label: 'Roue de la chance', route: 'AdminWheel' },
+  { icon: '🎁', label: 'Parrainages (5 amis = 1 parfum)', route: 'AdminInvites' },
 ];
 
 export function AccountScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const profile = useAuthStore((s) => s.profile);
+  // Parrainage : la carte n'apparaît que quand la base sait le faire (script add-friend-invites.sql lancé)
+  const invites = useMyInvites(!!profile);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const signOut = useAuthStore((s) => s.signOut);
   const refreshProfile = useAuthStore((s) => s.refreshProfile);
@@ -156,6 +162,19 @@ export function AccountScreen() {
         <LoyaltyCard points={profile.loyalty_points ?? 0} />
       </View>
 
+      {invites.state === 'ready' && invites.progress ? (
+        <Pressable style={styles.inviteCard} onPress={() => navigation.navigate('InviteFriends')} testID="account-invite-card">
+          <Text style={styles.inviteIcon}>🎁</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.inviteTitle}>Invite tes amis, gagne un parfum</Text>
+            <Text style={styles.inviteText}>
+              {progressView(invites.progress).barLabel}
+              {progressView(invites.progress).earned > 0 ? ` · ${progressView(invites.progress).earned} parfum${progressView(invites.progress).earned > 1 ? 's' : ''} gagné${progressView(invites.progress).earned > 1 ? 's' : ''}` : ''}
+            </Text>
+          </View>
+          <Text style={styles.menuChevron}>›</Text>
+        </Pressable>
+      ) : null}
       {editingProfile ? (
         <ProfileEditor profile={profile} onClose={() => setEditingProfile(false)} />
       ) : (
@@ -303,6 +322,10 @@ function LoyaltyCard({ points }: { points: number }) {
 }
 
 const styles = StyleSheet.create({
+  inviteCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.panel, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.gold, padding: spacing.md, marginBottom: spacing.sm },
+  inviteIcon: { fontSize: 28 },
+  inviteTitle: { color: colors.gold, fontFamily: fonts.bodySemiBold, fontSize: 15 },
+  inviteText: { color: colors.cream, fontFamily: fonts.body, fontSize: 13, marginTop: 2 },
   screen: { flex: 1, backgroundColor: colors.background, paddingTop: 50, paddingHorizontal: spacing.md },
   headerTitle: { fontFamily: fonts.display, fontSize: 22, color: colors.cream, textAlign: 'center', marginBottom: spacing.lg },
   guestWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: 100 },

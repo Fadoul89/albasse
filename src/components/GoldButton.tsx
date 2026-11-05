@@ -10,12 +10,13 @@ interface Props {
   disabled?: boolean;
   loading?: boolean;
   style?: ViewStyle;
+  testID?: string;
 }
 
-export function GoldButton({ label, onPress, variant = 'gold', disabled, loading, style }: Props) {
+export function GoldButton({ label, onPress, variant = 'gold', disabled, loading, style, testID }: Props) {
   if (variant === 'gold') {
     return (
-      <Pressable onPress={onPress} disabled={disabled || loading} style={[styles.wrapper, style]}>
+      <Pressable testID={testID} onPress={onPress} disabled={disabled || loading} style={[styles.wrapper, style]}>
         <LinearGradient
           colors={disabled ? ['#5a5138', '#6b6247'] : [colors.gold, colors.goldLight]}
           start={{ x: 0, y: 0 }}
@@ -35,6 +36,7 @@ export function GoldButton({ label, onPress, variant = 'gold', disabled, loading
   if (variant === 'red') {
     return (
       <Pressable
+        testID={testID}
         onPress={onPress}
         disabled={disabled || loading}
         style={[styles.wrapper, styles.redButton, disabled && { opacity: 0.5 }, style]}
@@ -47,6 +49,7 @@ export function GoldButton({ label, onPress, variant = 'gold', disabled, loading
   if (variant === 'blue') {
     return (
       <Pressable
+        testID={testID}
         onPress={onPress}
         disabled={disabled || loading}
         style={[styles.wrapper, styles.blueButton, disabled && { opacity: 0.5 }, style]}
@@ -58,6 +61,7 @@ export function GoldButton({ label, onPress, variant = 'gold', disabled, loading
 
   return (
     <Pressable
+      testID={testID}
       onPress={onPress}
       disabled={disabled || loading}
       style={[styles.wrapper, styles.outlineButton, disabled && { opacity: 0.5 }, style]}

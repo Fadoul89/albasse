@@ -10,6 +10,7 @@ import type { MaritalStatus } from '../lib/clientBirthMarital';
 import type { ProfileChanges } from '../lib/profileEdit';
 import { clearIntent, readIntent } from '../lib/assistantAttribution';
 import { isMissingColumn } from '../lib/dbErrors';
+import { claimInviteIfAny } from '../lib/friendInvitesApi';
 import { loginEmailFor, phoneLoginEmail } from '../lib/phoneAuth';
 import { forgetSessionOnly, sessionShouldEnd } from '../lib/rememberLogin';
 
@@ -329,6 +330,8 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
             console.warn('albasse: date de naissance / situation non enregistrées', extraError.message);
           }
         }
+        // Parrainage : le nouveau client dit qui l'a invité (code du lien, gardé sur le téléphone). Jamais bloquant : sans le script SQL, rien ne change.
+        await claimInviteIfAny();
         await recordLogin(data.user.id);
       }
 

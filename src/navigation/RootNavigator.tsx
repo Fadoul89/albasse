@@ -12,6 +12,7 @@ import { AppDownloadBanner } from '../components/AppDownloadBanner';
 import { RecentPurchasesTicker } from '../components/RecentPurchasesTicker';
 import { trackPageView } from '../lib/analytics';
 import { startShortcutInstallTracking, trackAppInstallIfNeeded } from '../lib/appInstallTracking';
+import { captureInviteCodeFromUrl, trackInviteAppOpen } from '../lib/friendInvitesApi';
 import { recordPushClickFromUrl } from '../lib/pushClicks';
 import { initBrowsingTracker } from '../lib/browsingTracker';
 import { isIosDevice, isRunningAsInstalledPwa } from '../lib/pwaInstallPrompt';
@@ -75,6 +76,8 @@ import { OrderConfirmationScreen } from '../screens/OrderConfirmationScreen';
 import { AdminBestLeadsScreen } from '../screens/admin/AdminBestLeadsScreen';
 import { WheelScreen } from '../screens/WheelScreen';
 import { AdminWheelScreen } from '../screens/admin/AdminWheelScreen';
+import { InviteFriendsScreen } from '../screens/InviteFriendsScreen';
+import { AdminInvitesScreen } from '../screens/admin/AdminInvitesScreen';
 import { AdminAffiliatesScreen } from '../screens/admin/AdminAffiliatesScreen';
 import { AdminAffiliateSettingsScreen } from '../screens/admin/AdminAffiliateSettingsScreen';
 import { AdminAffiliateCommissionsScreen } from '../screens/admin/AdminAffiliateCommissionsScreen';
@@ -148,6 +151,8 @@ const linking: LinkingOptions<RootStackParamList> = {
       AdminBestLeads: 'admin/meilleurs-clients',
       Wheel: 'roue-de-la-chance',
       AdminWheel: 'admin/roue-de-la-chance',
+      InviteFriends: 'inviter-mes-amis',
+      AdminInvites: 'admin/parrainages',
       AdminAffiliates: 'admin/affilies',
       AdminAffiliateSettings: 'admin/affilies/reglages',
       AdminAffiliateCommissions: 'admin/affilies/commissions',
@@ -178,6 +183,7 @@ const IGNORED_REDIRECT_PATHS = ['/', '/connexion', '/inscription'];
 export function RootNavigator() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const authLoading = useAuthStore((s) => s.isLoading);
+  const myId = useAuthStore((s) => s.profile?.id ?? null);
   const wasAuthenticated = useRef(isAuthenticated);
   const { settings, isLoading: settingsLoading } = useStoreSettings();
   const [routeName, setRouteName] = useState<string | undefined>();
@@ -193,6 +199,16 @@ export function RootNavigator() {
   // site « page unique » : ni mur de connexion, ni bandeaux, ni fenêtres, ni Zara (tout cela porte le nom d'Albasse Shopping)
   const showWall = !SINGLE && signUpFirst && wallCovers(routeName);
   const noteRoute = () => setRouteName(navigationRef.getCurrentRoute()?.name);
+
+  // Parrainage : le code du lien d'invitation (?invite=…) est gardé 30 jours sur le téléphone (docs/parrainage.md)
+  useEffect(() => {
+    captureInviteCodeFromUrl();
+  }, []);
+
+  // Parrainage : l'application installée s'ouvre avec ce client connecté : la base le note, une seule fois (c'est ce qui fait compter un ami)
+  useEffect(() => {
+    if (isAuthenticated) trackInviteAppOpen(myId);
+  }, [isAuthenticated, myId]);
 
   useEffect(() => {
     trackAppInstallIfNeeded();
@@ -294,6 +310,8 @@ export function RootNavigator() {
             <Stack.Screen name="AdminBestLeads" component={AdminBestLeadsScreen} />
             <Stack.Screen name="Wheel" component={WheelScreen} />
             <Stack.Screen name="AdminWheel" component={AdminWheelScreen} />
+            <Stack.Screen name="InviteFriends" component={InviteFriendsScreen} />
+            <Stack.Screen name="AdminInvites" component={AdminInvitesScreen} />
             <Stack.Screen name="AdminAffiliates" component={AdminAffiliatesScreen} />
             <Stack.Screen name="AdminAffiliateSettings" component={AdminAffiliateSettingsScreen} />
             <Stack.Screen name="AdminAffiliateCommissions" component={AdminAffiliateCommissionsScreen} />
