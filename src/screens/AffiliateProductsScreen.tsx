@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import { useAuthStore } from '../store/authStore';
 import { useMyAffiliateProducts } from '../hooks/useMyAffiliateProducts';
 import { useCategories } from '../hooks/useCategories';
+import { rootOf } from '../lib/subCategories';
 import { useAffiliateSettings } from '../hooks/useAffiliateSettings';
 import { useToastStore } from '../store/toastStore';
 import { ScreenHeader } from '../components/ScreenHeader';
@@ -39,6 +40,9 @@ export function AffiliateProductsScreen() {
     if (r.product.affiliate_commission_rate != null) return r.product.affiliate_commission_rate;
     const category = categories.find((c) => c.id === r.product.category_id);
     if (category?.affiliate_commission_rate != null) return category.affiliate_commission_rate;
+    // sous-catégorie sans taux à elle : le taux de sa catégorie principale (puis le taux global)
+    const main = rootOf(categories, r.product.category_id);
+    if (main?.affiliate_commission_rate != null) return main.affiliate_commission_rate;
     return settings.default_commission_rate;
   };
   const [query, setQuery] = useState('');

@@ -66,10 +66,14 @@ async function serve(request: Request, context: Context): Promise<Response> {
       );
       const category = found[0];
       if (!category) return notFound();
+      // sous-catégories : une catégorie principale montre aussi les articles de ses sous-catégories (avant le script add-subcategories.sql : la
+      // colonne parent_id n'existe pas, la lecture répond une erreur, `rows` rend une liste vide et rien ne change)
+      const children = await rows<{ id: string }>(supabaseUrl, supabaseKey, `categories?parent_id=eq.${encodeURIComponent(category.id)}&select=id`);
+      const familyIds = [category.id, ...children.map((c) => c.id)].map(encodeURIComponent).join(',');
       const products = await rows<SeoProduct>(
         supabaseUrl,
         supabaseKey,
-        `products?category_id=eq.${encodeURIComponent(category.id)}&is_active=eq.true&select=name,slug,price,images,stock&order=created_at.desc&limit=200`
+        `products?category_id=in.(${familyIds})&is_active=eq.true&select=name,slug,price,images,stock&order=created_at.desc&limit=200`
       );
       return new Response(categoryPage(category, products), { headers: HTML_HEADERS });
     }

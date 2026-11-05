@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -15,22 +15,23 @@ import { useCategories } from '../../hooks/useCategories';
 import { useToastStore } from '../../store/toastStore';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { uploadProductImage } from '../../lib/imageUpload';
-import { moveCategory, orderUpdates } from '../../lib/categoryOrder';
+import { orderUpdates } from '../../lib/categoryOrder';
+import {
+  flattenTree,
+  hasParentColumn,
+  mainCategories,
+  moveInGroup,
+  parentChoices,
+  parentOf,
+  subCategoriesOf,
+  uniqueSlug,
+} from '../../lib/subCategories';
 import { isMissingColumn } from '../../lib/dbErrors';
 import { colors, fonts, radius, spacing } from '../../theme';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { GoldButton } from '../../components/GoldButton';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import type { Category } from '../../types';
-
-function slugify(text: string) {
-  return text
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '');
-}
 
 export function AdminCategoriesScreen() {
   const profile = useAuthStore((s) => s.profile);
@@ -40,6 +41,9 @@ export function AdminCategoriesScreen() {
   const [name, setName] = useState('');
   const [commissionRate, setCommissionRate] = useState('');
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  // sous-catégories : la catégorie principale choisie dans le formulaire (null = catégorie principale)
+  const [parentId, setParentId] = useState<string | null>(null);
+  const listRef = useRef<FlatList<Category>>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [saving, setSaving] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Category | null>(null);
@@ -49,6 +53,10 @@ export function AdminCategoriesScreen() {
   const [savingOrder, setSavingOrder] = useState(false);
   const showToast = useToastStore((s) => s.show);
   const list = ordered ?? categories;
+  const rows = useMemo(() => flattenTree(list), [list]);
+  // la base a la colonne parent_id (script add-subcategories.sql lancé) : sans elle, pas de sous-catégories
+  const subColumn = hasParentColumn(categories);
+  const parentOptions = parentChoices(list, editingId);
 
   useEffect(() => setOrdered(null), [categories]);
 
@@ -66,6 +74,13 @@ export function AdminCategoriesScreen() {
     setName('');
     setCommissionRate('');
     setImageUrl(null);
+    setParentId(null);
+  };
+
+  const startSub = (main: Category) => {
+    resetForm();
+    setParentId(main.id);
+    listRef.current?.scrollToOffset({ offset: 0, animated: true });
   };
 
   const startEdit = (category: Category) => {
@@ -73,6 +88,8 @@ export function AdminCategoriesScreen() {
     setName(category.name);
     setCommissionRate(category.affiliate_commission_rate === null ? '' : String(category.affiliate_commission_rate));
     setImageUrl(category.image_url);
+    setParentId(parentOf(list, category)?.id ?? null);
+    listRef.current?.scrollToOffset({ offset: 0, animated: true });
   };
 
   const handlePickImage = async () => {
@@ -106,11 +123,14 @@ export function AdminCategoriesScreen() {
 
     setSaving(true);
     try {
+      const parent = parentId ? list.find((c) => c.id === parentId) ?? null : null;
       const payload = {
         name: name.trim(),
         image_url: imageUrl,
-        slug: slugify(name.trim()),
+        slug: uniqueSlug(name.trim(), list, parent, editingId),
         affiliate_commission_rate: commissionRate.trim() ? Number(commissionRate.trim().replace(',', '.')) : null,
+        // la colonne parent_id n'existe qu'après le script add-subcategories.sql : sans elle, on n'écrit rien dedans
+        ...(subColumn ? { parent_id: parent?.id ?? null } : {}),
       };
       const result = editingId
         ? await supabase.from('categories').update(payload).eq('id', editingId)
@@ -118,11 +138,14 @@ export function AdminCategoriesScreen() {
 
       if (result.error) {
         console.error('Erreur enregistrement catégorie:', result.error);
-        showToast(result.error.message, { title: 'Erreur', type: 'error' });
+        showToast(
+          isMissingColumn(result.error, 'parent_id') ? 'Lancez d’abord le script add-subcategories.sql dans Supabase.' : result.error.message,
+          { title: 'Erreur', type: 'error' }
+        );
         return;
       }
 
-      showToast(`Catégorie "${name}" ${editingId ? 'modifiée' : 'créée'}.`, { title: 'Enregistré ✓', type: 'success' });
+      showToast(`${parent ? 'Sous-catégorie' : 'Catégorie'} "${name}" ${editingId ? 'modifiée' : 'créée'}.`, { title: 'Enregistré ✓', type: 'success' });
       resetForm();
       refresh();
     } catch (e) {
@@ -133,8 +156,9 @@ export function AdminCategoriesScreen() {
     }
   };
 
-  const move = async (index: number, delta: -1 | 1) => {
-    const next = moveCategory(list, index, delta);
+  // ▲ ▼ : la catégorie monte ou descend parmi ses « frères » (les catégories principales entre elles, les sous-catégories d'une même catégorie entre elles)
+  const move = async (item: Category, delta: -1 | 1) => {
+    const next = moveInGroup(list, item.id, delta);
     if (next === list || savingOrder) return;
     setOrdered(next);
     setSavingOrder(true);
@@ -173,7 +197,8 @@ export function AdminCategoriesScreen() {
     <View style={styles.screen}>
       <ScreenHeader title="Gestion des catégories" showBack />
       <FlatList
-        data={list}
+        ref={listRef}
+        data={rows.map((r) => r.category)}
         keyExtractor={(item) => item.id}
         refreshing={isLoading}
         onRefresh={refresh}
@@ -181,8 +206,14 @@ export function AdminCategoriesScreen() {
         contentContainerStyle={{ padding: spacing.md }}
         ListHeaderComponent={
           <View style={styles.form}>
-            <Text style={styles.formTitle}>
-              {editingId ? 'Modifier la catégorie' : 'Nouvelle catégorie'}
+            <Text style={styles.formTitle} testID="category-form-title">
+              {editingId
+                ? parentId
+                  ? 'Modifier la sous-catégorie'
+                  : 'Modifier la catégorie'
+                : parentId
+                  ? `Nouvelle sous-catégorie de « ${list.find((c) => c.id === parentId)?.name ?? ''} »`
+                  : 'Nouvelle catégorie'}
             </Text>
             <Pressable style={styles.imagePicker} onPress={handlePickImage} disabled={uploadingImage}>
               {uploadingImage ? (
@@ -200,6 +231,40 @@ export function AdminCategoriesScreen() {
               placeholderTextColor={colors.creamFaint}
               style={styles.input}
             />
+            {subColumn ? (
+              <View style={styles.parentBox} testID="category-parent-box">
+                <Text style={styles.parentLabel}>Catégorie principale</Text>
+                {editingId && parentOptions.length === 0 ? (
+                  <Text style={styles.orderHint} testID="category-parent-locked">
+                    Cette catégorie a des sous-catégories : elle reste une catégorie principale.
+                  </Text>
+                ) : (
+                  <View style={styles.chipsRow}>
+                    <Pressable
+                      testID="category-parent-none"
+                      onPress={() => setParentId(null)}
+                      style={[styles.chip, parentId === null && styles.chipActive]}
+                    >
+                      <Text style={[styles.chipText, parentId === null && styles.chipTextActive]}>Aucune (catégorie principale)</Text>
+                    </Pressable>
+                    {parentOptions.map((c) => (
+                      <Pressable
+                        key={c.id}
+                        testID={`category-parent-${c.slug}`}
+                        onPress={() => setParentId(c.id)}
+                        style={[styles.chip, parentId === c.id && styles.chipActive]}
+                      >
+                        <Text style={[styles.chipText, parentId === c.id && styles.chipTextActive]}>{c.name}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
+              </View>
+            ) : (
+              <Text style={styles.orderHint} testID="category-sub-missing">
+                Pour créer des sous-catégories, lancez d’abord le script add-subcategories.sql dans Supabase.
+              </Text>
+            )}
             <TextInput
               value={commissionRate}
               onChangeText={setCommissionRate}
@@ -221,56 +286,77 @@ export function AdminCategoriesScreen() {
             </View>
             <Text style={styles.listTitle}>Catégories existantes</Text>
             <Text style={styles.orderHint}>
-              Touchez ▲ ▼ pour choisir l’ordre sur le site : la n° 1 s’affiche en premier.
+              Touchez ▲ ▼ pour choisir l’ordre sur le site : la n° 1 s’affiche en premier. Les sous-catégories se rangent sous leur catégorie principale.
             </Text>
           </View>
         }
-        renderItem={({ item, index }) => (
-          <View style={styles.row} testID={`category-row-${item.slug}`}>
-            <Text style={styles.rowRank}>{index + 1}</Text>
-            <View style={styles.moveCol}>
-              <Pressable
-                testID={`category-up-${item.slug}`}
-                accessibilityLabel={`Monter ${item.name}`}
-                onPress={() => move(index, -1)}
-                disabled={index === 0 || savingOrder}
-                style={[styles.moveBtn, index === 0 && styles.moveBtnOff]}
-              >
-                <Text style={styles.moveText}>▲</Text>
-              </Pressable>
-              <Pressable
-                testID={`category-down-${item.slug}`}
-                accessibilityLabel={`Descendre ${item.name}`}
-                onPress={() => move(index, 1)}
-                disabled={index === list.length - 1 || savingOrder}
-                style={[styles.moveBtn, index === list.length - 1 && styles.moveBtnOff]}
-              >
-                <Text style={styles.moveText}>▼</Text>
-              </Pressable>
-            </View>
-            {item.image_url ? (
-              <Image source={{ uri: item.image_url }} style={styles.rowImage} contentFit="cover" />
-            ) : (
-              <View style={styles.rowImagePlaceholder} />
-            )}
-            <View style={styles.rowBody}>
-              <Text style={styles.rowName}>{item.name}</Text>
-              <View style={styles.rowActions}>
-                <Pressable onPress={() => startEdit(item)}>
-                  <Text style={styles.editLink}>Modifier</Text>
+        renderItem={({ item }) => {
+          const parent = parentOf(list, item);
+          const isSubRow = parent !== null;
+          const siblings = parent ? subCategoriesOf(list, parent.id) : mainCategories(list);
+          const position = siblings.findIndex((c) => c.id === item.id);
+          const first = position <= 0;
+          const last = position === siblings.length - 1;
+          return (
+            <View style={[styles.row, isSubRow && styles.rowSub]} testID={`category-row-${item.slug}`}>
+              <Text style={styles.rowRank}>{isSubRow ? '↳' : position + 1}</Text>
+              <View style={styles.moveCol}>
+                <Pressable
+                  testID={`category-up-${item.slug}`}
+                  accessibilityLabel={`Monter ${item.name}`}
+                  onPress={() => move(item, -1)}
+                  disabled={first || savingOrder}
+                  style={[styles.moveBtn, first && styles.moveBtnOff]}
+                >
+                  <Text style={styles.moveText}>▲</Text>
                 </Pressable>
-                <Pressable onPress={() => setPendingDelete(item)}>
-                  <Text style={styles.deleteLink}>Supprimer</Text>
+                <Pressable
+                  testID={`category-down-${item.slug}`}
+                  accessibilityLabel={`Descendre ${item.name}`}
+                  onPress={() => move(item, 1)}
+                  disabled={last || savingOrder}
+                  style={[styles.moveBtn, last && styles.moveBtnOff]}
+                >
+                  <Text style={styles.moveText}>▼</Text>
                 </Pressable>
               </View>
+              {item.image_url ? (
+                <Image source={{ uri: item.image_url }} style={styles.rowImage} contentFit="cover" />
+              ) : (
+                <View style={styles.rowImagePlaceholder} />
+              )}
+              <View style={styles.rowBody}>
+                <Text style={styles.rowName}>{item.name}</Text>
+                {isSubRow && <Text style={styles.rowParent}>Sous-catégorie de {parent.name}</Text>}
+                {!isSubRow && subCategoriesOf(list, item.id).length > 0 && (
+                  <Text style={styles.rowParent}>{subCategoriesOf(list, item.id).length} sous-catégorie(s)</Text>
+                )}
+                <View style={styles.rowActions}>
+                  <Pressable onPress={() => startEdit(item)}>
+                    <Text style={styles.editLink}>Modifier</Text>
+                  </Pressable>
+                  {subColumn && !isSubRow && (
+                    <Pressable testID={`category-add-sub-${item.slug}`} onPress={() => startSub(item)}>
+                      <Text style={styles.editLink}>＋ Sous-catégorie</Text>
+                    </Pressable>
+                  )}
+                  <Pressable onPress={() => setPendingDelete(item)}>
+                    <Text style={styles.deleteLink}>Supprimer</Text>
+                  </Pressable>
+                </View>
+              </View>
             </View>
-          </View>
-        )}
+          );
+        }}
       />
       <ConfirmDialog
         visible={!!pendingDelete}
         title="Supprimer cette catégorie ?"
-        message={`"${pendingDelete?.name}" sera supprimée définitivement.`}
+        message={
+          pendingDelete && subCategoriesOf(list, pendingDelete.id).length > 0
+            ? `"${pendingDelete.name}" sera supprimée définitivement. Ses ${subCategoriesOf(list, pendingDelete.id).length} sous-catégories deviennent des catégories principales (leurs articles restent classés). Les articles rangés directement dans "${pendingDelete.name}" n’auront plus de catégorie.`
+            : `"${pendingDelete?.name}" sera supprimée définitivement. Les articles rangés dedans n’auront plus de catégorie.`
+        }
         confirmLabel="Supprimer"
         destructive
         loading={deleting}
@@ -324,6 +410,15 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
     marginBottom: spacing.sm,
   },
+  parentBox: { marginBottom: spacing.md },
+  parentLabel: { color: colors.creamMuted, fontFamily: fonts.bodySemiBold, fontSize: 13, marginBottom: 6 },
+  chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panel },
+  chipActive: { backgroundColor: colors.gold, borderColor: colors.gold },
+  chipText: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 12 },
+  chipTextActive: { color: colors.background },
+  rowSub: { marginLeft: 28, borderLeftWidth: 2, borderLeftColor: colors.gold },
+  rowParent: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11, marginTop: 2 },
   rowRank: { width: 22, color: colors.gold, fontFamily: fonts.bodyBold, fontSize: 15, textAlign: 'center' },
   moveCol: { gap: 4 },
   moveBtn: {
@@ -341,7 +436,7 @@ const styles = StyleSheet.create({
   rowImagePlaceholder: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.panelAlt },
   rowBody: { flex: 1 },
   rowName: { color: colors.cream, fontFamily: fonts.bodySemiBold, fontSize: 14 },
-  rowActions: { flexDirection: 'row', gap: 16, marginTop: 4 },
+  rowActions: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 16, rowGap: 4, marginTop: 4 },
   editLink: { color: colors.gold, fontFamily: fonts.bodyMedium, fontSize: 12 },
   deleteLink: { color: colors.red, fontFamily: fonts.bodyMedium, fontSize: 12 },
 });

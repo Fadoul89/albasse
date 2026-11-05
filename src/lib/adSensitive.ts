@@ -6,6 +6,7 @@
 
 import { normalize } from './assistantBrain';
 import { ageOf, maritalOf } from './clientBirthMarital';
+import { rootOf } from './subCategories';
 
 export const VITALITY_MIN_AGE = 32;
 
@@ -27,12 +28,14 @@ export function vitalityAllowed(customer: { birth_date?: unknown; marital_status
 // Les articles qu'une annonce a le droit de montrer à ce client : les articles « Vitalité & Énergie » partent, sauf pour un client marié de 32 ans et plus.
 export function adAllowedProducts<T extends { category_id: string | null }>(
   products: readonly T[],
-  categories: readonly { id: string; name?: string | null; slug?: string | null }[],
+  categories: readonly { id: string; name?: string | null; slug?: string | null; parent_id?: string | null }[],
   customer: { birth_date?: unknown; marital_status?: unknown } | null | undefined,
   now: number = Date.now()
 ): T[] {
   if (vitalityAllowed(customer, now)) return [...products];
-  const hidden = new Set(categories.filter(isVitalityCategory).map((c) => c.id));
+  // une sous-catégorie de « Vitalité & Énergie » est « Vitalité & Énergie » aussi
+  const typed = categories as readonly { id: string; slug: string; name: string; parent_id?: string | null }[];
+  const hidden = new Set(typed.filter((c) => isVitalityCategory(c) || isVitalityCategory(rootOf(typed, c.id))).map((c) => c.id));
   if (hidden.size === 0) return [...products];
   return products.filter((p) => !p.category_id || !hidden.has(p.category_id));
 }

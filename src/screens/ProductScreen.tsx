@@ -21,6 +21,7 @@ import { useProductBySlug, useProducts } from '../hooks/useProducts';
 import { shownOldPrice } from '../lib/promotions';
 import { useReviews } from '../hooks/useReviews';
 import { useCategories } from '../hooks/useCategories';
+import { rootOf } from '../lib/subCategories';
 import { useCartStore } from '../store/cartStore';
 import { useToastStore } from '../store/toastStore';
 import { useAuthStore } from '../store/authStore';
@@ -77,7 +78,8 @@ export function ProductScreen({ route }: Props) {
   // Suivi pour Zara (seulement si le visiteur ne l'a pas refusé) : le temps ACTIF commence quand la fiche est à l'écran
   // et s'arrête quand on la quitte (autre page, retour, autre produit).
   const { categories } = useCategories();
-  const category = categories.find((c) => c.id === product?.category_id);
+  // sous-catégories : le suivi de navigation (Zara) compte la catégorie PRINCIPALE de l'article
+  const category = rootOf(categories, product?.category_id);
   const meta = useMemo(
     () => (product ? { id: product.id, name: product.name, slug: product.slug, categoryId: product.category_id, categorySlug: category?.slug ?? null, categoryName: category?.name ?? null } : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps

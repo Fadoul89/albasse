@@ -8,6 +8,7 @@ import { colors, fonts, radius, spacing } from '../../theme';
 import { useAuthStore } from '../../store/authStore';
 import { useProducts } from '../../hooks/useProducts';
 import { useCategories } from '../../hooks/useCategories';
+import { familyIds, flattenTree } from '../../lib/subCategories';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { useToastStore } from '../../store/toastStore';
 import { ScreenHeader } from '../../components/ScreenHeader';
@@ -69,7 +70,9 @@ export function AdminProductsScreen() {
       list = list.filter((p) => p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q));
     }
     if (categoryId) {
-      list = list.filter((p) => p.category_id === categoryId);
+      // une catégorie principale montre aussi les articles de ses sous-catégories
+      const family = new Set(familyIds(categories, categoryId));
+      list = list.filter((p) => !!p.category_id && family.has(p.category_id));
     }
     switch (status) {
       case 'active':
@@ -107,7 +110,7 @@ export function AdminProductsScreen() {
     }
 
     return list;
-  }, [products, query, categoryId, status, sort]);
+  }, [products, query, categoryId, categories, status, sort]);
 
   const quickUpdate = async (id: string, payload: Partial<Product>) => {
     if (!isSupabaseConfigured) return;
@@ -179,13 +182,13 @@ export function AdminProductsScreen() {
               >
                 <Text style={[styles.chipText, !categoryId && styles.chipTextActive]}>Toutes catégories</Text>
               </Pressable>
-              {categories.map((c) => (
+              {flattenTree(categories).map(({ category: c, depth }) => (
                 <Pressable
                   key={c.id}
                   style={[styles.chip, categoryId === c.id && styles.chipActive]}
                   onPress={() => setCategoryId(c.id)}
                 >
-                  <Text style={[styles.chipText, categoryId === c.id && styles.chipTextActive]}>{c.name}</Text>
+                  <Text style={[styles.chipText, categoryId === c.id && styles.chipTextActive]}>{depth === 1 ? `↳ ${c.name}` : c.name}</Text>
                 </Pressable>
               ))}
             </View>

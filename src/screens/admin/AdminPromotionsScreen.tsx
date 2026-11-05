@@ -15,6 +15,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAuthStore } from '../../store/authStore';
 import { useSmartPromotions } from '../../hooks/useSmartPromotions';
 import { useCategories } from '../../hooks/useCategories';
+import { flattenTree } from '../../lib/subCategories';
 import { useProducts } from '../../hooks/useProducts';
 import { useStoreSettings } from '../../hooks/useStoreSettings';
 import { useToastStore } from '../../store/toastStore';
@@ -421,13 +422,13 @@ export function AdminPromotionsScreen() {
 
             {targetType === 'category' && (
               <View style={styles.chipsRow}>
-                {categories.map((c) => (
+                {flattenTree(categories).map(({ category: c, depth }) => (
                   <Pressable
                     key={c.id}
                     style={[styles.chip, categoryId === c.id && styles.chipActive]}
                     onPress={() => setCategoryId(c.id)}
                   >
-                    <Text style={[styles.chipText, categoryId === c.id && styles.chipTextActive]}>{c.name}</Text>
+                    <Text style={[styles.chipText, categoryId === c.id && styles.chipTextActive]}>{depth === 1 ? `↳ ${c.name}` : c.name}</Text>
                   </Pressable>
                 ))}
               </View>

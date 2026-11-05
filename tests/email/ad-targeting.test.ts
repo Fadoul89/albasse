@@ -323,4 +323,29 @@ const previews = previewAudiences({ products: richCheap, categories: cats, now: 
 check('aperçu de l\'administrateur : aucun des 5 publics ne reçoit un article « Vitalité & Énergie » (même le moins cher ou le plus cher de la boutique)', AUDIENCES.every((a) => !previews[a] || previews[a]!.product.category_id !== 'c-men'), AUDIENCES.map((a) => [a, previews[a]?.product.id]));
 check('élève et administrateur gardent leur annonce (avec la boutique d\'exemple) : le moins cher et le plus cher sont des articles NORMAUX', previews.eleve?.reason.kind === 'student' && previews.admin?.reason.kind === 'executive', AUDIENCES.map((a) => [a, previews[a]?.product.id]));
 
+// --- sous-catégories : une sous-catégorie hérite de sa catégorie principale (public du genre, « Vitalité & Énergie »), l'exploration compte la famille ---
+const subCats: AdCategory[] = [
+  ...cats,
+  { id: 'sc-vit', slug: 'cafe-homme', name: 'Café', parent_id: 'c-men' }, // sous-catégorie de « Vitalité & Énergie Homme »
+  { id: 'sc-shirt', slug: 'chemises-femmes', name: 'Chemises', parent_id: 'c-women' }, // sous-catégorie de « Vêtements pour femmes »
+  { id: 'sc-watch', slug: 'montres-or', name: 'Montres or', parent_id: 'c-watch' },
+];
+const vitSub = mk('sv1', 'sc-vit', { price: 7500 });
+check('une sous-catégorie de « Vitalité & Énergie » est « Vitalité & Énergie » aussi : pas d\'annonce pour un visiteur ou un célibataire', [null, { gender: 'homme', marital_status: 'celibataire', birth_date: '1980-01-01' }, { gender: 'homme' }].every((c) => pickTargetedAd({ products: [vitSub], categories: subCats, customer: c, browsing: viewMany(emptyProfile('sv', NOW - 5 * DAY), vitSub, 3, NOW - 2 * DAY), now: NOW, seed: 0 }) === null));
+check('… mais oui pour un marié de 40 ans', pickTargetedAd({ products: [vitSub], categories: subCats, customer: married40, browsing: viewMany(emptyProfile('sv', NOW - 5 * DAY), vitSub, 3, NOW - 2 * DAY), now: NOW, seed: 0 })?.product.id === 'sv1');
+check('adAllowedProducts : l\'article d\'une sous-catégorie de « Vitalité & Énergie » part aussi, sauf pour un marié de 32 ans et plus', adAllowedProducts([vitSub, mk('sn1', 'c-watch')], subCats, null).map((p) => p.id).join() === 'sn1' && adAllowedProducts([vitSub, mk('sn1', 'c-watch')], subCats, married40).length === 2);
+check('sans la colonne parent_id (avant le script SQL) : la règle d\'avant, rien ne casse', adAllowedProducts([vitSub, mk('sn1', 'c-watch')], cats, null).length === 2 /* sc-vit inconnue : article sans catégorie connue */);
+const shirtF = mk('sh1', 'sc-shirt', { price: 12000 });
+const aHim = pickTargetedAd({ products: [shirtF], categories: subCats, customer: { gender: 'homme' }, browsing: null, now: NOW, seed: 0 });
+const aHer = pickTargetedAd({ products: [shirtF], categories: subCats, customer: { gender: 'femme' }, browsing: null, now: NOW, seed: 0 });
+check('« Chemises » (sous-catégorie de « Vêtements pour femmes ») : jamais montrée à un homme, montrée à une femme avec la raison « genre »', aHim === null && aHer?.product.id === 'sh1' && aHer.reason.kind === 'gender', [aHim, aHer]);
+const w1 = mk('w1', 'c-watch'); const w2 = mk('w2', 'c-watch'); const w3 = mk('w3', 'sc-watch'); const w4 = mk('w4', 'sc-watch');
+let famProfile = emptyProfile('sw', NOW - 5 * DAY);
+famProfile = applyProductView(famProfile, meta(w1), NOW - 3 * DAY).profile;
+famProfile = applyCategoryView(famProfile, 'montres', 'Montres', NOW - 3 * DAY);
+famProfile = applyProductView(famProfile, meta(w2), NOW - 2 * DAY).profile;
+famProfile = applyCategoryView(famProfile, 'montres', 'Montres', NOW - 2 * DAY);
+const exploring = pickTargetedAd({ products: [w1, w2, w3, w4], categories: subCats, customer: null, browsing: famProfile, now: NOW, seed: 0 });
+check('catégorie explorée : un article de la FAMILLE (la catégorie principale ou ses sous-catégories) que le client n\'a pas vu', !!exploring && ['w3', 'w4'].includes(exploring.product.id) && exploring.reason.kind === 'category', exploring);
+
 console.log(`\n${ok} contrôles réussis`);

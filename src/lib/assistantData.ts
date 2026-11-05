@@ -6,6 +6,7 @@ import { buildBrowsingOverview, type BrowsingOverview } from './browsingOverview
 import { buildSalesMap, SALES_WINDOW_DAYS, type SalesMap } from './assistantSales';
 import { parseAffinity, type Affinity } from './assistantWords';
 import { sortCategories } from './categoryOrder';
+import { mainCategories, rootOf, type CatNode } from './subCategories';
 import type { Product } from '../types';
 import { applyPromotionRules, shownOldPrice } from './promotions';
 
@@ -96,12 +97,15 @@ export const getCategories = cached<CategoryInfo[]>(async () => {
   // toutes les colonnes : sort_order n'existe qu'après le script add-category-order.sql
   const { data, error } = await supabase.from('categories').select('*');
   if (error) throw error;
-  return sortCategories((data ?? []) as (CategoryInfo & { sort_order?: number | null })[]).map(({ name, slug }) => ({ name, slug }));
+  // sous-catégories : Zara propose les catégories PRINCIPALES (les articles d'une sous-catégorie y comptent : voir getCatalog)
+  const all = sortCategories((data ?? []) as (CatNode & CategoryInfo)[]);
+  return mainCategories(all).map(({ name, slug }) => ({ name, slug }));
 });
 
 export const getCatalog = cached<CatalogProduct[]>(async () => {
   const [cats, prods] = await Promise.all([
-    supabase.from('categories').select('id,name,slug'),
+    // toutes les colonnes : parent_id (sous-catégories) n'existe qu'après le script add-subcategories.sql
+    supabase.from('categories').select('*'),
     supabase
       .from('products')
       // « * » : les colonnes de la vente flash et de la promotion (promo_ends_at) n'existent pas avant add-zara-promotions.sql, le catalogue ne doit jamais échouer pour ça
@@ -112,9 +116,14 @@ export const getCatalog = cached<CatalogProduct[]>(async () => {
   ]);
   if (cats.error) throw cats.error;
   if (prods.error) throw prods.error;
-  const categories = new Map<string, { name: string; slug: string }>(
-    ((cats.data ?? []) as { id: string; name: string; slug: string }[]).map((c) => [c.id, { name: c.name, slug: c.slug }])
-  );
+  // Zara range chaque article dans sa catégorie PRINCIPALE (« Vêtements », même si l'article est dans la sous-catégorie « Chemises ») : ses boutons, ses
+  // conseils et ses recherches par catégorie marchent comme avant ; le nom de la sous-catégorie sert seulement à retrouver l'article.
+  const catRows = (cats.data ?? []) as CatNode[];
+  const catOf = (id: string): { name: string; slug: string; sub: string | null } => {
+    const root = rootOf(catRows, id);
+    const own = catRows.find((c) => c.id === id);
+    return { name: root?.name ?? '', slug: root?.slug ?? '', sub: own && root && own.id !== root.id ? own.name : null };
+  };
   return ((prods.data ?? []) as Record<string, any>[]).map((p) =>
     buildProduct({
       id: p.id,
@@ -124,8 +133,9 @@ export const getCatalog = cached<CatalogProduct[]>(async () => {
       // l'ancien prix seulement pendant une vraie promotion (vente flash ou promotion de Zara en cours) : Zara ne le cite jamais autrement
       compare_at_price: shownOldPrice({ price: Number(p.price), compare_at_price: p.compare_at_price == null ? null : Number(p.compare_at_price), is_flash_sale: p.is_flash_sale, flash_sale_ends_at: p.flash_sale_ends_at, promo_ends_at: p.promo_ends_at }),
       stock: p.stock,
-      category: categories.get(p.category_id)?.name ?? '',
-      category_slug: categories.get(p.category_id)?.slug ?? '',
+      category: catOf(p.category_id).name,
+      category_slug: catOf(p.category_id).slug,
+      sub_category: catOf(p.category_id).sub,
       colors: p.colors,
       sizes: p.sizes,
       description: p.description,
