@@ -75,12 +75,19 @@ const products = [
   { name: 'Eau <b>"fraîche"</b> & boisée', slug: 'eau-fraiche', description: '', price: 15000, images: ['https://img.example/e.jpg'], stock: 0, category_id: 'c2', categories: { name: 'Parfums & Cosmétique', slug: 'parfums' } },
 ];
 let dbDown = false;
+let noParentColumn = false;
 const calls: string[] = [];
 globalThis.fetch = (async (input: any) => {
   const u = String(input);
   calls.push(u);
   if (dbDown) throw new Error('réseau coupé');
   const json = (data: unknown) => new Response(JSON.stringify(data), { status: 200, headers: { 'content-type': 'application/json' } });
+  // sous-catégories : categories?parent_id=eq.<id> ; la colonne n'existe pas avant le script add-subcategories.sql (la base répond une erreur 400)
+  if (u.includes('/rest/v1/categories?parent_id=eq.')) {
+    if (noParentColumn) return new Response('{"code":"42703","message":"column categories.parent_id does not exist"}', { status: 400 });
+    const id = u.match(/parent_id=eq\.([^&]+)/)![1];
+    return json((categories as any[]).filter((c) => c.parent_id === id).map((c) => ({ id: c.id })));
+  }
   if (u.includes('/rest/v1/categories?slug=eq.')) {
     const slug = decodeURIComponent(u.match(/slug=eq\.([^&]+)/)![1]);
     return json(categories.filter((c) => c.slug === slug));
@@ -89,6 +96,10 @@ globalThis.fetch = (async (input: any) => {
   if (u.includes('/rest/v1/products?slug=eq.')) {
     const slug = decodeURIComponent(u.match(/slug=eq\.([^&]+)/)![1]);
     return json(products.filter((p) => p.slug === slug));
+  }
+  if (u.includes('/rest/v1/products?category_id=in.(')) {
+    const ids = decodeURIComponent(u.match(/category_id=in\.\(([^)]+)\)/)![1]).split(',');
+    return json(products.filter((p) => ids.includes(p.category_id)));
   }
   if (u.includes('/rest/v1/products?category_id=eq.')) {
     const id = u.match(/category_id=eq\.([^&]+)/)![1];
@@ -184,6 +195,21 @@ const ldBlocks = (html: string): any[] => [...html.matchAll(/<script type="appli
   {
     const { res } = await ask(ogPreview, '/categorie/inconnue');
     check('catégorie inconnue : 404', res.status === 404);
+  }
+  // sous-catégories : la page de la catégorie principale montre aussi les articles de ses sous-catégories
+  {
+    (categories as any[]).push({ id: 'c1a', name: 'Montres or', slug: 'montres-or', image_url: null, parent_id: 'c1' });
+    products.push({ name: 'Montre dorée', slug: 'montre-doree', description: '', price: 30000, images: [], stock: 3, category_id: 'c1a', categories: { name: 'Montres or', slug: 'montres-or' } } as any);
+    const parent = await (await ask(ogPreview, '/categorie/montres')).res.text();
+    check('catégorie principale : ses articles ET ceux de sa sous-catégorie (2 articles)', /2 articles,/.test(parent) && parent.includes('/produit/montre-keep-moving') && parent.includes('/produit/montre-doree'), parent.slice(0, 300));
+    const sub = await (await ask(ogPreview, '/categorie/montres-or')).res.text();
+    check('sous-catégorie : sa propre page, seulement ses articles (1 article)', /1 article,/.test(sub) && sub.includes('/produit/montre-doree') && !sub.includes('/produit/montre-keep-moving'));
+    noParentColumn = true;
+    const before = await (await ask(ogPreview, '/categorie/montres')).res.text();
+    check('avant le script SQL (pas de colonne parent_id) : la page de la catégorie marche comme avant (1 article)', /1 article,/.test(before) && before.includes('/produit/montre-keep-moving') && !before.includes('/produit/montre-doree'), before.slice(0, 200));
+    noParentColumn = false;
+    (categories as any[]).pop();
+    products.pop();
   }
 
   // filet de sécurité : une erreur imprévue (ici l'environnement qui plante) renvoie la page normale

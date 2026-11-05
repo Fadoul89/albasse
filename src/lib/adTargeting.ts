@@ -20,6 +20,7 @@ import { professionAudience, AUDIENCES, type Audience } from './adAudiences';
 import { isHomeCity } from './deliveryRules';
 import { MOBILE_MONEY_ENABLED } from '../constants/shopRules';
 import { isVitalityCategory, vitalityAllowed } from './adSensitive';
+import { inFamily, rootOf } from './subCategories';
 import { flashActive, promoActive, realDiscountPct, shownOldPrice, type PromoFields } from './promotions';
 
 export type AdLang = 'fr' | 'ar';
@@ -39,6 +40,7 @@ export interface AdCategory {
   id: string;
   slug: string;
   name: string;
+  parent_id?: string | null; // sous-catégorie (lib/subCategories) : elle hérite du public et du « Vitalité & Énergie » de sa catégorie principale
 }
 
 export type AdReason =
@@ -129,11 +131,16 @@ export function pickTargetedAd(input: AdInput): TargetedAd | null {
   const seed = Math.floor(input.seed ?? adSeed(now));
   const catById = new Map(input.categories.map((c) => [c.id, c]));
   const catBySlug = new Map(input.categories.map((c) => [c.slug, c]));
-  const audienceOfProduct = (p: AdProduct) => audienceOf(catById.get(p.category_id ?? '')?.name ?? catById.get(p.category_id ?? '')?.slug ?? '');
+  // une sous-catégorie sans public à elle (« Chemises ») prend celui de sa catégorie principale (« Vêtements pour hommes »)
+  const audienceOfCategory = (c: AdCategory | undefined) => (c ? audienceOf(c.name ?? c.slug ?? '') : null);
+  const audienceOfProduct = (p: AdProduct) => {
+    const own = catById.get(p.category_id ?? '');
+    return audienceOfCategory(own) ?? audienceOfCategory(rootOf(input.categories, p.category_id) ?? undefined);
+  };
   const excluded = new Set(input.exclude ?? []);
   // « Vitalité & Énergie » : jamais dans une annonce, sauf pour un client marié de 32 ans et plus (lib/adSensitive)
   const vitalityOk = vitalityAllowed(input.customer, now);
-  const vitalityHidden = (p: AdProduct) => !vitalityOk && isVitalityCategory(catById.get(p.category_id ?? ''));
+  const vitalityHidden = (p: AdProduct) => !vitalityOk && (isVitalityCategory(catById.get(p.category_id ?? '')) || isVitalityCategory(rootOf(input.categories, p.category_id)));
   const ok = (p: AdProduct) => eligible(p) && !excluded.has(p.id) && !vitalityHidden(p) && audienceAllows(input.customer?.gender, audienceOfProduct(p));
   const pool = input.products.filter(ok);
   const byId = new Map(pool.map((p) => [p.id, p]));
@@ -161,7 +168,7 @@ export function pickTargetedAd(input: AdInput): TargetedAd | null {
       const cat = catBySlug.get(top.key) ?? input.categories.find((c) => c.id === top.key);
       if (!cat) continue;
       const fresh = pool
-        .filter((p) => p.category_id === cat.id && !profile.products[p.id])
+        .filter((p) => inFamily(input.categories, p.category_id, cat.id) && !profile.products[p.id])
         .sort((a, b) => (realPromoPct(b, now) ?? 0) - (realPromoPct(a, now) ?? 0) || ms(b.created_at) - ms(a.created_at) || a.name.localeCompare(b.name));
       const p = rotate(fresh);
       if (p) return { product: p, reason: { kind: 'category', categoryName: cat.name.trim() } };

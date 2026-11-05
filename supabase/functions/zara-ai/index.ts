@@ -101,6 +101,7 @@ type Item = {
   compare_at_price: number | null;
   stock: number;
   category: string;
+  sub: string;
   colors: string[];
   sizes: string[];
   description: string;
@@ -122,10 +123,17 @@ async function catalog(db: any): Promise<Item[]> {
   if (cache && Date.now() - cache.at < 60_000) return cache.items;
   const [{ data: prods, error }, { data: cats }] = await Promise.all([
     db.from("products").select("*").eq("is_active", true).limit(3000),
-    db.from("categories").select("id,name"),
+    // toutes les colonnes : parent_id (sous-catégories) n'existe qu'après le script add-subcategories.sql
+    db.from("categories").select("*"),
   ]);
   if (error) throw error;
-  const catName = new Map<string, string>((cats ?? []).map((c: { id: string; name: string }) => [c.id, c.name]));
+  // sous-catégories : l'article est rangé dans sa catégorie PRINCIPALE (« Vêtements »), le nom de la sous-catégorie (« Chemises ») sert à le retrouver
+  const catById = new Map<string, { id: string; name: string; parent_id?: string | null }>((cats ?? []).map((c: { id: string; name: string; parent_id?: string | null }) => [c.id, c]));
+  const rootOf = (id: string) => {
+    const own = catById.get(id);
+    const parent = own?.parent_id ? catById.get(own.parent_id) : undefined;
+    return own && parent && !parent.parent_id ? parent : own;
+  };
   // articles vendus (commandes non annulées), pour recommander ce qui marche
   const sold = new Map<string, number>();
   const { data: orders } = await db.from("orders").select("items,status").neq("status", "cancelled").limit(5000);
@@ -136,7 +144,10 @@ async function catalog(db: any): Promise<Item[]> {
     }
   }
   const items: Item[] = (prods ?? []).map((p: Record<string, unknown>) => {
-    const category = catName.get(String(p.category_id)) ?? "";
+    const root = rootOf(String(p.category_id));
+    const category = root?.name ?? "";
+    const own = catById.get(String(p.category_id));
+    const sub = own && root && own.id !== root.id ? own.name : "";
     const description = String(p.description ?? "").replace(/\s+/g, " ").trim();
     return {
       id: String(p.id),
@@ -145,13 +156,14 @@ async function catalog(db: any): Promise<Item[]> {
       compare_at_price: p.compare_at_price == null ? null : Number(p.compare_at_price),
       stock: Number(p.stock ?? 0),
       category,
+      sub,
       colors: Array.isArray(p.colors) ? (p.colors as string[]) : [],
       sizes: Array.isArray(p.sizes) ? (p.sizes as string[]) : [],
       description,
       likes: Number(p.likes_count ?? 0),
       sold: sold.get(String(p.id)) ?? 0,
       flashEndsAt: p.is_flash_sale && p.flash_sale_ends_at && Date.parse(String(p.flash_sale_ends_at)) > Date.now() ? String(p.flash_sale_ends_at) : null,
-      hay: { name: norm(String(p.name ?? "")), cat: norm(category), desc: norm(description) },
+      hay: { name: norm(String(p.name ?? "")), cat: norm(`${category} ${sub}`), desc: norm(description) },
     };
   });
   cache = { at: Date.now(), items };
@@ -172,7 +184,7 @@ function card(p: Item) {
     jaime: p.likes,
     deja_vendus: p.sold,
     vente_flash_fin: p.flashEndsAt,
-    categorie: p.category,
+    categorie: p.sub ? `${p.category} › ${p.sub}` : p.category,
     couleurs: p.colors,
     tailles: p.sizes,
     description: p.description.slice(0, 160),

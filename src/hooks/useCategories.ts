@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { CATEGORIES as FALLBACK_CATEGORIES } from '../constants/categories';
 import { sortCategories } from '../lib/categoryOrder';
+import { mainCategories as mainOf, rootIdOf as rootIdIn } from '../lib/subCategories';
 import type { Category } from '../types';
 
 export function useCategories() {
@@ -32,5 +33,10 @@ export function useCategories() {
     refresh();
   }, []);
 
-  return { categories, isLoading, error, refresh };
+  // Sous-catégories (lib/subCategories) : `categories` garde TOUTES les catégories (pour retrouver n'importe quel article) ;
+  // `mainCategories` = les principales seulement (accueil, boutons) ; `rootIdOf` = la catégorie principale d'un article.
+  const mainCategories = useMemo(() => mainOf(categories), [categories]);
+  const rootIdOf = useCallback((id: string | null | undefined) => rootIdIn(categories, id), [categories]);
+
+  return { categories, mainCategories, rootIdOf, isLoading, error, refresh };
 }

@@ -27,14 +27,22 @@ const inStock = (p: WithCategory): boolean => p.stock === undefined || p.stock =
 
 // Une section par catégorie qui a au moins un article en vente, dans l'ordre reçu (celui de l'admin). Les articles retirés de la vente
 // (is_active = false) ne comptent pas ; une catégorie vide n'a pas de section.
-export function buildHomeSections<C extends WithId, P extends WithCategory>(categories: C[], products: P[], perCategory: number = HOME_PER_CATEGORY): HomeSection<C, P>[] {
+// Sous-catégories (lib/subCategories) : `categories` ne contient que les catégories principales, et `rootOf` donne la catégorie principale d'un article
+// (les articles d'une sous-catégorie comptent dans la section de leur catégorie principale). Sans `rootOf` : comme avant.
+export function buildHomeSections<C extends WithId, P extends WithCategory>(
+  categories: C[],
+  products: P[],
+  perCategory: number = HOME_PER_CATEGORY,
+  rootOf?: (categoryId: string) => string | null
+): HomeSection<C, P>[] {
   const limit = Math.max(0, Math.floor(perCategory));
   const byCategory = new Map<string, P[]>();
   for (const p of products) {
     if (p.is_active === false || !p.category_id) continue;
-    const list = byCategory.get(p.category_id);
+    const key = (rootOf ? rootOf(p.category_id) : null) ?? p.category_id;
+    const list = byCategory.get(key);
     if (list) list.push(p);
-    else byCategory.set(p.category_id, [p]);
+    else byCategory.set(key, [p]);
   }
   const sections: HomeSection<C, P>[] = [];
   for (const category of categories) {

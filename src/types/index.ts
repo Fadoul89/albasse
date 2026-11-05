@@ -8,6 +8,8 @@ export interface Category {
   affiliate_commission_rate: number | null;
   // ordre choisi par l'admin (1 = la première) ; absent avant le script add-category-order.sql
   sort_order?: number | null;
+  // catégorie principale de cette sous-catégorie (lib/subCategories) ; absent avant le script add-subcategories.sql, vide pour une catégorie principale
+  parent_id?: string | null;
 }
 
 export interface ProductVariantOption {

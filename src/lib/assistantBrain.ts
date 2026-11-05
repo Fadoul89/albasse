@@ -64,6 +64,8 @@ export interface RawProduct {
   stock: number | null;
   category: string;
   category_slug?: string | null;
+  // sous-catégorie de l'article (lib/subCategories) : `category` est toujours la catégorie PRINCIPALE ; le nom de la sous-catégorie sert seulement à la recherche
+  sub_category?: string | null;
   colors: string[] | null;
   sizes?: string[] | null;
   description: string | null;
@@ -109,7 +111,7 @@ export function buildProduct(p: RawProduct): CatalogProduct {
     image: p.image,
     createdAt: Date.parse(p.created_at) || 0,
     nameTokens: tokenize(p.name),
-    catTokens: tokenize(p.category),
+    catTokens: tokenize(p.sub_category ? `${p.category} ${p.sub_category}` : p.category),
     colorTokens: colors.flatMap(tokenize),
     descTokens: tokenize((p.description ?? '').slice(0, 400)),
   };

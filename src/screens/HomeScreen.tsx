@@ -39,7 +39,8 @@ export function HomeScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { products: allProducts, isLoading } = useProducts();
   const products = allProducts.filter((p) => p.is_active);
-  const { categories } = useCategories();
+  // sous-catégories : l'accueil montre les catégories PRINCIPALES ; les articles d'une sous-catégorie comptent dans la section de leur catégorie principale
+  const { categories, mainCategories, rootIdOf } = useCategories();
   const { settings } = useStoreSettings();
   const { width } = useWindowDimensions();
   const hasAdItems = settings.left_ad_items.length > 0 || settings.right_ad_items.length > 0;
@@ -59,7 +60,7 @@ export function HomeScreen() {
   const { items: promoAll, endsAt: promoEndsAt } = activePromotions(products, now);
   const promoItems = promoAll.slice(0, 12);
   // 4 articles par catégorie (dans l'ordre choisi par l'admin) ; le reste est dans la catégorie
-  const sections = buildHomeSections(categories, products);
+  const sections = buildHomeSections(mainCategories, products, undefined, rootIdOf);
   const promoEndLabel = promoEndsAt ? new Date(promoEndsAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', timeZone: 'Africa/Ndjamena' }) : '';
   // saison fraîche (jusqu'à fin décembre) : les vrais blousons et manteaux en vente, la plus grande remise réelle d'abord (jamais un porte-manteau)
   const coldPicks = coldSeasonActive() ? coldSeasonPicks(products, (p) => ({ name: p.name, price: p.price, compareAt: p.compare_at_price, stock: p.stock, hasImage: !!p.images?.[0] }), 6) : [];
@@ -180,7 +181,7 @@ export function HomeScreen() {
       {/* une seule ligne qui défile, sans titre « Catégories » (demande du patron) */}
       <View style={styles.categoriesSection} testID="home-categories">
         <FlatList
-          data={categories}
+          data={mainCategories}
           horizontal
           showsHorizontalScrollIndicator={false}
           keyExtractor={(item) => item.id}

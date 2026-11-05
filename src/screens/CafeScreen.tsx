@@ -7,6 +7,7 @@ import type { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing } from '../theme';
 import { useProductBySlug } from '../hooks/useProducts';
 import { useCategories } from '../hooks/useCategories';
+import { rootOf } from '../lib/subCategories';
 import { useStoreSettings } from '../hooks/useStoreSettings';
 import { useCartStore } from '../store/cartStore';
 import { useAuthStore } from '../store/authStore';
@@ -61,7 +62,8 @@ export function CafeScreen() {
   useEffect(() => {
     if (product) trackProductView(product.id);
   }, [product?.id]);
-  const category = categories.find((c) => c.id === product?.category_id);
+  // sous-catégories : le suivi de navigation (Zara) compte la catégorie PRINCIPALE de l'article
+  const category = rootOf(categories, product?.category_id);
   const meta = useMemo(
     () => (product ? { id: product.id, name: product.name, slug: product.slug, categoryId: product.category_id, categorySlug: category?.slug ?? null, categoryName: category?.name ?? null } : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps

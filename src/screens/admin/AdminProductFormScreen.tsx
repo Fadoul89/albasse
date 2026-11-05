@@ -15,6 +15,7 @@ import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { uploadProductImage } from '../../lib/imageUpload';
 import { addFictionalReview, deleteReview } from '../../lib/reviews';
 import { slugify } from '../../lib/slugify';
+import { flattenTree, mainCategories } from '../../lib/subCategories';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { GoldButton } from '../../components/GoldButton';
 import { StarRating } from '../../components/StarRating';
@@ -84,8 +85,10 @@ export function AdminProductFormScreen({ route }: Props) {
   };
 
   useEffect(() => {
-    if (!categoryId && categories.length > 0) {
-      setCategoryId(categories[0].id);
+    // par défaut : la première catégorie principale (jamais une sous-catégorie)
+    const first = mainCategories(categories)[0];
+    if (!categoryId && first) {
+      setCategoryId(first.id);
     }
   }, [categories, categoryId]);
 
@@ -236,14 +239,16 @@ export function AdminProductFormScreen({ route }: Props) {
         <Field label="Tailles (séparées par une virgule)" value={sizes} onChangeText={setSizes} />
 
         <Text style={styles.label}>Catégorie</Text>
+        {/* sous-catégories : chaque catégorie principale, puis ses sous-catégories (« ↳ Chemises ») ; l'article se range dans celle qu'on touche */}
         <View style={styles.chipsRow}>
-          {categories.map((c) => (
+          {flattenTree(categories).map(({ category: c, depth }) => (
             <Pressable
               key={c.id}
+              testID={`product-category-${c.slug}`}
               style={[styles.chip, categoryId === c.id && styles.chipActive]}
               onPress={() => setCategoryId(c.id)}
             >
-              <Text style={[styles.chipText, categoryId === c.id && styles.chipTextActive]}>{c.name}</Text>
+              <Text style={[styles.chipText, categoryId === c.id && styles.chipTextActive]}>{depth === 1 ? `↳ ${c.name}` : c.name}</Text>
             </Pressable>
           ))}
         </View>

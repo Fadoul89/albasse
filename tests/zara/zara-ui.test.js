@@ -20,7 +20,7 @@ const BASE_HOST = new URL(BASE).hostname;
 // MOBILE_MONEY=on : le site a été construit avec EXPO_PUBLIC_MOBILE_MONEY=on (Airtel Money et Moov Money ouverts) : on lance les ANCIENS contrôles.
 // Sans cette variable (le site publié : Airtel / Moov retirés « pour le moment ») : les nouveaux contrôles (partie ¤) et les anciens contrôles de paiement sont remplacés.
 const MM = process.env.MOBILE_MONEY === 'on';
-const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI0123456789TOFBCDE+=^~%&@?¤').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI0123456789TOFBCDE+=^~%&@?¤$').toUpperCase();
 // saison fraiche (blousons et manteaux) : le bouton du menu de Zara n'existe que jusqu'au 31 decembre 2026 a 23h59 (N'Djamena)
 const COLD_ON = Date.now() < Date.parse('2027-01-01T00:00:00+01:00');
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
@@ -268,23 +268,38 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         if (fakeCats && u.pathname === '/rest/v1/categories') {
           fakeCats.order = fakeCats.order || {};
           fakeCats.slugOf = fakeCats.slugOf || {};
+          // sous-categories (add-subcategories.sql) : fakeCats.subs = de fausses sous-categories ({ id, slug, name, parent_id }) ajoutees aux vraies categories,
+          // toutes les lignes recoivent alors « parent_id » (vide). fakeCats.noParent = colonne parent_id absente (script pas lance). fakeCats.inserts = les
+          // lignes envoyees par la page admin (creation, ajoutees aux fausses sous-categories) ; fakeCats.refuse = message d'erreur de la base a l'enregistrement
+          if (m === 'POST' && fakeCats.subs) {
+            const body = JSON.parse(req.postData() || '{}');
+            (fakeCats.inserts = fakeCats.inserts || []).push(body);
+            if (fakeCats.refuse) return json(route, { code: 'P0001', message: fakeCats.refuse }, 400);
+            if (fakeCats.noParent && 'parent_id' in body) return json(route, { code: 'PGRST204', message: "Could not find the 'parent_id' column of 'categories' in the schema cache" }, 400);
+            fakeCats.subs.push({ id: `created-${fakeCats.subs.length + 1}`, image_url: null, affiliate_commission_rate: null, ...body });
+            return route.fulfill({ status: 201, headers: { 'access-control-allow-origin': '*' } });
+          }
           if (m === 'PATCH') {
             const id = (u.searchParams.get('id') || '').replace('eq.', '');
             const body = JSON.parse(req.postData() || '{}');
             (fakeCats.patches = fakeCats.patches || []).push({ id, ...body });
             if (fakeCats.missing) return json(route, { code: 'PGRST204', message: "Could not find the 'sort_order' column of 'categories' in the schema cache" }, 400);
             if (fakeCats.slugOf[id] && 'sort_order' in body) fakeCats.order[fakeCats.slugOf[id]] = body.sort_order;
+            const fake = (fakeCats.subs || []).find((c) => c.id === id);
+            if (fake) Object.assign(fake, body);
             return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } });
           }
           if (m === 'GET') {
             return route.fetch({ headers: { ...req.headers(), apikey: KEY, authorization: `Bearer ${KEY}` } }).then(async (res) => {
               const data = await res.json();
               if (!Array.isArray(data)) return json(route, data, res.status());
-              return json(route, data.map((c) => {
+              const withSubs = fakeCats.subs && !fakeCats.noParent ? [...data, ...fakeCats.subs] : data;
+              return json(route, withSubs.map((c) => {
                 if (c.id && c.slug) fakeCats.slugOf[c.id] = c.slug;
                 const r = { ...c };
                 delete r.sort_order;
                 if (!fakeCats.missing) r.sort_order = fakeCats.order[c.slug] ?? null;
+                if (fakeCats.subs && !fakeCats.noParent && !('parent_id' in r)) r.parent_id = null;
                 return r;
               }), res.status());
             }).catch(() => {}); // page deja fermee pendant la lecture
@@ -887,6 +902,178 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   }
 
   // =============================================== € . « ANNONCE » CIBLÉE DE ZARA (UNE PUB COMME UNE VRAIE ADS, DE VRAIES RAISONS) ===============================================
+  if (PARTS.includes('$')) {
+    console.log('\n== $ sous-categories (docs/sous-categories.md) : une categorie principale + ses sous-categories (fausses categories, faux articles : lecture seule)');
+    const HDRA = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+    const cats = await get('categories?select=id,name,slug');
+    check('la base a au moins 2 categories', cats.length >= 2, cats.length);
+    const [cA, cB] = cats;
+    const catalog = (await get('products?select=*&is_active=eq.true&stock=gt.0&limit=80&order=created_at.desc')).filter((p) => (p.images || [])[0] && Number(p.price) > 0);
+    const uniq = []; const seen = new Set();
+    for (const p of catalog) { const key = p.name.replace(/\s+/g, ' ').trim().toLowerCase(); if (!seen.has(key)) { seen.add(key); uniq.push(p); } }
+    check('le catalogue a assez d\'articles pour le test', uniq.length >= 12, uniq.length);
+    const calm = (p, over) => ({ ...p, compare_at_price: null, is_flash_sale: false, flash_sale_ends_at: null, promo_ends_at: null, stock: 5, ...over });
+    const SUB1 = { id: 'fake-sub-chemises', slug: 'test-chemises', name: 'Lotions et crèmes', parent_id: cA.id, image_url: null, affiliate_commission_rate: null };
+    const SUB2 = { id: 'fake-sub-ceintures', slug: 'test-ceintures', name: 'Autres soins', parent_id: cA.id, image_url: null, affiliate_commission_rate: null };
+    // A : 2 articles directement + 3 dans « Lotions et crèmes » + 2 dans « Autres soins » (7 en tout) ; B : 2 articles, aucune sous-categorie
+    const direct = uniq.slice(0, 2).map((p) => calm(p, { category_id: cA.id }));
+    const inS1 = uniq.slice(2, 5).map((p) => calm(p, { category_id: SUB1.id }));
+    const inS2 = uniq.slice(5, 7).map((p) => calm(p, { category_id: SUB2.id }));
+    const inB = uniq.slice(7, 9).map((p) => calm(p, { category_id: cB.id }));
+    const rows = [...direct, ...inS1, ...inS2, ...inB];
+    const order = { [cA.slug]: 1, [cB.slug]: 2, [SUB1.slug]: 3, [SUB2.slug]: 4 };
+    const uidA = '44444444-4444-4444-8444-444444444444';
+    const JWTA = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0NDQ0NDQ0NC00NDQ0LTQ0NDQtODQ0NC00NDQ0NDQ0NDQ0NDQiLCJleHAiOjQxMDI0NDQ4MDAsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.c2ln';
+    const adminSub = () => {
+      const auth = { id: uidA, aud: 'authenticated', role: 'authenticated', email: 'admin@example.com', app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' };
+      const token = { access_token: JWTA, refresh_token: 'fake-refresh', token_type: 'bearer', expires_in: 3600, expires_at: 4102444800, user: auth };
+      return { auth, token, session: JSON.stringify(token), profile: { id: uidA, email: 'admin@example.com', full_name: 'Admin Albasse', phone: '66123456', banned: false, role: 'admin', is_admin: true } };
+    };
+    const SKA = 'sb-xtitsmmccpkelxfjyqyh-auth-token';
+    const openSub = async (ctxOpts, path, readyTestId, extra = {}, withAdmin = false) => {
+      const fu = withAdmin ? adminSub() : null;
+      const fc = { order: { ...order }, subs: [{ ...SUB1 }, { ...SUB2 }], ...extra };
+      const v = await newVisitor(ctxOpts, { fakeCats: fc, ...(fu ? { storage: { [SKA]: fu.session }, fakeUser: fu } : {}) });
+      v.fc = fc;
+      await v.page.route(/\/rest\/v1\/products\?/, (route) => (route.request().method() === 'OPTIONS' ? route.fulfill({ status: 204, headers: HDRA }) : route.fulfill({ status: 200, headers: { ...HDRA, 'content-type': 'application/json' }, body: JSON.stringify(rows) })));
+      await v.page.goto(`${BASE}${path}`, { waitUntil: 'load' });
+      await v.page.getByTestId(readyTestId).first().waitFor({ timeout: 30000 });
+      await sleep(900);
+      return v;
+    };
+    const shownCards = (pg) => pg.evaluate(() => [...document.querySelectorAll('[data-testid^="product-card-"]')].filter((c) => c.getClientRects().length > 0).map((c) => c.getAttribute('data-testid').slice('product-card-'.length)));
+    const rowsOfAdmin = (pg) => pg.locator('[data-testid^="category-row-"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid').replace('category-row-', '')));
+    const sameSet = (a, b) => a.length === b.length && b.every((x) => a.includes(x));
+
+    // ---- accueil : seulement les categories principales ; les articles des sous-categories comptent dans leur categorie principale
+    {
+      const v = await openSub(phone, '/', `home-section-${cA.slug}`);
+      const tiles = await v.page.getByTestId('home-categories').innerText();
+      check('accueil : la ligne des categories ne montre PAS les sous-categories', !/Lotions et crèmes|Autres soins/i.test(tiles) && new RegExp(cA.name.slice(0, 6), 'i').test(tiles), tiles.slice(0, 200));
+      check('accueil : aucune section pour une sous-categorie', (await v.page.getByTestId(`home-section-${SUB1.slug}`).count()) === 0 && (await v.page.getByTestId(`home-section-${SUB2.slug}`).count()) === 0);
+      check(`accueil : « ${cA.name} » compte ses 7 articles (les siens + ceux des sous-categories)`, /7 articles/.test(await v.page.getByTestId(`home-section-title-${cA.slug}`).innerText()));
+      const onHome = await v.page.evaluate((sel) => [...document.querySelectorAll(`${sel} [data-testid^="product-card-"]`)].map((c) => c.getAttribute('data-testid').slice('product-card-'.length)), `[data-testid="home-section-${cA.slug}"]`);
+      check('accueil : 4 articles montres, pris dans toute la famille (le reste « Voir les 3 autres articles »)', onHome.length === 4 && /3 autres articles/.test(await v.page.getByTestId(`home-more-${cA.slug}`).innerText()), onHome);
+      check('accueil : « ' + cB.name + ' » (sans sous-categorie) : 2 articles, rien ne change', /2 articles/.test(await v.page.getByTestId(`home-section-title-${cB.slug}`).innerText()));
+      // le bouton « Voir les 3 autres articles » ouvre la categorie principale : les 7 articles, avec les puces
+      await v.page.getByTestId(`home-more-${cA.slug}`).click();
+      await v.page.getByTestId('category-subchips').waitFor({ timeout: 25000 });
+      await sleep(800);
+      const all = await shownCards(v.page);
+      check('la categorie principale montre ses 7 articles (les siens + les 2 sous-categories)', v.page.url().includes(`/categorie/${cA.slug}`) && sameSet(all, [...direct, ...inS1, ...inS2].map((p) => p.slug)), all);
+      const chips = await v.page.getByTestId('category-subchips').innerText();
+      check('puces : « Tout », « Lotions et crèmes », « Autres soins » (dans l\'ordre choisi)', /Tout[\s\S]*Lotions et crèmes[\s\S]*Autres soins/.test(chips), chips);
+      check('« Tout » est la puce choisie (et pas « Lotions et crèmes »)', (await v.page.getByTestId('category-chip-all').getAttribute('aria-selected')) === 'true' && (await v.page.getByTestId(`category-chip-${SUB1.slug}`).getAttribute('aria-selected')) !== 'true');
+      await v.page.screenshot({ path: path.join(OUT, '$1-categorie-puces.png') });
+      // une puce : la sous-categorie, seulement ses articles, l'adresse change
+      await v.page.getByTestId(`category-chip-${SUB1.slug}`).click();
+      await sleep(1200);
+      const inSub = await shownCards(v.page);
+      check('« Lotions et crèmes » : seulement ses 3 articles, adresse de la sous-categorie', v.page.url().includes(`/categorie/${SUB1.slug}`) && sameSet(inSub, inS1.map((p) => p.slug)), { url: v.page.url(), inSub });
+      check('les puces restent affichees dans la sous-categorie (pour changer ou revenir)', (await v.page.getByTestId('category-subchips').count()) === 1 && (await v.page.getByTestId('category-chip-all').count()) === 1);
+      await v.page.screenshot({ path: path.join(OUT, '$2-sous-categorie.png') });
+      await v.page.getByTestId(`category-chip-${SUB2.slug}`).click();
+      await sleep(1200);
+      check('« Autres soins » : seulement ses 2 articles', sameSet(await shownCards(v.page), inS2.map((p) => p.slug)));
+      await v.page.getByTestId('category-chip-all').click();
+      await sleep(1200);
+      check('« Tout » : retour a la categorie principale et ses 7 articles', v.page.url().includes(`/categorie/${cA.slug}`) && (await shownCards(v.page)).length === 7);
+      check('aucune erreur (sous-categories, client)', v.errs.length === 0, v.errs);
+      check('aucune ecriture reelle', v.writes.every((w) => /visitor_sessions/.test(w)), v.writes);
+      await v.ctx.close();
+    }
+    // ---- ouvrir directement l'adresse d'une sous-categorie ; une categorie sans sous-categorie n'a pas de puces
+    {
+      const v = await openSub(phone, `/categorie/${SUB2.slug}`, 'category-subchips');
+      check('adresse directe d\'une sous-categorie : ses 2 articles et les puces', sameSet(await shownCards(v.page), inS2.map((p) => p.slug)) && (await v.page.getByTestId('category-chip-all').count()) === 1);
+      await v.ctx.close();
+      const w = await openSub(phone, `/categorie/${cB.slug}`, `product-card-${inB[0].slug}`);
+      check('categorie sans sous-categorie : ses 2 articles, aucune puce', (await shownCards(w.page)).length === 2 && (await w.page.getByTestId('category-subchips').count()) === 0);
+      await w.ctx.close();
+    }
+    // ---- avant le script SQL : la colonne parent_id n'existe pas, tout marche comme avant (aucune puce)
+    {
+      const v = await openSub(phone, `/categorie/${cA.slug}`, `product-card-${direct[0].slug}`, { noParent: true });
+      check('colonne parent_id absente : la categorie ne montre que ses propres articles et aucune puce', (await v.page.getByTestId('category-subchips').count()) === 0 && sameSet(await shownCards(v.page), direct.map((p) => p.slug)), await shownCards(v.page));
+      check('aucune erreur (avant le script SQL)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+    // ---- page administrateur « Categories » : l'arbre, creer une sous-categorie, l'ordre parmi les « freres », garde-fous
+    {
+      const v = await openSub(phone, '/admin/categories', `category-row-${cA.slug}`, {}, true);
+      const tree = await rowsOfAdmin(v.page);
+      const iA = tree.indexOf(cA.slug);
+      check('admin : chaque sous-categorie est juste sous sa categorie principale', tree[iA + 1] === SUB1.slug && tree[iA + 2] === SUB2.slug, tree.slice(0, 8));
+      const rowA = (await v.page.getByTestId(`category-row-${cA.slug}`).innerText()).replace(/\s+/g, ' ');
+      const rowS = (await v.page.getByTestId(`category-row-${SUB1.slug}`).innerText()).replace(/\s+/g, ' ');
+      check('admin : « 2 sous-categorie(s) » sur la principale, « Sous-categorie de … » sur l\'autre', /2 sous-catégorie\(s\)/.test(rowA) && new RegExp(`Sous-catégorie de ${cA.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`).test(rowS), { rowA, rowS });
+      check('admin : le bouton « ＋ Sous-categorie » est sur les principales seulement', (await v.page.getByTestId(`category-add-sub-${cA.slug}`).count()) === 1 && (await v.page.getByTestId(`category-add-sub-${SUB1.slug}`).count()) === 0);
+      check('admin : parmi les sous-categories, ▲ de la 1re et ▼ de la derniere desactives', (await v.page.getByTestId(`category-up-${SUB1.slug}`).getAttribute('aria-disabled')) === 'true' && (await v.page.getByTestId(`category-down-${SUB2.slug}`).getAttribute('aria-disabled')) === 'true');
+      // l'arbre vu de pres (pour l'image exemple) : la categorie principale A et ses sous-categories
+      await v.page.getByTestId(`category-row-${cA.slug}`).scrollIntoViewIfNeeded();
+      await v.page.evaluate(() => window.scrollBy(0, -40));
+      await sleep(500);
+      await v.page.screenshot({ path: path.join(OUT, '$4-admin-arbre.png') });
+      const wide = await v.page.getByTestId(`category-row-${cA.slug}`).evaluate((el) => { const r = el.getBoundingClientRect(); return [...el.querySelectorAll('*')].every((c) => c.getBoundingClientRect().right <= r.right + 1); });
+      check('admin : la ligne d\'une categorie principale tient dans l\'ecran du telephone (« Supprimer » pas coupe)', wide);
+      // ▼ sur « Lotions et crèmes » : elle passe apres « Autres soins », toujours sous sa categorie principale
+      await v.page.getByTestId(`category-down-${SUB1.slug}`).click();
+      await sleep(1500);
+      const t2 = await rowsOfAdmin(v.page);
+      const j = t2.indexOf(cA.slug);
+      check('admin : ▼ sur « Lotions et crèmes » : elle passe apres « Autres soins », sous la meme categorie', t2[j + 1] === SUB2.slug && t2[j + 2] === SUB1.slug, t2.slice(0, 8));
+      check('admin : les numeros envoyes sont seulement des numeros d\'ordre (aucune sous-categorie changee de parent)', v.fc.patches.every((p) => Object.keys(p).join() === 'id,sort_order'), v.fc.patches);
+      // creer une sous-categorie de B
+      await v.page.getByTestId(`category-add-sub-${cB.slug}`).click();
+      await sleep(600);
+      check('admin : « Nouvelle sous-categorie de « B » » et le parent est deja choisi', (await v.page.getByTestId('category-form-title').innerText()).includes(`Nouvelle sous-catégorie de « ${cB.name} »`));
+      await v.page.getByPlaceholder('Nom de la catégorie').fill('Pantalons test');
+      await v.page.getByText('Ajouter', { exact: true }).click();
+      await v.page.getByTestId('category-row-pantalons-test').waitFor({ timeout: 15000 });
+      const ins = v.fc.inserts || [];
+      check('admin : la sous-categorie est envoyee avec son parent et une adresse', ins.length === 1 && ins[0].parent_id === cB.id && ins[0].slug === 'pantalons-test' && ins[0].name === 'Pantalons test', ins);
+      const t3 = await rowsOfAdmin(v.page);
+      check('admin : la nouvelle sous-categorie apparait juste sous « B »', t3[t3.indexOf(cB.slug) + 1] === 'pantalons-test', t3.slice(0, 10));
+      // une categorie qui a des sous-categories reste principale
+      await v.page.getByTestId(`category-row-${cA.slug}`).getByText('Modifier', { exact: true }).click();
+      await v.page.getByTestId('category-parent-locked').waitFor({ timeout: 8000 });
+      check('admin : une categorie qui a des sous-categories ne peut pas devenir une sous-categorie', /elle reste une catégorie principale/.test(await v.page.getByTestId('category-parent-locked').innerText()));
+      // modifier une sous-categorie : le choix du parent
+      await v.page.getByTestId(`category-row-${SUB2.slug}`).getByText('Modifier', { exact: true }).click();
+      await sleep(500);
+      check('admin : modifier une sous-categorie : « Modifier la sous-categorie » et le choix de la categorie principale', (await v.page.getByTestId('category-form-title').innerText()).includes('Modifier la sous-catégorie') && (await v.page.getByTestId(`category-parent-${cB.slug}`).count()) === 1 && (await v.page.getByTestId(`category-parent-${SUB1.slug}`).count()) === 0);
+      await v.page.screenshot({ path: path.join(OUT, '$3-admin-categories.png') });
+      check('aucune erreur (sous-categories, admin)', v.errs.length === 0, v.errs);
+      check('aucune ecriture reelle (admin)', v.writes.every((w) => /visitor_sessions|profiles|auto_flag_stale_orders/.test(w)), v.writes);
+      await v.ctx.close();
+    }
+    // ---- admin : la base refuse (regle « un seul niveau ») : le message de la base est montre, rien n'est cree
+    {
+      const v = await openSub(phone, '/admin/categories', `category-row-${cA.slug}`, { refuse: 'Une sous-catégorie ne peut pas avoir de sous-catégorie : un seul niveau.' }, true);
+      await v.page.getByTestId(`category-add-sub-${cB.slug}`).click();
+      await v.page.getByPlaceholder('Nom de la catégorie').fill('Refusee test');
+      await v.page.getByText('Ajouter', { exact: true }).click();
+      await v.page.getByText('Une sous-catégorie ne peut pas avoir de sous-catégorie : un seul niveau.').waitFor({ timeout: 10000 });
+      await sleep(800);
+      check('admin : la base refuse : le message est montre et la liste ne change pas', (await v.page.getByTestId('category-row-refusee-test').count()) === 0);
+      await v.ctx.close();
+    }
+    // ---- admin avant le script SQL : explication claire, aucun bouton de sous-categorie
+    {
+      const v = await openSub(phone, '/admin/categories', `category-row-${cA.slug}`, { noParent: true }, true);
+      check('admin avant le script SQL : « lancez d\'abord le script add-subcategories.sql » et aucun bouton « Sous-categorie »', (await v.page.getByTestId('category-sub-missing').count()) === 1 && /add-subcategories\.sql/.test(await v.page.getByTestId('category-sub-missing').innerText()) && (await v.page.locator('[data-testid^="category-add-sub-"]').count()) === 0);
+      check('admin avant le script SQL : la liste est celle d\'avant (toutes principales)', (await rowsOfAdmin(v.page)).every((slug) => slug !== SUB1.slug && slug !== SUB2.slug));
+      await v.ctx.close();
+    }
+    // ---- formulaire d'article : la categorie se choisit parmi les principales ET les sous-categories (« ↳ »)
+    {
+      const v = await openSub(phone, '/admin/produits/edition', `product-category-${cA.slug}`, {}, true);
+      const subChip = await v.page.getByTestId(`product-category-${SUB1.slug}`).innerText();
+      check('formulaire d\'article : « ↳ Lotions et crèmes » est proposee sous sa categorie principale', /↳ Lotions et crèmes/.test(subChip) && (await v.page.getByTestId(`product-category-${cA.slug}`).count()) === 1, subChip);
+      await v.ctx.close();
+    }
+  }
+
   if (PARTS.includes('€')) {
     console.log("\n== € « Annonce » ciblée de Zara dans l'accueil (article regardé, catégorie explorée, vraie promotion, ville, « Pourquoi cette annonce ? »)");
     const uidE = '11111111-1111-4111-8111-111111111111';
