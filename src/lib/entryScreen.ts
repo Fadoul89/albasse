@@ -49,7 +49,7 @@ const firstImage = (p: EntryProduct): string | null => {
 
 // Les articles montrés à un visiteur qui n'a pas encore de compte : en vente (actif, en stock, avec photo) ET entre 10 000 et 15 000 FCFA ; les plus aimés d'abord (à égalité :
 // le moins cher, puis le plus récent), de catégories DIFFÉRENTES si possible, jamais un article « Vitalité & Énergie » (réservé aux annonces des clients mariés de 32 ans et plus) ;
-// les articles choisis sont ensuite rangés du moins cher au plus cher pour l'affichage.
+// 4 articles différents à 4 prix différents quand c'est possible ; les articles choisis sont ensuite rangés du moins cher au plus cher pour l'affichage.
 export function pickEntryProducts(products: readonly EntryProduct[], categories: readonly EntryCategory[], count: number = ENTRY_PREVIEW_COUNT): EntryProduct[] {
   const sellable = products.filter((p) => p.is_active !== false && (p.stock ?? 0) > 0 && firstImage(p) !== null && Number(p.price) >= ENTRY_PRICE_MIN && Number(p.price) <= ENTRY_PRICE_MAX && p.name.trim() !== '');
   const allowed = adAllowedProducts(sellable, categories, null);
@@ -60,18 +60,30 @@ export function pickEntryProducts(products: readonly EntryProduct[], categories:
     if (cheaper !== 0) return cheaper;
     return String(b.created_at ?? '').localeCompare(String(a.created_at ?? ''));
   });
+  // 4 articles DIFFÉRENTS à 4 PRIX DIFFÉRENTS (demande du patron) : on cherche d'abord un article par catégorie ET par prix, puis un article par prix, puis
+  // (seulement s'il n'y a pas assez de prix différents) un article par nom. Jamais deux fois le même nom, même sous deux fiches.
   const picked: EntryProduct[] = [];
-  const seen = new Set<string>();
-  for (const p of ranked) {
-    if (picked.length >= count) break;
-    const root = rootIdOf(categories, p.category_id) ?? p.category_id ?? p.id;
-    if (seen.has(root)) continue;
-    seen.add(root);
+  const roots = new Set<string>();
+  const prices = new Set<number>();
+  const names = new Set<string>();
+  const rootOfProduct = (p: EntryProduct) => rootIdOf(categories, p.category_id) ?? p.category_id ?? p.id;
+  const nameOf = (p: EntryProduct) => p.name.replace(/\s+/g, ' ').trim().toLowerCase();
+  const take = (p: EntryProduct) => {
     picked.push(p);
-  }
-  for (const p of ranked) {
-    if (picked.length >= count) break;
-    if (!picked.includes(p)) picked.push(p);
+    roots.add(rootOfProduct(p));
+    prices.add(Number(p.price));
+    names.add(nameOf(p));
+  };
+  const rules: ((p: EntryProduct) => boolean)[] = [
+    (p) => !roots.has(rootOfProduct(p)) && !prices.has(Number(p.price)) && !names.has(nameOf(p)),
+    (p) => !prices.has(Number(p.price)) && !names.has(nameOf(p)),
+    (p) => !names.has(nameOf(p)),
+  ];
+  for (const ok of rules) {
+    for (const p of ranked) {
+      if (picked.length >= count) break;
+      if (!picked.includes(p) && ok(p)) take(p);
+    }
   }
   // affichage : du moins cher au plus cher (à prix égal, l'ordre de choix est gardé)
   return picked.map((p, i) => ({ p, i })).sort((x, y) => Number(x.p.price) - Number(y.p.price) || x.i - y.i).map((x) => x.p);

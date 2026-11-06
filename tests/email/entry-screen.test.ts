@@ -118,7 +118,38 @@ check('moins de 4 articles dans la fourchette : on montre ceux qui existent', pi
 {
   const tie = [PR('peuaime', 'mont', 12000, 1), PR('beaucoup-cher', 'chau', 14000, 7), PR('beaucoup-moins-cher', 'parf', 11000, 7), PR('beaucoup-vieux', 'luns', 11000, 7, { created_at: '2026-10-01T00:00:00Z' })];
   const picked = pickEntryProducts(tie, cats, 3).map((p) => p.id);
-  check('mêmes « j\'aime » : le moins cher d\'abord, puis le plus récent (3 choisis, puis rangés par prix)', picked.join(',') === 'beaucoup-moins-cher,beaucoup-vieux,beaucoup-cher' || picked.join(',') === 'beaucoup-vieux,beaucoup-moins-cher,beaucoup-cher', picked);
+  check('mêmes « j\'aime » et même prix : le plus récent est gardé, l\'autre laisse sa place à un prix différent (puis rangés par prix)', picked.join(',') === 'beaucoup-moins-cher,peuaime,beaucoup-cher', picked);
+}
+{
+  // 3 articles à 12 500 et 1 à 15 000 : c'est ce que le patron a vu le 6 novembre → 4 prix différents demandés
+  const products = [
+    PR('survetement', 'vet', 12500, 2), PR('nivea', 'cosm', 12500, 1), PR('manette', 'jeux', 12500, 1), PR('sandale', 'chau', 15000, 3),
+    PR('montre', 'mont', 11000, 0), PR('parfum', 'parf', 13500, 0), PR('lunettes', 'luns', 14000, 0),
+  ];
+  const picked = pickEntryProducts(products, [...cats, { id: 'vet', name: 'Vêtements', slug: 'vetements' }, { id: 'cosm', name: 'Cosmétique', slug: 'cosmetique' }, { id: 'jeux', name: 'Jeux', slug: 'jeux' }]);
+  const prices = picked.map((p) => Number(p.price));
+  check('4 articles à 4 prix différents (plus jamais trois à 12 500)', picked.length === 4 && new Set(prices).size === 4, prices);
+  check('…les plus aimés d\'abord : sandale (3), survêtement (2), puis un article par prix et par catégorie parmi les suivants', picked.some((p) => p.id === 'sandale') && picked.some((p) => p.id === 'survetement'), picked.map((p) => p.id));
+  check('…et rangés du moins cher au plus cher', prices.every((n, i) => i === 0 || prices[i - 1] <= n), prices);
+}
+{
+  const same = [PR('a', 'mont', 12500, 5), PR('b', 'chau', 12500, 4), PR('c', 'parf', 12500, 3), PR('d', 'luns', 15000, 2), PR('e', 'vet', 12500, 1)];
+  const picked = pickEntryProducts(same, [...cats, { id: 'vet', name: 'Vêtements', slug: 'vetements' }]);
+  check('pas assez de prix différents (2 seulement) : on complète avec des articles différents au même prix, jamais moins que possible', picked.length === 4 && new Set(picked.map((p) => p.id)).size === 4 && new Set(picked.map((p) => Number(p.price))).size === 2, picked.map((p) => `${p.id}:${p.price}`));
+}
+{
+  const dup = [
+    PR('a1', 'chau', 15000, 3, { name: 'Al madjaz' }), PR('a2', 'chau', 15000, 2, { name: 'Al  madjaz ' }), PR('a3', 'mont', 14000, 2, { name: 'AL MADJAZ' }),
+    PR('b', 'parf', 12000, 1), PR('c', 'luns', 11000, 0),
+  ];
+  const picked = pickEntryProducts(dup, cats);
+  const names = picked.map((p) => p.name.replace(/\s+/g, ' ').trim().toLowerCase());
+  check('jamais deux fois le même article (même nom, majuscules et espaces en plus ignorés) : « Al madjaz » une seule fois', names.filter((n) => n === 'al madjaz').length === 1 && picked.length === 3, picked.map((p) => p.name));
+}
+{
+  const rich = Array.from({ length: 30 }, (_, i) => PR(`p${i}`, ['mont', 'chau', 'parf', 'luns', 'vet'][i % 5], 10000 + (i % 11) * 500, i % 4, { name: `Article ${i}` }));
+  const picked = pickEntryProducts(rich, [...cats, { id: 'vet', name: 'Vêtements', slug: 'vetements' }]);
+  check('beaucoup d\'articles : toujours 4 articles, 4 noms, 4 prix, 4 catégories différents', picked.length === 4 && new Set(picked.map((p) => p.name)).size === 4 && new Set(picked.map((p) => Number(p.price))).size === 4 && new Set(picked.map((p) => p.category_id)).size === 4, picked.map((p) => `${p.id}:${p.price}:${p.category_id}`));
 }
 {
   const strings = [PR('x', 'mont', '12000.00'), PR('y', 'chau', '15000.50'), PR('z', 'parf', '10000'), PR('w', 'luns', '9999.99')];

@@ -6625,6 +6625,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('bande « Voici ce qui vous attend » : 1 a 4 vrais articles, chacun avec son prix en FCFA', nCards >= 1 && nCards <= 4 && cardsText.every((t) => /\d.*FCFA/.test(t)) && /Voici ce qui vous attend/i.test(form + (await v.page.locator('body').innerText())), cardsText);
       const shownPrices = cardsText.map((t) => Number((t.match(/([\d\s\u00a0\u202f]+)\s*FCFA/) || [])[1]?.replace(/\D/g, '')));
       check('les articles montres coutent de 10 000 a 15 000 FCFA, du moins cher au plus cher', shownPrices.length >= 1 && shownPrices.every((n, i) => n >= 10000 && n <= 15000 && (i === 0 || shownPrices[i - 1] <= n)), shownPrices);
+      check('4 articles differents a 4 prix differents (jamais deux fois le meme prix, ni le meme nom)', cardsText.length === 4 && new Set(shownPrices).size === 4 && new Set(cardsText.map((t) => t.split('\n').map((x) => x.trim()).filter(Boolean).slice(-1)[0].toLowerCase())).size === 4, cardsText);
       check('les articles montres viennent de la boutique (leur nom existe dans la base)', await (async () => {
         const norm = (x) => String(x).replace(/\s+/g, ' ').trim(); // la page remplace les doubles espaces par un seul
         const names = new Set((await get('products?select=name&is_active=eq.true&stock=gt.0&price=gte.10000&price=lte.15000&limit=1000')).map((x) => norm(x.name)));
