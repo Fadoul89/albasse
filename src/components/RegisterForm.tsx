@@ -1,5 +1,6 @@
-// Le formulaire « Créer un compte » : nom, Homme / Femme, date de naissance, célibataire / marié, téléphone et mot de passe obligatoires, le reste facultatif. Sur la page Inscription et
-// en premier sur l'écran d'entrée quand le compte est obligatoire.
+// Le formulaire « Créer un compte » : nom, Homme / Femme, date de naissance, célibataire / marié, téléphone et mot de passe obligatoires, le reste facultatif. Sur la page Inscription.
+// Sur l'écran d'entrée (compte obligatoire) c'est la version COURTE (`short`) : étape 1 = nom, téléphone, mot de passe et conditions ; les 3 questions et le reste
+// viennent juste après (étape 2, components/SignupStepTwo, docs/ecran-entree.md).
 import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, StyleSheet, Pressable } from 'react-native';
 import { colors, fonts, radius, spacing, accountField, accountFieldPlaceholder } from '../theme';
@@ -17,9 +18,11 @@ import { MaritalPicker } from './MaritalPicker';
 import type { Gender } from '../lib/clientGender';
 import { BIRTH_EXAMPLE, checkBirthMarital, formatBirthInput, type MaritalStatus } from '../lib/clientBirthMarital';
 import { inviterFirstName, readStoredInviteCode } from '../lib/friendInvitesApi';
+import { checkStepOne } from '../lib/entryScreen';
+import { useSignupStepStore } from '../store/signupStepStore';
 import { inviterGreeting } from '../lib/friendInvites';
 
-export function RegisterForm({ onSuccess, onPrivacy }: { onSuccess: () => void; onPrivacy: () => void }) {
+export function RegisterForm({ onSuccess, onPrivacy, short }: { onSuccess: () => void; onPrivacy: () => void; short?: boolean }) {
   const signUp = useAuthStore((s) => s.signUp);
   const [fullName, setFullName] = useState('');
   const [gender, setGender] = useState<'' | Gender>('');
@@ -35,6 +38,7 @@ export function RegisterForm({ onSuccess, onPrivacy }: { onSuccess: () => void; 
   const [password, setPassword] = useState('');
   const [acceptsNotifications, setAcceptsNotifications] = useState(true);
   const [acceptsTerms, setAcceptsTerms] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const showToast = useToastStore((s) => s.show);
   // Parrainage : le code du lien d'invitation, s'il y en a un, dit « Invité(e) par Amina » (rien n'est affiché si le code n'existe pas)
@@ -47,12 +51,43 @@ export function RegisterForm({ onSuccess, onPrivacy }: { onSuccess: () => void; 
     };
   }, []);
 
+  // Étape 1 (écran d'entrée) : le compte est créé avec le nom, le téléphone et le mot de passe. Les notifications ne sont PAS activées ici : leur case (cochée
+  // d'office, comme avant) est dans l'étape 2. `arm()` AVANT la création : dès que le compte existe, l'étape 2 prend la place du mur, sans laisser voir la boutique.
+  const handleShortSubmit = async () => {
+    const step = checkStepOne({ name: fullName, phone, password, terms: acceptsTerms }, !!phoneDigits(phone));
+    if (!step.ok) {
+      showToast(step.message, { title: step.title, type: 'error' });
+      return;
+    }
+    setLoading(true);
+    useSignupStepStore.getState().arm();
+    const { error, needsEmailConfirmation } = await signUp(password, {
+      fullName: fullName.trim(),
+      phone: phone.trim(),
+      acceptsNotifications: false,
+    });
+    setLoading(false);
+    if (error || needsEmailConfirmation) {
+      useSignupStepStore.getState().disarm();
+      if (error) showToast(error, { title: 'Inscription impossible', type: 'error' });
+      else showToast('Un e-mail de confirmation vous a été envoyé. Cliquez sur le lien reçu avant de vous connecter.', { title: 'Vérifiez votre e-mail 📩', type: 'info' });
+      return;
+    }
+    showToast('Dernière étape : 3 petites questions.', { title: 'Compte créé ✓', type: 'success' });
+    rememberLogin(phone, true);
+    onSuccess();
+  };
+
   const handleSubmit = async () => {
     if (!isSupabaseConfigured) {
       showToast(
         "Ajoutez EXPO_PUBLIC_SUPABASE_URL et EXPO_PUBLIC_SUPABASE_ANON_KEY dans .env pour activer les comptes.",
         { title: 'Supabase non configuré', type: 'error' }
       );
+      return;
+    }
+    if (short) {
+      await handleShortSubmit();
       return;
     }
     if (!fullName.trim() || !phone.trim() || !password) {
@@ -135,6 +170,75 @@ export function RegisterForm({ onSuccess, onPrivacy }: { onSuccess: () => void; 
       }
     }
   };
+
+  if (short) {
+    return (
+      <View>
+        {inviter ? (
+          <Text style={styles.invitedBy} testID="register-invited-by">
+            🎁 {inviterGreeting(inviter)}
+          </Text>
+        ) : null}
+        <Text style={styles.sectionLabel}>Créer mon compte · étape 1 sur 2</Text>
+        <TextInput
+          testID="register-name"
+          autoComplete="name"
+          value={fullName}
+          onChangeText={setFullName}
+          placeholder="Nom et prénom *"
+          placeholderTextColor={accountFieldPlaceholder}
+          style={accountField}
+        />
+        <TextInput
+          testID="register-phone"
+          autoComplete="tel"
+          textContentType="telephoneNumber"
+          value={phone}
+          onChangeText={setPhone}
+          placeholder="Numéro de téléphone * (ex. 66 12 34 56)"
+          placeholderTextColor={accountFieldPlaceholder}
+          keyboardType="phone-pad"
+          style={accountField}
+        />
+        <TextInput
+          testID="register-password"
+          autoComplete="new-password"
+          textContentType="newPassword"
+          value={password}
+          onChangeText={setPassword}
+          placeholder="Mot de passe (min. 6 caractères) *"
+          placeholderTextColor={accountFieldPlaceholder}
+          secureTextEntry
+          style={accountField}
+        />
+        <Text style={styles.fieldHint}>Pour vous connecter : votre numéro de téléphone et ce mot de passe.</Text>
+        <Pressable testID="register-terms" style={styles.checkboxRow} onPress={() => setAcceptsTerms((v) => !v)}>
+          <View style={[styles.checkbox, acceptsTerms && styles.checkboxChecked]}>{acceptsTerms && <Text style={styles.checkboxMark}>✓</Text>}</View>
+          <Text style={styles.checkboxLabel}>J'ai lu et j'accepte les conditions d'inscription.</Text>
+        </Pressable>
+        <GoldButton label="Créer mon compte" onPress={handleSubmit} loading={loading} style={{ marginTop: spacing.sm }} testID="register-submit" />
+        <Text style={styles.stepNote}>Ensuite : 3 petites questions rapides (étape 2).</Text>
+        <Pressable testID="register-terms-toggle" onPress={() => setShowTerms((v) => !v)}>
+          <Text style={styles.privacyLink}>{showTerms ? '▲ Masquer les conditions' : '📜 Lire les conditions d’inscription'}</Text>
+        </Pressable>
+        {showTerms && (
+          <View style={styles.termsBox} testID="register-terms-box">
+            <Text style={styles.termsItem}>1. Fournir des informations exactes (nom et téléphone).</Text>
+            <Text style={styles.termsItem}>2. Passer uniquement des commandes sérieuses et avec une réelle intention d'achat.</Text>
+            <Text style={styles.termsItem}>3. Respecter les règles de livraison et de paiement.</Text>
+            <Text style={styles.termsItem}>4. Ne pas utiliser le site pour des activités frauduleuses, du spam ou des abus.</Text>
+            <Text style={styles.termsItem}>
+              5. En cas de 3 commandes non honorées ou de comportement abusif, mon compte peut être examiné, limité ou bloqué par l'administration.
+            </Text>
+            <Text style={styles.termsItem}>6. J'accepte de recevoir les notifications commerciales uniquement si je donne mon accord.</Text>
+            <Pressable onPress={onPrivacy}>
+              <Text style={styles.privacyLink}>📜 Lire notre politique de confidentialité</Text>
+            </Pressable>
+          </View>
+        )}
+      </View>
+    );
+  }
 
   return (
     <View>
@@ -303,6 +407,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   fieldLabel: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 12, marginBottom: 6 },
+  stepNote: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11, textAlign: 'center', marginTop: 6, marginBottom: 2 },
   fieldHint: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11, marginTop: -2, marginBottom: spacing.sm },
   privacyNote: {
     color: colors.creamFaint,

@@ -931,7 +931,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const accountI = ({ is_admin = false, name = 'Ahmed Hassan' } = {}) => {
       const auth = { id: uid, aud: 'authenticated', role: 'authenticated', email: LOGIN_EMAIL, app_metadata: { provider: 'email' }, user_metadata: {}, identities: [{ id: uid, provider: 'email' }], created_at: '2026-01-01T00:00:00Z' };
       const token = { access_token: JWT, refresh_token: 'fake-refresh', token_type: 'bearer', expires_in: 3600, expires_at: 4102444800, user: auth };
-      return { auth, token, session: JSON.stringify(token), editable: true, patches: [], profile: { id: uid, email: LOGIN_EMAIL, full_name: name, phone: '66123456', whatsapp_number: null, profession: null, region: null, country: 'Tchad', address: null, loyalty_points: 0, banned: false, role: is_admin ? 'admin' : 'customer', is_admin, is_affiliate: false } };
+      return { auth, token, session: JSON.stringify(token), editable: true, patches: [], profile: { id: uid, email: LOGIN_EMAIL, full_name: name, phone: '66123456', whatsapp_number: null, profession: null, region: null, country: 'Tchad', address: null, loyalty_points: 0, banned: false, role: is_admin ? 'admin' : 'customer', is_admin, is_affiliate: false, gender: null, birth_date: null, marital_status: null } };
     };
     const walls = (pg) => pg.getByTestId('account-wall');
     const showI = (pg, text) => pg.getByText(text, { exact: true }).locator('visible=true').first();
@@ -944,13 +944,17 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.page.getByTestId('register-phone').waitFor({ timeout: 15000 });
       await sleep(900);
       await v.page.getByTestId('register-name').locator('visible=true').fill(name);
-      await v.page.getByTestId('register-gender-femme').locator('visible=true').click();
-      await v.page.getByTestId('register-birth').locator('visible=true').fill('25/03/1998');
-      await v.page.getByTestId('register-marital-celibataire').locator('visible=true').click();
       await v.page.getByTestId('register-phone').locator('visible=true').fill(phoneNo);
       await v.page.getByTestId('register-password').locator('visible=true').fill(password);
       await v.page.getByTestId('register-terms').locator('visible=true').click();
       await showI(v.page, 'Créer mon compte').click();
+      // etape 2 : les 3 questions juste apres la creation du compte (docs/ecran-entree.md)
+      await v.page.getByTestId('signup-step2').waitFor({ timeout: 15000 });
+      await sleep(600);
+      await v.page.getByTestId('step2-gender-femme').locator('visible=true').click();
+      await v.page.getByTestId('step2-birth').locator('visible=true').fill('25/03/1998');
+      await v.page.getByTestId('step2-marital-celibataire').locator('visible=true').click();
+      await v.page.getByTestId('step2-submit').locator('visible=true').click();
     };
     const PROGRESS = (extra = {}) => ({ code: 'ABCD2345', goal: 5, joined: 3, installed: 2, friends: [{ name: 'Fatimé', installed: true }, { name: 'Moussa', installed: true }, { name: 'Khadija', installed: false }], rewards: [], ...extra });
 
@@ -6460,8 +6464,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const auth = { id: uid, aud: 'authenticated', role: 'authenticated', email, app_metadata: { provider: 'email' }, user_metadata: {}, identities: [{ id: uid, provider: 'email' }], created_at: '2026-01-01T00:00:00Z' };
       const token = { access_token: JWT, refresh_token: 'fake-refresh', token_type: 'bearer', expires_in: 3600, expires_at: 4102444800, user: auth };
       const profile = filled
-        ? { id: uid, email, full_name: 'Ali Mahamat', phone: '66 12 34 56', whatsapp_number: '66 12 34 56', banned: false, role: is_admin ? 'admin' : 'customer', is_admin, loyalty_points: 0, login_count: 1 }
-        : { id: uid, email, full_name: null, phone: null, whatsapp_number: null, banned: false, role: 'customer', is_admin, loyalty_points: 0, login_count: 0 };
+        ? { id: uid, email, full_name: 'Ali Mahamat', phone: '66 12 34 56', whatsapp_number: '66 12 34 56', banned: false, role: is_admin ? 'admin' : 'customer', is_admin, loyalty_points: 0, login_count: 1, gender: 'homme', birth_date: '1998-03-25', marital_status: 'celibataire' }
+        : { id: uid, email, full_name: null, phone: null, whatsapp_number: null, banned: false, role: 'customer', is_admin, loyalty_points: 0, login_count: 0, gender: null, birth_date: null, marital_status: null };
       return { auth, token, session: JSON.stringify(token), profile, editable: true, patches: [] };
     };
     const SK = 'sb-xtitsmmccpkelxfjyqyh-auth-token';
@@ -6531,7 +6535,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await wall(v.page).getByText('Créer mon compte', { exact: true }).click();
       await wall(v.page).getByTestId('register-name').waitFor({ timeout: 10000 });
       check('« Créer mon compte » : retour au formulaire de creation', (await wall(v.page).getByTestId('login-identifier').count()) === 0);
-      check('formulaire court : obligatoires nom, telephone, mot de passe ; e-mail facultatif', /Informations obligatoires/i.test(txt) && /Informations optionnelles/i.test(txt) && (await wall(v.page).getByTestId('register-email').getAttribute('placeholder')) === 'E-mail (facultatif)');
+      check('formulaire court (etape 1) : nom, telephone, mot de passe obligatoires ; l\'e-mail facultatif est dans l\'etape 2', /étape 1 sur 2/i.test(txt) && !/Informations optionnelles/i.test(txt) && (await wall(v.page).getByTestId('register-email').count()) === 0 && (await wall(v.page).getByTestId('register-name').count()) === 1);
       check('plus de liens « Confidentialité » ni « Contact » sur l\'ecran d\'entree', !/Confidentialité/.test(txt) && !/Contact/.test(txt), txt);
       check('page en francais (lang="fr") : Chrome ne la traduit plus (« ALBASSE SHOPPING » reste tel quel)', (await v.page.evaluate(() => document.documentElement.lang)) === 'fr');
       check('pas de bouton de Zara derriere le mur', (await fabCount(v.page)) === 0);
@@ -6577,18 +6581,26 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.ctx.close();
     }
     // 5) inscription depuis le mur : nom, numero, mot de passe ; on revient sur la fiche demandee
-    const register = async (v, { name = 'Ali Mahamat', phoneNo = '66 12 34 56', password = 'secret12', email = '', terms = true, gender = 'homme', birth = '25/03/1998', marital = 'celibataire' } = {}) => {
+    // l'etape 2 (les 3 questions, juste apres la creation du compte)
+    const step2 = async (v, { gender = 'homme', birth = '25/03/1998', marital = 'celibataire', email = '' } = {}) => {
+      await v.page.getByTestId('signup-step2').waitFor({ timeout: 15000 });
+      await sleep(600);
+      if (gender) await v.page.getByTestId(`step2-gender-${gender}`).locator('visible=true').click();
+      if (birth) await v.page.getByTestId('step2-birth').locator('visible=true').fill(birth);
+      if (marital) await v.page.getByTestId(`step2-marital-${marital}`).locator('visible=true').click();
+      if (email) await v.page.getByTestId('step2-email').locator('visible=true').fill(email);
+      await v.page.getByTestId('step2-submit').locator('visible=true').click();
+    };
+    // etape 1 (nom, numero, mot de passe, conditions) ; `finish` : puis l'etape 2 (Homme / Femme, naissance, situation, e-mail facultatif)
+    const register = async (v, { name = 'Ali Mahamat', phoneNo = '66 12 34 56', password = 'secret12', terms = true, finish = true, ...rest } = {}) => {
       await v.page.getByTestId('register-phone').waitFor({ timeout: 15000 });
       await sleep(800);
       if (name) await v.page.getByTestId('register-name').locator('visible=true').fill(name);
-      if (gender) await v.page.getByTestId(`register-gender-${gender}`).locator('visible=true').click();
-      if (birth) await v.page.getByTestId('register-birth').locator('visible=true').fill(birth);
-      if (marital) await v.page.getByTestId(`register-marital-${marital}`).locator('visible=true').click();
       if (phoneNo) await v.page.getByTestId('register-phone').locator('visible=true').fill(phoneNo);
       if (password) await v.page.getByTestId('register-password').locator('visible=true').fill(password);
-      if (email) await v.page.getByTestId('register-email').locator('visible=true').fill(email);
       if (terms) await v.page.getByTestId('register-terms').locator('visible=true').click();
       await shown(v.page, 'Créer mon compte').click();
+      if (finish) await step2(v, rest);
     };
     {
       const fu = accountOf();
@@ -6600,12 +6612,25 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await sleep(800);
       check('fiche ouverte depuis un lien : le formulaire de creation est directement sur l\'ecran d\'entree', (await wall(v.page).getByTestId('register-phone').count()) === 1);
       const form = await v.page.locator('body').innerText();
-      check('formulaire court : e-mail, WhatsApp et profession dans « facultatif »', /E-mail \(facultatif\)|Informations optionnelles/i.test(form) && !/Email \*/.test(form) && !/Profession \*/.test(form) && !/Numéro WhatsApp \*/.test(form));
+      check('etape 1 : seulement nom, telephone et mot de passe (ni Homme/Femme, ni naissance, ni situation, ni e-mail facultatif)', /étape 1 sur 2/i.test(form) && (await v.page.getByTestId('register-name').locator('visible=true').count()) === 1 && (await v.page.getByTestId('register-password').locator('visible=true').count()) === 1 && (await v.page.getByTestId('register-gender-homme').count()) === 0 && (await v.page.getByTestId('register-birth').count()) === 0 && (await v.page.getByTestId('register-marital-celibataire').count()) === 0 && (await v.page.getByTestId('register-email').count()) === 0 && !/Informations optionnelles/i.test(form), form.slice(0, 300));
+      check('etape 1 : « Ensuite : 3 petites questions rapides (étape 2) » est annonce', /Ensuite : 3 petites questions rapides \(étape 2\)/i.test(form));
+      const btnBox = await shown(v.page, 'Créer mon compte').boundingBox();
+      const innerH = await v.page.evaluate(() => window.innerHeight);
+      check('le bouton « Créer mon compte » se voit sans faire defiler (ecran de telephone)', !!btnBox && btnBox.y + btnBox.height <= innerH, { btnBox, innerH });
+      await v.page.screenshot({ path: path.join(OUT, '2-entree-etape1.png') });
+      // « Voici ce qui vous attend » : de vrais articles de la boutique (photo, prix), et les 3 avantages vrais
+      await v.page.getByTestId('entry-product-0').waitFor({ timeout: 15000 });
+      const nCards = await v.page.locator('[data-testid^="entry-product-"]').count();
+      const cardsText = await v.page.locator('[data-testid^="entry-product-"]').allInnerTexts();
+      check('bande « Voici ce qui vous attend » : 1 a 4 vrais articles, chacun avec son prix en FCFA', nCards >= 1 && nCards <= 4 && cardsText.every((t) => /\d.*FCFA/.test(t)) && /Voici ce qui vous attend/i.test(form + (await v.page.locator('body').innerText())), cardsText);
+      check('les articles montres viennent de la boutique (leur nom existe dans la base)', await (async () => {
+        const names = new Set((await get('products?select=name&is_active=eq.true&stock=gt.0&limit=1000')).map((x) => String(x.name).trim()));
+        return cardsText.every((t) => names.has(t.split('\n').map((x) => x.trim()).filter(Boolean).slice(-1)[0]));
+      })(), cardsText);
+      const benefits = await v.page.getByTestId('entry-benefits').innerText();
+      check('3 avantages vrais : paiement a la livraison a N\'Djamena, parrainage, roue de la chance', /Paiement à la livraison à N’Djamena/.test(benefits) && /Invite 5 amis, gagne un parfum/.test(benefits) && /Roue de la chance/.test(benefits), benefits);
       // il manque le numero : rien n'est envoye
       await v.page.getByTestId('register-name').locator('visible=true').fill('Ali Mahamat');
-      await v.page.getByTestId('register-gender-homme').locator('visible=true').click();
-      await v.page.getByTestId('register-birth').locator('visible=true').fill('25/03/1998');
-      await v.page.getByTestId('register-marital-celibataire').locator('visible=true').click();
       await v.page.getByTestId('register-password').locator('visible=true').fill('secret12');
       await v.page.getByTestId('register-terms').locator('visible=true').click();
       await shown(v.page, 'Créer mon compte').click();
@@ -6616,18 +6641,52 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.page.getByText(/numéro de téléphone valide/).first().waitFor({ timeout: 8000 });
       check('numero trop court : message, rien n\'est envoye', !(fu.signups || []).length);
       await v.page.getByTestId('register-phone').locator('visible=true').fill('66 12 34 56');
-      await v.page.getByTestId('register-email').locator('visible=true').fill('pas-un-email');
+      await v.page.getByTestId('register-terms').locator('visible=true').click(); // decoche
       await shown(v.page, 'Créer mon compte').click();
+      await v.page.getByText(/accepter les conditions d'inscription/).waitFor({ timeout: 8000 });
+      check('conditions pas cochees : message, rien n\'est envoye', !(fu.signups || []).length);
+      await v.page.getByTestId('register-terms-toggle').locator('visible=true').click();
+      await v.page.getByTestId('register-terms-box').waitFor({ timeout: 8000 });
+      check('« Lire les conditions d\'inscription » : les 6 conditions s\'affichent', /6\. J'accepte de recevoir les notifications commerciales uniquement si je donne mon accord/.test(await v.page.getByTestId('register-terms-box').innerText()));
+      await v.page.getByTestId('register-terms').locator('visible=true').click(); // recoche
+      await shown(v.page, 'Créer mon compte').click();
+      // le compte est cree, puis les 3 questions couvrent la page (sans montrer la boutique)
+      await v.page.getByTestId('signup-step2').waitFor({ timeout: 15000 });
+      await sleep(1000);
+      check('etape 1 faite : le compte est cree (numero + mot de passe) AVANT les 3 questions', (fu.signups || []).length === 1 && fu.signups[0].email === LOGIN_EMAIL, fu.signups);
+      check('etape 2 : plus de mur, les 3 questions (Homme/Femme, naissance, situation) couvrent la page', (await wall(v.page).count()) === 0 && (await v.page.getByTestId('step2-gender-homme').count()) === 1 && (await v.page.getByTestId('step2-birth').count()) === 1 && (await v.page.getByTestId('step2-marital-celibataire').count()) === 1 && /Dernière étape/.test(await v.page.locator('body').innerText()));
+      check('etape 1 : les notifications ne sont PAS activees avant l\'etape 2 (leur case est dans l\'etape 2)', fu.patches.filter((x) => 'notify_promotions' in x).every((x) => x.notify_promotions === false), fu.patches);
+      check('etape 2 : ni Zara ni fenetre par-dessus les 3 questions', (await fabCount(v.page)) === 0);
+      await v.page.screenshot({ path: path.join(OUT, '2-entree-etape2.png') });
+      // site ferme puis rouvert avant la fin : les 3 questions reviennent
+      await v.page.reload({ waitUntil: 'load' });
+      await v.page.getByTestId('signup-step2').waitFor({ timeout: 25000 });
+      check('site rouvert avant la fin : l\'etape 2 revient (le compte existe deja)', (await wall(v.page).count()) === 0);
+      await sleep(1000);
+      // rien de choisi : refuse, rien n'est enregistre
+      await v.page.getByTestId('step2-submit').locator('visible=true').click();
+      await v.page.getByText('Merci de choisir « Homme » ou « Femme ».').waitFor({ timeout: 8000 });
+      await v.page.getByTestId('step2-gender-homme').locator('visible=true').click();
+      await v.page.getByTestId('step2-submit').locator('visible=true').click();
+      await v.page.getByText('Date de naissance manquante').waitFor({ timeout: 8000 });
+      await v.page.getByTestId('step2-birth').locator('visible=true').fill('25/03/1998');
+      await v.page.getByTestId('step2-submit').locator('visible=true').click();
+      await v.page.getByText(/Merci de choisir « Célibataire » ou « Marié\(e\) »/).waitFor({ timeout: 8000 });
+      check('etape 2 : sexe, naissance et situation manquants : un message a chaque fois, rien n\'est enregistre', !fu.patches.some((x) => 'gender' in x || 'birth_date' in x || 'marital_status' in x), fu.patches);
+      await v.page.getByTestId('step2-marital-celibataire').locator('visible=true').click();
+      await v.page.getByTestId('step2-email').locator('visible=true').fill('pas-un-email');
+      await v.page.getByTestId('step2-submit').locator('visible=true').click();
       await v.page.getByText(/adresse e-mail valide, ou laissez la case vide/).waitFor({ timeout: 8000 });
-      check('e-mail mal ecrit : message, rien n\'est envoye', !(fu.signups || []).length);
-      await v.page.getByTestId('register-email').locator('visible=true').fill('');
-      await shown(v.page, 'Créer mon compte').click();
+      check('e-mail mal ecrit (etape 2) : message, rien n\'est enregistre', !fu.patches.some((x) => 'gender' in x || 'birth_date' in x), fu.patches);
+      await v.page.getByTestId('step2-email').locator('visible=true').fill('');
+      await v.page.getByTestId('step2-submit').locator('visible=true').click();
       await v.page.getByText('Bienvenue ✓').waitFor({ timeout: 15000 });
       await sleep(2500);
       const su = (fu.signups || [])[0] || {};
       check('inscription sans e-mail : le compte est cree avec le numero (23566123456@tel.albasseshopping.com) et le mot de passe', fu.signups.length === 1 && su.email === LOGIN_EMAIL && su.password === 'secret12', fu.signups);
       const patch = fu.patches.find((x) => 'full_name' in x) || {};
       check('profil : nom, numero, WhatsApp = le meme numero, pas de profession, pas d\'e-mail', patch.full_name === 'Ali Mahamat' && patch.phone === '66 12 34 56' && patch.whatsapp_number === '66 12 34 56' && patch.profession === null && !('email' in patch), patch);
+      check('etape 2 : Homme, date de naissance et situation sont enregistres (une demande a part pour chacun), notifications cochees d\'office = oui', fu.patches.some((x) => x.gender === 'homme') && fu.patches.some((x) => x.birth_date === '1998-03-25' && x.marital_status === 'celibataire') && fu.patches.some((x) => x.notify_promotions === true && x.notify_new_products === true && x.notify_flash_sale === true), fu.patches);
       check('apres l\'inscription : plus de mur, retour sur la fiche demandee', (await wall(v.page).count()) === 0 && new URL(v.page.url()).pathname === `/produit/${prod.slug}`, v.page.url());
       check('apres l\'inscription : Zara est de retour', (await fabCount(v.page)) > 0);
       check('aucune erreur (inscription)', v.errs.length === 0, v.errs);
@@ -6666,7 +6725,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await register(v, { phoneNo: '+235 66 12 34 56', email: 'ali@example.com' });
       await v.page.getByText('Bienvenue ✓').waitFor({ timeout: 15000 });
       await sleep(1500);
-      const patch = fu.patches.find((x) => 'full_name' in x) || {};
+      const patch = fu.patches.find((x) => 'email' in x) || {};
       check('« +235 66 12 34 56 » donne le meme compte que « 66 12 34 56 »', (fu.signups || [])[0]?.email === LOGIN_EMAIL, fu.signups);
       check('e-mail donne : enregistre dans le profil', patch.email === 'ali@example.com', patch);
       await v.ctx.close();
@@ -6678,7 +6737,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await waitWall(v.page);
       await sleep(1000);
-      await register(v);
+      await register(v, { finish: false });
       await v.page.getByText(/Un compte existe déjà avec ce numéro/).waitFor({ timeout: 15000 });
       check('numero deja inscrit : « Connectez-vous avec votre numero et votre mot de passe »', /Connectez-vous avec votre numéro/.test(await v.page.getByText(/Un compte existe déjà avec ce numéro/).first().innerText()));
       await v.ctx.close();

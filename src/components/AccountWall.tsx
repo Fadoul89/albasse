@@ -1,5 +1,6 @@
 // Compte obligatoire à l'entrée (voir lib/accountWall) : couvre la page tant que le visiteur n'a pas de compte.
-// Le formulaire « Créer un compte » s'affiche en premier ; « J'ai déjà un compte » montre la connexion (numéro ou e-mail,
+// Le formulaire « Créer un compte » (version COURTE, étape 1 sur 2 : les 3 questions suivent juste après, components/SignupStepTwo) s'affiche en premier, sous la bande
+// « Voici ce qui vous attend » (vrais articles, avantages : components/EntryPreview, docs/ecran-entree.md) ; « J'ai déjà un compte » montre la connexion (numéro ou e-mail,
 // « Se souvenir de mon mot de passe »). Après l'inscription ou la connexion, l'écran disparaît et la page demandée est là.
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
@@ -9,6 +10,7 @@ import { colors, fonts, spacing } from '../theme';
 import { GoldButton } from './GoldButton';
 import { LoginForm } from './LoginForm';
 import { RegisterForm } from './RegisterForm';
+import { EntryPreview } from './EntryPreview';
 
 const LOGO = require('../../assets/logo.jpg');
 
@@ -31,9 +33,10 @@ export function AccountWall() {
             ? 'Créez votre compte gratuit pour découvrir nos articles et commander.'
             : 'Connectez-vous pour découvrir nos articles et commander.'}
         </Text>
+        {register && <EntryPreview />}
         <View style={styles.block} testID={register ? 'wall-register' : 'wall-login'}>
           {register ? (
-            <RegisterForm onSuccess={done} onPrivacy={() => go('PrivacyPolicy')} />
+            <RegisterForm short onSuccess={done} onPrivacy={() => go('PrivacyPolicy')} />
           ) : (
             <LoginForm onSuccess={done} onForgot={() => go('ForgotPassword')} />
           )}
@@ -57,12 +60,12 @@ export function AccountWall() {
 
 const styles = StyleSheet.create({
   cover: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.background, zIndex: 50 },
-  content: { flexGrow: 1, alignItems: 'center', padding: spacing.lg, paddingBottom: spacing.xl * 2 },
-  logo: { width: 76, height: 76, borderRadius: 38, marginBottom: spacing.sm, borderWidth: 2, borderColor: colors.gold },
-  brand: { fontFamily: fonts.display, fontSize: 22, color: colors.goldLight, letterSpacing: 1, marginBottom: spacing.md },
+  content: { flexGrow: 1, alignItems: 'center', padding: spacing.md, paddingTop: spacing.lg, paddingBottom: spacing.xl * 2 },
+  logo: { width: 64, height: 64, borderRadius: 32, marginBottom: 6, borderWidth: 2, borderColor: colors.gold },
+  brand: { fontFamily: fonts.display, fontSize: 22, color: colors.goldLight, letterSpacing: 1, marginBottom: spacing.sm },
   title: { fontFamily: fonts.bodyBold, fontSize: 22, color: colors.cream, marginBottom: 4 },
   text: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: colors.creamMuted, textAlign: 'center', maxWidth: 360 },
-  block: { width: '100%', maxWidth: 420, marginTop: spacing.lg },
+  block: { width: '100%', maxWidth: 420, marginTop: spacing.sm },
   dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, width: '100%', maxWidth: 420, marginTop: spacing.xl },
   dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
   dividerText: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 12 },
