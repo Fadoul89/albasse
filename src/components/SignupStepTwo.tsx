@@ -16,7 +16,7 @@ import { GenderPicker } from './GenderPicker';
 import { MaritalPicker } from './MaritalPicker';
 import { hasGenderColumn, type Gender } from '../lib/clientGender';
 import { BIRTH_EXAMPLE, checkBirthMarital, formatBirthInput, hasBirthColumn, hasMaritalColumn, type MaritalStatus } from '../lib/clientBirthMarital';
-import { isValidEmail, phoneDigits } from '../lib/phoneAuth';
+import { phoneDigits } from '../lib/phoneAuth';
 import { isMissingColumn } from '../lib/dbErrors';
 import { installAfterSignUpDue, markInstallPageShown } from '../lib/installAfterSignUp';
 import { stepTwoMissing } from '../lib/entryScreen';
@@ -31,7 +31,6 @@ export function SignupStepTwo() {
   const [gender, setGender] = useState<'' | Gender>('');
   const [birthDate, setBirthDate] = useState('');
   const [marital, setMarital] = useState<'' | MaritalStatus>('');
-  const [email, setEmail] = useState('');
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [profession, setProfession] = useState('');
   const [region, setRegion] = useState('');
@@ -66,10 +65,6 @@ export function SignupStepTwo() {
       if (showBirth) birthIso = extras.birthDate;
       if (showMarital) maritalValue = extras.marital;
     }
-    if (email.trim() && !isValidEmail(email)) {
-      showToast('Merci de saisir une adresse e-mail valide, ou laissez la case vide.', { title: 'E-mail invalide', type: 'error' });
-      return;
-    }
     if (whatsappNumber.trim() && !phoneDigits(whatsappNumber)) {
       showToast('Merci de saisir un numéro WhatsApp valide (8 à 15 chiffres).', { title: 'Numéro WhatsApp invalide', type: 'error' });
       return;
@@ -82,7 +77,6 @@ export function SignupStepTwo() {
       .update({
         whatsapp_number: whatsappNumber.trim() || profile.phone || null,
         profession: profession.trim() || null,
-        ...(email.trim() ? { email: email.trim() } : {}),
         region: region || null,
         country: country || null,
         address: address || null,
@@ -176,17 +170,6 @@ export function SignupStepTwo() {
           )}
 
           <Text style={styles.sectionLabel}>Informations optionnelles</Text>
-          <TextInput
-            testID="step2-email"
-            autoComplete="email"
-            value={email}
-            onChangeText={setEmail}
-            placeholder="E-mail (facultatif)"
-            placeholderTextColor={accountFieldPlaceholder}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            style={accountField}
-          />
           <TextInput value={whatsappNumber} onChangeText={setWhatsappNumber} placeholder="Numéro WhatsApp (si différent du téléphone)" placeholderTextColor={accountFieldPlaceholder} keyboardType="phone-pad" style={accountField} />
           <TextInput value={profession} onChangeText={setProfession} placeholder="Profession" placeholderTextColor={accountFieldPlaceholder} style={accountField} />
           <Text style={styles.fieldLabel}>📍 Ville</Text>

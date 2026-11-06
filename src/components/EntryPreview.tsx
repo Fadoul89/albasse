@@ -5,7 +5,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { colors, fonts, radius, spacing } from '../theme';
-import { ENTRY_BENEFITS, entryPrice, pickEntryProducts, type EntryCategory, type EntryProduct } from '../lib/entryScreen';
+import { ENTRY_BENEFITS, ENTRY_PRICE_MAX, ENTRY_PRICE_MIN, entryPrice, pickEntryProducts, type EntryCategory, type EntryProduct } from '../lib/entryScreen';
 
 export function EntryPreview() {
   const [products, setProducts] = useState<EntryProduct[]>([]);
@@ -21,8 +21,10 @@ export function EntryPreview() {
             .select('id,name,price,images,stock,is_active,category_id,likes_count,created_at')
             .eq('is_active', true)
             .gt('stock', 0)
+            .gte('price', ENTRY_PRICE_MIN)
+            .lte('price', ENTRY_PRICE_MAX)
             .order('likes_count', { ascending: false, nullsFirst: false })
-            .limit(60),
+            .limit(120),
           supabase.from('categories').select('*'),
         ]);
         if (!alive || p.error || !p.data) return;

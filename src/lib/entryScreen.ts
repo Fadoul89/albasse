@@ -10,6 +10,9 @@ import { hasBirthColumn, hasMaritalColumn, maritalOf } from './clientBirthMarita
 import { rootIdOf } from './subCategories';
 
 export const ENTRY_PREVIEW_COUNT = 4;
+// Demande du patron (6 novembre 2026) : « montre les articles moins chers : de 10 000 à 15 000 FCFA ». Seuls les articles de cette fourchette (bornes comprises) sont montrés.
+export const ENTRY_PRICE_MIN = 10000;
+export const ENTRY_PRICE_MAX = 15000;
 
 // Les avantages montrés à l'entrée (tous vrais) : paiement à la livraison à N'Djamena seulement, parrainage ; la roue de la chance seulement quand elle est active (lib/featureFlags)
 export const ENTRY_BENEFITS: readonly string[] = [
@@ -44,30 +47,46 @@ const firstImage = (p: EntryProduct): string | null => {
   return url ?? null;
 };
 
-// Les articles montrés à un visiteur qui n'a pas encore de compte : en vente (actif, en stock, avec photo et prix), les plus aimés d'abord,
-// de catégories DIFFÉRENTES si possible, et jamais un article « Vitalité & Énergie » (réservé aux annonces des clients mariés de 32 ans et plus).
+// Les articles montrés à un visiteur qui n'a pas encore de compte : en vente (actif, en stock, avec photo) ET entre 10 000 et 15 000 FCFA ; les plus aimés d'abord (à égalité :
+// le moins cher, puis le plus récent), de catégories DIFFÉRENTES si possible, jamais un article « Vitalité & Énergie » (réservé aux annonces des clients mariés de 32 ans et plus) ;
+// 4 articles différents à 4 prix différents quand c'est possible ; les articles choisis sont ensuite rangés du moins cher au plus cher pour l'affichage.
 export function pickEntryProducts(products: readonly EntryProduct[], categories: readonly EntryCategory[], count: number = ENTRY_PREVIEW_COUNT): EntryProduct[] {
-  const sellable = products.filter((p) => p.is_active !== false && (p.stock ?? 0) > 0 && firstImage(p) !== null && Number(p.price) > 0 && p.name.trim() !== '');
+  const sellable = products.filter((p) => p.is_active !== false && (p.stock ?? 0) > 0 && firstImage(p) !== null && Number(p.price) >= ENTRY_PRICE_MIN && Number(p.price) <= ENTRY_PRICE_MAX && p.name.trim() !== '');
   const allowed = adAllowedProducts(sellable, categories, null);
   const ranked = [...allowed].sort((a, b) => {
     const likes = (b.likes_count ?? 0) - (a.likes_count ?? 0);
     if (likes !== 0) return likes;
+    const cheaper = Number(a.price) - Number(b.price);
+    if (cheaper !== 0) return cheaper;
     return String(b.created_at ?? '').localeCompare(String(a.created_at ?? ''));
   });
+  // 4 articles DIFFÉRENTS à 4 PRIX DIFFÉRENTS (demande du patron) : on cherche d'abord un article par catégorie ET par prix, puis un article par prix, puis
+  // (seulement s'il n'y a pas assez de prix différents) un article par nom. Jamais deux fois le même nom, même sous deux fiches.
   const picked: EntryProduct[] = [];
-  const seen = new Set<string>();
-  for (const p of ranked) {
-    if (picked.length >= count) break;
-    const root = rootIdOf(categories, p.category_id) ?? p.category_id ?? p.id;
-    if (seen.has(root)) continue;
-    seen.add(root);
+  const roots = new Set<string>();
+  const prices = new Set<number>();
+  const names = new Set<string>();
+  const rootOfProduct = (p: EntryProduct) => rootIdOf(categories, p.category_id) ?? p.category_id ?? p.id;
+  const nameOf = (p: EntryProduct) => p.name.replace(/\s+/g, ' ').trim().toLowerCase();
+  const take = (p: EntryProduct) => {
     picked.push(p);
+    roots.add(rootOfProduct(p));
+    prices.add(Number(p.price));
+    names.add(nameOf(p));
+  };
+  const rules: ((p: EntryProduct) => boolean)[] = [
+    (p) => !roots.has(rootOfProduct(p)) && !prices.has(Number(p.price)) && !names.has(nameOf(p)),
+    (p) => !prices.has(Number(p.price)) && !names.has(nameOf(p)),
+    (p) => !names.has(nameOf(p)),
+  ];
+  for (const ok of rules) {
+    for (const p of ranked) {
+      if (picked.length >= count) break;
+      if (!picked.includes(p) && ok(p)) take(p);
+    }
   }
-  for (const p of ranked) {
-    if (picked.length >= count) break;
-    if (!picked.includes(p)) picked.push(p);
-  }
-  return picked;
+  // affichage : du moins cher au plus cher (à prix égal, l'ordre de choix est gardé)
+  return picked.map((p, i) => ({ p, i })).sort((x, y) => Number(x.p.price) - Number(y.p.price) || x.i - y.i).map((x) => x.p);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -76,11 +95,13 @@ export function pickEntryProducts(products: readonly EntryProduct[], categories:
 
 export type StepOneCheck = { ok: true } | { ok: false; title: string; message: string };
 
-export function checkStepOne(input: { name: string; phone: string; password: string; terms: boolean }, phoneOk: boolean): StepOneCheck {
+// L'e-mail est facultatif : vide = accepté ; écrit mais mal écrit = refusé (`emailOk` : l'adresse écrite est valide)
+export function checkStepOne(input: { name: string; phone: string; password: string; terms: boolean; email?: string }, phoneOk: boolean, emailOk: boolean = true): StepOneCheck {
   if (!input.name.trim() || !input.phone.trim() || !input.password) {
     return { ok: false, title: 'Champs manquants', message: 'Nom, numéro de téléphone et mot de passe sont obligatoires.' };
   }
   if (!phoneOk) return { ok: false, title: 'Téléphone invalide', message: 'Merci de saisir un numéro de téléphone valide (ex. 66 12 34 56).' };
+  if ((input.email ?? '').trim() && !emailOk) return { ok: false, title: 'E-mail invalide', message: 'Merci de saisir une adresse e-mail valide, ou laissez la case vide.' };
   if (input.password.length < 6) return { ok: false, title: 'Mot de passe trop court', message: 'Minimum 6 caractères.' };
   if (!input.terms) return { ok: false, title: 'Conditions non acceptées', message: "Merci d'accepter les conditions d'inscription pour continuer." };
   return { ok: true };
