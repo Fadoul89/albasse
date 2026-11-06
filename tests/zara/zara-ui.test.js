@@ -6623,14 +6623,30 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const nCards = await v.page.locator('[data-testid^="entry-product-"]').count();
       const cardsText = await v.page.locator('[data-testid^="entry-product-"]').allInnerTexts();
       check('bande « Voici ce qui vous attend » : 1 a 4 vrais articles, chacun avec son prix en FCFA', nCards >= 1 && nCards <= 4 && cardsText.every((t) => /\d.*FCFA/.test(t)) && /Voici ce qui vous attend/i.test(form + (await v.page.locator('body').innerText())), cardsText);
-      const shownPrices = cardsText.map((t) => Number((t.match(/([\d\s\u00a0\u202f]+)\s*FCFA/) || [])[1]?.replace(/\D/g, '')));
-      check('les articles montres coutent de 10 000 a 15 000 FCFA, du moins cher au plus cher', shownPrices.length >= 1 && shownPrices.every((n, i) => n >= 10000 && n <= 15000 && (i === 0 || shownPrices[i - 1] <= n)), shownPrices);
-      check('4 articles differents a 4 prix differents (jamais deux fois le meme prix, ni le meme nom)', cardsText.length === 4 && new Set(shownPrices).size === 4 && new Set(cardsText.map((t) => t.split('\n').map((x) => x.trim()).filter(Boolean).slice(-1)[0].toLowerCase())).size === 4, cardsText);
+      const priceOf = (t) => Number((t.match(/([\d\s\u00a0\u202f]+)\s*FCFA/) || [])[1]?.replace(/\D/g, ''));
+      const nameOfCard = (t) => t.split('\n').map((x) => x.trim()).filter(Boolean).slice(-1)[0].toLowerCase();
+      const shownPrices = cardsText.map(priceOf);
+      const inBands = (n) => (n >= 10000 && n <= 15000) || (n >= 20000 && n <= 40000);
+      check('les articles montres coutent de 10 000 a 15 000 FCFA ou de 20 000 a 40 000 FCFA (rien entre les deux), du moins cher au plus cher', shownPrices.length >= 1 && shownPrices.every((n, i) => inBands(n) && (i === 0 || shownPrices[i - 1] <= n)), shownPrices);
+      check('4 articles differents a 4 prix differents (jamais deux fois le meme prix, ni le meme nom)', cardsText.length === 4 && new Set(shownPrices).size === 4 && new Set(cardsText.map(nameOfCard)).size === 4, cardsText);
+      check('un melange des deux fourchettes : au moins un article de 10 000 a 15 000 et un de 20 000 a 40 000', shownPrices.some((n) => n <= 15000) && shownPrices.some((n) => n >= 20000), shownPrices);
       check('les articles montres viennent de la boutique (leur nom existe dans la base)', await (async () => {
         const norm = (x) => String(x).replace(/\s+/g, ' ').trim(); // la page remplace les doubles espaces par un seul
-        const names = new Set((await get('products?select=name&is_active=eq.true&stock=gt.0&price=gte.10000&price=lte.15000&limit=1000')).map((x) => norm(x.name)));
+        const names = new Set((await get('products?select=name&is_active=eq.true&stock=gt.0&price=gte.10000&price=lte.40000&limit=2000')).map((x) => norm(x.name)));
         return cardsText.every((t) => names.has(norm(t.split('\n').map((x) => x.trim()).filter(Boolean).slice(-1)[0])));
       })(), cardsText);
+      // la bande change toute seule : un nouveau jeu de 4 articles au bout de quelques secondes (docs/ecran-entree.md)
+      const dotsBefore = await v.page.getByTestId('entry-dots').locator('> div').count();
+      check('petits points sous la bande : un par jeu (la bande change toute seule)', dotsBefore >= 2 && dotsBefore <= 4, dotsBefore);
+      await sleep(6500);
+      const cardsText2 = await v.page.locator('[data-testid^="entry-product-"]').allInnerTexts();
+      const prices2 = cardsText2.map(priceOf);
+      check('au bout de ~6 secondes : un AUTRE jeu de 4 articles (noms differents du 1er jeu)', cardsText2.length === 4 && cardsText2.map(nameOfCard).every((n) => !cardsText.map(nameOfCard).includes(n)), { avant: cardsText, apres: cardsText2 });
+      check('le 2e jeu : 4 prix differents dans les deux fourchettes, du moins cher au plus cher', new Set(prices2).size === 4 && prices2.every((n, i) => inBands(n) && (i === 0 || prices2[i - 1] <= n)) && prices2.some((n) => n <= 15000) && prices2.some((n) => n >= 20000), prices2);
+      check('le bouton « Creer mon compte » reste visible sans defiler pendant que la bande change', await (async () => {
+        const b = await shown(v.page, 'Créer mon compte').boundingBox();
+        return !!b && b.y + b.height <= (await v.page.evaluate(() => window.innerHeight));
+      })());
       const benefits = await v.page.getByTestId('entry-benefits').innerText();
       check('2 avantages vrais : paiement a la livraison a N\'Djamena et parrainage ; la roue de la chance est cachee (docs/roue-cachee.md)', /Paiement à la livraison à N’Djamena/.test(benefits) && /Invite 5 amis, gagne un parfum/.test(benefits) && !/roue/i.test(benefits), benefits);
       // il manque le numero : rien n'est envoye
