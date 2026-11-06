@@ -6623,9 +6623,12 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const nCards = await v.page.locator('[data-testid^="entry-product-"]').count();
       const cardsText = await v.page.locator('[data-testid^="entry-product-"]').allInnerTexts();
       check('bande « Voici ce qui vous attend » : 1 a 4 vrais articles, chacun avec son prix en FCFA', nCards >= 1 && nCards <= 4 && cardsText.every((t) => /\d.*FCFA/.test(t)) && /Voici ce qui vous attend/i.test(form + (await v.page.locator('body').innerText())), cardsText);
+      const shownPrices = cardsText.map((t) => Number((t.match(/([\d\s\u00a0\u202f]+)\s*FCFA/) || [])[1]?.replace(/\D/g, '')));
+      check('les articles montres coutent de 10 000 a 15 000 FCFA, du moins cher au plus cher', shownPrices.length >= 1 && shownPrices.every((n, i) => n >= 10000 && n <= 15000 && (i === 0 || shownPrices[i - 1] <= n)), shownPrices);
       check('les articles montres viennent de la boutique (leur nom existe dans la base)', await (async () => {
-        const names = new Set((await get('products?select=name&is_active=eq.true&stock=gt.0&limit=1000')).map((x) => String(x.name).trim()));
-        return cardsText.every((t) => names.has(t.split('\n').map((x) => x.trim()).filter(Boolean).slice(-1)[0]));
+        const norm = (x) => String(x).replace(/\s+/g, ' ').trim(); // la page remplace les doubles espaces par un seul
+        const names = new Set((await get('products?select=name&is_active=eq.true&stock=gt.0&price=gte.10000&price=lte.15000&limit=1000')).map((x) => norm(x.name)));
+        return cardsText.every((t) => names.has(norm(t.split('\n').map((x) => x.trim()).filter(Boolean).slice(-1)[0])));
       })(), cardsText);
       const benefits = await v.page.getByTestId('entry-benefits').innerText();
       check('2 avantages vrais : paiement a la livraison a N\'Djamena et parrainage ; la roue de la chance est cachee (docs/roue-cachee.md)', /Paiement à la livraison à N’Djamena/.test(benefits) && /Invite 5 amis, gagne un parfum/.test(benefits) && !/roue/i.test(benefits), benefits);

@@ -10,6 +10,9 @@ import { hasBirthColumn, hasMaritalColumn, maritalOf } from './clientBirthMarita
 import { rootIdOf } from './subCategories';
 
 export const ENTRY_PREVIEW_COUNT = 4;
+// Demande du patron (6 novembre 2026) : « montre les articles moins chers : de 10 000 à 15 000 FCFA ». Seuls les articles de cette fourchette (bornes comprises) sont montrés.
+export const ENTRY_PRICE_MIN = 10000;
+export const ENTRY_PRICE_MAX = 15000;
 
 // Les avantages montrés à l'entrée (tous vrais) : paiement à la livraison à N'Djamena seulement, parrainage ; la roue de la chance seulement quand elle est active (lib/featureFlags)
 export const ENTRY_BENEFITS: readonly string[] = [
@@ -44,14 +47,17 @@ const firstImage = (p: EntryProduct): string | null => {
   return url ?? null;
 };
 
-// Les articles montrés à un visiteur qui n'a pas encore de compte : en vente (actif, en stock, avec photo et prix), les plus aimés d'abord,
-// de catégories DIFFÉRENTES si possible, et jamais un article « Vitalité & Énergie » (réservé aux annonces des clients mariés de 32 ans et plus).
+// Les articles montrés à un visiteur qui n'a pas encore de compte : en vente (actif, en stock, avec photo) ET entre 10 000 et 15 000 FCFA ; les plus aimés d'abord (à égalité :
+// le moins cher, puis le plus récent), de catégories DIFFÉRENTES si possible, jamais un article « Vitalité & Énergie » (réservé aux annonces des clients mariés de 32 ans et plus) ;
+// les articles choisis sont ensuite rangés du moins cher au plus cher pour l'affichage.
 export function pickEntryProducts(products: readonly EntryProduct[], categories: readonly EntryCategory[], count: number = ENTRY_PREVIEW_COUNT): EntryProduct[] {
-  const sellable = products.filter((p) => p.is_active !== false && (p.stock ?? 0) > 0 && firstImage(p) !== null && Number(p.price) > 0 && p.name.trim() !== '');
+  const sellable = products.filter((p) => p.is_active !== false && (p.stock ?? 0) > 0 && firstImage(p) !== null && Number(p.price) >= ENTRY_PRICE_MIN && Number(p.price) <= ENTRY_PRICE_MAX && p.name.trim() !== '');
   const allowed = adAllowedProducts(sellable, categories, null);
   const ranked = [...allowed].sort((a, b) => {
     const likes = (b.likes_count ?? 0) - (a.likes_count ?? 0);
     if (likes !== 0) return likes;
+    const cheaper = Number(a.price) - Number(b.price);
+    if (cheaper !== 0) return cheaper;
     return String(b.created_at ?? '').localeCompare(String(a.created_at ?? ''));
   });
   const picked: EntryProduct[] = [];
@@ -67,7 +73,8 @@ export function pickEntryProducts(products: readonly EntryProduct[], categories:
     if (picked.length >= count) break;
     if (!picked.includes(p)) picked.push(p);
   }
-  return picked;
+  // affichage : du moins cher au plus cher (à prix égal, l'ordre de choix est gardé)
+  return picked.map((p, i) => ({ p, i })).sort((x, y) => Number(x.p.price) - Number(y.p.price) || x.i - y.i).map((x) => x.p);
 }
 
 // ---------------------------------------------------------------------------------------------

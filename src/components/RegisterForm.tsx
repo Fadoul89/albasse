@@ -186,7 +186,7 @@ export function RegisterForm({ onSuccess, onPrivacy, short }: { onSuccess: () =>
           autoComplete="name"
           value={fullName}
           onChangeText={setFullName}
-          placeholder="Nom et prénom *"
+          placeholder="Nom et prénom (obligatoire)"
           placeholderTextColor={accountFieldPlaceholder}
           style={accountField}
         />
@@ -196,7 +196,7 @@ export function RegisterForm({ onSuccess, onPrivacy, short }: { onSuccess: () =>
           textContentType="telephoneNumber"
           value={phone}
           onChangeText={setPhone}
-          placeholder="Numéro de téléphone * (ex. 66 12 34 56)"
+          placeholder="Numéro de téléphone (obligatoire)"
           placeholderTextColor={accountFieldPlaceholder}
           keyboardType="phone-pad"
           style={accountField}
@@ -207,7 +207,7 @@ export function RegisterForm({ onSuccess, onPrivacy, short }: { onSuccess: () =>
           textContentType="newPassword"
           value={password}
           onChangeText={setPassword}
-          placeholder="Mot de passe (min. 6 caractères) *"
+          placeholder="Mot de passe (obligatoire, min. 6)"
           placeholderTextColor={accountFieldPlaceholder}
           secureTextEntry
           style={accountField}
