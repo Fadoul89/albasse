@@ -4,17 +4,18 @@
 // Rien n'est inventé : les articles et les prix viennent de la boutique, les avantages sont ceux que le site offre vraiment.
 
 import { adAllowedProducts } from './adSensitive';
+import { WHEEL_ENABLED } from './featureFlags';
 import { genderOf } from './clientGender';
 import { hasBirthColumn, hasMaritalColumn, maritalOf } from './clientBirthMarital';
 import { rootIdOf } from './subCategories';
 
 export const ENTRY_PREVIEW_COUNT = 4;
 
-// Les avantages montrés à l'entrée (tous vrais) : paiement à la livraison à N'Djamena seulement, parrainage, roue de la chance
+// Les avantages montrés à l'entrée (tous vrais) : paiement à la livraison à N'Djamena seulement, parrainage ; la roue de la chance seulement quand elle est active (lib/featureFlags)
 export const ENTRY_BENEFITS: readonly string[] = [
   '💵 Paiement à la livraison à N’Djamena',
   '🎁 Invite 5 amis, gagne un parfum',
-  '🎡 Roue de la chance',
+  ...(WHEEL_ENABLED ? ['🎡 Roue de la chance'] : []),
 ];
 
 export interface EntryProduct {

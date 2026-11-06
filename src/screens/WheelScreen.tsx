@@ -6,11 +6,26 @@ import { useToastStore } from '../store/toastStore';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { GoldButton } from '../components/GoldButton';
 import { colors, fonts, radius, spacing } from '../theme';
+import { WHEEL_ENABLED } from '../lib/featureFlags';
 
 const WHEEL_SIZE = 280;
 const RADIUS = WHEEL_SIZE / 2 - 30;
 
+// La roue est cachée (lib/featureFlags) : un ancien lien /roue-de-la-chance ouvre ce message, rien n'est joué ni écrit.
 export function WheelScreen() {
+  return WHEEL_ENABLED ? <WheelGame /> : <WheelOff />;
+}
+
+function WheelOff() {
+  return (
+    <View style={styles.screen} testID="wheel-off">
+      <ScreenHeader title="Roue de la chance" showBack />
+      <Text style={styles.denied}>La roue de la chance n’est pas disponible pour le moment.</Text>
+    </View>
+  );
+}
+
+function WheelGame() {
   const profile = useAuthStore((s) => s.profile);
   const { prizes, deliveredCount, ordersUntilNextSpin, isLoading, spin } = useWheel();
   const showToast = useToastStore((s) => s.show);
