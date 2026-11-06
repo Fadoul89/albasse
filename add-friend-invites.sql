@@ -58,6 +58,8 @@ alter table public.invite_rewards enable row level security;
 drop policy if exists invite_rewards_read on public.invite_rewards;
 create policy invite_rewards_read on public.invite_rewards for select using (user_id = auth.uid() or public.is_admin());
 
+-- Supabase donne par défaut tous les droits aux nouvelles tables : on les retire, puis on ne rend que la lecture (la sécurité par ligne limite à SES gains).
+revoke all on public.invite_rewards from public, anon, authenticated;
 grant select on public.invite_rewards to authenticated;
 
 -- ---------------------------------------------------------------------------------------------

@@ -21,6 +21,8 @@ create table public.profiles (
 );
 
 grant usage on schema public to anon, authenticated;
+-- comme Supabase : toute nouvelle table du schéma public reçoit d'office tous les droits (le script doit les retirer)
+alter default privileges in schema public grant all on tables to anon, authenticated;
 grant usage on schema auth to anon, authenticated;
 grant select, insert, update, delete on public.profiles to authenticated;
 alter table public.profiles enable row level security;
