@@ -6558,8 +6558,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check(`reglage ${what} : pas de mur, Zara est la`, (await wall(v.page).count()) === 0 && (await fabCount(v.page)) > 0);
       await v.ctx.close();
     }
-    // 3) robot de Google : il voit le site (articles trouves sur Google)
-    {
+    // 3) robot de Google : il voit le site (articles trouves sur Google). Contre le vrai site (BASE_URL), Netlify traite les robots a part : SKIP_BOT=1 saute ce controle
+    if (!process.env.SKIP_BOT) {
       const v = await newVisitor({ ...phone, userAgent: 'Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)' }, { fakeStore: { waOrder: true, accountRequired: true } });
       await v.page.goto(`${BASE}/produit/${prod.slug}`, { waitUntil: 'load' });
       await v.page.getByText('Commander', { exact: true }).first().waitFor({ timeout: 25000 });

@@ -91,3 +91,5 @@ annuler ou envoyer remet le départ des 24 h à maintenant (pas à la date de cr
 Même méthode : on le joue sur un Postgres local jetable (`sh tests/sql/run-source-report.sh`). Contrôles faits : relancé sans erreur ; ni l'anonyme ni un client ne peuvent l'appeler ;
 période du 10 au 16 octobre avec ses bornes comprises (1 ms avant et après exclues) ; 1 500 visites de plus que la limite de 1 000 lignes ; nouveaux et revenants (première visite depuis toujours) ;
 temps moyen, pages vues ; articles vus et paniers des visites de la période ; commandes livrées et non fausses de la période seulement ; source vide = « Autre » ; vraies visites ; campagnes (média, source, commandes) ; période sans visite.
+
+- Contre le vrai site (`BASE_URL=https://www.albasseshopping.com`), mettre `SKIP_BOT=1` pour sauter le contrôle « robot de Google » de la partie `2` : sur le vrai site, Netlify traite les robots à part.
