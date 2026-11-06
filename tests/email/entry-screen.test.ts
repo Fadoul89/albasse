@@ -144,6 +144,14 @@ check('mot de passe de 6 caractères : accepté', checkStepOne({ name: 'Ali', ph
   const r = checkStepOne({ name: 'Ali', phone: '66 12 34 56', password: 'secret12', terms: false }, phoneOk);
   check('conditions pas acceptées : refusé', !r.ok && r.title === 'Conditions non acceptées', r);
 }
+check('e-mail facultatif : vide = accepté', checkStepOne({ name: 'Ali', phone: '66 12 34 56', password: 'secret12', terms: true, email: '' }, phoneOk, true).ok === true && checkStepOne({ name: 'Ali', phone: '66 12 34 56', password: 'secret12', terms: true, email: '   ' }, phoneOk, false).ok === true && checkStepOne({ name: 'Ali', phone: '66 12 34 56', password: 'secret12', terms: true }, phoneOk, false).ok === true);
+{
+  const r = checkStepOne({ name: 'Ali', phone: '66 12 34 56', password: 'secret12', terms: true, email: 'pas-un-email' }, phoneOk, false);
+  check('e-mail écrit mais mal écrit : « E-mail invalide » (même message qu\'avant)', !r.ok && r.title === 'E-mail invalide' && r.message === 'Merci de saisir une adresse e-mail valide, ou laissez la case vide.', r);
+}
+check('e-mail valide : accepté', checkStepOne({ name: 'Ali', phone: '66 12 34 56', password: 'secret12', terms: true, email: 'ali@example.com' }, phoneOk, true).ok === true);
+check('numéro invalide passe avant l\'e-mail invalide', (() => { const r = checkStepOne({ name: 'Ali', phone: '12', password: 'secret12', terms: true, email: 'x' }, false, false); return !r.ok && r.title === 'Téléphone invalide'; })());
+check('e-mail invalide passe avant mot de passe trop court et conditions', (() => { const r = checkStepOne({ name: 'Ali', phone: '66 12 34 56', password: '123', terms: false, email: 'x' }, phoneOk, false); return !r.ok && r.title === 'E-mail invalide'; })());
 check('l\'ordre des contrôles : champs manquants avant tout le reste', (() => { const r = checkStepOne({ name: '', phone: '', password: '', terms: false }, false); return !r.ok && r.title === 'Champs manquants'; })());
 
 // ---- étape 2 : qui doit répondre ?

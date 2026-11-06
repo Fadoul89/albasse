@@ -6535,7 +6535,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await wall(v.page).getByText('Créer mon compte', { exact: true }).click();
       await wall(v.page).getByTestId('register-name').waitFor({ timeout: 10000 });
       check('« Créer mon compte » : retour au formulaire de creation', (await wall(v.page).getByTestId('login-identifier').count()) === 0);
-      check('formulaire court (etape 1) : nom, telephone, mot de passe obligatoires ; l\'e-mail facultatif est dans l\'etape 2', /étape 1 sur 2/i.test(txt) && !/Informations optionnelles/i.test(txt) && (await wall(v.page).getByTestId('register-email').count()) === 0 && (await wall(v.page).getByTestId('register-name').count()) === 1);
+      check('formulaire court (etape 1) : nom, telephone, mot de passe obligatoires ; e-mail facultatif', /étape 1 sur 2/i.test(txt) && !/Informations optionnelles/i.test(txt) && (await wall(v.page).getByTestId('register-email').count()) === 1 && (await wall(v.page).getByTestId('register-name').count()) === 1);
       check('plus de liens « Confidentialité » ni « Contact » sur l\'ecran d\'entree', !/Confidentialité/.test(txt) && !/Contact/.test(txt), txt);
       check('page en francais (lang="fr") : Chrome ne la traduit plus (« ALBASSE SHOPPING » reste tel quel)', (await v.page.evaluate(() => document.documentElement.lang)) === 'fr');
       check('pas de bouton de Zara derriere le mur', (await fabCount(v.page)) === 0);
@@ -6582,22 +6582,22 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     }
     // 5) inscription depuis le mur : nom, numero, mot de passe ; on revient sur la fiche demandee
     // l'etape 2 (les 3 questions, juste apres la creation du compte)
-    const step2 = async (v, { gender = 'homme', birth = '25/03/1998', marital = 'celibataire', email = '' } = {}) => {
+    const step2 = async (v, { gender = 'homme', birth = '25/03/1998', marital = 'celibataire' } = {}) => {
       await v.page.getByTestId('signup-step2').waitFor({ timeout: 15000 });
       await sleep(600);
       if (gender) await v.page.getByTestId(`step2-gender-${gender}`).locator('visible=true').click();
       if (birth) await v.page.getByTestId('step2-birth').locator('visible=true').fill(birth);
       if (marital) await v.page.getByTestId(`step2-marital-${marital}`).locator('visible=true').click();
-      if (email) await v.page.getByTestId('step2-email').locator('visible=true').fill(email);
       await v.page.getByTestId('step2-submit').locator('visible=true').click();
     };
     // etape 1 (nom, numero, mot de passe, conditions) ; `finish` : puis l'etape 2 (Homme / Femme, naissance, situation, e-mail facultatif)
-    const register = async (v, { name = 'Ali Mahamat', phoneNo = '66 12 34 56', password = 'secret12', terms = true, finish = true, ...rest } = {}) => {
+    const register = async (v, { name = 'Ali Mahamat', phoneNo = '66 12 34 56', password = 'secret12', email = '', terms = true, finish = true, ...rest } = {}) => {
       await v.page.getByTestId('register-phone').waitFor({ timeout: 15000 });
       await sleep(800);
       if (name) await v.page.getByTestId('register-name').locator('visible=true').fill(name);
       if (phoneNo) await v.page.getByTestId('register-phone').locator('visible=true').fill(phoneNo);
       if (password) await v.page.getByTestId('register-password').locator('visible=true').fill(password);
+      if (email) await v.page.getByTestId('register-email').locator('visible=true').fill(email);
       if (terms) await v.page.getByTestId('register-terms').locator('visible=true').click();
       await shown(v.page, 'Créer mon compte').click();
       if (finish) await step2(v, rest);
@@ -6612,7 +6612,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await sleep(800);
       check('fiche ouverte depuis un lien : le formulaire de creation est directement sur l\'ecran d\'entree', (await wall(v.page).getByTestId('register-phone').count()) === 1);
       const form = await v.page.locator('body').innerText();
-      check('etape 1 : seulement nom, telephone et mot de passe (ni Homme/Femme, ni naissance, ni situation, ni e-mail facultatif)', /étape 1 sur 2/i.test(form) && (await v.page.getByTestId('register-name').locator('visible=true').count()) === 1 && (await v.page.getByTestId('register-password').locator('visible=true').count()) === 1 && (await v.page.getByTestId('register-gender-homme').count()) === 0 && (await v.page.getByTestId('register-birth').count()) === 0 && (await v.page.getByTestId('register-marital-celibataire').count()) === 0 && (await v.page.getByTestId('register-email').count()) === 0 && !/Informations optionnelles/i.test(form), form.slice(0, 300));
+      check('etape 1 : nom, telephone, mot de passe et « Adresse e-mail (facultatif) » (ni Homme/Femme, ni naissance, ni situation)', /étape 1 sur 2/i.test(form) && (await v.page.getByTestId('register-name').locator('visible=true').count()) === 1 && (await v.page.getByTestId('register-password').locator('visible=true').count()) === 1 && (await v.page.getByTestId('register-gender-homme').count()) === 0 && (await v.page.getByTestId('register-birth').count()) === 0 && (await v.page.getByTestId('register-marital-celibataire').count()) === 0 && (await v.page.getByTestId('register-email').locator('visible=true').count()) === 1 && (await v.page.getByTestId('register-email').getAttribute('placeholder')) === 'Adresse e-mail (facultatif)' && !/Informations optionnelles/i.test(form), form.slice(0, 300));
       check('etape 1 : « Ensuite : 3 petites questions rapides (étape 2) » est annonce', /Ensuite : 3 petites questions rapides \(étape 2\)/i.test(form));
       const btnBox = await shown(v.page, 'Créer mon compte').boundingBox();
       const innerH = await v.page.evaluate(() => window.innerHeight);
@@ -6641,6 +6641,11 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.page.getByText(/numéro de téléphone valide/).first().waitFor({ timeout: 8000 });
       check('numero trop court : message, rien n\'est envoye', !(fu.signups || []).length);
       await v.page.getByTestId('register-phone').locator('visible=true').fill('66 12 34 56');
+      await v.page.getByTestId('register-email').locator('visible=true').fill('pas-un-email');
+      await shown(v.page, 'Créer mon compte').click();
+      await v.page.getByText(/adresse e-mail valide, ou laissez la case vide/).waitFor({ timeout: 8000 });
+      check('e-mail mal ecrit (etape 1) : message, rien n\'est envoye', !(fu.signups || []).length);
+      await v.page.getByTestId('register-email').locator('visible=true').fill('');
       await v.page.getByTestId('register-terms').locator('visible=true').click(); // decoche
       await shown(v.page, 'Créer mon compte').click();
       await v.page.getByText(/accepter les conditions d'inscription/).waitFor({ timeout: 8000 });
@@ -6674,11 +6679,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.page.getByText(/Merci de choisir « Célibataire » ou « Marié\(e\) »/).waitFor({ timeout: 8000 });
       check('etape 2 : sexe, naissance et situation manquants : un message a chaque fois, rien n\'est enregistre', !fu.patches.some((x) => 'gender' in x || 'birth_date' in x || 'marital_status' in x), fu.patches);
       await v.page.getByTestId('step2-marital-celibataire').locator('visible=true').click();
-      await v.page.getByTestId('step2-email').locator('visible=true').fill('pas-un-email');
-      await v.page.getByTestId('step2-submit').locator('visible=true').click();
-      await v.page.getByText(/adresse e-mail valide, ou laissez la case vide/).waitFor({ timeout: 8000 });
-      check('e-mail mal ecrit (etape 2) : message, rien n\'est enregistre', !fu.patches.some((x) => 'gender' in x || 'birth_date' in x), fu.patches);
-      await v.page.getByTestId('step2-email').locator('visible=true').fill('');
+      check('etape 2 : plus de champ e-mail (il est a l\'etape 1)', (await v.page.getByTestId('step2-email').count()) === 0);
       await v.page.getByTestId('step2-submit').locator('visible=true').click();
       await v.page.getByText('Bienvenue ✓').waitFor({ timeout: 15000 });
       await sleep(2500);

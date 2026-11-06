@@ -13,8 +13,8 @@ Je ne promets aucun chiffre : après la mise en ligne, on compare **« comptes c
 ## Ce que voit le visiteur maintenant
 1. **« Voici ce qui vous attend »** : 4 vrais articles de la boutique (photo, nom, prix en FCFA), de catégories différentes si possible, les plus aimés d'abord. Seulement des articles en vente (actif, en stock, avec photo et prix). **Jamais un article « Vitalité & Énergie »** (ni ses sous-catégories) : ils sont réservés aux annonces des clients mariés de 32 ans et plus (`lib/adSensitive`). Si la boutique ne répond pas, la bande n'apparaît pas.
 2. **2 avantages, tous vrais** : 💵 paiement à la livraison à N'Djamena · 🎁 Invite 5 amis, gagne un parfum. Aucun pourcentage, aucune urgence inventée. (La pastille « 🎡 Roue de la chance » a été retirée le 6 novembre : la roue est cachée, docs/roue-cachee.md.)
-3. **Étape 1 sur 2** : nom et prénom, téléphone, mot de passe, case des conditions (les 6 conditions s'ouvrent avec « Lire les conditions d'inscription »). **Le bouton « Créer mon compte » se voit sans défiler** sur un téléphone de 800 px de haut.
-4. **Étape 2 sur 2**, juste après la création du compte : les 3 questions **toujours obligatoires** (Homme/Femme, date de naissance, célibataire/marié), puis les informations facultatives (e-mail, WhatsApp, profession, ville, pays, adresse) et la case des notifications (cochée d'office, comme avant), puis « Terminer ».
+3. **Étape 1 sur 2** : nom et prénom, téléphone, mot de passe, **adresse e-mail (facultatif)**, case des conditions (les 6 conditions s'ouvrent avec « Lire les conditions d'inscription »). **Le bouton « Créer mon compte » se voit sans défiler** sur un téléphone de 800 px de haut.
+4. **Étape 2 sur 2**, juste après la création du compte : les 3 questions **toujours obligatoires** (Homme/Femme, date de naissance, célibataire/marié), puis les informations facultatives (WhatsApp, profession, ville, pays, adresse ; l'e-mail est à l'étape 1) et la case des notifications (cochée d'office, comme avant), puis « Terminer ».
 
 ## Ce qui ne change pas
 - **Le compte reste obligatoire** (interrupteur Admin › Clients).

@@ -54,7 +54,7 @@ export function RegisterForm({ onSuccess, onPrivacy, short }: { onSuccess: () =>
   // Étape 1 (écran d'entrée) : le compte est créé avec le nom, le téléphone et le mot de passe. Les notifications ne sont PAS activées ici : leur case (cochée
   // d'office, comme avant) est dans l'étape 2. `arm()` AVANT la création : dès que le compte existe, l'étape 2 prend la place du mur, sans laisser voir la boutique.
   const handleShortSubmit = async () => {
-    const step = checkStepOne({ name: fullName, phone, password, terms: acceptsTerms }, !!phoneDigits(phone));
+    const step = checkStepOne({ name: fullName, phone, password, terms: acceptsTerms, email }, !!phoneDigits(phone), !email.trim() || isValidEmail(email));
     if (!step.ok) {
       showToast(step.message, { title: step.title, type: 'error' });
       return;
@@ -64,6 +64,7 @@ export function RegisterForm({ onSuccess, onPrivacy, short }: { onSuccess: () =>
     const { error, needsEmailConfirmation } = await signUp(password, {
       fullName: fullName.trim(),
       phone: phone.trim(),
+      email: email.trim(),
       acceptsNotifications: false,
     });
     setLoading(false);
@@ -212,6 +213,17 @@ export function RegisterForm({ onSuccess, onPrivacy, short }: { onSuccess: () =>
           style={accountField}
         />
         <Text style={styles.fieldHint}>Pour vous connecter : votre numéro de téléphone et ce mot de passe.</Text>
+        <TextInput
+          testID="register-email"
+          autoComplete="email"
+          value={email}
+          onChangeText={setEmail}
+          placeholder="Adresse e-mail (facultatif)"
+          placeholderTextColor={accountFieldPlaceholder}
+          autoCapitalize="none"
+          keyboardType="email-address"
+          style={accountField}
+        />
         <Pressable testID="register-terms" style={styles.checkboxRow} onPress={() => setAcceptsTerms((v) => !v)}>
           <View style={[styles.checkbox, acceptsTerms && styles.checkboxChecked]}>{acceptsTerms && <Text style={styles.checkboxMark}>✓</Text>}</View>
           <Text style={styles.checkboxLabel}>J'ai lu et j'accepte les conditions d'inscription.</Text>

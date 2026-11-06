@@ -76,11 +76,13 @@ export function pickEntryProducts(products: readonly EntryProduct[], categories:
 
 export type StepOneCheck = { ok: true } | { ok: false; title: string; message: string };
 
-export function checkStepOne(input: { name: string; phone: string; password: string; terms: boolean }, phoneOk: boolean): StepOneCheck {
+// L'e-mail est facultatif : vide = accepté ; écrit mais mal écrit = refusé (`emailOk` : l'adresse écrite est valide)
+export function checkStepOne(input: { name: string; phone: string; password: string; terms: boolean; email?: string }, phoneOk: boolean, emailOk: boolean = true): StepOneCheck {
   if (!input.name.trim() || !input.phone.trim() || !input.password) {
     return { ok: false, title: 'Champs manquants', message: 'Nom, numéro de téléphone et mot de passe sont obligatoires.' };
   }
   if (!phoneOk) return { ok: false, title: 'Téléphone invalide', message: 'Merci de saisir un numéro de téléphone valide (ex. 66 12 34 56).' };
+  if ((input.email ?? '').trim() && !emailOk) return { ok: false, title: 'E-mail invalide', message: 'Merci de saisir une adresse e-mail valide, ou laissez la case vide.' };
   if (input.password.length < 6) return { ok: false, title: 'Mot de passe trop court', message: 'Minimum 6 caractères.' };
   if (!input.terms) return { ok: false, title: 'Conditions non acceptées', message: "Merci d'accepter les conditions d'inscription pour continuer." };
   return { ok: true };
