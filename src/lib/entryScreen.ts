@@ -1,4 +1,4 @@
-// Écran d'entrée « Créez votre compte » (docs/ecran-entree.md) : la bande « Voici ce qui vous attend » (4 vrais articles, avec leur vrai prix), les avantages, et
+// Écran d'entrée « Créez votre compte » (docs/ecran-entree.md) : la bande « Voici ce qui vous attend » (4 vrais articles à la fois, qui changent toute seule, avec leur vrai prix), les avantages, et
 // l'inscription en 2 étapes. Des fonctions pures, sans réseau : testées dans tests/email/entry-screen.test.ts.
 //
 // Rien n'est inventé : les articles et les prix viennent de la boutique, les avantages sont ceux que le site offre vraiment.
@@ -10,9 +10,23 @@ import { hasBirthColumn, hasMaritalColumn, maritalOf } from './clientBirthMarita
 import { rootIdOf } from './subCategories';
 
 export const ENTRY_PREVIEW_COUNT = 4;
-// Demande du patron (6 novembre 2026) : « montre les articles moins chers : de 10 000 à 15 000 FCFA ». Seuls les articles de cette fourchette (bornes comprises) sont montrés.
-export const ENTRY_PRICE_MIN = 10000;
-export const ENTRY_PRICE_MAX = 15000;
+// Demandes du patron (6 novembre 2026) : « montre les articles moins chers : de 10 000 à 15 000 FCFA », puis « les articles changent automatiquement, avec les autres de
+// 20 000 à 40 000 FCFA ». Deux fourchettes (bornes comprises) ; les articles de 15 001 à 19 999 FCFA ne sont pas montrés.
+export const ENTRY_PRICE_BANDS: readonly { min: number; max: number }[] = [
+  { min: 10000, max: 15000 },
+  { min: 20000, max: 40000 },
+];
+export const ENTRY_PRICE_MIN = Math.min(...ENTRY_PRICE_BANDS.map((b) => b.min));
+export const ENTRY_PRICE_MAX = Math.max(...ENTRY_PRICE_BANDS.map((b) => b.max));
+// La bande change toute seule : jusqu'à 4 « jeux » de 4 articles, un nouveau jeu toutes les 5 secondes
+export const ENTRY_SET_COUNT = 4;
+export const ENTRY_ROTATE_MS = 5000;
+
+// La fourchette d'un prix : 0 (10 000 à 15 000), 1 (20 000 à 40 000), ou -1 (hors des deux : jamais montré)
+export const entryBandOf = (price: number | string): number => {
+  const n = Number(price);
+  return Number.isFinite(n) ? ENTRY_PRICE_BANDS.findIndex((b) => n >= b.min && n <= b.max) : -1;
+};
 
 // Les avantages montrés à l'entrée (tous vrais) : paiement à la livraison à N'Djamena seulement, parrainage ; la roue de la chance seulement quand elle est active (lib/featureFlags)
 export const ENTRY_BENEFITS: readonly string[] = [
@@ -47,27 +61,31 @@ const firstImage = (p: EntryProduct): string | null => {
   return url ?? null;
 };
 
-// Les articles montrés à un visiteur qui n'a pas encore de compte : en vente (actif, en stock, avec photo) ET entre 10 000 et 15 000 FCFA ; les plus aimés d'abord (à égalité :
-// le moins cher, puis le plus récent), de catégories DIFFÉRENTES si possible, jamais un article « Vitalité & Énergie » (réservé aux annonces des clients mariés de 32 ans et plus) ;
-// 4 articles différents à 4 prix différents quand c'est possible ; les articles choisis sont ensuite rangés du moins cher au plus cher pour l'affichage.
-export function pickEntryProducts(products: readonly EntryProduct[], categories: readonly EntryCategory[], count: number = ENTRY_PREVIEW_COUNT): EntryProduct[] {
-  const sellable = products.filter((p) => p.is_active !== false && (p.stock ?? 0) > 0 && firstImage(p) !== null && Number(p.price) >= ENTRY_PRICE_MIN && Number(p.price) <= ENTRY_PRICE_MAX && p.name.trim() !== '');
+const nameOf = (p: EntryProduct) => p.name.replace(/\s+/g, ' ').trim().toLowerCase();
+
+// Les articles à montrer, du plus aimé au moins aimé (à égalité : le moins cher, puis le plus récent) : en vente (actif, en stock, avec photo, un nom), dans l'une des deux
+// fourchettes de prix, et jamais un article « Vitalité & Énergie » (réservé aux annonces des clients mariés de 32 ans et plus).
+function rankEntryProducts(products: readonly EntryProduct[], categories: readonly EntryCategory[]): EntryProduct[] {
+  const sellable = products.filter((p) => p.is_active !== false && (p.stock ?? 0) > 0 && firstImage(p) !== null && entryBandOf(p.price) >= 0 && p.name.trim() !== '');
   const allowed = adAllowedProducts(sellable, categories, null);
-  const ranked = [...allowed].sort((a, b) => {
+  return [...allowed].sort((a, b) => {
     const likes = (b.likes_count ?? 0) - (a.likes_count ?? 0);
     if (likes !== 0) return likes;
     const cheaper = Number(a.price) - Number(b.price);
     if (cheaper !== 0) return cheaper;
     return String(b.created_at ?? '').localeCompare(String(a.created_at ?? ''));
   });
-  // 4 articles DIFFÉRENTS à 4 PRIX DIFFÉRENTS (demande du patron) : on cherche d'abord un article par catégorie ET par prix, puis un article par prix, puis
-  // (seulement s'il n'y a pas assez de prix différents) un article par nom. Jamais deux fois le même nom, même sous deux fiches.
+}
+
+// UN jeu de `count` articles DIFFÉRENTS à des PRIX DIFFÉRENTS : la moitié (arrondie en haut) de la fourchette 10 000 à 15 000, le reste de la fourchette 20 000 à 40 000,
+// quand les deux ont des articles ; sinon on complète avec l'autre. On cherche d'abord un article par catégorie ET par prix, puis un article par prix, puis (seulement
+// s'il n'y a pas assez de prix différents) un article par nom. Jamais deux fois le même nom, même sous deux fiches.
+function selectEntrySet(ranked: readonly EntryProduct[], categories: readonly EntryCategory[], count: number): EntryProduct[] {
   const picked: EntryProduct[] = [];
   const roots = new Set<string>();
   const prices = new Set<number>();
   const names = new Set<string>();
   const rootOfProduct = (p: EntryProduct) => rootIdOf(categories, p.category_id) ?? p.category_id ?? p.id;
-  const nameOf = (p: EntryProduct) => p.name.replace(/\s+/g, ' ').trim().toLowerCase();
   const take = (p: EntryProduct) => {
     picked.push(p);
     roots.add(rootOfProduct(p));
@@ -79,14 +97,41 @@ export function pickEntryProducts(products: readonly EntryProduct[], categories:
     (p) => !prices.has(Number(p.price)) && !names.has(nameOf(p)),
     (p) => !names.has(nameOf(p)),
   ];
-  for (const ok of rules) {
-    for (const p of ranked) {
-      if (picked.length >= count) break;
-      if (!picked.includes(p) && ok(p)) take(p);
+  const run = (list: readonly EntryProduct[], upTo: number) => {
+    for (const ok of rules) {
+      for (const p of list) {
+        if (picked.length >= upTo) return;
+        if (!picked.includes(p) && ok(p)) take(p);
+      }
     }
+  };
+  run(ranked.filter((p) => entryBandOf(p.price) === 0), Math.ceil(count / 2));
+  run(ranked.filter((p) => entryBandOf(p.price) === 1), count);
+  run(ranked, count);
+  return picked;
+}
+
+// affichage : du moins cher au plus cher (à prix égal, l'ordre de choix est gardé)
+const byPriceAscending = (set: readonly EntryProduct[]): EntryProduct[] => set.map((p, i) => ({ p, i })).sort((x, y) => Number(x.p.price) - Number(y.p.price) || x.i - y.i).map((x) => x.p);
+
+// Les « jeux » de la bande « Voici ce qui vous attend » : le 1er jeu est montré tout de suite, les autres prennent sa place l'un après l'autre (toutes les ENTRY_ROTATE_MS).
+// Un article (ou son nom) n'apparaît que dans un seul jeu ; seul le 1er jeu peut avoir moins de `count` articles (jamais une bande à moitié vide qui change).
+export function pickEntrySets(products: readonly EntryProduct[], categories: readonly EntryCategory[], count: number = ENTRY_PREVIEW_COUNT, maxSets: number = ENTRY_SET_COUNT): EntryProduct[][] {
+  let pool = rankEntryProducts(products, categories);
+  const sets: EntryProduct[][] = [];
+  while (sets.length < maxSets && pool.length > 0) {
+    const set = selectEntrySet(pool, categories, count);
+    if (set.length === 0 || (sets.length > 0 && set.length < count)) break;
+    sets.push(byPriceAscending(set));
+    const usedNames = new Set(set.map(nameOf));
+    pool = pool.filter((p) => !set.includes(p) && !usedNames.has(nameOf(p)));
   }
-  // affichage : du moins cher au plus cher (à prix égal, l'ordre de choix est gardé)
-  return picked.map((p, i) => ({ p, i })).sort((x, y) => Number(x.p.price) - Number(y.p.price) || x.i - y.i).map((x) => x.p);
+  return sets;
+}
+
+// Le 1er jeu seulement (les plus aimés d'abord, 4 prix différents, du moins cher au plus cher)
+export function pickEntryProducts(products: readonly EntryProduct[], categories: readonly EntryCategory[], count: number = ENTRY_PREVIEW_COUNT): EntryProduct[] {
+  return pickEntrySets(products, categories, count, 1)[0] ?? [];
 }
 
 // ---------------------------------------------------------------------------------------------
