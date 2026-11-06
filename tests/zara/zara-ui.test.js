@@ -6558,8 +6558,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check(`reglage ${what} : pas de mur, Zara est la`, (await wall(v.page).count()) === 0 && (await fabCount(v.page)) > 0);
       await v.ctx.close();
     }
-    // 3) robot de Google : il voit le site (articles trouves sur Google)
-    {
+    // 3) robot de Google : il voit le site (articles trouves sur Google). Contre le vrai site (BASE_URL), Netlify traite les robots a part : SKIP_BOT=1 saute ce controle
+    if (!process.env.SKIP_BOT) {
       const v = await newVisitor({ ...phone, userAgent: 'Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)' }, { fakeStore: { waOrder: true, accountRequired: true } });
       await v.page.goto(`${BASE}/produit/${prod.slug}`, { waitUntil: 'load' });
       await v.page.getByText('Commander', { exact: true }).first().waitFor({ timeout: 25000 });
@@ -6628,7 +6628,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         return cardsText.every((t) => names.has(t.split('\n').map((x) => x.trim()).filter(Boolean).slice(-1)[0]));
       })(), cardsText);
       const benefits = await v.page.getByTestId('entry-benefits').innerText();
-      check('3 avantages vrais : paiement a la livraison a N\'Djamena, parrainage, roue de la chance', /Paiement à la livraison à N’Djamena/.test(benefits) && /Invite 5 amis, gagne un parfum/.test(benefits) && /Roue de la chance/.test(benefits), benefits);
+      check('2 avantages vrais : paiement a la livraison a N\'Djamena et parrainage ; la roue de la chance est cachee (docs/roue-cachee.md)', /Paiement à la livraison à N’Djamena/.test(benefits) && /Invite 5 amis, gagne un parfum/.test(benefits) && !/roue/i.test(benefits), benefits);
       // il manque le numero : rien n'est envoye
       await v.page.getByTestId('register-name').locator('visible=true').fill('Ali Mahamat');
       await v.page.getByTestId('register-password').locator('visible=true').fill('secret12');
@@ -6694,6 +6694,10 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.page.goto(`${BASE}/compte`, { waitUntil: 'load' });
       await sleep(4000);
       check('Mon compte : l\'adresse « @tel.albasseshopping.com » n\'est jamais montree', !/tel\.albasseshopping\.com/.test(await v.page.locator('body').innerText()));
+      check('Mon compte : plus de ligne « Roue de la chance » (cachee, docs/roue-cachee.md)', !/Roue de la chance/i.test(await v.page.locator('body').innerText()));
+      await v.page.goto(`${BASE}/roue-de-la-chance`, { waitUntil: 'load' });
+      await v.page.getByTestId('wheel-off').waitFor({ timeout: 25000 });
+      check('un ancien lien /roue-de-la-chance : un message, aucun jeu, aucun bouton « Tourner la roue »', /pas disponible pour le moment/.test(await v.page.locator('body').innerText()) && (await v.page.getByText(/Tourner la roue/).count()) === 0);
       await v.ctx.close();
     }
     // 5b) juste apres l'inscription, sur un telephone sans le raccourci : la page d'installation (une seule fois)

@@ -55,6 +55,7 @@ import { AdminPromotionsScreen } from '../screens/admin/AdminPromotionsScreen';
 import { AdminZaraSeoScreen } from '../screens/admin/AdminZaraSeoScreen';
 import { SmartPromotionPopup } from '../components/SmartPromotionPopup';
 import { WheelPopup } from '../components/WheelPopup';
+import { WHEEL_ENABLED } from '../lib/featureFlags';
 import { AppDownloadPopup } from '../components/AppDownloadPopup';
 import { IosInstallGuide } from '../components/IosInstallGuide';
 import { GlowBorder } from '../components/GlowBorder';
@@ -340,7 +341,7 @@ export function RootNavigator() {
           <>
             <Assistant />
             <SmartPromotionPopup />
-            <WheelPopup />
+            {WHEEL_ENABLED && <WheelPopup />}
             <AppDownloadPopup />
             <GlowBorder />
           </>

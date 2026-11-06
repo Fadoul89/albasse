@@ -19,6 +19,7 @@ import { uploadAvatar } from '../lib/imageUpload';
 import { getLoyaltyStatus, LOYALTY_TIERS } from '../lib/loyalty';
 import { useMyInvites } from '../hooks/useMyInvites';
 import { progressView } from '../lib/friendInvites';
+import { WHEEL_ENABLED } from '../lib/featureFlags';
 
 type AdminRoute = Extract<
   keyof RootStackParamList,
@@ -212,10 +213,12 @@ export function AccountScreen() {
             ))}
         </View>
       )}
-      <Pressable style={styles.menuItem} onPress={() => navigation.navigate('Wheel')}>
-        <Text style={styles.menuIcon}>🎡</Text>
-        <Text style={styles.menuLabel}>Roue de la chance</Text>
-      </Pressable>
+      {WHEEL_ENABLED && (
+        <Pressable style={styles.menuItem} onPress={() => navigation.navigate('Wheel')}>
+          <Text style={styles.menuIcon}>🎡</Text>
+          <Text style={styles.menuLabel}>Roue de la chance</Text>
+        </Pressable>
+      )}
       {profile.is_affiliate && profile.affiliate_status === 'approved' && (
         <Pressable style={styles.menuItem} onPress={() => navigation.navigate('AffiliateDashboard')}>
           <Text style={styles.menuIcon}>🤝</Text>

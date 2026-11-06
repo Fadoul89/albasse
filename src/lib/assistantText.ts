@@ -576,8 +576,8 @@ const FR: Texts = {
       : `💵 Paiement à la livraison : à ${HOME_CITY}. Dans les autres villes, la commande se prend sur WhatsApp pour le moment.`,
     `⏳ Pour éviter les fausses commandes, chaque commande est valable ${ORDER_VALIDITY_HOURS} h.`,
   ].join('\n'),
-  accountInvite: 'Créez votre compte gratuit{nom} : suivez vos commandes, retrouvez vos favoris ❤️, gagnez des points fidélité et tournez la roue de la chance 🎡 !',
-  accountExplain: 'Créer un compte est gratuit et rapide : vous suivez vos commandes, retrouvez vos favoris ❤️, gagnez des points fidélité et tournez la roue de la chance 🎡.',
+  accountInvite: 'Créez votre compte gratuit{nom} : suivez vos commandes, retrouvez vos favoris ❤️ et gagnez des points fidélité !',
+  accountExplain: 'Créer un compte est gratuit et rapide : vous suivez vos commandes, retrouvez vos favoris ❤️ et gagnez des points fidélité.',
   menuIntro: 'Que souhaitez-vous découvrir aujourd’hui ? 🛍️',
   menuIntroNamed: 'Que souhaitez-vous découvrir{nom} ? 🛍️',
   talk: {
@@ -1170,8 +1170,8 @@ const AR: Texts = {
       : '💵 الدفع عند الاستلام في إنجامينا. في المدن الأخرى، يتم الطلب عبر واتساب حالياً.',
     `⏳ لتجنب الطلبات الوهمية، كل طلب صالح لمدة ${ORDER_VALIDITY_HOURS} ساعة.`,
   ].join('\n'),
-  accountInvite: 'أنشئ حسابك المجاني{nom}: تابع طلباتك، احتفظ بمفضلاتك ❤️، اجمع نقاط الولاء وأدر عجلة الحظ 🎡!',
-  accountExplain: 'إنشاء الحساب مجاني وسريع: تتابع طلباتك، وتحتفظ بمفضلاتك ❤️، وتجمع نقاط الولاء وتدير عجلة الحظ 🎡.',
+  accountInvite: 'أنشئ حسابك المجاني{nom}: تابع طلباتك، احتفظ بمفضلاتك ❤️ واجمع نقاط الولاء!',
+  accountExplain: 'إنشاء الحساب مجاني وسريع: تتابع طلباتك، وتحتفظ بمفضلاتك ❤️ وتجمع نقاط الولاء.',
   menuIntro: 'ماذا تريد أن تكتشف اليوم؟ 🛍️',
   menuIntroNamed: 'ماذا تريد أن تكتشف{nom}؟ 🛍️',
   talk: {

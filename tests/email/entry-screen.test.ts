@@ -14,6 +14,7 @@ import {
   type EntryCategory,
   type EntryProduct,
 } from '../../src/lib/entryScreen.ts';
+import { WHEEL_ENABLED } from '../../src/lib/featureFlags.ts';
 
 let ok = 0;
 const check = (label: string, cond: unknown, detail?: unknown) => {
@@ -117,7 +118,8 @@ check('le tri ne modifie pas la liste reçue', (() => {
 })());
 
 // ---- les avantages : seulement des choses vraies
-check('3 avantages : paiement à la livraison à N\'Djamena, parrainage, roue de la chance', ENTRY_BENEFITS.length === 3 && /N’Djamena/.test(ENTRY_BENEFITS[0]) && /Invite 5 amis, gagne un parfum/.test(ENTRY_BENEFITS[1]) && /Roue de la chance/.test(ENTRY_BENEFITS[2]), ENTRY_BENEFITS);
+check('2 avantages : paiement à la livraison à N\'Djamena et parrainage (la roue de la chance est cachée : lib/featureFlags)', ENTRY_BENEFITS.length === (WHEEL_ENABLED ? 3 : 2) && /N’Djamena/.test(ENTRY_BENEFITS[0]) && /Invite 5 amis, gagne un parfum/.test(ENTRY_BENEFITS[1]), ENTRY_BENEFITS);
+check('roue cachée : aucun avantage ne parle de la roue de la chance', WHEEL_ENABLED || ENTRY_BENEFITS.every((b) => !/roue/i.test(b)), ENTRY_BENEFITS);
 check('aucun avantage ne promet un pourcentage, un prix cassé ou une urgence', ENTRY_BENEFITS.every((b) => !/%|dernier|limité|stock|\bvite\b|promo|solde|-\d/i.test(b)), ENTRY_BENEFITS);
 
 // ---- étape 1
