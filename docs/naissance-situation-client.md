@@ -1,16 +1,15 @@
-# Date de naissance et Célibataire / Marié(e) : à la création du compte
+# Date de naissance et Célibataire / Marié(e) : demandées dans le sondage du site
 
-Quand un client crée son compte, il doit maintenant écrire sa **date de naissance** et choisir **Célibataire** ou **Marié(e)**. Sans les deux, le compte n'est pas créé et un message dit quoi corriger. Rien n'est deviné : seul ce que le client écrit lui-même est gardé.
+> **Mis à jour le 7 novembre 2026** : ces deux réponses ne sont **plus demandées à la création du compte** (demande du patron : « pour la création de compte, demande seulement l'information sur cette page »). Elles sont demandées ensuite, dans le **petit sondage du site** (carte sur l'accueil, questions 2 et 3, jamais obligatoires) : voir `docs/sondage-client.md`. Le reste de cette page décrit toujours la lecture de la date, l'âge, les messages et le profil.
+
+Le client écrit sa **date de naissance** et choisit **Célibataire** ou **Marié(e)**. Rien n'est deviné : seul ce que le client écrit lui-même est gardé.
 
 ## Ce que voit le client
-Sur « Créer un compte » (page Inscription, et en premier sur l'écran d'entrée quand le compte est obligatoire), dans la partie **Informations obligatoires**, dans cet ordre :
-1. Nom et prénom
-2. Vous êtes * (Homme / Femme)
-3. **🎂 Date de naissance *** : un champ où l'on tape les chiffres, les barres arrivent toutes seules (`25031998` devient `25/03/1998`). Exemple affiché dans le champ.
-4. **💍 Situation *** : deux gros boutons, **🙋 Célibataire** et **💍 Marié(e)** (un seul peut être choisi).
-5. Téléphone, mot de passe
+Dans la carte du sondage (accueil), une question à la fois :
+1. **🎂 Quelle est votre date de naissance ?** : un champ où l'on tape les chiffres, les barres arrivent toutes seules (`25031998` devient `25/03/1998`). Exemple affiché dans le champ.
+2. **💍 Quelle est votre situation ?** : deux gros boutons, **🙋 Célibataire** et **💍 Marié(e)** (un seul peut être choisi).
 
-Messages si quelque chose ne va pas (aucun compte n'est créé) :
+Messages si quelque chose ne va pas (rien n'est enregistré) :
 - Date vide : « Date de naissance manquante — Merci d'écrire votre date de naissance (jour / mois / année). »
 - Date mal écrite : « Écrivez-la ainsi : 25/03/1998 (jour / mois / année). »
 - Date qui n'existe pas (31/02/1998, 29/02/1999…) : « Cette date n'existe pas. »

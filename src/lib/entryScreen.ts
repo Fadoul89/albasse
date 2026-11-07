@@ -1,12 +1,10 @@
 // Écran d'entrée « Créez votre compte » (docs/ecran-entree.md) : la bande « Voici ce qui vous attend » (4 vrais articles à la fois, qui changent toute seule, avec leur vrai prix), les avantages, et
-// l'inscription en 2 étapes. Des fonctions pures, sans réseau : testées dans tests/email/entry-screen.test.ts.
+// l'inscription courte (nom, téléphone, mot de passe). Des fonctions pures, sans réseau : testées dans tests/email/entry-screen.test.ts.
 //
 // Rien n'est inventé : les articles et les prix viennent de la boutique, les avantages sont ceux que le site offre vraiment.
 
 import { adAllowedProducts } from './adSensitive';
 import { WHEEL_ENABLED } from './featureFlags';
-import { genderOf } from './clientGender';
-import { hasBirthColumn, hasMaritalColumn, maritalOf } from './clientBirthMarital';
 import { rootIdOf } from './subCategories';
 
 export const ENTRY_PREVIEW_COUNT = 4;
@@ -135,7 +133,7 @@ export function pickEntryProducts(products: readonly EntryProduct[], categories:
 }
 
 // ---------------------------------------------------------------------------------------------
-// Étape 1 : nom, téléphone, mot de passe, conditions
+// Création du compte : nom, téléphone, mot de passe, conditions (e-mail facultatif). Le reste est demandé ensuite, dans le sondage (lib/clientSurvey)
 // ---------------------------------------------------------------------------------------------
 
 export type StepOneCheck = { ok: true } | { ok: false; title: string; message: string };
@@ -151,29 +149,3 @@ export function checkStepOne(input: { name: string; phone: string; password: str
   if (!input.terms) return { ok: false, title: 'Conditions non acceptées', message: "Merci d'accepter les conditions d'inscription pour continuer." };
   return { ok: true };
 }
-
-// ---------------------------------------------------------------------------------------------
-// Étape 2 : les 3 questions (sexe, date de naissance, situation), obligatoires, juste après la création du compte
-// ---------------------------------------------------------------------------------------------
-
-// Le profil attend-il encore une de ces réponses ? Une colonne absente de la base (script SQL pas lancé) ne se demande pas.
-export function stepTwoMissing(profile: object | null | undefined): boolean {
-  if (!profile) return false;
-  const p = profile as { gender?: unknown; birth_date?: unknown; marital_status?: unknown };
-  if ('gender' in profile && !genderOf(p.gender)) return true;
-  if (hasBirthColumn(profile) && !p.birth_date) return true;
-  if (hasMaritalColumn(profile) && !maritalOf(p.marital_status)) return true;
-  return false;
-}
-
-// Profil pas encore chargé = on attend (l'étape 2 s'affiche déjà, avec un petit chargement) ; sinon : manque-t-il une réponse ?
-export const answersMissingFor = (profile: object | null | undefined): boolean => (profile ? stepTwoMissing(profile) : true);
-
-// L'étape 2 s'affiche seulement si ce téléphone vient de créer son compte avec le formulaire court (« en attente »), qu'on est connecté et qu'il manque une réponse.
-export const stepTwoDue = (input: { pending: boolean; isAuthenticated: boolean; answersMissing: boolean }): boolean =>
-  input.pending && input.isAuthenticated && input.answersMissing;
-
-// L'attente expire au bout de 3 jours (téléphone éteint en pleine inscription) : un ancien compte n'est jamais bloqué par un vieux reste.
-export const STEP_TWO_MAX_AGE_MS = 3 * 24 * 3_600_000;
-export const stepTwoStillValid = (armedAt: number | null | undefined, now: number): boolean =>
-  typeof armedAt === 'number' && Number.isFinite(armedAt) && armedAt <= now + 3_600_000 && now - armedAt < STEP_TWO_MAX_AGE_MS;

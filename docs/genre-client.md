@@ -3,10 +3,9 @@
 Pour bien suivre l'analyse des clients, le site garde maintenant si chaque client est un **homme** ou une **femme**. Rien n'est deviné d'après le prénom : seul le choix du client (ou le vôtre) est gardé. Tant que personne n'a choisi : « Non précisé ».
 
 ## Comment le genre est rempli
-- **Nouveaux comptes** : à l'inscription, « Vous êtes * » (Homme / Femme) est **obligatoire**, juste sous le nom. Un geste.
-- **Clients déjà inscrits** : sur l'accueil, une petite carte de Zara « Pour mieux vous conseiller, vous êtes… » (Homme / Femme). Un geste.
+- **Tous les clients** (7 novembre 2026) : le sexe n'est plus demandé à l'inscription. Il est demandé ensuite, dans le **petit sondage du site** (une carte sur l'accueil, `docs/sondage-client.md`) : « Pour mieux vous conseiller, vous êtes… » (Homme / Femme). Un geste. C'est la 1re question du sondage.
   - « Plus tard » ferme la carte ; elle revient 3 jours après, **trois fois au plus** (puis Zara ne demande plus). Le souvenir est sur le téléphone du client.
-  - La carte n'est montrée ni à l'équipe, ni à un client qui a déjà choisi, ni tant que le script SQL n'est pas lancé.
+  - La carte n'est montrée ni à l'équipe, ni à un client qui a déjà tout répondu, et la question du sexe seulement quand le script SQL est lancé.
   - C'est une carte sur la page d'accueil, pas une fenêtre : elle ne gêne jamais la fenêtre « Télécharge l'app ».
 - **Le client** peut changer à tout moment : Compte › Modifier mon profil › « Vous êtes ».
 - **Vous (administrateur)** : Admin › Clients › le client › Identité › « Genre » (Homme / Femme, ou « Remettre non précisé »). Utile pour corriger.
@@ -27,7 +26,7 @@ Le genre est ajouté à la liste des données de la politique de confidentialit�
 ## Tests
 - Base : `sh tests/sql/run-client-gender.sh` (18 contrôles : le client choisit pour lui-même seulement, valeurs refusées hors homme / femme, l'administrateur passe par la fonction, l'anonyme n'a aucun accès, script rejouable).
 - Règles : `node --import ./tests/zara/register.mjs tests/email/client-gender.test.ts` (35 contrôles : libellés, statistiques par genre, quand Zara demande, formulaire du profil).
-- Navigateur : partie `%` de `tests/zara/zara-ui.test.js` (inscription obligatoire, profil, carte de Zara et ses 3 demandes, Admin › Clients : carte, filtres, fiche).
+- Navigateur : partie `%` de `tests/zara/zara-ui.test.js` (inscription courte, profil, sondage du site, Admin › Clients : carte, filtres, fiche).
 
 ## Voir aussi
 La **date de naissance** et **Célibataire / Marié(e)** suivent le même modèle (obligatoires à l'inscription, modifiables dans le profil, visibles dans Admin › Clients) : voir `docs/naissance-situation-client.md`.

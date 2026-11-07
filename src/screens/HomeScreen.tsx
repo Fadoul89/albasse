@@ -20,7 +20,7 @@ import { CityClock } from '../components/CityClock';
 import { ZaraAdCard } from '../components/ZaraAdCard';
 import { TargetedAdCard } from '../components/TargetedAdCard';
 import { WebPushBanner } from '../components/WebPushBanner';
-import { GenderQuestionCard } from '../components/GenderQuestionCard';
+import { SurveyCard } from '../components/SurveyCard';
 import { fetchOnlineCount, onlineLabel } from '../lib/onlineCount';
 import { coldSeasonActive, coldSeasonPicks } from '../lib/coldSeason';
 import { activeFlash, activePromotions, nextPromoChange } from '../lib/promotions';
@@ -130,8 +130,6 @@ export function HomeScreen() {
         </View>
       </View>
 
-      <GenderQuestionCard />
-
       <View style={styles.independenceBanner}>
         <ChadFlag width={26} height={18} />
         <Text style={styles.independenceText}>
@@ -192,6 +190,9 @@ export function HomeScreen() {
 
       {/* publicité de Zara (si l'admin lui confie les publicités) : un vrai article, des faits vrais seulement */}
       <ZaraAdCard products={products} categories={categories} />
+
+      {/* le petit sondage (docs/sondage-client.md) : juste sous l'annonce de Zara, pour ne pas repousser le haut de l'accueil ni l'annonce */}
+      <SurveyCard />
 
       {showMobileAds && (
         // téléphone : chaque bande de publicité prend toute la largeur, plus haute (les photos se voient en grand)

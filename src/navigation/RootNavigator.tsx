@@ -21,9 +21,6 @@ import { useAuthStore } from '../store/authStore';
 import { useStoreSettings } from '../hooks/useStoreSettings';
 import { mustSignUp, wallCovers } from '../lib/accountWall';
 import { AccountWall } from '../components/AccountWall';
-import { SignupStepTwo } from '../components/SignupStepTwo';
-import { useSignupStepStore } from '../store/signupStepStore';
-import { answersMissingFor, stepTwoDue } from '../lib/entryScreen';
 import { isSinglePage } from '../lib/singlePage';
 import { TabNavigator } from './TabNavigator';
 import { CategoryScreen } from '../screens/CategoryScreen';
@@ -204,17 +201,7 @@ export function RootNavigator() {
   });
   // site « page unique » : ni mur de connexion, ni bandeaux, ni fenêtres, ni Zara (tout cela porte le nom d'Albasse Shopping)
   const showWall = !SINGLE && signUpFirst && wallCovers(routeName);
-  // étape 2 de l'inscription (docs/ecran-entree.md) : juste après la création du compte avec le formulaire court, les 3 questions couvrent la page tant qu'elles
-  // ne sont pas répondues (le compte existe déjà ; si le client ferme le site, elles reviennent à sa prochaine ouverture)
-  const stepTwoPending = useSignupStepStore((s) => s.pending);
-  const answersMissing = useAuthStore((s) => answersMissingFor(s.profile));
-  const showStepTwo = !SINGLE && !showWall && wallCovers(routeName) && stepTwoDue({ pending: stepTwoPending, isAuthenticated, answersMissing });
   const noteRoute = () => setRouteName(navigationRef.getCurrentRoute()?.name);
-
-  // étape 2 de l'inscription : retrouve sur le téléphone si elle était en cours à la dernière fermeture
-  useEffect(() => {
-    useSignupStepStore.getState().hydrate();
-  }, []);
 
   // Parrainage : le code du lien d'invitation (?invite=…) est gardé 30 jours sur le téléphone (docs/parrainage.md)
   useEffect(() => {
@@ -334,13 +321,12 @@ export function RootNavigator() {
             <Stack.Screen name="AdminAffiliateCommissions" component={AdminAffiliateCommissionsScreen} />
           </Stack.Navigator>
           {showWall && <AccountWall />}
-          {showStepTwo && <SignupStepTwo />}
         </View>
         <FavoritesSync />
         <AdminOrderAlert />
         {/* le tutoriel iPhone reste disponible sans compte : la page /installer le demande aux visiteurs qui n'ont pas encore de compte */}
         {!SINGLE && <IosInstallGuide />}
-        {!signUpFirst && !showStepTwo && !SINGLE && (
+        {!signUpFirst && !SINGLE && (
           <>
             <Assistant />
             <SmartPromotionPopup />

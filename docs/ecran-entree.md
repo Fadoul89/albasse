@@ -1,4 +1,4 @@
-# Écran d'entrée : « Voici ce qui vous attend » et inscription en 2 étapes
+# Écran d'entrée : « Voici ce qui vous attend » et inscription courte
 
 Demande du patron (6 novembre 2026), après avoir vu que **les visiteurs arrivent mais ne créent pas de compte** : *« Oui »* à l'idée « l'écran d'entrée qui donne envie ».
 
@@ -17,24 +17,20 @@ Je ne promets aucun chiffre : après la mise en ligne, on compare **« comptes c
    - **Le changement automatique** : jusqu'à **4 jeux** (16 articles), un **nouveau jeu toutes les 5 secondes** (`ENTRY_ROTATE_MS`, `ENTRY_SET_COUNT`), avec un petit fondu et **4 petits points** sous la bande (le point doré = le jeu montré). Un article n'est que dans un seul jeu. Les photos des jeux suivants sont chargées d'avance. Il n'y a jamais un jeu à moitié vide qui remplace un jeu complet : avec moins de 8 articles possibles, la bande reste sur le 1er jeu. Sur un téléphone réglé sur « moins d'animations », la bande ne bouge pas (1er jeu seulement).
    - Seulement des articles en vente (actif, en stock, avec photo et prix). **Jamais un article « Vitalité & Énergie »** (ni ses sous-catégories) : ils sont réservés aux annonces des clients mariés de 32 ans et plus (`lib/adSensitive`). Si la boutique ne répond pas, ou s'il n'y a aucun article dans les deux fourchettes, la bande n'apparaît pas.
 2. **2 avantages, tous vrais** : 💵 paiement à la livraison à N'Djamena · 🎁 Invite 5 amis, gagne un parfum. Aucun pourcentage, aucune urgence inventée. (La pastille « 🎡 Roue de la chance » a été retirée le 6 novembre : la roue est cachée, docs/roue-cachee.md.)
-3. **Étape 1 sur 2** : nom et prénom, téléphone, mot de passe (les trois écrits « (obligatoire) » dans leur case), **adresse e-mail (facultatif)**, case des conditions (les 6 conditions s'ouvrent avec « Lire les conditions d'inscription »). **Le bouton « Créer mon compte » se voit sans défiler** sur un téléphone de 800 px de haut.
-4. **Étape 2 sur 2**, juste après la création du compte : les 3 questions **toujours obligatoires** (Homme/Femme, date de naissance, célibataire/marié), puis les informations facultatives (WhatsApp, profession, ville, pays, adresse ; l'e-mail est à l'étape 1) et la case des notifications (cochée d'office, comme avant), puis « Terminer ».
+3. **« Créer mon compte »** : nom et prénom, téléphone, mot de passe (les trois écrits « (obligatoire) » dans leur case), **adresse e-mail (facultatif)**, case des conditions (les 6 conditions s'ouvrent avec « Lire les conditions d'inscription »). **Le bouton « Créer mon compte » se voit sans défiler** sur un téléphone de 800 px de haut. **C'est tout** : le compte est créé avec ces seules informations.
+   - *Demande du patron (7 novembre 2026) : « Pour la création de compte, demande seulement l'information sur cette page. Les autres, comme le sexe, la date de naissance et le numéro WhatsApp, demande-les comme un sondage à l'intérieur du site. »* L'ancienne « étape 2 » (3 questions obligatoires juste après la création du compte) est **supprimée**. Ces questions sont posées ensuite, dans une petite carte sur l'accueil : **`docs/sondage-client.md`**.
 
 ## Ce qui ne change pas
 - **Le compte reste obligatoire** (interrupteur Admin › Clients).
-- La page « Inscription » complète (`/inscription`, ouverte depuis Zara ou un lien) garde le formulaire en **une seule étape** avec tous les champs.
-- Les anciens clients ne sont jamais bloqués : l'étape 2 ne s'affiche qu'à celui qui vient de créer son compte avec le formulaire court.
-- Le parrainage (« Invité(e) par Amina », `invite_claim`) se fait à l'étape 1, comme avant.
-- La page d'installation de l'application (une seule fois, téléphone sans le raccourci) s'ouvre **après l'étape 2**.
+- La page « Inscription » (`/inscription`, ouverte depuis Zara ou un lien) montre **le même formulaire court** : les deux endroits où l'on crée un compte demandent exactement les mêmes informations.
+- Le parrainage (« Invité(e) par Amina », `invite_claim`) se fait à la création du compte, comme avant.
+- La page d'installation de l'application (une seule fois, téléphone sans le raccourci) s'ouvre **tout de suite après la création du compte**.
 - **Aucun script SQL** : les colonnes existent déjà ; rien n'est ajouté dans la base.
 
 ## Détails qui comptent
-- **Les notifications** ne sont pas activées à l'étape 1 : leur case (cochée d'office, avec le même texte qu'avant) est à l'étape 2. Le patron et le client gardent donc le même consentement qu'avant.
-- **Fermer le site entre les deux étapes** : le compte existe déjà ; un petit repère est gardé sur le téléphone (3 jours au plus) et **les 3 questions reviennent** à la prochaine ouverture, tant qu'elles ne sont pas répondues. Après 3 jours le repère disparaît : un ancien compte n'est jamais bloqué par un vieux reste.
-- **Pendant l'étape 2** : ni Zara ni fenêtre de promotion / roue / installation par-dessus les questions (comme derrière le mur).
-- **Une colonne absente de la base** (script SQL de genre ou de naissance pas lancé) : la question correspondante n'est pas posée et rien n'est écrit. Si rien ne manque, l'étape 2 ne s'affiche pas.
-- **Erreur réseau à l'étape 2** : rien n'est perdu, un message dit de réessayer ; l'étape reste là.
-- Le compte créé à l'étape 1 est compté dans les statistiques (« comptes créés ») comme avant ; seuls les clients qui répondent à l'étape 2 ont Homme/Femme, naissance et situation dans Admin › Clients (les autres : « Non précisé »).
+- **Les notifications** ne sont pas activées à la création du compte : les conditions disent « J'accepte de recevoir les notifications commerciales uniquement si je donne mon accord ». L'accord est demandé dans le sondage (« Voulez-vous recevoir les nouveautés et les offres ? » : Oui, avec plaisir / Non merci). Tant que le client n'a pas répondu « Oui », Zara Marketing ne lui écrit pas.
+- **Plus d'écran qui couvre la page** après la création du compte : le client arrive directement sur la page demandée, avec Zara et les fenêtres habituelles.
+- **Le compte créé est compté** dans les statistiques (« comptes créés ») comme avant ; seuls les clients qui répondent au sondage ont Homme/Femme, naissance, situation dans Admin › Clients (les autres : « Non précisé »).
 
 ## Mesurer (à lancer dans Supabase › SQL Editor, lecture seule)
 ```sql
@@ -48,10 +44,10 @@ from jours j order by j.jour;
 Attention : les chiffres de quelques dizaines de visiteurs par jour bougent beaucoup d'un jour à l'autre ; comparer plusieurs jours.
 
 ## Où est le code
-- Règles pures (articles montrés, avantages, contrôle de l'étape 1, qui doit répondre à l'étape 2, expiration) : `src/lib/entryScreen.ts` (test : `node --import ./tests/zara/register.mjs tests/email/entry-screen.test.ts`).
+- Règles pures (articles montrés, avantages, contrôle du formulaire court) : `src/lib/entryScreen.ts` (test : `node --import ./tests/zara/register.mjs tests/email/entry-screen.test.ts`).
 - Bande d'articles et avantages : `src/components/EntryPreview.tsx` ; écran d'entrée : `src/components/AccountWall.tsx`.
-- Étape 1 : `src/components/RegisterForm.tsx` (propriété `short`) ; étape 2 : `src/components/SignupStepTwo.tsx` ; repère sur le téléphone : `src/store/signupStepStore.ts` ; affichage : `src/navigation/RootNavigator.tsx` (`showStepTwo`).
-- Test dans le navigateur : parties `2` (compte obligatoire, étape 1, étape 2, reprise après fermeture) et `#` (parrainage) de `tests/zara/zara-ui.test.js`.
+- Formulaire court (écran d'entrée et page `/inscription`) : `src/components/RegisterForm.tsx`. Les questions suivantes : `src/components/SurveyCard.tsx` et `src/lib/clientSurvey.ts` (`docs/sondage-client.md`).
+- Test dans le navigateur : parties `2` (compte obligatoire, inscription courte), `#` (parrainage) et `%` (sondage) de `tests/zara/zara-ui.test.js`.
 
 ## Honnêteté
 - Les articles et les prix montrés sont ceux de la boutique, au moment où la page s'ouvre (la bande change entre des articles déjà chargés ; elle ne les relit pas toutes les 5 secondes).

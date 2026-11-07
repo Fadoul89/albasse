@@ -1,18 +1,13 @@
-// Homme / Femme : le genre du client (choix, libellés, statistiques par genre, quand Zara demande une fois, formulaire du profil). Aucun réseau.
+// Homme / Femme : le genre du client (choix, libellés, statistiques par genre, formulaire du profil ; quand le sondage demande : tests/email/client-survey.test.ts). Aucun réseau.
 // Lancer : node --import ./tests/zara/register.mjs tests/email/client-gender.test.ts
 import {
-  ASK_GAP_MS,
-  ASK_MAX,
   GENDERS,
-  NEVER_ASKED,
   averagePerClient,
-  genderAskDue,
   genderLabel,
   genderOf,
   genderSummary,
   hasGenderColumn,
   isGender,
-  parseAskState,
   percent,
 } from '../../src/lib/clientGender.ts';
 import { checkProfileForm, formFromProfile, profileFormChanged } from '../../src/lib/profileEdit.ts';
@@ -65,26 +60,6 @@ const none = genderSummary([]);
 check('aucun client : tout à zéro', none.total === 0 && none.known === 0 && none.buckets.homme.clients === 0 && none.buckets.unknown.revenue === 0);
 check('pourcentages : 5 sur 8 = 63 %, rien à diviser = « — »', percent(5, 8) === '63 %' && percent(0, 0) === '—' && percent(1, 3) === '33 %');
 check('moyenne par client : 90 000 / 3 = 30 000 ; sans client = 0', averagePerClient(90000, 3) === 30000 && averagePerClient(5, 0) === 0);
-
-// ---- quand Zara demande une fois (carte sur l'accueil)
-const DAY = 86_400_000;
-const T = Date.parse('2026-11-01T10:00:00Z');
-const client = { is_admin: false, gender: null };
-check('jamais demandé, colonne présente : la carte est montrée', genderAskDue(client, NEVER_ASKED, T));
-check('colonne absente (script SQL pas lancé) : jamais montrée', !genderAskDue({ is_admin: false }, NEVER_ASKED, T));
-check('déjà choisi : jamais montrée', !genderAskDue({ is_admin: false, gender: 'femme' }, NEVER_ASKED, T) && !genderAskDue({ is_admin: false, gender: 'homme' }, NEVER_ASKED, T));
-check('équipe (administrateur) : jamais montrée', !genderAskDue({ is_admin: true, gender: null }, NEVER_ASKED, T));
-check('pas de profil (visiteur) : jamais montrée', !genderAskDue(null, NEVER_ASKED, T) && !genderAskDue(undefined, NEVER_ASKED, T));
-check('« Plus tard » il y a 1 jour : pas encore', !genderAskDue(client, { count: 1, last: T - DAY }, T));
-check('« Plus tard » il y a 2 j 23 h : pas encore', !genderAskDue(client, { count: 1, last: T - 3 * DAY + 3600_000 }, T));
-check('3 jours après : la carte revient', genderAskDue(client, { count: 1, last: T - ASK_GAP_MS }, T));
-check('la 3e fois est la dernière : 3 demandes faites, Zara ne demande plus', ASK_MAX === 3 && !genderAskDue(client, { count: 3, last: T - 30 * DAY }, T) && genderAskDue(client, { count: 2, last: T - 4 * DAY }, T));
-check('date dans le futur (horloge changée) : on attend', !genderAskDue(client, { count: 1, last: T + DAY }, T));
-
-// ---- ce que le téléphone a gardé
-check('texte correct relu', JSON.stringify(parseAskState('{"count":2,"last":1700000000000}')) === '{"count":2,"last":1700000000000}');
-check('rien de gardé : jamais demandé', parseAskState(null).count === 0 && parseAskState(undefined).count === 0 && parseAskState('').count === 0);
-check('texte illisible ou faux : jamais demandé', parseAskState('pas du json').count === 0 && parseAskState('{"count":"x"}').count === 0 && parseAskState('{"count":-1,"last":5}').count === 0 && parseAskState('[]').count === 0);
 
 // ---- formulaire du profil
 const profile = (extra: Partial<Profile> = {}) =>
