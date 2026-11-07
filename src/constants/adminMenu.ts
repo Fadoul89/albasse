@@ -24,6 +24,7 @@ export type AdminRoute = Extract<
   | 'AdminBestLeads'
   | 'AdminWheel'
   | 'AdminInvites'
+  | 'AdminPartners'
 >;
 
 export interface AdminMenuItem {
@@ -82,6 +83,7 @@ export const ADMIN_MENU_GROUPS: AdminMenuGroup[] = [
       { icon: '📦', label: 'Commandes et factures', route: 'AdminOrders' },
       { icon: '🛠️', label: 'Produits', route: 'AdminProducts' },
       { icon: '🏷️', label: 'Catégories', route: 'AdminCategories' },
+      { icon: '🏪', label: 'Mes partenaires (privé)', route: 'AdminPartners' },
       { icon: '✈️', label: 'Voyage', route: 'AdminTravelRequests' },
     ],
   },

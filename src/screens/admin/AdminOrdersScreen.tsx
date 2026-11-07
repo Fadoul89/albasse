@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, TextInput, ScrollView, Platform } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Pressable, TextInput, ScrollView, Platform, Linking } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
@@ -17,6 +17,8 @@ import { countsAsSale, salesTotal } from '../../lib/salesRules';
 import { flagDeadlineIso, formatSlot, waitsForAppointment } from '../../lib/scheduledDelivery';
 import { SCHEDULED_DELIVERY } from '../../constants/shopRules';
 import { GIFT_ADMIN_BADGE, hasChatGift } from '../../lib/assistantWords';
+import { fetchPartnerData, type PartnerData } from '../../lib/partnersData';
+import { partnerByProduct, partnerCallLink, partnerLine, partnerWhatsappLink } from '../../lib/partners';
 import type { Order, OrderStatus } from '../../types';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
@@ -95,6 +97,20 @@ export function AdminOrdersScreen() {
       });
     });
   }, [profile]);
+
+  // À qui appartient chaque article commandé (partenaires : confidentiel, administrateur seulement, docs/partenaires.md). Pas disponible = aucune ligne de plus.
+  const [partnerData, setPartnerData] = useState<PartnerData | null>(null);
+  useEffect(() => {
+    if (!isSupabaseConfigured || !profile?.is_admin) return;
+    let alive = true;
+    fetchPartnerData().then((d) => {
+      if (alive) setPartnerData(d);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [profile?.is_admin]);
+  const partnerOf = useMemo(() => (partnerData ? partnerByProduct(partnerData.partners, partnerData.links) : null), [partnerData]);
 
   if (!profile?.is_admin) {
     return (
@@ -264,6 +280,33 @@ export function AdminOrdersScreen() {
                     <Text style={styles.itemMeta}>
                       {[oi.color, oi.size].filter(Boolean).join(' · ') || 'Standard'} · x{oi.quantity}
                     </Text>
+                    {(() => {
+                      const ap = partnerOf?.get(oi.product_id);
+                      if (!ap) return null;
+                      const wa = partnerWhatsappLink(ap.partner, { name: oi.product_name, quantity: oi.quantity });
+                      const call = partnerCallLink(ap.partner);
+                      return (
+                        <View testID="admin-order-partner-box">
+                          <Text style={styles.partnerLine} testID="admin-order-partner">
+                            {partnerLine(ap)}
+                          </Text>
+                          {(wa || call) && (
+                            <View style={styles.partnerBtns}>
+                              {call && (
+                                <Pressable style={styles.partnerBtn} onPress={() => Linking.openURL(call)} accessibilityRole="button" testID="admin-order-partner-call">
+                                  <Text style={styles.partnerBtnText}>📞 Appeler</Text>
+                                </Pressable>
+                              )}
+                              {wa && (
+                                <Pressable style={[styles.partnerBtn, styles.partnerBtnWa]} onPress={() => Linking.openURL(wa)} accessibilityRole="button" testID="admin-order-partner-whatsapp">
+                                  <Text style={styles.partnerBtnText}>💬 Prévenir le partenaire</Text>
+                                </Pressable>
+                              )}
+                            </View>
+                          )}
+                        </View>
+                      );
+                    })()}
                   </View>
                   <Text style={styles.itemPrice}>{formatXAF(oi.unit_price * oi.quantity)}</Text>
                 </View>
@@ -385,6 +428,11 @@ const styles = StyleSheet.create({
   itemImagePlaceholder: { width: 44, height: 52, borderRadius: 6, backgroundColor: colors.panel },
   itemName: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 13 },
   itemMeta: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11, marginTop: 2 },
+  partnerLine: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 11.5, lineHeight: 16, marginTop: 4 },
+  partnerBtns: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 5 },
+  partnerBtn: { borderWidth: 1, borderColor: colors.border, borderRadius: 14, paddingHorizontal: 9, paddingVertical: 4 },
+  partnerBtnWa: { backgroundColor: 'rgba(37,211,102,0.18)', borderColor: 'rgba(37,211,102,0.5)' },
+  partnerBtnText: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 11 },
   itemPrice: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 12 },
   paymentMethod: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 12, marginBottom: 4 },
   total: { color: colors.goldLight, fontFamily: fonts.bodyBold, fontSize: 15 },

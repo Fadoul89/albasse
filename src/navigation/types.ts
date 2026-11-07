@@ -52,6 +52,7 @@ export type RootStackParamList = {
   AdminWheel: undefined;
   InviteFriends: undefined;
   AdminInvites: undefined;
+  AdminPartners: undefined;
 };
 
 export type TabParamList = {

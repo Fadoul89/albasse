@@ -46,6 +46,7 @@ type AdminRoute = Extract<
   | 'AdminBestLeads'
   | 'AdminWheel'
   | 'AdminInvites'
+  | 'AdminPartners'
 >;
 
 const ADMIN_MENU_ITEMS: { icon: string; label: string; route: AdminRoute }[] = [
@@ -70,6 +71,7 @@ const ADMIN_MENU_ITEMS: { icon: string; label: string; route: AdminRoute }[] = [
   { icon: '🎯', label: 'Meilleurs clients potentiels', route: 'AdminBestLeads' },
   { icon: '🎡', label: 'Roue de la chance', route: 'AdminWheel' },
   { icon: '🎁', label: 'Parrainages (5 amis = 1 parfum)', route: 'AdminInvites' },
+  { icon: '🏪', label: 'Mes partenaires (privé)', route: 'AdminPartners' },
 ];
 
 export function AccountScreen() {

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, Pressable, TextInput, Switch } from 'react-native';
 import { Image } from 'expo-image';
 import { useNavigation } from '@react-navigation/native';
@@ -15,6 +15,8 @@ import { useToastStore } from '../../store/toastStore';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { StoreSettingToggle } from '../../components/StoreSettingToggle';
+import { fetchPartnerData, type PartnerData } from '../../lib/partnersData';
+import { partnerByProduct } from '../../lib/partners';
 import type { Product } from '../../types';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
@@ -53,6 +55,20 @@ export function AdminProductsScreen() {
   const [pendingDelete, setPendingDelete] = useState<Product | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
+
+  // le partenaire de chaque article (confidentiel, administrateur seulement, docs/partenaires.md) : pas disponible = rien de plus affiché
+  const [partnerData, setPartnerData] = useState<PartnerData | null>(null);
+  useEffect(() => {
+    if (!isSupabaseConfigured || !profile?.is_admin) return;
+    let alive = true;
+    fetchPartnerData().then((d) => {
+      if (alive) setPartnerData(d);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [profile?.is_admin]);
+  const partnerOf = useMemo(() => (partnerData ? partnerByProduct(partnerData.partners, partnerData.links) : null), [partnerData]);
 
   if (!profile?.is_admin) {
     return (
@@ -224,6 +240,11 @@ export function AdminProductsScreen() {
                   {item.is_flash_sale ? ' · ⚡ Flash' : ''}
                   {!item.is_active ? ' · ⚪ Inactif' : ''}
                 </Text>
+                {partnerOf?.get(item.id) && (
+                  <Text style={styles.partnerTag} numberOfLines={1} testID="admin-product-partner">
+                    🤝 {partnerOf.get(item.id)!.partner.name}
+                  </Text>
+                )}
               </View>
               <View style={styles.actions}>
                 <Pressable onPress={() => navigation.navigate('AdminProductForm', { productId: item.id })}>
@@ -369,6 +390,7 @@ const styles = StyleSheet.create({
   thumb: { width: 56, height: 68, borderRadius: radius.sm },
   name: { color: colors.cream, fontFamily: fonts.bodySemiBold, fontSize: 13 },
   meta: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11, marginTop: 3 },
+  partnerTag: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 11, marginTop: 3 },
   actions: { alignItems: 'flex-end', gap: 6 },
   editLink: { color: colors.gold, fontFamily: fonts.bodyMedium, fontSize: 12 },
   deleteLink: { color: colors.red, fontFamily: fonts.bodyMedium, fontSize: 12 },

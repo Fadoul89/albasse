@@ -6081,6 +6081,289 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     }
   }
 
+  if (PARTS.includes('Ω')) {
+    console.log("\n== Ω Mes partenaires (Admin) : liste, ajout / modification / suppression, partenaire de l'article, ligne sur les commandes, script SQL pas lancé, jamais visible des clients (fausse base)");
+    const uidO = '77777777-7777-4777-8777-777777777777';
+    const JWTO = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3Nzc3Nzc3Ny03Nzc3LTQ3NzctODc3Ny03Nzc3Nzc3Nzc3NzciLCJleHAiOjQxMDI0NDQ4MDAsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.c2ln';
+    const SKO = 'sb-xtitsmmccpkelxfjyqyh-auth-token';
+    const CORSO = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*', 'access-control-expose-headers': '*' };
+    const jsonO = (route, body, status = 200, extra = {}) => route.fulfill({ status, headers: { 'content-type': 'application/json', ...CORSO, ...extra }, body: JSON.stringify(body) });
+    const adminO = (isAdmin = true) => {
+      const auth = { id: uidO, aud: 'authenticated', role: 'authenticated', email: 'admin@example.com', app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' };
+      const token = { access_token: JWTO, refresh_token: 'fake-refresh', token_type: 'bearer', expires_in: 3600, expires_at: 4102444800, user: auth };
+      return { auth, token, session: JSON.stringify(token), editable: false, patches: [], profile: { id: uidO, email: 'admin@example.com', full_name: 'Admin Albasse', phone: '66123456', whatsapp_number: null, profession: null, region: null, country: 'Tchad', address: null, loyalty_points: 0, banned: false, role: isAdmin ? 'admin' : 'customer', is_admin: isAdmin, is_affiliate: false } };
+    };
+    const PID = { montre: 'aaaaaaaa-1111-4111-8111-000000000001', parfum: 'aaaaaaaa-1111-4111-8111-000000000002', sac: 'aaaaaaaa-1111-4111-8111-000000000003' };
+    const PRT = { mahamat: 'bbbbbbbb-2222-4222-8222-000000000001', amina: 'bbbbbbbb-2222-4222-8222-000000000002' };
+    const CATO = { id: 'cccccccc-3333-4333-8333-000000000001', name: 'Montres', slug: 'montres', icon: '⌚', image_url: null, sort_order: 1, parent_id: null, created_at: '2026-01-01T00:00:00Z' };
+    const prodO = (id, name, price) => ({ id, name, slug: name.toLowerCase().replace(/\W+/g, '-'), description: 'Description de test', price, compare_at_price: null, stock: 10, images: ['https://example.com/a.jpg'], colors: [], sizes: [], category_id: CATO.id, rating: 0, review_count: 0, is_flash_sale: false, flash_sale_ends_at: null, is_active: true, notify_on_publish: false, affiliate_commission_rate: null, likes_count: 0, old_price_saved: null, created_at: '2026-10-01T00:00:00Z' });
+    const itemO = (pid, name, qty) => ({ product_id: pid, product_name: name, product_image: 'https://example.com/a.jpg', unit_price: 11000, quantity: qty, color: null, size: null });
+    const orderO = (id, n, items) => ({ id, user_id: null, order_number: n, items, total: 22000, status: 'pending', payment_method: 'cash_on_delivery', shipping_name: 'Aïcha Moussa', shipping_phone: '66111111', shipping_address: 'Quartier Farcha', shipping_city: "N'Djamena", created_at: '2026-11-06T10:00:00Z', is_flagged_fake: false, gift_wrap: false, loyalty_discount: 0, delivery_type: 'normal', scheduled_for: null, notes: null });
+    // la fausse base : se comporte comme la vraie (ajout, modification, suppression, suppression en cascade)
+    const makeDb = ({ missing = false } = {}) => ({
+      missing,
+      partners: [
+        { id: PRT.mahamat, name: 'Mahamat Ali', phone: '66 12 34 56', note: 'Marché de Dembé', created_at: '2026-10-01T00:00:00Z' },
+        { id: PRT.amina, name: 'Boutique Amina', phone: null, note: null, created_at: '2026-10-02T00:00:00Z' },
+      ],
+      links: [
+        { product_id: PID.montre, partner_id: PRT.mahamat, note: 'Prix chez lui : 8 000' },
+        { product_id: PID.sac, partner_id: PRT.amina, note: null },
+      ],
+      products: [prodO(PID.montre, 'Montre KEEP MOVING', 11000), prodO(PID.parfum, 'Parfum Oud', 22000), prodO(PID.sac, 'Sac doré', 30000)],
+      orders: [orderO('dddddddd-4444-4444-8444-000000000001', 101, [itemO(PID.montre, 'Montre KEEP MOVING', 2), itemO(PID.parfum, 'Parfum Oud', 1)]), orderO('dddddddd-4444-4444-8444-000000000002', 102, [itemO(PID.sac, 'Sac doré', 1)])],
+      calls: [],
+    });
+    const MISSING = { code: 'PGRST205', message: "Could not find the table 'public.partners' in the schema cache" };
+    const openAdmin = async (db, path, readyTestId, { admin = true } = {}) => {
+      const fu = adminO(admin);
+      const v = await newVisitor(phone, { storage: { [SKO]: fu.session }, fakeUser: fu, fakeStore: { waOrder: true, accountRequired: false, patches: [] } });
+      v.db = db;
+      v.partnerRequests = [];
+      await v.page.route(/\/rest\/v1\//, (route) => {
+        const req = route.request();
+        const u = new URL(req.url());
+        if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORSO, body: '' });
+        const t = u.pathname.replace('/rest/v1/', '');
+        const method = req.method();
+        const body = (() => { try { return JSON.parse(req.postData() || 'null'); } catch { return null; } })();
+        const idEq = (u.searchParams.get('id') || '').replace(/^eq\./, '');
+        const prodEq = (u.searchParams.get('product_id') || '').replace(/^eq\./, '');
+        if (t === 'partners' || t === 'product_partners') {
+          v.partnerRequests.push({ method, t, search: u.search, body });
+          db.calls.push({ method, t, search: u.search, body });
+          if (db.missing) return jsonO(route, MISSING, 404);
+        }
+        if (t === 'partners') {
+          if (method === 'GET') return jsonO(route, db.partners);
+          if (method === 'POST') {
+            const row = { id: 'bbbbbbbb-2222-4222-8222-0000000000' + String(10 + db.partners.length), created_at: '2026-11-07T08:00:00Z', ...body };
+            db.partners.push(row);
+            return jsonO(route, row, 201);
+          }
+          if (method === 'PATCH') { db.partners = db.partners.map((x) => (x.id === idEq ? { ...x, ...body } : x)); return route.fulfill({ status: 204, headers: CORSO, body: '' }); }
+          if (method === 'DELETE') { db.partners = db.partners.filter((x) => x.id !== idEq); db.links = db.links.filter((l) => l.partner_id !== idEq); return route.fulfill({ status: 204, headers: CORSO, body: '' }); }
+        }
+        if (t === 'product_partners') {
+          if (method === 'GET') return jsonO(route, db.links);
+          if (method === 'POST') { const rows = Array.isArray(body) ? body : [body]; for (const r of rows) { db.links = db.links.filter((l) => l.product_id !== r.product_id); db.links.push({ note: null, ...r }); } return route.fulfill({ status: 201, headers: CORSO, body: '' }); }
+          if (method === 'DELETE') { db.links = db.links.filter((l) => l.product_id !== prodEq); return route.fulfill({ status: 204, headers: CORSO, body: '' }); }
+        }
+        if (t === 'products') {
+          if (method === 'GET') return jsonO(route, db.products);
+          if (method === 'POST') { db.calls.push({ method, t: 'products-insert', body }); return jsonO(route, { id: 'aaaaaaaa-1111-4111-8111-000000000099' }, 201); }
+          if (method === 'PATCH') { db.calls.push({ method, t: 'products-update', search: u.search, body }); return route.fulfill({ status: 204, headers: CORSO, body: '' }); }
+        }
+        if (t === 'categories') return jsonO(route, [CATO]);
+        if (t === 'orders' && method === 'GET') return jsonO(route, db.orders);
+        if (t === 'rpc/auto_flag_stale_orders') return jsonO(route, null);
+        if (['affiliate_commissions', 'visitor_sessions', 'product_views', 'cart_events', 'favorites', 'product_slug_history', 'reviews'].includes(t)) return jsonO(route, []);
+        return route.fallback();
+      });
+      await v.page.goto(`${BASE}${path}`, { waitUntil: 'load' });
+      await v.page.getByTestId(readyTestId).first().waitFor({ timeout: 30000 });
+      await sleep(1500);
+      return v;
+    };
+    const shown = (pg, text) => pg.getByText(text, { exact: true }).locator('visible=true').first();
+    const rowByName = (pg, name) => pg.getByTestId('partner-row').filter({ hasText: name });
+    const calls = (db, method, t) => db.calls.filter((c) => c.method === method && c.t === t);
+
+    // --- a. la page « Mes partenaires » : la liste, le numéro, les articles de chacun
+    {
+      const db = makeDb();
+      const v = await openAdmin(db, '/admin/partenaires', 'partners-privacy');
+      check('Mes partenaires : « cette liste est à vous seul » (les clients ne voient jamais à qui appartient un article)', /à vous seul[\s\S]*jamais/.test(await v.page.getByTestId('partners-privacy').innerText()));
+      check('2 partenaires affichés, chacun avec son nombre d\'articles (« 1 article »)', (await v.page.getByTestId('partner-row').count()) === 2 && (await rowByName(v.page, 'Mahamat Ali').getByTestId('partner-articles-count').innerText()).trim() === '1 article', await v.page.getByTestId('partner-row').allInnerTexts());
+      const mah = rowByName(v.page, 'Mahamat Ali');
+      check('Mahamat : numéro joli « +235 66 12 34 56 » et petit mot', /\+235 66 12 34 56/.test(await mah.innerText()) && /Marché de Dembé/.test(await mah.innerText()));
+      check('Mahamat : boutons Appeler et WhatsApp ; Boutique Amina (sans numéro) : aucun des deux', (await mah.getByTestId('partner-call').count()) === 1 && (await mah.getByTestId('partner-whatsapp').count()) === 1 && (await rowByName(v.page, 'Boutique Amina').getByTestId('partner-call').count()) === 0 && (await rowByName(v.page, 'Boutique Amina').getByTestId('partner-whatsapp').count()) === 0);
+      await mah.getByTestId('partner-articles-toggle').click();
+      await sleep(600);
+      const arts = await mah.getByTestId('partner-article-item').allInnerTexts();
+      check('« Ses articles » : la montre, avec son petit message privé', arts.length === 1 && /Montre KEEP MOVING — Prix chez lui : 8 000/.test(arts[0].replace(/\s+/g, ' ')), arts);
+      await v.page.screenshot({ path: path.join(OUT, 'Ω-a-partenaires.png'), fullPage: true });
+
+      // ajout : nom obligatoire, numéro valide
+      await v.page.getByTestId('partners-form-add').click();
+      await sleep(700);
+      check('ajout sans nom : refusé par le site, rien n\'est envoyé', calls(db, 'POST', 'partners').length === 0 && (await v.page.getByText(/donner le nom du partenaire/).count()) >= 1);
+      await v.page.getByTestId('partners-form-name').fill('Idriss Hassan');
+      await v.page.getByTestId('partners-form-phone').fill('abc');
+      await v.page.getByTestId('partners-form-add').click();
+      await sleep(700);
+      check('ajout avec un faux numéro : refusé, rien n\'est envoyé', calls(db, 'POST', 'partners').length === 0 && (await v.page.getByText(/numéro de téléphone valide/).count()) >= 1);
+      await v.page.getByTestId('partners-form-phone').fill('99 88 77 66');
+      await v.page.getByTestId('partners-form-note').fill('  Quartier Moursal  ');
+      await v.page.getByTestId('partners-form-add').click();
+      await sleep(1500);
+      const post = calls(db, 'POST', 'partners');
+      check('ajout : la base reçoit nom, numéro et petit mot propres (espaces retirés)', post.length === 1 && post[0].body.name === 'Idriss Hassan' && post[0].body.phone === '99 88 77 66' && post[0].body.note === 'Quartier Moursal' && Object.keys(post[0].body).sort().join() === 'name,note,phone', post);
+      check('ajout : le partenaire apparaît dans la liste (3) et le formulaire est vidé', (await v.page.getByTestId('partner-row').count()) === 3 && (await v.page.getByTestId('partners-form-name').inputValue()) === '');
+      // modification
+      const idr = rowByName(v.page, 'Idriss Hassan');
+      await idr.getByTestId('partner-edit').click();
+      await idr.getByTestId('partner-edit-name').fill('Idriss H.');
+      await idr.getByTestId('partner-edit-save').click();
+      await sleep(1500);
+      const patch = calls(db, 'PATCH', 'partners');
+      check('modification : la base reçoit le nouveau nom pour le bon partenaire', patch.length === 1 && patch[0].body.name === 'Idriss H.' && /id=eq\./.test(patch[0].search) && (await rowByName(v.page, 'Idriss H.').count()) === 1, patch);
+      // suppression : confirmation qui dit que les articles ne sont pas touchés
+      await rowByName(v.page, 'Mahamat Ali').getByTestId('partner-delete').click();
+      await sleep(600);
+      const dlg = await v.page.locator('body').innerText();
+      check('suppression : la fenêtre dit « ne sont PAS supprimés » et « 1 article »', /Supprimer ce partenaire/.test(dlg) && /1 article ne sont PAS supprimés|1 article[\s\S]*ne sont PAS supprimés/.test(dlg.replace(/\s+/g, ' ')), dlg.slice(0, 300));
+      await v.page.getByText('Annuler', { exact: true }).last().click();
+      await sleep(400);
+      check('« Annuler » : rien n\'est supprimé', calls(db, 'DELETE', 'partners').length === 0 && (await v.page.getByTestId('partner-row').count()) === 3);
+      await rowByName(v.page, 'Mahamat Ali').getByTestId('partner-delete').click();
+      await sleep(500);
+      await v.page.getByText('Supprimer', { exact: true }).last().click();
+      await sleep(1500);
+      const del = calls(db, 'DELETE', 'partners');
+      check('suppression confirmée : la base supprime ce partenaire (et ses liens, jamais les articles)', del.length === 1 && del[0].search.includes(PRT.mahamat) && (await v.page.getByTestId('partner-row').count()) === 2 && db.links.every((l) => l.partner_id !== PRT.mahamat) && db.products.length === 3, del);
+      check('aucune erreur (partenaires)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+
+    // --- b. script SQL pas lancé : explication claire, rien d'autre
+    {
+      const db = makeDb({ missing: true });
+      const v = await openAdmin(db, '/admin/partenaires', 'partners-unavailable');
+      check('script pas lancé : « lancez add-partners.sql », aucun formulaire ni liste', /add-partners\.sql/.test(await v.page.getByTestId('partners-unavailable').innerText()) && (await v.page.getByTestId('partners-form-add').count()) === 0 && (await v.page.getByTestId('partner-row').count()) === 0);
+      await v.ctx.close();
+    }
+
+    // --- c. le formulaire d'article : choisir, changer, retirer le partenaire
+    {
+      const db = makeDb();
+      // article sans partenaire : on choisit Mahamat et un petit message
+      const v = await openAdmin(db, `/admin/produits/edition?productId=${PID.parfum}`, 'product-partner-box');
+      check('formulaire d\'article : la partie « Partenaire de l\'article » dit qu\'elle est visible par vous seul', /vous seul[\s\S]*jamais montré aux clients/.test((await v.page.getByTestId('product-partner-box').innerText()).replace(/\s+/g, ' ')));
+      check('formulaire d\'article : « Aucun » est choisi au départ, 2 partenaires proposés', (await v.page.getByTestId('product-partner-none').count()) === 1 && (await v.page.getByTestId(`product-partner-${PRT.mahamat}`).count()) === 1 && (await v.page.getByTestId(`product-partner-${PRT.amina}`).count()) === 1 && (await v.page.getByTestId('product-partner-note').count()) === 0);
+      await v.page.getByTestId(`product-partner-${PRT.mahamat}`).click();
+      await v.page.getByTestId('product-partner-note').fill('  Il apporte 5 pièces par semaine ');
+      await v.page.getByTestId('product-partner-box').scrollIntoViewIfNeeded();
+      await v.page.screenshot({ path: path.join(OUT, 'Ω-c-formulaire-article.png') });
+      await shown(v.page, 'Enregistrer les modifications').click();
+      await sleep(2500);
+      const up = calls(db, 'PATCH', 'products-update');
+      const link = db.calls.filter((c) => c.t === 'product_partners' && c.method === 'POST');
+      check('enregistrer : l\'article est enregistré ET le lien est envoyé (article, partenaire, petit message propre)', up.length === 1 && link.length === 1 && link[0].body.product_id === PID.parfum && link[0].body.partner_id === PRT.mahamat && link[0].body.note === 'Il apporte 5 pièces par semaine' && /on_conflict=product_id/.test(link[0].search), link);
+      check('…le lien est dans la base', db.links.some((l) => l.product_id === PID.parfum && l.partner_id === PRT.mahamat));
+      check('…et le lien n\'est PAS envoyé avec les données de l\'article (la table publique « products » ne reçoit aucune colonne de partenaire)', up.length === 1 && !('partner_id' in up[0].body) && !('partner' in up[0].body) && !JSON.stringify(up[0].body).includes('Mahamat'), up[0] && up[0].body);
+      await v.ctx.close();
+    }
+    {
+      // article avec partenaire : déjà choisi, on le retire (« Aucun »)
+      const db = makeDb();
+      const v = await openAdmin(db, `/admin/produits/edition?productId=${PID.montre}`, 'product-partner-box');
+      check('article déjà associé : Mahamat est déjà choisi et son petit message est là', (await v.page.getByTestId(`product-partner-${PRT.mahamat}`).count()) === 1 && (await v.page.getByTestId('product-partner-note').inputValue()) === 'Prix chez lui : 8 000');
+      await v.page.getByTestId('product-partner-none').click();
+      await sleep(300);
+      check('« Aucun (article à moi) » : le petit message disparaît du formulaire', (await v.page.getByTestId('product-partner-note').count()) === 0);
+      await shown(v.page, 'Enregistrer les modifications').click();
+      await sleep(2500);
+      const del = db.calls.filter((c) => c.t === 'product_partners' && c.method === 'DELETE');
+      check('enregistrer : le lien de cet article est supprimé (et lui seul)', del.length === 1 && del[0].search.includes(PID.montre) && !db.links.some((l) => l.product_id === PID.montre) && db.links.some((l) => l.product_id === PID.sac), del);
+      await v.ctx.close();
+    }
+    {
+      // aucun changement de partenaire : aucune écriture sur les tables des partenaires
+      const db = makeDb();
+      const v = await openAdmin(db, `/admin/produits/edition?productId=${PID.sac}`, 'product-partner-box');
+      await shown(v.page, 'Enregistrer les modifications').click();
+      await sleep(2500);
+      check('rien changé côté partenaire : l\'article est enregistré, aucune écriture sur les partenaires', calls(db, 'PATCH', 'products-update').length === 1 && db.calls.filter((c) => c.t === 'product_partners' && c.method !== 'GET').length === 0);
+      await v.ctx.close();
+    }
+    {
+      // script pas lancé : le formulaire d'article est exactement celui d'avant
+      const db = makeDb({ missing: true });
+      const v = await openAdmin(db, `/admin/produits/edition?productId=${PID.parfum}`, 'product-category-montres');
+      check('script pas lancé : aucune partie « Partenaire » dans le formulaire d\'article', (await v.page.getByTestId('product-partner-box').count()) === 0);
+      await shown(v.page, 'Enregistrer les modifications').click();
+      await sleep(2500);
+      check('script pas lancé : l\'article s\'enregistre quand même, sans toucher aux partenaires', calls(db, 'PATCH', 'products-update').length === 1 && db.calls.filter((c) => c.t === 'product_partners' && c.method !== 'GET').length === 0);
+      await v.ctx.close();
+    }
+    {
+      // nouvel article : la base rend son identifiant, le lien est créé avec lui
+      const db = makeDb();
+      const v = await openAdmin(db, '/admin/produits/edition', 'product-partner-box');
+      await v.page.getByText('Nom', { exact: true }).first().locator('xpath=following::input[1]').fill('Nouvel article');
+      await v.page.getByText('Prix (FCFA)', { exact: true }).first().locator('xpath=following::input[1]').fill('12000');
+      await v.page.getByTestId(`product-partner-${PRT.amina}`).click();
+      await shown(v.page, 'Créer le produit').click();
+      await sleep(2500);
+      const ins = db.calls.filter((c) => c.t === 'products-insert');
+      const link = db.calls.filter((c) => c.t === 'product_partners' && c.method === 'POST');
+      check('nouvel article : créé, puis lié à Boutique Amina avec l\'identifiant rendu par la base', ins.length === 1 && link.length === 1 && link[0].body.product_id === 'aaaaaaaa-1111-4111-8111-000000000099' && link[0].body.partner_id === PRT.amina && link[0].body.note === null, { ins: ins.length, link });
+      await v.ctx.close();
+    }
+
+    // --- d. les commandes : à qui appartient chaque article
+    {
+      const db = makeDb();
+      const v = await openAdmin(db, '/admin/commandes', 'admin-order-number');
+      const lines = await v.page.getByTestId('admin-order-partner').allInnerTexts();
+      check('commandes : sous la montre « 🤝 Partenaire : Mahamat Ali · +235 66 12 34 56 — Prix chez lui : 8 000 »', lines.some((t) => t.replace(/\s+/g, ' ') === '🤝 Partenaire : Mahamat Ali · +235 66 12 34 56 — Prix chez lui : 8 000'), lines);
+      check('commandes : sous le sac « 🤝 Partenaire : Boutique Amina » ; aucune ligne sous le parfum (à vous) : 2 lignes en tout', lines.some((t) => t.trim() === '🤝 Partenaire : Boutique Amina') && lines.length === 2, lines);
+      const cardA = v.page.locator('[data-testid="admin-order-partner-box"]').first();
+      const [popup] = await Promise.all([v.ctx.waitForEvent('page', { timeout: 10000 }), cardA.getByTestId('admin-order-partner-whatsapp').click()]);
+      await popup.waitForLoadState('domcontentloaded').catch(() => {});
+      const wurl = popup.url();
+      await popup.close();
+      const wtext = decodeURIComponent(wurl.split('text=')[1] || '');
+      check('« Prévenir le partenaire » : WhatsApp du partenaire avec l\'article et la quantité, sans aucune information du client', wurl.startsWith('https://wa.me/23566123456?text=') && /« Montre KEEP MOVING » × 2/.test(wtext) && !/Aïcha|66111111|Farcha|FCFA|Djamena/.test(wtext), wtext);
+      check('Boutique Amina (sans numéro) : ni « Appeler » ni « Prévenir »', (await v.page.getByTestId('admin-order-partner-call').count()) === 1 && (await v.page.getByTestId('admin-order-partner-whatsapp').count()) === 1);
+      await v.page.screenshot({ path: path.join(OUT, 'Ω-d-commandes.png'), fullPage: true });
+      await v.ctx.close();
+    }
+    {
+      const db = makeDb({ missing: true });
+      const v = await openAdmin(db, '/admin/commandes', 'admin-order-number');
+      check('script pas lancé : les 2 commandes s\'affichent comme avant, sans aucune ligne « Partenaire »', (await v.page.getByTestId('admin-order-number').count()) === 2 && (await v.page.getByTestId('admin-order-partner').count()) === 0);
+      await v.ctx.close();
+    }
+
+    // --- e) la liste des articles de l'administrateur
+    {
+      const db = makeDb();
+      const v = await openAdmin(db, '/admin/produits', 'admin-product-partner');
+      const tags = await v.page.getByTestId('admin-product-partner').allInnerTexts();
+      check('liste des articles (administrateur) : « 🤝 Mahamat Ali » sur la montre, « 🤝 Boutique Amina » sur le sac, rien sur le parfum', tags.length === 2 && tags.some((t) => /Mahamat Ali/.test(t)) && tags.some((t) => /Boutique Amina/.test(t)), tags);
+      await v.ctx.close();
+    }
+
+    // --- f) JAMAIS visible des clients : ni page d'article, ni accueil, ni page des partenaires
+    {
+      const vis = await newVisitor(phone, { fakeStore: { waOrder: true, accountRequired: false, patches: [] } });
+      const seen = [];
+      vis.page.on('request', (r) => { if (/\/rest\/v1\/(partners|product_partners)/.test(r.url())) seen.push(r.url()); });
+      await vis.page.goto(`${BASE}/`, { waitUntil: 'load' });
+      await sleep(4000);
+      const href = await vis.page.locator('a[href*="/produit/"]').first().getAttribute('href').catch(() => null);
+      if (href) { await vis.page.goto(`${BASE}${href}`, { waitUntil: 'load' }); await sleep(4000); }
+      check('visiteur : ni l\'accueil ni une page d\'article ne demandent les partenaires à la base (aucune requête)', seen.length === 0, seen);
+      const body = await vis.page.locator('body').innerText();
+      check('visiteur : aucun mot « Partenaire » sur la page d\'article', !/Partenaire|🤝/.test(body), body.slice(0, 200));
+      await vis.page.goto(`${BASE}/admin/partenaires`, { waitUntil: 'load' });
+      await sleep(3000);
+      const body2 = await vis.page.locator('body').innerText();
+      check('visiteur : la page /admin/partenaires ne montre rien (accès réservé), aucune requête sur les partenaires', (await vis.page.getByTestId('partner-row').count()) === 0 && (await vis.page.getByTestId('partners-form-add').count()) === 0 && seen.length === 0, body2.slice(0, 160));
+      await vis.ctx.close();
+      // client connecté (pas administrateur) : la page est refusée
+      const c = await newVisitor(phone, { storage: { [SKO]: adminO(false).session }, fakeUser: adminO(false), fakeStore: { waOrder: true, accountRequired: false, patches: [] } });
+      const seen2 = [];
+      c.page.on('request', (r) => { if (/\/rest\/v1\/(partners|product_partners)/.test(r.url())) seen2.push(r.url()); });
+      await c.page.goto(`${BASE}/admin/partenaires`, { waitUntil: 'load' });
+      await sleep(3500);
+      check('client connecté (pas administrateur) : « Accès réservé aux administrateurs », aucune requête sur les partenaires', (await c.page.getByText('Accès réservé aux administrateurs').count()) >= 1 && seen2.length === 0, seen2);
+      await c.ctx.close();
+    }
+  }
+
   if (PARTS.includes('^')) {
     console.log("\n== ^ Relance « Intérêt élevé » (Admin › Clients) : filtre complet, article regardé, bouton WhatsApp avec message déjà écrit, panne de lecture (fausse base)");
     const uidR = '66666666-6666-4666-8666-666666666666';
@@ -9518,7 +9801,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         check('Marketing ensemble : assistant marketing, Zara Marketing (e-mails), promotions, roue de la chance, affilies', ['Assistant marketing', 'Zara Marketing (e-mails)', 'Promotions intelligentes', 'Roue de la chance', 'Affiliés'].every((l) => g.marketing.includes(l)), g.marketing);
         check('Boutique : commandes et factures, produits, categories, voyage ; Parametres : contact, paiement, livraison', ['Commandes et factures', 'Produits', 'Catégories', 'Voyage'].every((l) => g.shop.includes(l)) && ['Informations de contact', 'Paiement', 'Livraison (Villes)'].every((l) => g.settings.includes(l)), { shop: g.shop, settings: g.settings });
         await page.screenshot({ path: path.join(OUT, 'C8-tableau-de-bord.png') });
-        check('20 pages accessibles depuis le tableau de bord (dont Zara SEO)', (await page.locator('[data-testid^="admin-menu-Admin"]').count()) === 20);
+        check('22 pages accessibles depuis le tableau de bord (dont Zara SEO, Parrainages et Mes partenaires)', (await page.locator('[data-testid^="admin-menu-Admin"]').count()) === 22);
+        check('« Mes partenaires (privé) » est dans le thème Boutique, à côté des produits', /Mes partenaires/.test(g.shop), g.shop);
         await page.getByTestId('admin-menu-AdminStoreSettings').click();
         await page.getByTestId('settings-legal-line').waitFor({ timeout: 15000 });
         check('un theme mene a la bonne page (Parametres › Informations de contact)', new URL(page.url()).pathname === '/admin/parametres/contact', page.url());
