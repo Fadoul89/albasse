@@ -1,4 +1,4 @@
-// Écran d'entrée « Créez votre compte » : les 4 articles montrés, les avantages, l'étape 1 (nom, téléphone, mot de passe) et l'étape 2 (3 questions). Aucun réseau.
+// Écran d'entrée « Créez votre compte » : les 4 articles montrés, les avantages, et la création du compte (nom, téléphone, mot de passe, conditions ; le reste est demandé ensuite dans le sondage). Aucun réseau.
 // Lancer : node --import ./tests/zara/register.mjs tests/email/entry-screen.test.ts
 import {
   ENTRY_BENEFITS,
@@ -8,16 +8,11 @@ import {
   ENTRY_PRICE_MIN,
   ENTRY_ROTATE_MS,
   ENTRY_SET_COUNT,
-  STEP_TWO_MAX_AGE_MS,
-  answersMissingFor,
   checkStepOne,
   entryBandOf,
   entryPrice,
   pickEntryProducts,
   pickEntrySets,
-  stepTwoDue,
-  stepTwoMissing,
-  stepTwoStillValid,
   type EntryCategory,
   type EntryProduct,
 } from '../../src/lib/entryScreen.ts';
@@ -260,32 +255,6 @@ check('e-mail valide : accepté', checkStepOne({ name: 'Ali', phone: '66 12 34 5
 check('numéro invalide passe avant l\'e-mail invalide', (() => { const r = checkStepOne({ name: 'Ali', phone: '12', password: 'secret12', terms: true, email: 'x' }, false, false); return !r.ok && r.title === 'Téléphone invalide'; })());
 check('e-mail invalide passe avant mot de passe trop court et conditions', (() => { const r = checkStepOne({ name: 'Ali', phone: '66 12 34 56', password: '123', terms: false, email: 'x' }, phoneOk, false); return !r.ok && r.title === 'E-mail invalide'; })());
 check('l\'ordre des contrôles : champs manquants avant tout le reste', (() => { const r = checkStepOne({ name: '', phone: '', password: '', terms: false }, false); return !r.ok && r.title === 'Champs manquants'; })());
-
-// ---- étape 2 : qui doit répondre ?
-const full = { gender: 'femme', birth_date: '1998-03-25', marital_status: 'celibataire' };
-check('profil complet : rien à demander', !stepTwoMissing(full));
-check('sexe manquant (colonne présente, vide) : à demander', stepTwoMissing({ ...full, gender: null }));
-check('naissance manquante : à demander', stepTwoMissing({ ...full, birth_date: null }));
-check('situation manquante : à demander', stepTwoMissing({ ...full, marital_status: null }));
-check('valeur inconnue (« autre ») : à demander', stepTwoMissing({ ...full, gender: 'autre' }) && stepTwoMissing({ ...full, marital_status: 'veuf' }));
-check('rien de rempli, colonnes présentes : à demander', stepTwoMissing({ gender: null, birth_date: null, marital_status: null }));
-check('colonnes absentes de la base (scripts SQL pas lancés) : on ne demande pas ce qui ne peut pas être gardé', !stepTwoMissing({ id: 'u' }));
-check('seulement le sexe absent de la base : la naissance et la situation sont quand même demandées', stepTwoMissing({ birth_date: null, marital_status: null }) && !stepTwoMissing({ birth_date: '1998-03-25', marital_status: 'marie' }));
-check('pas de profil : stepTwoMissing = faux ; answersMissingFor = vrai (on attend le profil, avec un petit chargement)', !stepTwoMissing(null) && !stepTwoMissing(undefined) && answersMissingFor(null) === true && answersMissingFor(undefined) === true);
-check('answersMissingFor suit le profil', answersMissingFor(full) === false && answersMissingFor({ ...full, gender: null }) === true);
-
-check('étape 2 due : en attente + connecté + réponses manquantes', stepTwoDue({ pending: true, isAuthenticated: true, answersMissing: true }));
-check('pas en attente : jamais (les anciens clients ne sont pas bloqués)', !stepTwoDue({ pending: false, isAuthenticated: true, answersMissing: true }));
-check('pas connecté : jamais (c\'est le mur d\'entrée qui s\'affiche)', !stepTwoDue({ pending: true, isAuthenticated: false, answersMissing: true }));
-check('réponses déjà données : plus rien à demander', !stepTwoDue({ pending: true, isAuthenticated: true, answersMissing: false }));
-
-// ---- l'attente expire
-const NOW = Date.UTC(2026, 10, 6, 12, 0, 0);
-check('attente de 10 minutes : valable', stepTwoStillValid(NOW - 600_000, NOW));
-check('attente de 2 jours : valable', stepTwoStillValid(NOW - 2 * 86_400_000, NOW));
-check('attente de 3 jours ou plus : expirée (un ancien compte n\'est jamais bloqué par un vieux reste)', !stepTwoStillValid(NOW - STEP_TWO_MAX_AGE_MS, NOW) && !stepTwoStillValid(NOW - 10 * 86_400_000, NOW));
-check('pas de date / texte / valeur absurde : expirée', !stepTwoStillValid(null, NOW) && !stepTwoStillValid(undefined, NOW) && !stepTwoStillValid(NaN, NOW) && !stepTwoStillValid(Infinity, NOW));
-check('horloge du téléphone en retard de moins d\'1 h : valable ; date très loin dans le futur : expirée', stepTwoStillValid(NOW + 1_800_000, NOW) && !stepTwoStillValid(NOW + 5 * 3_600_000, NOW));
 
 console.log(`\n${ok} controles OK`);
 if (process.exitCode) console.log('DES ECHECS ci-dessus');

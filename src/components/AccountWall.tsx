@@ -1,5 +1,5 @@
 // Compte obligatoire à l'entrée (voir lib/accountWall) : couvre la page tant que le visiteur n'a pas de compte.
-// Le formulaire « Créer un compte » (version COURTE, étape 1 sur 2 : les 3 questions suivent juste après, components/SignupStepTwo) s'affiche en premier, sous la bande
+// Le formulaire « Créer un compte » (COURT : nom, téléphone, mot de passe, e-mail facultatif ; le reste est demandé ensuite dans le site, components/SurveyCard) s'affiche en premier, sous la bande
 // « Voici ce qui vous attend » (vrais articles, avantages : components/EntryPreview, docs/ecran-entree.md) ; « J'ai déjà un compte » montre la connexion (numéro ou e-mail,
 // « Se souvenir de mon mot de passe »). Après l'inscription ou la connexion, l'écran disparaît et la page demandée est là.
 import React, { useState } from 'react';
@@ -36,7 +36,7 @@ export function AccountWall() {
         {register && <EntryPreview />}
         <View style={styles.block} testID={register ? 'wall-register' : 'wall-login'}>
           {register ? (
-            <RegisterForm short onSuccess={done} onPrivacy={() => go('PrivacyPolicy')} />
+            <RegisterForm onSuccess={done} onPrivacy={() => go('PrivacyPolicy')} />
           ) : (
             <LoginForm onSuccess={done} onForgot={() => go('ForgotPassword')} />
           )}

@@ -30,6 +30,10 @@ export interface ProfileChanges {
   gender?: Gender; // seulement quand le client a choisi (et que la base a la colonne) : sinon la colonne n'est jamais écrite
   birth_date?: string; // « 1998-03-25 » : même règle (jamais écrite tant que le formulaire est vide)
   marital_status?: MaritalStatus; // idem
+  // l'accord pour les nouveautés et offres (sondage du site : « Oui, avec plaisir »)
+  notify_new_products?: boolean;
+  notify_promotions?: boolean;
+  notify_flash_sale?: boolean;
 }
 
 export type ProfileField = keyof ProfileForm;

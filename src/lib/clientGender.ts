@@ -63,39 +63,3 @@ export const percent = (part: number, total: number): string => (total > 0 ? `${
 
 // « 12 500 FCFA » en moyenne par client (« — » sans client)
 export const averagePerClient = (revenue: number, clients: number): number => (clients > 0 ? Math.round(revenue / clients) : 0);
-
-// ---------------------------------------------------------------------------------------------
-// Zara demande une fois aux clients déjà inscrits (carte sur l'accueil)
-// ---------------------------------------------------------------------------------------------
-
-export const ASK_GAP_MS = 3 * 86_400_000; // « Plus tard » : la carte revient 3 jours après…
-export const ASK_MAX = 3; // … trois fois au plus, puis Zara ne demande plus
-
-export interface AskState {
-  count: number; // nombre de fois où la carte a été montrée
-  last: number; // la dernière fois (millisecondes)
-}
-export const NEVER_ASKED: AskState = { count: 0, last: 0 };
-
-// Ce que le téléphone a gardé (texte JSON) : tout ce qui n'est pas clair compte comme « jamais demandé »
-export function parseAskState(raw: string | null | undefined): AskState {
-  try {
-    const v = JSON.parse(String(raw ?? ''));
-    const count = Math.floor(Number(v?.count));
-    const last = Number(v?.last);
-    if (Number.isFinite(count) && count >= 0 && Number.isFinite(last) && last >= 0) return { count, last };
-  } catch {
-    // texte illisible
-  }
-  return NEVER_ASKED;
-}
-
-// La carte est montrée seulement : à un client connecté (pas à l'équipe), dont la base a la colonne et qui n'a pas encore choisi, qui n'a pas dépassé
-// ASK_MAX demandes et qui n'a pas reçu la carte depuis moins de 3 jours.
-export function genderAskDue(profile: { is_admin?: boolean; gender?: unknown } | null | undefined, state: AskState, now: number): boolean {
-  if (!profile || profile.is_admin) return false;
-  if (!hasGenderColumn(profile)) return false;
-  if (genderOf(profile.gender)) return false;
-  if (state.count >= ASK_MAX) return false;
-  return state.count === 0 || now - state.last >= ASK_GAP_MS;
-}

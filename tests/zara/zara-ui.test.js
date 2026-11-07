@@ -948,13 +948,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.page.getByTestId('register-password').locator('visible=true').fill(password);
       await v.page.getByTestId('register-terms').locator('visible=true').click();
       await showI(v.page, 'Créer mon compte').click();
-      // etape 2 : les 3 questions juste apres la creation du compte (docs/ecran-entree.md)
-      await v.page.getByTestId('signup-step2').waitFor({ timeout: 15000 });
-      await sleep(600);
-      await v.page.getByTestId('step2-gender-femme').locator('visible=true').click();
-      await v.page.getByTestId('step2-birth').locator('visible=true').fill('25/03/1998');
-      await v.page.getByTestId('step2-marital-celibataire').locator('visible=true').click();
-      await v.page.getByTestId('step2-submit').locator('visible=true').click();
+      // plus d'etape 2 : le compte est cree avec ces seules informations, le reste est demande ensuite dans le site (sondage, partie %)
     };
     const PROGRESS = (extra = {}) => ({ code: 'ABCD2345', goal: 5, joined: 3, installed: 2, friends: [{ name: 'Fatimé', installed: true }, { name: 'Moussa', installed: true }, { name: 'Khadija', installed: false }], rewards: [], ...extra });
 
@@ -6860,7 +6854,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await wall(v.page).getByText('Créer mon compte', { exact: true }).click();
       await wall(v.page).getByTestId('register-name').waitFor({ timeout: 10000 });
       check('« Créer mon compte » : retour au formulaire de creation', (await wall(v.page).getByTestId('login-identifier').count()) === 0);
-      check('formulaire court (etape 1) : nom, telephone, mot de passe obligatoires ; e-mail facultatif', /étape 1 sur 2/i.test(txt) && !/Informations optionnelles/i.test(txt) && (await wall(v.page).getByTestId('register-email').count()) === 1 && (await wall(v.page).getByTestId('register-name').count()) === 1);
+      check('formulaire court (seulement ces informations) : nom, telephone, mot de passe obligatoires ; e-mail facultatif', /Créer mon compte/i.test(txt) && !/étape/i.test(txt) && !/Informations optionnelles/i.test(txt) && (await wall(v.page).getByTestId('register-email').count()) === 1 && (await wall(v.page).getByTestId('register-name').count()) === 1);
       check('plus de liens « Confidentialité » ni « Contact » sur l\'ecran d\'entree', !/Confidentialité/.test(txt) && !/Contact/.test(txt), txt);
       check('page en francais (lang="fr") : Chrome ne la traduit plus (« ALBASSE SHOPPING » reste tel quel)', (await v.page.evaluate(() => document.documentElement.lang)) === 'fr');
       check('pas de bouton de Zara derriere le mur', (await fabCount(v.page)) === 0);
@@ -6906,17 +6900,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.ctx.close();
     }
     // 5) inscription depuis le mur : nom, numero, mot de passe ; on revient sur la fiche demandee
-    // l'etape 2 (les 3 questions, juste apres la creation du compte)
-    const step2 = async (v, { gender = 'homme', birth = '25/03/1998', marital = 'celibataire' } = {}) => {
-      await v.page.getByTestId('signup-step2').waitFor({ timeout: 15000 });
-      await sleep(600);
-      if (gender) await v.page.getByTestId(`step2-gender-${gender}`).locator('visible=true').click();
-      if (birth) await v.page.getByTestId('step2-birth').locator('visible=true').fill(birth);
-      if (marital) await v.page.getByTestId(`step2-marital-${marital}`).locator('visible=true').click();
-      await v.page.getByTestId('step2-submit').locator('visible=true').click();
-    };
-    // etape 1 (nom, numero, mot de passe, conditions) ; `finish` : puis l'etape 2 (Homme / Femme, naissance, situation, e-mail facultatif)
-    const register = async (v, { name = 'Ali Mahamat', phoneNo = '66 12 34 56', password = 'secret12', email = '', terms = true, finish = true, ...rest } = {}) => {
+    // l'inscription : nom, numero, mot de passe, conditions (+ e-mail facultatif) ; plus d'etape 2 (docs/sondage-client.md)
+    const register = async (v, { name = 'Ali Mahamat', phoneNo = '66 12 34 56', password = 'secret12', email = '', terms = true } = {}) => {
       await v.page.getByTestId('register-phone').waitFor({ timeout: 15000 });
       await sleep(800);
       if (name) await v.page.getByTestId('register-name').locator('visible=true').fill(name);
@@ -6925,7 +6910,6 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       if (email) await v.page.getByTestId('register-email').locator('visible=true').fill(email);
       if (terms) await v.page.getByTestId('register-terms').locator('visible=true').click();
       await shown(v.page, 'Créer mon compte').click();
-      if (finish) await step2(v, rest);
     };
     {
       const fu = accountOf();
@@ -6937,12 +6921,12 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await sleep(800);
       check('fiche ouverte depuis un lien : le formulaire de creation est directement sur l\'ecran d\'entree', (await wall(v.page).getByTestId('register-phone').count()) === 1);
       const form = await v.page.locator('body').innerText();
-      check('etape 1 : nom, telephone, mot de passe et « Adresse e-mail (facultatif) » (ni Homme/Femme, ni naissance, ni situation)', /étape 1 sur 2/i.test(form) && (await v.page.getByTestId('register-name').locator('visible=true').count()) === 1 && (await v.page.getByTestId('register-password').locator('visible=true').count()) === 1 && (await v.page.getByTestId('register-gender-homme').count()) === 0 && (await v.page.getByTestId('register-birth').count()) === 0 && (await v.page.getByTestId('register-marital-celibataire').count()) === 0 && (await v.page.getByTestId('register-email').locator('visible=true').count()) === 1 && (await v.page.getByTestId('register-email').getAttribute('placeholder')) === 'Adresse e-mail (facultatif)' && !/Informations optionnelles/i.test(form), form.slice(0, 300));
-      check('etape 1 : « Ensuite : 3 petites questions rapides (étape 2) » est annonce', /Ensuite : 3 petites questions rapides \(étape 2\)/i.test(form));
+      check('inscription : nom, telephone, mot de passe et « Adresse e-mail (facultatif) » (ni Homme/Femme, ni naissance, ni situation)', /Créer mon compte/i.test(form) && !/étape/i.test(form) && (await v.page.getByTestId('register-name').locator('visible=true').count()) === 1 && (await v.page.getByTestId('register-password').locator('visible=true').count()) === 1 && (await v.page.getByTestId('register-gender-homme').count()) === 0 && (await v.page.getByTestId('register-birth').count()) === 0 && (await v.page.getByTestId('register-marital-celibataire').count()) === 0 && (await v.page.getByTestId('register-email').locator('visible=true').count()) === 1 && (await v.page.getByTestId('register-email').getAttribute('placeholder')) === 'Adresse e-mail (facultatif)' && !/Informations optionnelles/i.test(form), form.slice(0, 300));
+      check('plus de « Ensuite : 3 petites questions » : le compte se cree avec ces seules informations', !/Ensuite : 3 petites questions/i.test(form) && !/étape 2/i.test(form));
       const btnBox = await shown(v.page, 'Créer mon compte').boundingBox();
       const innerH = await v.page.evaluate(() => window.innerHeight);
       check('le bouton « Créer mon compte » se voit sans faire defiler (ecran de telephone)', !!btnBox && btnBox.y + btnBox.height <= innerH, { btnBox, innerH });
-      await v.page.screenshot({ path: path.join(OUT, '2-entree-etape1.png') });
+      await v.page.screenshot({ path: path.join(OUT, '2-entree-inscription.png') });
       // « Voici ce qui vous attend » : de vrais articles de la boutique (photo, prix), et les 3 avantages vrais
       await v.page.getByTestId('entry-product-0').waitFor({ timeout: 15000 });
       const nCards = await v.page.locator('[data-testid^="entry-product-"]').count();
@@ -7000,39 +6984,16 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('« Lire les conditions d\'inscription » : les 6 conditions s\'affichent', /6\. J'accepte de recevoir les notifications commerciales uniquement si je donne mon accord/.test(await v.page.getByTestId('register-terms-box').innerText()));
       await v.page.getByTestId('register-terms').locator('visible=true').click(); // recoche
       await shown(v.page, 'Créer mon compte').click();
-      // le compte est cree, puis les 3 questions couvrent la page (sans montrer la boutique)
-      await v.page.getByTestId('signup-step2').waitFor({ timeout: 15000 });
-      await sleep(1000);
-      check('etape 1 faite : le compte est cree (numero + mot de passe) AVANT les 3 questions', (fu.signups || []).length === 1 && fu.signups[0].email === LOGIN_EMAIL, fu.signups);
-      check('etape 2 : plus de mur, les 3 questions (Homme/Femme, naissance, situation) couvrent la page', (await wall(v.page).count()) === 0 && (await v.page.getByTestId('step2-gender-homme').count()) === 1 && (await v.page.getByTestId('step2-birth').count()) === 1 && (await v.page.getByTestId('step2-marital-celibataire').count()) === 1 && /Dernière étape/.test(await v.page.locator('body').innerText()));
-      check('etape 1 : les notifications ne sont PAS activees avant l\'etape 2 (leur case est dans l\'etape 2)', fu.patches.filter((x) => 'notify_promotions' in x).every((x) => x.notify_promotions === false), fu.patches);
-      check('etape 2 : ni Zara ni fenetre par-dessus les 3 questions', (await fabCount(v.page)) === 0);
-      await v.page.screenshot({ path: path.join(OUT, '2-entree-etape2.png') });
-      // site ferme puis rouvert avant la fin : les 3 questions reviennent
-      await v.page.reload({ waitUntil: 'load' });
-      await v.page.getByTestId('signup-step2').waitFor({ timeout: 25000 });
-      check('site rouvert avant la fin : l\'etape 2 revient (le compte existe deja)', (await wall(v.page).count()) === 0);
-      await sleep(1000);
-      // rien de choisi : refuse, rien n'est enregistre
-      await v.page.getByTestId('step2-submit').locator('visible=true').click();
-      await v.page.getByText('Merci de choisir « Homme » ou « Femme ».').waitFor({ timeout: 8000 });
-      await v.page.getByTestId('step2-gender-homme').locator('visible=true').click();
-      await v.page.getByTestId('step2-submit').locator('visible=true').click();
-      await v.page.getByText('Date de naissance manquante').waitFor({ timeout: 8000 });
-      await v.page.getByTestId('step2-birth').locator('visible=true').fill('25/03/1998');
-      await v.page.getByTestId('step2-submit').locator('visible=true').click();
-      await v.page.getByText(/Merci de choisir « Célibataire » ou « Marié\(e\) »/).waitFor({ timeout: 8000 });
-      check('etape 2 : sexe, naissance et situation manquants : un message a chaque fois, rien n\'est enregistre', !fu.patches.some((x) => 'gender' in x || 'birth_date' in x || 'marital_status' in x), fu.patches);
-      await v.page.getByTestId('step2-marital-celibataire').locator('visible=true').click();
-      check('etape 2 : plus de champ e-mail (il est a l\'etape 1)', (await v.page.getByTestId('step2-email').count()) === 0);
-      await v.page.getByTestId('step2-submit').locator('visible=true').click();
+      // le compte est cree avec ces seules informations : plus d'etape 2, le client arrive directement dans le site
       await v.page.getByText('Bienvenue ✓').waitFor({ timeout: 15000 });
       await sleep(2500);
+      check('plus d\'etape 2 : aucune question (Homme/Femme, naissance, situation) n\'est posee a la creation du compte', (await v.page.getByTestId('signup-step2').count()) === 0 && (await v.page.getByTestId('step2-gender-homme').count()) === 0 && !/Dernière étape/.test(await v.page.locator('body').innerText()));
+      check('le compte est cree (numero + mot de passe) sans aucune reponse sur le sexe, la naissance ou la situation', (fu.signups || []).length === 1 && fu.signups[0].email === LOGIN_EMAIL && !fu.patches.some((x) => 'gender' in x || 'birth_date' in x || 'marital_status' in x), { signups: fu.signups, patches: fu.patches });
+      check('les notifications ne sont PAS activees a la creation (l\'accord est demande ensuite, dans le sondage)', fu.patches.filter((x) => 'notify_promotions' in x).every((x) => x.notify_promotions === false) && !fu.patches.some((x) => x.notify_promotions === true), fu.patches);
       const su = (fu.signups || [])[0] || {};
       check('inscription sans e-mail : le compte est cree avec le numero (23566123456@tel.albasseshopping.com) et le mot de passe', fu.signups.length === 1 && su.email === LOGIN_EMAIL && su.password === 'secret12', fu.signups);
       const patch = fu.patches.find((x) => 'full_name' in x) || {};
       check('profil : nom, numero, WhatsApp = le meme numero, pas de profession, pas d\'e-mail', patch.full_name === 'Ali Mahamat' && patch.phone === '66 12 34 56' && patch.whatsapp_number === '66 12 34 56' && patch.profession === null && !('email' in patch), patch);
-      check('etape 2 : Homme, date de naissance et situation sont enregistres (une demande a part pour chacun), notifications cochees d\'office = oui', fu.patches.some((x) => x.gender === 'homme') && fu.patches.some((x) => x.birth_date === '1998-03-25' && x.marital_status === 'celibataire') && fu.patches.some((x) => x.notify_promotions === true && x.notify_new_products === true && x.notify_flash_sale === true), fu.patches);
       check('apres l\'inscription : plus de mur, retour sur la fiche demandee', (await wall(v.page).count()) === 0 && new URL(v.page.url()).pathname === `/produit/${prod.slug}`, v.page.url());
       check('apres l\'inscription : Zara est de retour', (await fabCount(v.page)) > 0);
       check('aucune erreur (inscription)', v.errs.length === 0, v.errs);
@@ -7087,7 +7048,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await waitWall(v.page);
       await sleep(1000);
-      await register(v, { finish: false });
+      await register(v);
       await v.page.getByText(/Un compte existe déjà avec ce numéro/).waitFor({ timeout: 15000 });
       check('numero deja inscrit : « Connectez-vous avec votre numero et votre mot de passe »', /Connectez-vous avec votre numéro/.test(await v.page.getByText(/Un compte existe déjà avec ce numéro/).first().innerText()));
       await v.ctx.close();
@@ -10309,7 +10270,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
 
   // =============================================== % HOMME / FEMME : INSCRIPTION, PROFIL, CARTE DE ZARA, ADMIN › CLIENTS ===============================================
   if (PARTS.includes('%')) {
-    console.log('\n== % Homme / Femme + date de naissance + celibataire / marie : inscription obligatoire, profil, carte de Zara (anciens clients), Admin › Clients (fausse base)');
+    console.log('\n== % Homme / Femme + date de naissance + celibataire / marie + WhatsApp + notifications : inscription courte, sondage du site (accueil), profil, Admin › Clients (fausse base)');
     const SKG = 'sb-xtitsmmccpkelxfjyqyh-auth-token';
     const HDRG = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
     const jsonG = (route, body, status = 200) => route.fulfill({ status, headers: { 'content-type': 'application/json', ...HDRG }, body: JSON.stringify(body) });
@@ -10326,7 +10287,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const clientG = (profile = {}, opts = {}) => mkG(UID_C, JWTG_CLIENT, 'ahmed@gmail.com', profile, opts);
     const adminG = (profile = {}) => mkG(UID_A, JWTG_ADMIN, 'admin@gmail.com', { id: UID_A, full_name: 'Admin Albasse', role: 'admin', is_admin: true, ...profile });
     const selected = async (page, testId) => (await page.getByTestId(testId).getAttribute('aria-checked')) === 'true';
-    const askKey = 'albasse_gender_ask_v1_' + UID_C;
+    const askKey = 'albasse_survey_ask_v1_' + UID_C;
+    const localKey = 'albasse_survey_local_v1_' + UID_C;
     const homeG = async (fu, extra = {}) => {
       const c = await newVisitor(phone, { lang: 'fr', storage: { [SKG]: fu.session }, fakeUser: fu, fakeStore: { waOrder: true, accountRequired: false, patches: [] }, ...extra });
       await c.page.goto(`${BASE}/`, { waitUntil: 'load' });
@@ -10334,7 +10296,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       return c;
     };
 
-    // ---------- 1. inscription : le choix Homme / Femme est obligatoire
+    // ---------- 1. inscription : seulement le nom, le telephone et le mot de passe (docs/sondage-client.md)
     const signupG = async (fuOpts = {}, profile = { gender: null }) => {
       const fu = { ...mkG(UID_C, JWTG_CLIENT, 'ahmed@gmail.com', profile), ...fuOpts };
       const v = await newVisitor(phone, { fakeUser: fu, fakeStore: { waOrder: true, accountRequired: false, patches: [] } });
@@ -10345,8 +10307,6 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     };
     const fillSignupG = async (v) => {
       await v.page.getByTestId('register-name').locator('visible=true').fill('Aïcha Moussa');
-      await v.page.getByTestId('register-birth').locator('visible=true').fill('14/07/2005');
-      await v.page.getByTestId('register-marital-celibataire').locator('visible=true').click();
       await v.page.getByTestId('register-phone').locator('visible=true').fill('66 12 34 56');
       await v.page.getByTestId('register-password').locator('visible=true').fill('secret12');
       await v.page.getByTestId('register-terms').locator('visible=true').click();
@@ -10355,42 +10315,30 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const genderPatches = (fu) => fu.patches.filter((x) => Object.keys(x).join() === 'gender');
     {
       const { v, fu } = await signupG();
-      check('inscription : « Vous êtes * » avec deux boutons Homme et Femme, aucun choisi au départ', (await v.page.getByText('Vous êtes *').count()) === 1 && (await v.page.getByTestId('register-gender-homme').count()) === 1 && (await v.page.getByTestId('register-gender-femme').count()) === 1 && !(await selected(v.page, 'register-gender-homme')) && !(await selected(v.page, 'register-gender-femme')));
-      const pos = async (id) => (await v.page.getByTestId(id).locator('visible=true').boundingBox()) || { y: -1 };
-      const yName = (await pos('register-name')).y;
-      const yGender = (await pos('register-gender-homme')).y;
-      const yPhone = (await pos('register-phone')).y;
-      check('le choix est juste sous le nom, avant le téléphone (dans « obligatoire »)', yName > 0 && yGender > yName && yPhone > yGender, { yName, yGender, yPhone });
-      await v.page.screenshot({ path: path.join(OUT, '%1-inscription-genre.png') });
+      const body = await v.page.locator('body').innerText();
+      check('inscription : plus de « Vous êtes », de date de naissance ni de situation (ces questions viennent ensuite, dans le sondage du site)', !/Vous êtes/.test(body) && !/Date de naissance/.test(body) && !/Situation/.test(body) && (await v.page.getByTestId('register-gender-homme').count()) === 0 && (await v.page.getByTestId('register-gender-femme').count()) === 0 && (await v.page.getByTestId('register-birth').count()) === 0 && (await v.page.getByTestId('register-marital-celibataire').count()) === 0, body.slice(0, 300));
+      check('inscription : seulement nom, telephone, mot de passe, e-mail facultatif et conditions', (await v.page.getByTestId('register-name').locator('visible=true').count()) === 1 && (await v.page.getByTestId('register-phone').locator('visible=true').count()) === 1 && (await v.page.getByTestId('register-password').locator('visible=true').count()) === 1 && (await v.page.getByTestId('register-email').getAttribute('placeholder')) === 'Adresse e-mail (facultatif)' && !/Informations (obligatoires|optionnelles)/.test(body));
+      await v.page.screenshot({ path: path.join(OUT, '%1-inscription-courte.png') });
       await fillSignupG(v);
-      await submitG(v);
-      await v.page.getByText('Choix manquant').waitFor({ timeout: 8000 });
-      check('sans choix : « Merci de choisir Homme ou Femme », aucun compte créé', /Homme.*Femme/.test(await v.page.locator('body').innerText()) && !(fu.signups || []).length);
-      await v.page.getByTestId('register-gender-femme').locator('visible=true').click();
-      check('Femme choisi : le bouton est coché, pas Homme', (await selected(v.page, 'register-gender-femme')) && !(await selected(v.page, 'register-gender-homme')));
-      await v.page.getByTestId('register-gender-homme').locator('visible=true').click();
-      check('on peut changer d\'avis : Homme coché, plus Femme', (await selected(v.page, 'register-gender-homme')) && !(await selected(v.page, 'register-gender-femme')));
-      await v.page.getByTestId('register-gender-femme').locator('visible=true').click();
-      await v.page.screenshot({ path: path.join(OUT, '%2-inscription-femme-choisie.png') });
       await submitG(v);
       await v.page.getByText('Bienvenue ✓').waitFor({ timeout: 15000 });
       await sleep(1500);
       const main = fu.patches.find((x) => 'full_name' in x) || {};
-      check('compte créé UNE fois (numéro), avec le choix fait', (fu.signups || []).length === 1);
-      check('le profil principal ne porte PAS le genre (demande séparée : la colonne absente ne casse jamais l\'inscription)', main.full_name === 'Aïcha Moussa' && !('gender' in main), main);
-      check('une demande à part enregistre exactement { gender: "femme" }', genderPatches(fu).length === 1 && genderPatches(fu)[0].gender === 'femme', fu.patches);
-      check('aucune erreur (inscription avec genre)', v.errs.length === 0, v.errs);
+      check('compte créé UNE fois (numéro)', (fu.signups || []).length === 1);
+      check('le profil porte le nom, le téléphone et le WhatsApp = le même numéro', main.full_name === 'Aïcha Moussa' && main.phone === '66 12 34 56' && main.whatsapp_number === '66 12 34 56', main);
+      check('aucune demande sur le sexe, la date de naissance ni la situation', !fu.patches.some((x) => 'gender' in x || 'birth_date' in x || 'marital_status' in x), fu.patches);
+      check('les notifications ne sont PAS activées (l\'accord est demandé ensuite, dans le sondage)', main.notify_promotions === false && main.notify_new_products === false && main.notify_flash_sale === false, main);
+      check('aucune erreur (inscription courte)', v.errs.length === 0, v.errs);
       await v.ctx.close();
     }
     {
-      // le script SQL n'est pas encore lancé : la base répond « colonne introuvable » pour le genre ; l'inscription réussit quand même
+      // les scripts SQL du sexe / de la naissance ne sont pas lancés : l'inscription réussit, sans aucun message d'erreur
       const { v, fu } = await signupG({ rejectColumn: 'gender' }, {});
       await fillSignupG(v);
-      await v.page.getByTestId('register-gender-homme').locator('visible=true').click();
       await submitG(v);
       await v.page.getByText('Bienvenue ✓').waitFor({ timeout: 15000 });
       await sleep(1200);
-      check('colonne « gender » absente de la base : l\'inscription réussit quand même, aucun message d\'erreur', (fu.signups || []).length === 1 && (await v.page.getByText(/Inscription impossible/).count()) === 0 && !('gender' in fu.profile));
+      check('colonnes absentes de la base : l\'inscription réussit quand même, aucun message d\'erreur', (fu.signups || []).length === 1 && (await v.page.getByText(/Inscription impossible/).count()) === 0 && !('gender' in fu.profile));
       await v.ctx.close();
     }
 
@@ -10442,71 +10390,137 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await c.ctx.close();
     }
 
-    // ---------- 3. la carte de Zara pour les clients déjà inscrits
-    {
-      const fu = clientG({ gender: null });
-      const c = await homeG(fu);
-      await c.page.getByTestId('gender-card').waitFor({ timeout: 15000 });
-      const txt = await c.page.getByTestId('gender-card').innerText();
-      check('accueil : la carte « Zara : une petite question — vous êtes… » avec Homme, Femme et « Plus tard »', /Zara : une petite question/.test(txt) && /vous êtes/i.test(txt) && /Homme/.test(txt) && /Femme/.test(txt) && /Plus tard/.test(txt), txt);
-      await c.page.screenshot({ path: path.join(OUT, '%4-accueil-carte-zara.png') });
-      const ask = JSON.parse((await c.page.evaluate((k) => localStorage.getItem(k), askKey)) || 'null');
-      check('la demande est notée sur le téléphone (1re fois)', ask && ask.count === 1 && Math.abs(Date.now() - ask.last) < 60000, ask);
-      await c.page.getByTestId('gender-card-femme').click();
-      await c.page.getByText('Merci ✓').waitFor({ timeout: 10000 });
-      check('un geste : exactement { gender: "femme" } envoyé à la base', fu.patches.length === 1 && JSON.stringify(fu.patches[0]) === '{"gender":"femme"}', fu.patches);
-      check('la carte disparaît, remerciement affiché', (await c.page.getByTestId('gender-card').count()) === 0);
+    // ---------- 3. le sondage du site : la carte sur l'accueil (docs/sondage-client.md)
+    const toastNow = (v, re) => v.page.getByText(re).first().waitFor({ timeout: 8000 });
+    const stepText = (c) => c.page.getByTestId('survey-step').innerText();
+    const surveyOnly = { gender: null, birth_date: '1998-03-25', marital_status: 'marie', whatsapp_number: '99 22 10 17' }; // il ne reste que le sexe
+    const reloadHome = async (c) => {
       await c.page.reload({ waitUntil: 'load' });
       await c.page.getByTestId('home-tagline').waitFor({ timeout: 25000 });
       await sleep(2500);
-      check('après rechargement : la carte ne revient pas (le client a répondu)', (await c.page.getByTestId('gender-card').count()) === 0);
-      check('aucune erreur (carte de Zara)', c.errs.length === 0, c.errs);
+    };
+    {
+      // un compte tout neuf (créé avec le formulaire court) : les 5 questions, une à la fois, chaque réponse enregistrée tout de suite
+      const fu = clientG({ gender: null, birth_date: null, marital_status: null, whatsapp_number: '66123456', notify_new_products: false, notify_promotions: false, notify_flash_sale: false });
+      const c = await homeG(fu);
+      await c.page.getByTestId('survey-card').waitFor({ timeout: 15000 });
+      const txt = await c.page.getByTestId('survey-card').innerText();
+      check('accueil : la carte « Zara : un petit sondage », « Question 1 sur 5 », « vous êtes… » avec Homme, Femme et « Plus tard »', /Zara : un petit sondage/.test(txt) && /Question 1 sur 5/.test(txt) && /vous êtes/i.test(txt) && /Homme/.test(txt) && /Femme/.test(txt) && /Plus tard/.test(txt), txt);
+      await c.page.screenshot({ path: path.join(OUT, '%4-accueil-sondage-1.png') });
+      const ask = JSON.parse((await c.page.evaluate((k) => localStorage.getItem(k), askKey)) || 'null');
+      check('la demande est notée sur le téléphone (1re fois)', ask && ask.count === 1 && Math.abs(Date.now() - ask.last) < 60000, ask);
+      // 1) sexe
+      await c.page.getByTestId('survey-gender-femme').click();
+      await c.page.getByTestId('survey-q-birth').waitFor({ timeout: 10000 });
+      check('un geste : exactement { gender: "femme" } envoyé à la base, puis « Question 2 sur 5 » (date de naissance)', fu.patches.length === 1 && JSON.stringify(fu.patches[0]) === '{"gender":"femme"}' && /Question 2 sur 5/.test(await stepText(c)), fu.patches);
+      // 2) date de naissance : les erreurs ne font rien écrire
+      const birth = c.page.getByTestId('survey-birth');
+      await c.page.getByTestId('survey-birth-submit').click();
+      await toastNow(c, /Date de naissance manquante/);
+      await birth.fill('31/02/1998');
+      await c.page.getByTestId('survey-birth-submit').click();
+      await toastNow(c, /Cette date n’existe pas/);
+      await birth.fill('01/01/2999');
+      await c.page.getByTestId('survey-birth-submit').click();
+      await toastNow(c, /ne peut pas être dans le futur/);
+      await birth.fill('01/01/1900');
+      await c.page.getByTestId('survey-birth-submit').click();
+      await toastNow(c, /Date de naissance à vérifier/);
+      check('date vide, 31/02, futur, année 1900 : un message à chaque fois, rien n\'est enregistré, la question reste', fu.patches.length === 1 && (await c.page.getByTestId('survey-q-birth').count()) === 1, fu.patches);
+      await birth.fill('');
+      await birth.pressSequentially('25031998');
+      check('la frappe « 25031998 » devient « 25/03/1998 » toute seule', (await birth.inputValue()) === '25/03/1998', await birth.inputValue());
+      await c.page.getByTestId('survey-birth-submit').click();
+      await c.page.getByTestId('survey-q-marital').waitFor({ timeout: 10000 });
+      check('date juste : exactement { birth_date: "1998-03-25" }, puis « Question 3 sur 5 » (situation)', fu.patches.length === 2 && JSON.stringify(fu.patches[1]) === '{"birth_date":"1998-03-25"}' && /Question 3 sur 5/.test(await stepText(c)), fu.patches);
+      // 3) situation
+      await c.page.getByTestId('survey-marital-marie').click();
+      await c.page.getByTestId('survey-q-whatsapp').waitFor({ timeout: 10000 });
+      check('un geste : exactement { marital_status: "marie" }, puis « Question 4 sur 5 » (WhatsApp)', fu.patches.length === 3 && JSON.stringify(fu.patches[2]) === '{"marital_status":"marie"}' && /Question 4 sur 5/.test(await stepText(c)), fu.patches);
+      // 4) WhatsApp : un autre numéro
+      check('WhatsApp : la carte rappelle le téléphone du compte et propose « Oui, le même » / « Un autre numéro »', /Votre téléphone : 66123456/.test(await c.page.getByTestId('survey-q-whatsapp').innerText()) && (await c.page.getByTestId('survey-whatsapp-same').count()) === 1 && (await c.page.getByTestId('survey-whatsapp-other').count()) === 1);
+      await c.page.getByTestId('survey-whatsapp-other').click();
+      await c.page.getByTestId('survey-whatsapp-input').fill('abc');
+      await c.page.getByTestId('survey-whatsapp-submit').click();
+      await toastNow(c, /Numéro WhatsApp invalide/);
+      check('numéro WhatsApp faux : message, rien n\'est enregistré', fu.patches.length === 3, fu.patches);
+      await c.page.getByTestId('survey-whatsapp-input').fill('99  22 10 17');
+      await c.page.getByTestId('survey-whatsapp-submit').click();
+      await c.page.getByTestId('survey-q-notifications').waitFor({ timeout: 10000 });
+      check('autre numéro : exactement { whatsapp_number: "99 22 10 17" } (espaces nettoyés), puis « Question 5 sur 5 »', fu.patches.length === 4 && JSON.stringify(fu.patches[3]) === '{"whatsapp_number":"99 22 10 17"}' && /Question 5 sur 5/.test(await stepText(c)), fu.patches);
+      // 5) notifications
+      const q5 = await c.page.getByTestId('survey-q-notifications').innerText();
+      check('notifications : « nouveautés et offres », « Oui, avec plaisir » / « Non merci », modifiable dans Mon compte', /nouveautés et les offres/.test(q5) && /Oui, avec plaisir/.test(q5) && /Non merci/.test(q5) && /Mon compte/.test(q5), q5);
+      await c.page.screenshot({ path: path.join(OUT, '%5-accueil-sondage-5.png') });
+      await c.page.getByTestId('survey-notifications-yes').click();
+      await c.page.getByText('Merci ✓').waitFor({ timeout: 10000 });
+      check('« Oui, avec plaisir » : exactement les 3 réglages de Mon compte → Notifications passent à « oui »', fu.patches.length === 5 && JSON.stringify(fu.patches[4]) === '{"notify_new_products":true,"notify_promotions":true,"notify_flash_sale":true}', fu.patches);
+      check('dernière réponse : la carte disparaît, remerciement affiché', (await c.page.getByTestId('survey-card').count()) === 0);
+      await reloadHome(c);
+      check('après rechargement : la carte ne revient pas (tout est répondu)', (await c.page.getByTestId('survey-card').count()) === 0);
+      check('aucune erreur (sondage)', c.errs.length === 0, c.errs);
+      await c.ctx.close();
+    }
+    {
+      // « Oui, c'est le même numéro » et « Non merci » ne laissent aucune trace dans le profil : le téléphone s'en souvient
+      const fu = clientG({ gender: 'homme', birth_date: '1998-03-25', marital_status: 'celibataire', whatsapp_number: '66123456', notify_new_products: false, notify_promotions: false, notify_flash_sale: false });
+      const c = await homeG(fu);
+      await c.page.getByTestId('survey-card').waitFor({ timeout: 15000 });
+      check('seulement les questions qui manquent : « Question 1 sur 2 » (WhatsApp)', /Question 1 sur 2/.test(await stepText(c)) && (await c.page.getByTestId('survey-q-whatsapp').count()) === 1);
+      await c.page.getByTestId('survey-whatsapp-same').click();
+      await c.page.getByTestId('survey-q-notifications').waitFor({ timeout: 10000 });
+      check('« Oui, le même » : rien n\'est envoyé à la base, « Question 2 sur 2 »', fu.patches.length === 0 && /Question 2 sur 2/.test(await stepText(c)), fu.patches);
+      await c.page.getByTestId('survey-notifications-no').click();
+      await c.page.getByText('Merci ✓').waitFor({ timeout: 10000 });
+      check('« Non merci » : rien n\'est envoyé à la base (les notifications restent éteintes), la carte disparaît', fu.patches.length === 0 && (await c.page.getByTestId('survey-card').count()) === 0, fu.patches);
+      const kept = JSON.parse((await c.page.evaluate((k) => localStorage.getItem(k), localKey)) || 'null');
+      check('le téléphone se souvient des deux réponses', kept && kept.whatsappDone === true && kept.notificationsDone === true, kept);
+      await c.page.evaluate((k) => localStorage.removeItem(k), askKey);
+      await reloadHome(c);
+      check('même sans mémoire de « la dernière fois » : plus aucune question (« le même » et « non merci » sont gardés)', (await c.page.getByTestId('survey-card').count()) === 0);
       await c.ctx.close();
     }
     {
       // « Plus tard » : revient 3 jours après, trois fois au plus
-      const fu = clientG({ gender: null });
+      const fu = clientG(surveyOnly);
       const c = await homeG(fu);
-      await c.page.getByTestId('gender-card').waitFor({ timeout: 15000 });
-      await c.page.getByTestId('gender-card-later').click();
-      check('« Plus tard » : la carte se ferme, rien n\'est envoyé à la base', (await c.page.getByTestId('gender-card').count()) === 0 && fu.patches.length === 0);
-      await c.page.reload({ waitUntil: 'load' });
-      await c.page.getByTestId('home-tagline').waitFor({ timeout: 25000 });
-      await sleep(2500);
-      check('rechargement tout de suite : la carte ne revient pas (pas avant 3 jours)', (await c.page.getByTestId('gender-card').count()) === 0);
+      await c.page.getByTestId('survey-card').waitFor({ timeout: 15000 });
+      await c.page.getByTestId('survey-later').click();
+      check('« Plus tard » : la carte se ferme, rien n\'est envoyé à la base', (await c.page.getByTestId('survey-card').count()) === 0 && fu.patches.length === 0);
+      await reloadHome(c);
+      check('rechargement tout de suite : la carte ne revient pas (pas avant 3 jours)', (await c.page.getByTestId('survey-card').count()) === 0);
       await c.page.evaluate(([k, v]) => localStorage.setItem(k, v), [askKey, JSON.stringify({ count: 1, last: Date.now() - 4 * 86400000 })]);
       await c.page.reload({ waitUntil: 'load' });
-      await c.page.getByTestId('gender-card').waitFor({ timeout: 15000 });
+      await c.page.getByTestId('survey-card').waitFor({ timeout: 15000 });
       check('4 jours après : la carte revient (2e fois)', (JSON.parse(await c.page.evaluate((k) => localStorage.getItem(k), askKey)) || {}).count === 2);
-      await c.page.getByTestId('gender-card-later').click();
+      await c.page.getByTestId('survey-later').click();
       await c.page.evaluate(([k, v]) => localStorage.setItem(k, v), [askKey, JSON.stringify({ count: 3, last: Date.now() - 20 * 86400000 })]);
-      await c.page.reload({ waitUntil: 'load' });
-      await c.page.getByTestId('home-tagline').waitFor({ timeout: 25000 });
-      await sleep(2500);
-      check('après 3 demandes : Zara ne demande plus, même 20 jours après', (await c.page.getByTestId('gender-card').count()) === 0);
+      await reloadHome(c);
+      check('après 3 demandes : le sondage ne demande plus, même 20 jours après', (await c.page.getByTestId('survey-card').count()) === 0);
       await c.ctx.close();
     }
     {
       // la base refuse l'enregistrement : message, la carte reste pour réessayer
-      const fu = clientG({ gender: null }, { failNext: 1 });
+      const fu = clientG(surveyOnly, { failNext: 1 });
       const c = await homeG(fu);
-      await c.page.getByTestId('gender-card').waitFor({ timeout: 15000 });
-      await c.page.getByTestId('gender-card-homme').click();
+      await c.page.getByTestId('survey-card').waitFor({ timeout: 15000 });
+      await c.page.getByTestId('survey-gender-homme').click();
       await c.page.getByText('Enregistrement impossible').waitFor({ timeout: 10000 });
-      check('enregistrement refusé : message clair, la carte reste pour réessayer', (await c.page.getByTestId('gender-card').count()) === 1);
-      await c.page.getByTestId('gender-card-homme').click();
+      check('enregistrement refusé : message clair, la carte reste pour réessayer', (await c.page.getByTestId('survey-card').count()) === 1);
+      await c.page.getByTestId('survey-gender-homme').click();
       await c.page.getByText('Merci ✓').waitFor({ timeout: 10000 });
-      check('deuxième essai réussi : enregistré, la carte disparaît', fu.patches.length === 2 && fu.patches[1].gender === 'homme' && (await c.page.getByTestId('gender-card').count()) === 0, fu.patches);
+      check('deuxième essai réussi : enregistré, la carte disparaît', fu.patches.length === 2 && fu.patches[1].gender === 'homme' && (await c.page.getByTestId('survey-card').count()) === 0, fu.patches);
       await c.ctx.close();
     }
     for (const [label, fu] of [
-      ['client qui a déjà choisi', clientG({ gender: 'homme' })],
-      ['base sans la colonne (script SQL pas lancé)', clientG({})],
-      ['équipe (administrateur)', adminG({ gender: null })],
+      ['client qui a tout répondu', clientG({ gender: 'homme', birth_date: '1998-03-25', marital_status: 'marie', whatsapp_number: '99 22 10 17', notify_new_products: true, notify_promotions: true, notify_flash_sale: true })],
+      ['client qui a déjà dit « oui » à un seul réglage de notifications', clientG({ ...surveyOnly, gender: 'femme', notify_new_products: false, notify_promotions: true, notify_flash_sale: false })],
+      ['base sans les colonnes sexe / naissance / situation (scripts SQL pas lancés), WhatsApp déjà différent', clientG({ whatsapp_number: '99 22 10 17' })],
+      ['équipe (administrateur)', adminG({ gender: null, birth_date: null, marital_status: null })],
     ]) {
       const c = await homeG(fu);
       await sleep(3000);
-      check(`pas de carte pour : ${label}`, (await c.page.getByTestId('gender-card').count()) === 0 && fu.patches.length === 0);
+      check(`pas de carte pour : ${label}`, (await c.page.getByTestId('survey-card').count()) === 0 && fu.patches.length === 0);
       await c.ctx.close();
     }
     {
@@ -10515,7 +10529,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await c.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await c.page.getByTestId('home-tagline').waitFor({ timeout: 25000 });
       await sleep(2500);
-      check('pas de carte pour un visiteur sans compte', (await c.page.getByTestId('gender-card').count()) === 0);
+      check('pas de carte pour un visiteur sans compte', (await c.page.getByTestId('survey-card').count()) === 0);
       await c.ctx.close();
     }
 
@@ -10704,78 +10718,9 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.ctx.close();
     }
 
-    // ---------- 5. Date de naissance + Célibataire / Marié(e) (docs/naissance-situation-client.md)
-    const FULL_B = { gender: null, birth_date: null, marital_status: null }; // le script add-client-birth-marital.sql est lancé : colonnes vides
+    // ---------- 5. date de naissance + celibataire / marie : plus demandes a l'inscription (voir 1), demandes dans le sondage (voir 3)
+    const FULL_B = { gender: null, birth_date: null, marital_status: null }; // le script add-client-birth-marital.sql est lance : colonnes vides
     const birthPatches = (fu) => fu.patches.filter((x) => 'birth_date' in x || 'marital_status' in x);
-    const toastNow = (v, re) => v.page.getByText(re).first().waitFor({ timeout: 8000 });
-    {
-      const { v, fu } = await signupG({}, FULL_B);
-      const body = await v.page.locator('body').innerText();
-      check('inscription : « Date de naissance * » et « Situation * » avec Célibataire et Marié(e), rien de choisi',
-        /Date de naissance \*/.test(body) && /Situation \*/.test(body) && (await v.page.getByTestId('register-birth').locator('visible=true').count()) === 1
-        && (await v.page.getByTestId('register-marital-celibataire').count()) === 1 && (await v.page.getByTestId('register-marital-marie').count()) === 1
-        && !(await selected(v.page, 'register-marital-celibataire')) && !(await selected(v.page, 'register-marital-marie')));
-      check('le champ date dit comment l\'écrire (jour / mois / année, exemple 25/03/1998)', /Jour \/ mois \/ année \(ex\. 25\/03\/1998\)/.test((await v.page.getByTestId('register-birth').locator('visible=true').getAttribute('placeholder')) || ''));
-      const pos = async (id) => (await v.page.getByTestId(id).locator('visible=true').boundingBox()) || { y: -1 };
-      const ys = [await pos('register-gender-homme'), await pos('register-birth'), await pos('register-marital-celibataire'), await pos('register-phone')].map((p) => p.y);
-      check('ordre : genre, date de naissance, situation, puis téléphone (tous dans « obligatoire »)', ys[0] > 0 && ys[1] > ys[0] && ys[2] > ys[1] && ys[3] > ys[2], ys);
-      const birth = v.page.getByTestId('register-birth').locator('visible=true');
-      await birth.pressSequentially('25031998');
-      check('la frappe « 25031998 » devient « 25/03/1998 » toute seule', (await birth.inputValue()) === '25/03/1998', await birth.inputValue());
-      await birth.fill('');
-      await v.page.getByTestId('register-name').locator('visible=true').fill('Aïcha Moussa');
-      await v.page.getByTestId('register-gender-femme').locator('visible=true').click();
-      await v.page.getByTestId('register-phone').locator('visible=true').fill('66 12 34 56');
-      await v.page.getByTestId('register-password').locator('visible=true').fill('secret12');
-      await v.page.getByTestId('register-terms').locator('visible=true').click();
-      await v.page.screenshot({ path: path.join(OUT, '%7-inscription-naissance-vide.png') });
-      await submitG(v);
-      await toastNow(v, /Date de naissance manquante/);
-      check('sans date : « Date de naissance manquante », aucun compte créé', !(fu.signups || []).length);
-      await birth.fill('31/02/1998');
-      await submitG(v);
-      await toastNow(v, /Cette date n’existe pas/);
-      check('31/02/1998 : « Cette date n’existe pas », aucun compte créé', !(fu.signups || []).length);
-      await birth.fill('01/01/2999');
-      await submitG(v);
-      await toastNow(v, /ne peut pas être dans le futur/);
-      check('une date dans le futur : refusée, aucun compte créé', !(fu.signups || []).length);
-      await birth.fill('01/01/1900');
-      await submitG(v);
-      await toastNow(v, /Date de naissance à vérifier/);
-      check('année 1900 (126 ans) : « à vérifier », aucun compte créé', !(fu.signups || []).length);
-      await birth.fill('25/03/1998');
-      await submitG(v);
-      await toastNow(v, /Choix manquant/);
-      check('date juste mais sans situation : « Merci de choisir Célibataire ou Marié(e) », aucun compte créé', /Célibataire.*Marié\(e\)/.test(await v.page.locator('body').innerText()) && !(fu.signups || []).length);
-      await v.page.getByTestId('register-marital-marie').locator('visible=true').click();
-      check('Marié(e) choisi : coché, pas Célibataire', (await selected(v.page, 'register-marital-marie')) && !(await selected(v.page, 'register-marital-celibataire')));
-      await v.page.getByTestId('register-marital-celibataire').locator('visible=true').click();
-      check('on peut changer d\'avis : Célibataire coché, plus Marié(e)', (await selected(v.page, 'register-marital-celibataire')) && !(await selected(v.page, 'register-marital-marie')));
-      await v.page.getByTestId('register-marital-marie').locator('visible=true').click();
-      await v.page.screenshot({ path: path.join(OUT, '%8-inscription-naissance-situation.png') });
-      await submitG(v);
-      await v.page.getByText('Bienvenue ✓').waitFor({ timeout: 15000 });
-      await sleep(1500);
-      const main = fu.patches.find((x) => 'full_name' in x) || {};
-      check('compte créé UNE fois, avec la date et la situation', (fu.signups || []).length === 1);
-      check('le profil principal ne porte NI la date NI la situation (demande à part : une colonne absente ne casse jamais l\'inscription)', main.full_name === 'Aïcha Moussa' && !('birth_date' in main) && !('marital_status' in main), main);
-      check('une demande à part enregistre exactement { birth_date: "1998-03-25", marital_status: "marie" }', birthPatches(fu).length === 1 && JSON.stringify(birthPatches(fu)[0]) === '{"birth_date":"1998-03-25","marital_status":"marie"}', fu.patches);
-      check('le genre garde sa propre demande, inchangée', genderPatches(fu).length === 1 && genderPatches(fu)[0].gender === 'femme', fu.patches);
-      check('aucune erreur (inscription avec date et situation)', v.errs.length === 0, v.errs);
-      await v.ctx.close();
-    }
-    {
-      // le script n'est pas encore lancé : la base répond « colonne introuvable » ; l'inscription réussit quand même
-      const { v, fu } = await signupG({ rejectColumn: 'birth_date' }, {});
-      await fillSignupG(v);
-      await v.page.getByTestId('register-gender-homme').locator('visible=true').click();
-      await submitG(v);
-      await v.page.getByText('Bienvenue ✓').waitFor({ timeout: 15000 });
-      await sleep(1200);
-      check('colonnes absentes de la base : l\'inscription réussit quand même, aucun message d\'erreur', (fu.signups || []).length === 1 && (await v.page.getByText(/Inscription impossible/).count()) === 0 && !('birth_date' in fu.profile) && !('marital_status' in fu.profile));
-      await v.ctx.close();
-    }
 
     // ---------- 6. profil du client : date de naissance et situation (seulement quand la base a les colonnes)
     {

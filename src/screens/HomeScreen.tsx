@@ -20,7 +20,7 @@ import { CityClock } from '../components/CityClock';
 import { ZaraAdCard } from '../components/ZaraAdCard';
 import { TargetedAdCard } from '../components/TargetedAdCard';
 import { WebPushBanner } from '../components/WebPushBanner';
-import { GenderQuestionCard } from '../components/GenderQuestionCard';
+import { SurveyCard } from '../components/SurveyCard';
 import { fetchOnlineCount, onlineLabel } from '../lib/onlineCount';
 import { coldSeasonActive, coldSeasonPicks } from '../lib/coldSeason';
 import { activeFlash, activePromotions, nextPromoChange } from '../lib/promotions';
@@ -130,7 +130,7 @@ export function HomeScreen() {
         </View>
       </View>
 
-      <GenderQuestionCard />
+      <SurveyCard />
 
       <View style={styles.independenceBanner}>
         <ChadFlag width={26} height={18} />
