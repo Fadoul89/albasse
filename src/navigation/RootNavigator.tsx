@@ -82,6 +82,7 @@ import { WheelScreen } from '../screens/WheelScreen';
 import { AdminWheelScreen } from '../screens/admin/AdminWheelScreen';
 import { InviteFriendsScreen } from '../screens/InviteFriendsScreen';
 import { AdminInvitesScreen } from '../screens/admin/AdminInvitesScreen';
+import { AdminPartnersScreen } from '../screens/admin/AdminPartnersScreen';
 import { AdminAffiliatesScreen } from '../screens/admin/AdminAffiliatesScreen';
 import { AdminAffiliateSettingsScreen } from '../screens/admin/AdminAffiliateSettingsScreen';
 import { AdminAffiliateCommissionsScreen } from '../screens/admin/AdminAffiliateCommissionsScreen';
@@ -157,6 +158,7 @@ const linking: LinkingOptions<RootStackParamList> = {
       AdminWheel: 'admin/roue-de-la-chance',
       InviteFriends: 'inviter-mes-amis',
       AdminInvites: 'admin/parrainages',
+      AdminPartners: 'admin/partenaires',
       AdminAffiliates: 'admin/affilies',
       AdminAffiliateSettings: 'admin/affilies/reglages',
       AdminAffiliateCommissions: 'admin/affilies/commissions',
@@ -326,6 +328,7 @@ export function RootNavigator() {
             <Stack.Screen name="AdminWheel" component={AdminWheelScreen} />
             <Stack.Screen name="InviteFriends" component={InviteFriendsScreen} />
             <Stack.Screen name="AdminInvites" component={AdminInvitesScreen} />
+            <Stack.Screen name="AdminPartners" component={AdminPartnersScreen} />
             <Stack.Screen name="AdminAffiliates" component={AdminAffiliatesScreen} />
             <Stack.Screen name="AdminAffiliateSettings" component={AdminAffiliateSettingsScreen} />
             <Stack.Screen name="AdminAffiliateCommissions" component={AdminAffiliateCommissionsScreen} />

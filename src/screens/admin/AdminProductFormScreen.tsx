@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, StyleSheet, ScrollView, Pressable, Switch, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -16,7 +16,9 @@ import { uploadProductImage } from '../../lib/imageUpload';
 import { addFictionalReview, deleteReview } from '../../lib/reviews';
 import { slugify } from '../../lib/slugify';
 import { mainCategories } from '../../lib/subCategories';
+import { fetchPartnerData, setProductPartner, type PartnerData } from '../../lib/partnersData';
 import { CategoryPicker } from '../../components/CategoryPicker';
+import { PartnerPicker } from '../../components/PartnerPicker';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { GoldButton } from '../../components/GoldButton';
 import { StarRating } from '../../components/StarRating';
@@ -50,6 +52,31 @@ export function AdminProductFormScreen({ route }: Props) {
   );
   const [saving, setSaving] = useState(false);
   const showToast = useToastStore((s) => s.show);
+
+  // Partenaire de l'article (administrateur seulement, docs/partenaires.md) : tant que le script add-partners.sql n'est pas lancé, cette partie n'apparaît pas
+  const [partnerData, setPartnerData] = useState<PartnerData | null>(null);
+  const [partnerId, setPartnerId] = useState<string | null>(null);
+  const [partnerNote, setPartnerNote] = useState('');
+  const initialPartner = useRef<{ partnerId: string | null; note: string }>({ partnerId: null, note: '' });
+  const partnerLoadedFor = useRef<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetchPartnerData().then((d) => {
+      if (alive) setPartnerData(d);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  useEffect(() => {
+    // le partenaire déjà choisi pour cet article (une seule fois : un choix en cours n'est jamais écrasé)
+    if (!partnerData || !productId || partnerLoadedFor.current === productId) return;
+    partnerLoadedFor.current = productId;
+    const link = partnerData.links.find((l) => l.product_id === productId);
+    initialPartner.current = { partnerId: link?.partner_id ?? null, note: link?.note ?? '' };
+    setPartnerId(link?.partner_id ?? null);
+    setPartnerNote(link?.note ?? '');
+  }, [partnerData, productId]);
 
   const { reviews, refresh: refreshReviews } = useReviews(productId ?? '');
   const [reviewAuthor, setReviewAuthor] = useState('');
@@ -179,12 +206,24 @@ export function AdminProductFormScreen({ route }: Props) {
     try {
       const result = isEditing
         ? await supabase.from('products').update(payload).eq('id', productId)
-        : await supabase.from('products').insert(payload);
+        : await supabase.from('products').insert(payload).select('id').single();
 
       if (result.error) {
         console.error('Erreur enregistrement produit:', result.error);
         showToast(result.error.message, { title: 'Erreur', type: 'error' });
         return;
+      }
+      const savedId = isEditing ? productId : ((result.data as { id?: string } | null)?.id ?? null);
+
+      // le partenaire de l'article : seulement si on l'a changé (ou choisi pour un nouvel article) ; l'article est déjà enregistré quoi qu'il arrive
+      const partnerChanged = partnerData && (partnerId !== initialPartner.current.partnerId || (partnerId && partnerNote.trim() !== initialPartner.current.note.trim()));
+      if (partnerData && savedId && partnerChanged) {
+        const saved = await setProductPartner(savedId, partnerId, partnerNote);
+        if (!saved.ok) {
+          showToast(`« ${name} » est enregistré, mais pas son partenaire : ${saved.message} Rouvrez l'article pour réessayer.`, { title: 'Partenaire non enregistré', type: 'error' });
+          navigation.goBack();
+          return;
+        }
       }
 
       if (isEditing && existing && existing.slug !== slug) {
@@ -249,6 +288,20 @@ export function AdminProductFormScreen({ route }: Props) {
           subNoneLabel={(main) => 'Aucune sous-catégorie'}
           subHint={(main) => `« Aucune » range l’article directement dans « ${main.name} ».`}
         />
+
+        {partnerData && (
+          <PartnerPicker
+            partners={partnerData.partners}
+            value={partnerId}
+            note={partnerNote}
+            onChange={(id) => {
+              setPartnerId(id);
+              if (!id) setPartnerNote('');
+            }}
+            onNoteChange={setPartnerNote}
+            onManage={() => navigation.navigate('AdminPartners')}
+          />
+        )}
 
         <View style={styles.switchRow}>
           <Text style={styles.label}>Vente flash</Text>
