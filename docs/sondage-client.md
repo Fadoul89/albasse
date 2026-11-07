@@ -7,7 +7,7 @@ Demande du patron (7 novembre 2026) : *« Pour la création de compte, demande s
 - **Maintenant** : le compte est créé avec **seulement** le nom, le téléphone, le mot de passe (et l'e-mail s'il est écrit, facultatif). Le client entre tout de suite dans le site. Les autres questions viennent **ensuite**, dans une petite carte sur l'accueil, une question à la fois. **Aucune n'est obligatoire.**
 
 ## La carte « ✨ Zara : un petit sondage » (accueil)
-Une carte sur la page d'accueil (pas une fenêtre : elle ne gêne jamais la fenêtre « Télécharge l'app »). **« Question 2 sur 5 »**, une seule question à la fois, **chaque réponse est enregistrée tout de suite** (si le client ferme le site au milieu, ce qui est répondu est gardé) :
+Une carte sur la page d'accueil, **juste sous la ligne des catégories et l'annonce de Zara** (elle ne repousse donc ni le haut de l'accueil ni l'annonce) ; ce n'est pas une fenêtre : elle ne gêne jamais la fenêtre « Télécharge l'app ». **« Question 2 sur 5 »**, une seule question à la fois, **chaque réponse est enregistrée tout de suite** (si le client ferme le site au milieu, ce qui est répondu est gardé) :
 
 | # | Question | Réponse | Ce qui est écrit |
 | --- | --- | --- | --- |
