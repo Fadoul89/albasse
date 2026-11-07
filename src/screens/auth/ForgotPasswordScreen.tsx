@@ -11,6 +11,7 @@ import { ScreenHeader } from '../../components/ScreenHeader';
 import { isSupabaseConfigured } from '../../lib/supabase';
 import { useStoreSettings } from '../../hooks/useStoreSettings';
 import { phoneDigits } from '../../lib/phoneAuth';
+import { alertPasswordRequest } from '../../lib/passwordRequestAlert';
 
 export function ForgotPasswordScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -46,9 +47,12 @@ export function ForgotPasswordScreen() {
         showToast('Merci de saisir un e-mail ou un numéro de téléphone valide.', { title: 'Invalide', type: 'error' });
         return;
       }
+      // l'équipe est prévenue sur Telegram (sans attendre que le client écrive sur WhatsApp) ; jamais bloquant
+      void alertPasswordRequest(email);
       setPhoneHelp(email.trim());
       return;
     }
+    void alertPasswordRequest(email);
     setLoading(true);
     const { error } = await resetPassword(email.trim());
     setLoading(false);
