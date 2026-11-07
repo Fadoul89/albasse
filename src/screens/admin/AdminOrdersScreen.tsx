@@ -18,7 +18,7 @@ import { flagDeadlineIso, formatSlot, waitsForAppointment } from '../../lib/sche
 import { SCHEDULED_DELIVERY } from '../../constants/shopRules';
 import { GIFT_ADMIN_BADGE, hasChatGift } from '../../lib/assistantWords';
 import { fetchPartnerData, type PartnerData } from '../../lib/partnersData';
-import { partnerByProduct, partnerCallLink, partnerLine, partnerWhatsappLink } from '../../lib/partners';
+import { partnerByProduct, partnerCallLink, partnerPhoneLabel, partnerWhatsappLink } from '../../lib/partners';
 import type { Order, OrderStatus } from '../../types';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
@@ -266,51 +266,65 @@ export function AdminOrdersScreen() {
             </View>
 
             <View style={styles.itemsList}>
-              {item.items.map((oi, idx) => (
-                <View key={`${oi.product_id}-${idx}`} style={styles.itemRow}>
-                  {oi.product_image ? (
-                    <Image source={{ uri: oi.product_image }} style={styles.itemImage} contentFit="cover" />
-                  ) : (
-                    <View style={styles.itemImagePlaceholder} />
-                  )}
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.itemName} numberOfLines={1}>
-                      {oi.product_name}
-                    </Text>
-                    <Text style={styles.itemMeta}>
-                      {[oi.color, oi.size].filter(Boolean).join(' · ') || 'Standard'} · x{oi.quantity}
-                    </Text>
-                    {(() => {
-                      const ap = partnerOf?.get(oi.product_id);
-                      if (!ap) return null;
-                      const wa = partnerWhatsappLink(ap.partner, { name: oi.product_name, quantity: oi.quantity });
-                      const call = partnerCallLink(ap.partner);
-                      return (
-                        <View testID="admin-order-partner-box">
-                          <Text style={styles.partnerLine} testID="admin-order-partner">
-                            {partnerLine(ap)}
+              {item.items.map((oi, idx) => {
+                // le partenaire de l'article (confidentiel, administrateur seulement) : un cadre large SOUS la ligne de l'article, lisible sur un téléphone
+                const ap = partnerOf?.get(oi.product_id);
+                const wa = ap ? partnerWhatsappLink(ap.partner, { name: oi.product_name, quantity: oi.quantity }) : null;
+                const call = ap ? partnerCallLink(ap.partner) : null;
+                const phoneLabel = ap ? partnerPhoneLabel(ap.partner.phone) : null;
+                return (
+                  <View key={`${oi.product_id}-${idx}`}>
+                    <View style={styles.itemRow}>
+                      {oi.product_image ? (
+                        <Image source={{ uri: oi.product_image }} style={styles.itemImage} contentFit="cover" />
+                      ) : (
+                        <View style={styles.itemImagePlaceholder} />
+                      )}
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.itemName} numberOfLines={1}>
+                          {oi.product_name}
+                        </Text>
+                        <Text style={styles.itemMeta}>
+                          {[oi.color, oi.size].filter(Boolean).join(' · ') || 'Standard'} · x{oi.quantity}
+                        </Text>
+                      </View>
+                      <Text style={styles.itemPrice}>{formatXAF(oi.unit_price * oi.quantity)}</Text>
+                    </View>
+                    {ap && (
+                      <View style={styles.partnerBox} testID="admin-order-partner-box">
+                        <Text style={styles.partnerTitle}>🤝 PARTENAIRE DE CET ARTICLE</Text>
+                        <Text style={styles.partnerName} testID="admin-order-partner-name">
+                          {ap.partner.name.trim()}
+                        </Text>
+                        {phoneLabel && (
+                          <Text style={styles.partnerPhone} testID="admin-order-partner-phone">
+                            📞 {phoneLabel}
                           </Text>
-                          {(wa || call) && (
-                            <View style={styles.partnerBtns}>
-                              {call && (
-                                <Pressable style={styles.partnerBtn} onPress={() => Linking.openURL(call)} accessibilityRole="button" testID="admin-order-partner-call">
-                                  <Text style={styles.partnerBtnText}>📞 Appeler</Text>
-                                </Pressable>
-                              )}
-                              {wa && (
-                                <Pressable style={[styles.partnerBtn, styles.partnerBtnWa]} onPress={() => Linking.openURL(wa)} accessibilityRole="button" testID="admin-order-partner-whatsapp">
-                                  <Text style={styles.partnerBtnText}>💬 Prévenir le partenaire</Text>
-                                </Pressable>
-                              )}
-                            </View>
-                          )}
-                        </View>
-                      );
-                    })()}
+                        )}
+                        {!!ap.note && (
+                          <Text style={styles.partnerNote} testID="admin-order-partner-note">
+                            📝 {ap.note}
+                          </Text>
+                        )}
+                        {(wa || call) && (
+                          <View style={styles.partnerBtns}>
+                            {call && (
+                              <Pressable style={styles.partnerBtn} onPress={() => Linking.openURL(call)} accessibilityRole="button" testID="admin-order-partner-call">
+                                <Text style={styles.partnerBtnText}>📞 Appeler</Text>
+                              </Pressable>
+                            )}
+                            {wa && (
+                              <Pressable style={[styles.partnerBtn, styles.partnerBtnWa]} onPress={() => Linking.openURL(wa)} accessibilityRole="button" testID="admin-order-partner-whatsapp">
+                                <Text style={styles.partnerBtnText}>💬 Prévenir le partenaire</Text>
+                              </Pressable>
+                            )}
+                          </View>
+                        )}
+                      </View>
+                    )}
                   </View>
-                  <Text style={styles.itemPrice}>{formatXAF(oi.unit_price * oi.quantity)}</Text>
-                </View>
-              ))}
+                );
+              })}
             </View>
 
             <Text style={styles.paymentMethod}>
@@ -428,11 +442,15 @@ const styles = StyleSheet.create({
   itemImagePlaceholder: { width: 44, height: 52, borderRadius: 6, backgroundColor: colors.panel },
   itemName: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 13 },
   itemMeta: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11, marginTop: 2 },
-  partnerLine: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 11.5, lineHeight: 16, marginTop: 4 },
-  partnerBtns: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 5 },
-  partnerBtn: { borderWidth: 1, borderColor: colors.border, borderRadius: 14, paddingHorizontal: 9, paddingVertical: 4 },
+  partnerBox: { backgroundColor: 'rgba(240,215,140,0.10)', borderWidth: 1, borderColor: 'rgba(240,215,140,0.45)', borderRadius: radius.sm, padding: spacing.sm, marginTop: 6, marginBottom: 4 },
+  partnerTitle: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 10.5, letterSpacing: 0.6 },
+  partnerName: { color: colors.cream, fontFamily: fonts.bodyBold, fontSize: 16, marginTop: 3 },
+  partnerPhone: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 14, marginTop: 4 },
+  partnerNote: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 13, lineHeight: 18, marginTop: 4 },
+  partnerBtns: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  partnerBtn: { borderWidth: 1, borderColor: colors.border, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 7 },
   partnerBtnWa: { backgroundColor: 'rgba(37,211,102,0.18)', borderColor: 'rgba(37,211,102,0.5)' },
-  partnerBtnText: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 11 },
+  partnerBtnText: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 13 },
   itemPrice: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 12 },
   paymentMethod: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 12, marginBottom: 4 },
   total: { color: colors.goldLight, fontFamily: fonts.bodyBold, fontSize: 15 },
