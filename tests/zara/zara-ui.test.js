@@ -6306,9 +6306,15 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     {
       const db = makeDb();
       const v = await openAdmin(db, '/admin/commandes', 'admin-order-number');
-      const lines = await v.page.getByTestId('admin-order-partner').allInnerTexts();
-      check('commandes : sous la montre « 🤝 Partenaire : Mahamat Ali · +235 66 12 34 56 — Prix chez lui : 8 000 »', lines.some((t) => t.replace(/\s+/g, ' ') === '🤝 Partenaire : Mahamat Ali · +235 66 12 34 56 — Prix chez lui : 8 000'), lines);
-      check('commandes : sous le sac « 🤝 Partenaire : Boutique Amina » ; aucune ligne sous le parfum (à vous) : 2 lignes en tout', lines.some((t) => t.trim() === '🤝 Partenaire : Boutique Amina') && lines.length === 2, lines);
+      const boxes = await v.page.getByTestId('admin-order-partner-box').allInnerTexts();
+      const flat = (t) => t.replace(/\s+/g, ' ').trim();
+      check('commandes : sous la montre, un cadre « PARTENAIRE DE CET ARTICLE » avec le nom, le numéro joli et le petit message (chacun sur sa ligne)', boxes.length === 2 && /PARTENAIRE DE CET ARTICLE/.test(boxes[0]) && /Mahamat Ali/.test(boxes[0]) && /\+235 66 12 34 56/.test(boxes[0]) && /Prix chez lui : 8 000/.test(boxes[0]) && boxes[0].split('\n').filter((l) => /Mahamat Ali|\+235 66 12 34 56|Prix chez lui/.test(l)).length === 3, boxes);
+      check('commandes : sous le sac, le cadre de Boutique Amina (sans numéro ni petit message : seulement son nom) ; aucun cadre sous le parfum (à vous) : 2 cadres en tout', /Boutique Amina/.test(boxes[1]) && !/📞|📝/.test(boxes[1]) && boxes.length === 2, boxes);
+      // lisible sur un téléphone : le cadre prend toute la largeur de la commande, SOUS la ligne de l'article (plus coincé dans la colonne du milieu)
+      const nameBox = await v.page.getByText('Montre KEEP MOVING', { exact: true }).first().boundingBox();
+      const frame = await v.page.getByTestId('admin-order-partner-box').first().boundingBox();
+      check('commandes : le cadre du partenaire est large (au moins 280 px sur un téléphone de 390 px) et sous le nom de l\'article', !!frame && !!nameBox && frame.width >= 280 && frame.y > nameBox.y + nameBox.height - 2, { frame, nameBox });
+      check('commandes : le nom du partenaire est en grand (au moins 15 px) et son numéro aussi lisible (14 px)', (await v.page.getByTestId('admin-order-partner-name').first().evaluate((e) => parseFloat(getComputedStyle(e).fontSize))) >= 15 && (await v.page.getByTestId('admin-order-partner-phone').first().evaluate((e) => parseFloat(getComputedStyle(e).fontSize))) >= 14);
       const cardA = v.page.locator('[data-testid="admin-order-partner-box"]').first();
       const [popup] = await Promise.all([v.ctx.waitForEvent('page', { timeout: 10000 }), cardA.getByTestId('admin-order-partner-whatsapp').click()]);
       await popup.waitForLoadState('domcontentloaded').catch(() => {});
@@ -6323,7 +6329,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     {
       const db = makeDb({ missing: true });
       const v = await openAdmin(db, '/admin/commandes', 'admin-order-number');
-      check('script pas lancé : les 2 commandes s\'affichent comme avant, sans aucune ligne « Partenaire »', (await v.page.getByTestId('admin-order-number').count()) === 2 && (await v.page.getByTestId('admin-order-partner').count()) === 0);
+      check('script pas lancé : les 2 commandes s\'affichent comme avant, sans aucun cadre « Partenaire »', (await v.page.getByTestId('admin-order-number').count()) === 2 && (await v.page.getByTestId('admin-order-partner-box').count()) === 0);
       await v.ctx.close();
     }
 
