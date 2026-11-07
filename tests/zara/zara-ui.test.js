@@ -6870,6 +6870,17 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await wall(v.page).getByText('J’ai déjà un compte', { exact: true }).click();
       await wall(v.page).getByTestId('login-identifier').waitFor({ timeout: 10000 });
       check('ecran d\'entree : lien « J’ai oublié mon mot de passe » sous la connexion', (await wall(v.page).getByTestId('login-forgot').innerText()).trim() === 'J’ai oublié mon mot de passe');
+      // l'alerte Telegram de l'administrateur passe par la base (fonction notify_admin_password_request) : ici elle est interceptee et notee, jamais envoyee pour de vrai
+      const CORSH = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+      const pwdAlerts = [];
+      let pwdAlertFails = false;
+      await v.page.route(/\/rest\/v1\/rpc\/notify_admin_password_request/, (route) => {
+        const req = route.request();
+        if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORSH, body: '' });
+        pwdAlerts.push(JSON.parse(req.postData() || '{}'));
+        return pwdAlertFails ? route.fulfill({ status: 404, headers: { 'content-type': 'application/json', ...CORSH }, body: JSON.stringify({ code: 'PGRST202', message: 'Could not find the function public.notify_admin_password_request' }) }) : route.fulfill({ status: 204, headers: CORSH, body: '' });
+      });
+      await v.page.route(/\/auth\/v1\/recover/, (route) => (route.request().method() === 'OPTIONS' ? route.fulfill({ status: 204, headers: CORSH, body: '' }) : route.fulfill({ status: 200, headers: { 'content-type': 'application/json', ...CORSH }, body: '{}' })));
       await wall(v.page).getByTestId('login-forgot').click();
       await v.page.waitForURL(/\/mot-de-passe-oublie/, { timeout: 15000 });
       await v.page.getByTestId('forgot-identifier').waitFor({ timeout: 15000 });
@@ -6883,6 +6894,36 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await popup.waitForLoadState('domcontentloaded').catch(() => {});
       const url = decodeURIComponent(popup.url());
       check('mot de passe oublie (numero) : WhatsApp de la boutique avec le numero du client', url.startsWith('https://wa.me/235') && /oublié le mot de passe/.test(url) && /66 12 34 56/.test(url), url);
+      check('mot de passe oublie (numero) : l\'equipe est prevenue sur Telegram (la base recoit le numero ecrit, une seule fois)', pwdAlerts.length === 1 && pwdAlerts[0].p_login === '66 12 34 56' && Object.keys(pwdAlerts[0]).join() === 'p_login', pwdAlerts);
+      // l'alerte tombe en panne (script pas encore lance) : l'ecran marche comme avant
+      pwdAlertFails = true;
+      await v.page.goto(`${BASE}/mot-de-passe-oublie`, { waitUntil: 'load' });
+      await v.page.getByTestId('forgot-identifier').waitFor({ timeout: 15000 });
+      await sleep(600);
+      await v.page.getByTestId('forgot-identifier').locator('visible=true').fill('+235 66 12 34 56');
+      await shown(v.page, 'Continuer').click();
+      await v.page.getByTestId('forgot-phone-help').waitFor({ timeout: 8000 });
+      check('alerte en panne (404) : l\'aide WhatsApp s\'affiche quand meme, aucun message d\'erreur pour le client', pwdAlerts.length === 2 && (await v.page.getByText(/Envoi impossible|Could not find|PGRST/).count()) === 0, pwdAlerts.length);
+      pwdAlertFails = false;
+      // ancien compte avec e-mail : le lien part par e-mail, l'equipe est seulement prevenue
+      await v.page.goto(`${BASE}/mot-de-passe-oublie`, { waitUntil: 'load' });
+      await v.page.getByTestId('forgot-identifier').waitFor({ timeout: 15000 });
+      await sleep(600);
+      await v.page.getByTestId('forgot-identifier').locator('visible=true').fill('  awa@example.com ');
+      await shown(v.page, 'Continuer').click();
+      await v.page.getByText(/un e-mail contenant un lien de réinitialisation/).waitFor({ timeout: 8000 });
+      check('mot de passe oublie (e-mail) : le lien part par e-mail ET l\'equipe est prevenue (e-mail sans espaces autour)', pwdAlerts.length === 3 && pwdAlerts[2].p_login === 'awa@example.com', pwdAlerts);
+      // rien d'ecrit ou n'importe quoi : refuse, aucune alerte
+      await v.page.goto(`${BASE}/mot-de-passe-oublie`, { waitUntil: 'load' });
+      await v.page.getByTestId('forgot-identifier').waitFor({ timeout: 15000 });
+      await sleep(600);
+      await shown(v.page, 'Continuer').click();
+      await sleep(700);
+      await v.page.getByTestId('forgot-identifier').locator('visible=true').fill('abc');
+      await shown(v.page, 'Continuer').click();
+      await sleep(700);
+      check('champ vide ou texte sans numero : refuse par le site, aucune alerte envoyee', pwdAlerts.length === 3 && (await v.page.getByTestId('forgot-phone-help').count()) === 0, pwdAlerts.length);
+      check('aucune erreur de page (mot de passe oublie)', v.errs.length === 0, v.errs);
       await v.ctx.close();
     }
     // 9) l'admin coupe et remet le compte obligatoire (page Clients)
