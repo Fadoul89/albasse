@@ -860,6 +860,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await sleep(Math.max(0, 22000 - (Date.now() - t0)));
       check('22 s apres l\'arrivee : le chat de Zara ne s\'est PAS ouvert tout seul, la carte est toujours visible', (await panelOf(c.page).count()) === 0 && (await c.page.getByTestId('zara-ad').count()) === 1);
       check('Zara n\'a demarre aucune conversation toute seule', c.chatStarts.length === 0, c.chatStarts);
+      await c.page.screenshot({ path: path.join(OUT, '7f2-apres-22-secondes-chat-ferme.png') });
       // le client touche le bouton rond : le chat s'ouvre, en fenetre du bas (pas en plein ecran)
       await c.page.getByRole('button', { name: FAB_NAME }).click();
       await panelOf(c.page).waitFor({ timeout: 12000 });
