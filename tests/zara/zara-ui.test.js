@@ -6099,7 +6099,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       prof(ids.hassan, 'Hassan Doba', '66000000', 'Doba', { whatsapp_number: '66222222' }),
       prof(ids.mariam, 'Mariam Sold', '66333333', null),
       prof(ids.ali, 'Ali Commande', '66444444', "N'Djamena"),
-      prof(ids.fatima, 'Fatima Calme', '66555555', 'Abéché'),
+      prof(ids.fatima, 'Fatima Calme', '66555555', 'Abéché', { email: '23566555555@tel.albasseshopping.com' }),
     ];
     const productsR = [
       { id: P.slip, name: 'Chaussures homme slip-on sport ', slug: 'chaussures-homme-slip-on-sport', price: 15000, compare_at_price: null, stock: 6, is_active: true },
@@ -6116,12 +6116,19 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       { user_id: ids.ali, product_id: P.bought, cart_status: 'none', last_viewed_at: '2026-10-28T10:00:00Z', active_seconds: 90 },
     ];
     const ordersR = [{ user_id: ids.ali, status: 'pending', items: [{ product_id: P.bought, product_name: 'Article déjà commandé', quantity: 1 }] }];
+    // les e-mails que Zara a envoyes (table email_outbox, lisible par l'administrateur) : Aicha a recu l'e-mail « absents » hier et a clique ; Hassan une campagne avec une adresse refusee ;
+    // Mariam et Ali : rien ; Fatima : compte cree avec le telephone seulement (pas d'adresse)
+    const emailRowsR = [
+      { user_id: ids.aicha, kind: 'promo_inactive', status: 'sent', sent_at: '2026-11-05T08:00:00Z', click_count: 1, bounce_type: null, complaint_at: null },
+      { user_id: ids.aicha, kind: 'promo_inactive', status: 'sent', sent_at: '2026-10-20T08:00:00Z', click_count: 0, bounce_type: null, complaint_at: null },
+      { user_id: ids.hassan, kind: 'marketing', status: 'sent', sent_at: '2026-11-01T08:00:00Z', click_count: 0, bounce_type: 'hard', complaint_at: null },
+    ];
     const HDRR = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
     const jsonR = (route, body, status = 200) => route.fulfill({ status, headers: { 'content-type': 'application/json', ...HDRR }, body: JSON.stringify(body) });
     // la fausse base de l'administrateur ; failInterest : la lecture des articles regardes tombe en panne
-    const openClients = async ({ failInterest = false } = {}) => {
+    const openClients = async ({ failInterest = false, failEmails = false } = {}) => {
       const fu = adminR();
-      const seen = { interestUrl: null, ordersUrl: null, overviewCalls: 0 };
+      const seen = { interestUrl: null, ordersUrl: null, overviewCalls: 0, emailsUrl: null };
       const v = await newVisitor(phone, { storage: { [SKR]: fu.session }, fakeUser: fu, fakeStore: { waOrder: true, accountRequired: false, patches: [] } });
       await v.page.route(/\/rest\/v1\//, (route) => {
         const req = route.request();
@@ -6136,6 +6143,10 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         if (t === 'visitor_product_interest') {
           seen.interestUrl = u.search;
           return failInterest ? jsonR(route, { code: '42501', message: 'permission denied' }, 403) : jsonR(route, interestR);
+        }
+        if (t === 'email_outbox') {
+          seen.emailsUrl = u.search;
+          return failEmails ? jsonR(route, { code: '42501', message: 'permission denied' }, 403) : jsonR(route, emailRowsR);
         }
         if (t === 'products' && /compare_at_price/.test(u.searchParams.get('select') || '') && /^in\./.test(u.searchParams.get('id') || '')) return jsonR(route, productsR);
         if (['visitor_sessions', 'product_views', 'cart_events', 'favorites'].includes(t)) return jsonR(route, []);
@@ -6198,10 +6209,35 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await sleep(500);
       const f = await whatsappOf(v, 'Fatima');
       check('Fatima (aucun article regardé) : simple bonjour', f.text === "Bonjour Fatima, ici l'équipe Albasse Shopping 😊", f.text);
+      // « Dernier e-mail Zara » sur chaque fiche (demande du patron : pourquoi Zara n'ecrit pas aux absents ?)
+      await v.page.getByText('Tous', { exact: true }).first().click();
+      await sleep(500);
+      const mailOf = async (name) => (await rowOf(v.page, name).getByTestId('customer-last-email').allInnerTexts()).join(' | ');
+      check('la lecture des e-mails : seulement les e-mails de Zara (« absents » et campagnes), envoyes, du plus recent au plus ancien',
+        /kind=in\.(\(|%28)promo_inactive(,|%2C)marketing(\)|%29)/.test(seen.emailsUrl || '') && /status=eq\.sent/.test(seen.emailsUrl || '') && /order=sent_at\.desc/.test(seen.emailsUrl || '') && !/welcome|order_/.test(seen.emailsUrl || ''), seen.emailsUrl);
+      const mA = await mailOf('Aïcha');
+      check('Aïcha : « Dernier e-mail Zara : 5 nov. 2026 · il y a N j · e-mail « absents » · 1 clic » (le plus recent, pas celui du 20 octobre)', /^✉️ Dernier e-mail Zara : 5 nov\.? 2026 · il y a \d+ j · e-mail « absents » · 1 clic$/.test(mA), mA);
+      const mH = await mailOf('Hassan');
+      check('Hassan : campagne Zara Marketing du 1er nov. et « adresse refusee par la messagerie »', /Dernier e-mail Zara : 1(er)? nov\.? 2026/.test(mH) && /campagne Zara Marketing/.test(mH) && /adresse refusée par la messagerie/.test(mH), mH);
+      const mM = await mailOf('Mariam');
+      check('Mariam (rien envoye, absente depuis plus de 7 jours, adresse reelle) : « Aucun e-mail Zara envoye pour l\'instant »', /Aucun e-mail Zara envoyé pour l.instant/.test(mM), mM);
+      const mF = await mailOf('Fatima');
+      check('Fatima (compte cree avec le telephone) : « Pas d\'adresse e-mail : Zara ne peut pas lui ecrire (WhatsApp seulement) »', /Pas d'adresse e-mail : Zara ne peut pas lui écrire \(WhatsApp seulement\)/.test(mF), mF);
+      check('Fatima : pas de bouton « E-mail » (elle n\'a pas d\'adresse), mais WhatsApp oui', (await rowOf(v.page, 'Fatima').getByTestId('customer-contact-email').count()) === 0 && (await rowOf(v.page, 'Fatima').getByTestId('customer-contact-whatsapp').count()) === 1);
+      check('chaque fiche a sa ligne « e-mail » (5 sur 5), jamais « undefined », « null » ou « NaN »', (await v.page.getByTestId('customer-last-email').count()) === 5 && !/undefined|null|NaN/.test((await v.page.getByTestId('customer-last-email').allInnerTexts()).join(' ')));
       await v.page.getByText('💙 Intérêt élevé', { exact: true }).first().click();
       await sleep(400);
       await v.page.screenshot({ path: path.join(OUT, '^a-clients-interet-eleve.png'), fullPage: true });
       check('aucune erreur (relance)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+
+    // --- a2. la lecture des e-mails envoyes tombe en panne : aucune ligne « Dernier e-mail Zara » (jamais un faux « aucun e-mail »), le reste de l'ecran marche
+    {
+      const { v } = await openClients({ failEmails: true });
+      check('panne de lecture des e-mails : les 5 clients s\'affichent quand meme', (await v.page.getByTestId('admin-customer-row').count()) === 5);
+      check('panne de lecture des e-mails : aucune ligne « Dernier e-mail Zara » ni « Aucun e-mail » (rien d\'invente)', (await v.page.getByTestId('customer-last-email').count()) === 0);
+      check('panne de lecture des e-mails : l\'article regarde et le WhatsApp marchent toujours', (await rowOf(v.page, 'Aïcha').getByTestId('customer-relance-article').count()) === 1 && (await rowOf(v.page, 'Aïcha').getByTestId('customer-contact-whatsapp').count()) === 1);
       await v.ctx.close();
     }
 

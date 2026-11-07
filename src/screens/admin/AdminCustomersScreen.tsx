@@ -19,6 +19,8 @@ import { phoneDigits, visibleEmail } from '../../lib/phoneAuth';
 import { fetchBrowsingOverview } from '../../lib/assistantData';
 import { fetchRelanceData, type RelanceData } from '../../lib/relanceData';
 import { pickRelance, relanceMessage, whatsappLink, type RelancePick } from '../../lib/relanceMessage';
+import { fetchLastZaraEmails, type LastEmailData } from '../../lib/lastEmailData';
+import { lastEmailLine, type LastEmail } from '../../lib/lastEmail';
 import { supabase } from '../../lib/supabase';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { StoreSettingToggle } from '../../components/StoreSettingToggle';
@@ -109,6 +111,8 @@ export function AdminCustomersScreen() {
   const [likesByUser, setLikesByUser] = useState<Map<string, number>>(new Map());
   // tous les articles regardés de près par des clients connectés, leurs commandes et les prix/stocks du jour (pour le message WhatsApp)
   const [relance, setRelance] = useState<RelanceData | null>(null);
+  // les e-mails que Zara a envoyés (« Dernier e-mail Zara » sur chaque fiche) ; null tant que la lecture n'a pas abouti : alors aucune ligne, jamais un faux « aucun e-mail »
+  const [sentEmails, setSentEmails] = useState<LastEmailData | null>(null);
 
   useEffect(() => {
     if (!profile?.is_admin) return;
@@ -123,6 +127,9 @@ export function AdminCustomersScreen() {
       if (!alive || !data) return;
       setRelance(data);
       setHighInterest((prev) => new Set([...prev, ...data.rows.map((r) => r.userId.slice(0, 8))]));
+    });
+    fetchLastZaraEmails().then((data) => {
+      if (alive && data) setSentEmails(data);
     });
     Promise.resolve(supabase.from('favorites').select('user_id')).then(({ data }) => {
       if (!alive || !data) return;
@@ -248,6 +255,7 @@ export function AdminCustomersScreen() {
             highInterest={highInterest.has(item.profile.id.slice(0, 8)) || (likesByUser.get(item.profile.id) ?? 0) > 0}
             likes={likesByUser.get(item.profile.id) ?? 0}
             pick={picks.get(item.profile.id) ?? null}
+            lastEmail={sentEmails ? (sentEmails.byUser.get(item.profile.id) ?? (sentEmails.complete ? null : undefined)) : undefined}
             onPress={() => navigation.navigate('AdminCustomerDetail', { userId: item.profile.id })}
           />
         )}
@@ -402,12 +410,14 @@ function CustomerRow({
   highInterest,
   likes,
   pick,
+  lastEmail,
   onPress,
 }: {
   customer: CustomerSummary;
   highInterest: boolean;
   likes: number;
   pick: RelancePick | null;
+  lastEmail: LastEmail | null | undefined;
   onPress: () => void;
 }) {
   const level = engagementLevel(customer.totalDurationSeconds);
@@ -417,6 +427,7 @@ function CustomerRow({
   const isAway = away >= AWAY_DAYS;
   const wa = whatsappUrl(customer, pick);
   const mail = emailUrl(customer);
+  const emailLine = lastEmailLine({ email: visibleEmail(customer.profile.email), notifyPromotions: customer.profile.notify_promotions, banned: !!customer.profile.banned, daysAway: away, last: lastEmail }, formatDate);
   return (
     <Pressable style={[styles.row, isAway && styles.rowAway]} onPress={onPress} testID="admin-customer-row">
       <View style={styles.rowHeader}>
@@ -479,6 +490,11 @@ function CustomerRow({
         📍 {customer.profile.region ?? '—'}, {customer.profile.country ?? '—'}
       </Text>
       <Text style={styles.rowMeta}>Créé le {formatDate(customer.profile.created_at)}</Text>
+      {emailLine && (
+        <Text style={[styles.rowMeta, emailLine.tone === 'sent' && styles.rowMailSent, emailLine.tone === 'problem' && styles.rowMailProblem]} testID="customer-last-email">
+          {emailLine.text}
+        </Text>
+      )}
       <View style={styles.rowFooter}>
         <Text style={styles.rowFooterText}>⏱️ {formatDuration(customer.totalDurationSeconds)}</Text>
         <Text style={styles.rowFooterText}>🛒 {customer.orderCount} commande(s)</Text>
@@ -594,6 +610,8 @@ const styles = StyleSheet.create({
   rowRelance: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 11.5, lineHeight: 16, marginBottom: 4 },
   rowLoyalty: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 11, marginBottom: 2 },
   rowMeta: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11, marginTop: 2 },
+  rowMailSent: { color: colors.goldLight, fontFamily: fonts.bodyMedium },
+  rowMailProblem: { color: '#ff8a80', fontFamily: fonts.bodyMedium },
   rowFooter: { flexDirection: 'row', gap: 14, marginTop: 8 },
   rowFooterText: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 11 },
   pageBar: { alignItems: 'center', paddingVertical: spacing.md },
