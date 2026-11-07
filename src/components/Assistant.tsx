@@ -4,12 +4,10 @@ import { Image } from 'expo-image';
 import { colors, fonts, radius } from '../theme';
 import { navigationRef } from '../navigation/navigationRef';
 import { useAssistantStore } from '../store/assistantStore';
-import { useZaraAdSignal, zaraChatOpensAt } from '../store/zaraAdSignal';
 import { useAuthStore } from '../store/authStore';
 import { firstNameOfFullName } from '../lib/assistantBrain';
 import { texts } from '../lib/assistantText';
 import { pushReminderNow } from '../lib/pushReminder';
-import { playZaraDing } from '../lib/zaraSound';
 import { AssistantPanel } from './AssistantPanel';
 import { TAB_BAR_HEIGHT } from '../navigation/tabLayout';
 
@@ -20,10 +18,6 @@ const MEMBER_TEASER_DELAY_MS = 10000;
 const TEASER_DURATION_MS = 10000;
 const TEASER_SEEN_KEY = 'albasse_assistant_teaser_seen';
 const MEMBER_TEASER_SEEN_KEY = 'albasse_assistant_teaser_member_seen';
-// Zara prend la parole la première : sur l'Accueil, 8 secondes après l'arrivée, elle ouvre toute seule la conversation (une seule fois par visite).
-const AUTO_OPEN_DELAY_MS = 8000;
-const AUTO_OPEN_SEEN_KEY = 'albasse_assistant_autoopen_seen';
-let autoOpenedThisVisit = false; // application : pas de sessionStorage, on retient pour la durée de la visite
 const SIZE = 62;
 const PRODUCT_BAR_LIFT = 62;
 // Sur les pages avec la barre du bas (Accueil, Recherche, Commandes, Compte), le bouton est au milieu de la barre, dans l'espace ouvert
@@ -411,49 +405,13 @@ export function Assistant() {
     el.classList.add('notranslate');
   });
 
-  // Ouverture automatique : seulement sur l'Accueil, une fois par visite, et pas si le visiteur a déjà touché ou fermé Zara. S'il quitte l'Accueil
-  // avant la fin des 8 secondes, rien ne s'ouvre et la petite bulle reprend son rôle.
-  const onHome = routeName === 'Home';
-  const autoOpenPending = onHome && !open && !teaserDismissed && !autoOpenedThisVisit && !teaserAlreadySeen(AUTO_OPEN_SEEN_KEY);
-  // Si Zara gère les publicités et qu'une carte va s'afficher sur l'accueil, Zara ouvre son chat 10 secondes après l'apparition de la carte
-  // (jamais avant l'heure habituelle de 8 secondes) : le client voit d'abord la publicité.
-  const adReadyAt = useZaraAdSignal((s) => s.readyAt);
-  const autoOpenStart = useRef<number | null>(null);
-  useEffect(() => {
-    if (!autoOpenPending) {
-      autoOpenStart.current = null;
-      return;
-    }
-    if (autoOpenStart.current === null) autoOpenStart.current = Date.now();
-    const wait = Math.max(0, zaraChatOpensAt(autoOpenStart.current, AUTO_OPEN_DELAY_MS, adReadyAt) - Date.now());
-    const timer = setTimeout(() => {
-      autoOpenedThisVisit = true;
-      if (Platform.OS === 'web') {
-        try {
-          window.sessionStorage.setItem(AUTO_OPEN_SEEN_KEY, '1');
-          // la petite bulle ne revient pas non plus après un rechargement de la même visite
-          window.sessionStorage.setItem(TEASER_SEEN_KEY, '1');
-          window.sessionStorage.setItem(MEMBER_TEASER_SEEN_KEY, '1');
-        } catch {
-          // ignore : elle pourra se rouvrir seule après un rechargement
-        }
-      }
-      // un petit « ding » si le téléphone l'autorise (il faut que le visiteur ait déjà touché l'écran), sinon Zara s'ouvre en silence
-      playZaraDing();
-      // même ouverture que le toucher sur la bulle : rappel des notifications ou invitation à installer s'ils sont dus, sinon l'accueil de Zara
-      if (pushDue) openFor('push');
-      else if (installDue) openFor('install');
-      else openChat();
-    }, wait);
-    return () => clearTimeout(timer);
-  }, [autoOpenPending, adReadyAt, pushDue, installDue, openFor, openChat]);
+  // Zara n'ouvre JAMAIS son chat toute seule (demande du patron, 7 novembre 2026) : la fenêtre ne s'ouvre que si le visiteur touche le bouton rond ou la petite bulle.
 
   // Un client qui se connecte pendant la visite a droit à sa propre salutation (par son prénom), même si la bulle des visiteurs est déjà passée.
   const isMember = !!memberName;
   useEffect(() => {
     const seenKey = isMember ? MEMBER_TEASER_SEEN_KEY : TEASER_SEEN_KEY;
-    // sur l'Accueil, Zara s'ouvre toute seule dans 8 secondes : la bulle ne passe pas juste avant
-    if (open || teaserDismissed || autoOpenPending || teaserAlreadySeen(seenKey)) return;
+    if (open || teaserDismissed || teaserAlreadySeen(seenKey)) return;
     const delay = isMember ? MEMBER_TEASER_DELAY_MS : TEASER_DELAY_MS;
     const show = setTimeout(() => {
       setTeaserVisible(true);
@@ -470,7 +428,7 @@ export function Assistant() {
       clearTimeout(show);
       clearTimeout(hide);
     };
-  }, [open, teaserDismissed, isMember, autoOpenPending]);
+  }, [open, teaserDismissed, isMember]);
 
   if (routeName?.startsWith('Admin')) return null;
 
