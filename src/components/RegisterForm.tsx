@@ -87,7 +87,7 @@ export function RegisterForm({ onSuccess, onPrivacy }: { onSuccess: () => void; 
           🎁 {inviterGreeting(inviter)}
         </Text>
       ) : null}
-      <Text style={styles.sectionLabel}>Créer mon compte</Text>
+      <Text style={styles.sectionLabel}>Créer mon compte · c’est rapide</Text>
       <TextInput
         testID="register-name"
         autoComplete="name"
