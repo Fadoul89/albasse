@@ -194,7 +194,7 @@ export function AdminCustomerDetailScreen({ route }: Props) {
           </Pressable>
         )}
 
-        <AdminAccountManager profile={profile} onChanged={refreshCustomers} onDeleted={() => { refreshCustomers(); navigation.goBack(); }} />
+        <AdminAccountManager profile={profile} onChanged={refreshCustomers} onDeleted={() => { refreshCustomers(); if (navigation.canGoBack()) navigation.goBack(); else navigation.navigate('AdminCustomers' as never); }} />
 
         <Section title="🔑 Mot de passe oublié">
           <View testID="admin-password-section">
