@@ -1775,6 +1775,25 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await boss.page.getByTestId('targeted-ad').scrollIntoViewIfNeeded();
       await boss.page.screenshot({ path: path.join(OUT, '€7-annonce-administrateur.png') });
       await boss.ctx.close();
+      // militaires et forces de l'ordre : le badge « groupe sanguin » choisi par le patron (lib/adAudiences, FORCES_PRODUCT_SLUGS)
+      const badgeLive = liveE.find((p) => p.slug === 'bagde-groupe-sanguin');
+      if (badgeLive && okP(badgeLive)) {
+        for (const metier of ['Militaire', 'Gendarme', 'Policier']) {
+          const f = await homeE({ user: memberE({ profession: metier }) });
+          await waitAdE(f.page);
+          check(`métier « ${metier} » : l'annonce est le badge « ${badgeLive.name.trim()} », « Pensé pour les militaires et les forces de l’ordre. »`, (await txt(f.page, 'targeted-ad-name')) === badgeLive.name.trim() && (await txt(f.page, 'targeted-ad-headline')) === 'Pensé pour les militaires et les forces de l’ordre.', [await txt(f.page, 'targeted-ad-name'), await txt(f.page, 'targeted-ad-headline')]);
+          if (metier === 'Militaire') {
+            check('la raison dit le métier écrit dans le compte, sans fausse rareté ni faux pourcentage', /Vous avez indiqué un métier militaire ou de sécurité/.test(await txt(f.page, 'targeted-ad-why')) && !/rare|plus que|%/i.test(await txt(f.page, 'targeted-ad')), await txt(f.page, 'targeted-ad-why'));
+            await f.page.getByTestId('targeted-ad').scrollIntoViewIfNeeded();
+            await f.page.screenshot({ path: path.join(OUT, '€10-annonce-militaire.png') });
+          }
+          await f.ctx.close();
+        }
+        const shop1 = await homeE({ user: memberE({ profession: 'commerçant' }) });
+        await sleep(6000);
+        if (await shop1.page.getByTestId('targeted-ad').count()) check('un commerçant ne reçoit pas l\'annonce des militaires', (await txt(shop1.page, 'targeted-ad-headline')) !== 'Pensé pour les militaires et les forces de l’ordre.');
+        await shop1.ctx.close();
+      } else console.log('SAUTE  militaires : le badge « groupe sanguin » n\'est pas en vente en ce moment');
       // homme : « Vitalité & Énergie Homme » est réservée aux mariés de 32 ans et plus (lib/adSensitive) ; un homme ordinaire reçoit autre chose, jamais la catégorie des femmes
       const menCat = catsE.find((c) => /homme/i.test(c.name));
       const menItems = menCat ? liveE.filter((p) => p.category_id === menCat.id && okP(p)) : [];
@@ -1824,6 +1843,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         { email: 'a1@gmail.com', gender: 'homme', profession: 'Administrateur' },
         { email: 'd1@gmail.com', gender: null, profession: 'Directeur' },
         { email: 'c1@gmail.com', gender: null, profession: 'commerçant' },
+        { email: 'f1@gmail.com', gender: 'homme', profession: 'militaire' },
+        { email: 'f2@gmail.com', gender: 'femme', profession: 'Gendarme' },
         { email: 'test1@gmail.com', gender: 'femme', profession: 'étudiant' }, // compte test : jamais compté
       ];
       await v.page.route(/\/rest\/v1\/profiles\?/, (rt) => {
@@ -1834,15 +1855,21 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.page.goto(`${BASE}/admin/promotions`, { waitUntil: 'load' });
       await v.page.getByTestId('zara-audiences').waitFor({ timeout: 25000 });
       await v.page.getByTestId('zara-audience-etudiant-count').filter({ hasText: /clients/ }).waitFor({ timeout: 15000 });
-      check('admin : « Annonces de Zara · 24 h sur 24 » avec les 5 publics (femmes, hommes, élèves, étudiants, administrateurs)', (await v.page.locator('[data-testid^="zara-audience-"][data-testid$="-count"]').count()) === 5);
+      check('admin : « Annonces de Zara · 24 h sur 24 » avec les 6 publics (femmes, hommes, élèves, étudiants, administrateurs, militaires et forces de l’ordre)', (await v.page.locator('[data-testid^="zara-audience-"][data-testid$="-count"]').count()) === 6);
       const cnt = async (k) => (await txt(v.page, `zara-audience-${k}-count`));
-      check('admin : les vrais nombres de clients par public (compte test non compté) : femmes 2, hommes 2, élèves 2, étudiants 3, administrateurs 2', (await cnt('femme')) === '2 clients' && (await cnt('homme')) === '2 clients' && (await cnt('eleve')) === '2 clients' && (await cnt('etudiant')) === '3 clients' && (await cnt('admin')) === '2 clients', [await cnt('femme'), await cnt('homme'), await cnt('eleve'), await cnt('etudiant'), await cnt('admin')]);
+      check('admin : les vrais nombres de clients par public (compte test non compté) : femmes 3, hommes 3, élèves 2, étudiants 3, administrateurs 2, militaires et forces de l’ordre 2', (await cnt('femme')) === '3 clients' && (await cnt('homme')) === '3 clients' && (await cnt('eleve')) === '2 clients' && (await cnt('etudiant')) === '3 clients' && (await cnt('admin')) === '2 clients' && (await cnt('forces')) === '2 clients', [await cnt('femme'), await cnt('homme'), await cnt('eleve'), await cnt('etudiant'), await cnt('admin'), await cnt('forces')]);
       await v.page.getByTestId('zara-audiences-status').filter({ hasText: /Allumé/ }).waitFor({ timeout: 10000 }).catch(() => {}); // l'écran dit « Éteint » un instant, le temps de lire le réglage
       check('admin : « Allumé » quand l’interrupteur est allumé, et « changement toutes les 6 heures, jour et nuit »', /Allumé/.test(await txt(v.page, 'zara-audiences-status')) && /toutes les 6 heures, jour et nuit \(00 h, 06 h, 12 h, 18 h\)\. Prochain changement : \d\d h \d\d/.test(await txt(v.page, 'zara-audiences-next')), [await txt(v.page, 'zara-audiences-status'), await txt(v.page, 'zara-audiences-next')]);
+      const badgeAdm = liveE.find((p) => p.slug === 'bagde-groupe-sanguin');
+      if (badgeAdm && okP(badgeAdm)) await v.page.getByTestId('zara-audience-forces-name').waitFor({ timeout: 20000 }).catch(() => {}); // les annonces se chargent un instant après les nombres de clients
       const names = [];
-      for (const k of ['femme', 'homme', 'eleve', 'etudiant', 'admin']) {
+      for (const k of ['femme', 'homme', 'eleve', 'etudiant', 'admin', 'forces']) {
         const has = (await v.page.getByTestId(`zara-audience-${k}-name`).count()) === 1;
         names.push([k, has ? await txt(v.page, `zara-audience-${k}-name`) : null]);
+      }
+      if (badgeAdm && okP(badgeAdm)) {
+        const forcesName = (await v.page.getByTestId('zara-audience-forces-name').count()) ? await txt(v.page, 'zara-audience-forces-name') : null;
+        check('admin : le public « militaires et forces de l’ordre » montre le badge « groupe sanguin » et « Pensé pour les militaires et les forces de l’ordre. »', forcesName === badgeAdm.name.trim() && /Pensé pour les militaires/.test(await txt(v.page, 'zara-audience-forces-headline')), forcesName);
       }
       check('admin : chaque public montre son annonce (nom de l’article, accroche) ou dit que Zara n’invente rien', names.every(([, n]) => n !== null) || (await v.page.locator('[data-testid$="-none"]').count()) > 0, names);
       check('admin : aucun des 5 publics ne reçoit un article « Vitalité & Énergie » (réservé aux mariés de 32 ans et plus)', names.every(([, n]) => !n || !vitNames.has(n)), names);

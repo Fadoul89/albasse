@@ -10,8 +10,8 @@ Elle est **choisie pour chaque client** avec de **vraies raisons**, et elle dit 
 Le même interrupteur que les autres publicités de Zara : Admin → **Promotions intelligentes** → « 🤖 Zara gère les publicités à l'écran ».
 Éteint (ou script `add-zara-ads.sql` pas lancé) : aucune annonce. **Aucun nouveau script SQL.**
 
-## Zara travaille 24 h sur 24, pour 5 publics
-Zara prépare des annonces pour **cinq publics** : **Femmes, Hommes, Élèves, Étudiants, Administrateurs et cadres**.
+## Zara travaille 24 h sur 24, pour 6 publics
+Zara prépare des annonces pour **six publics** : **Femmes, Hommes, Élèves, Étudiants, Administrateurs et cadres, Militaires et forces de l'ordre**.
 Elle **change les annonces 4 fois par jour, jour et nuit** (à 00 h, 06 h, 12 h et 18 h, heure du Tchad) : le même client ne voit pas toujours le même article.
 
 Un client appartient à un public **seulement d'après ce qu'il a écrit lui-même dans son compte** (rien n'est deviné d'après le prénom ou le comportement) :
@@ -19,6 +19,7 @@ Un client appartient à un public **seulement d'après ce qu'il a écrit lui-mê
 - **Étudiants** : le métier contient « étudiant », « étudiante », « étudiants », « etudiant », même la faute « etudient » (et en arabe طالب…).
 - **Élèves** : « élève », « élèves », « lycéen », « collégienne »… (et en arabe تلميذ…). Un « étudiant en administration » reste étudiant.
 - **Administrateurs et cadres** : « administrateur », « administratrice », « administration », « directeur », « ingénieur », « gestionnaire », « comptable », « banquier », « entrepreneur »… (la liste des métiers haut placés de Zara) et en arabe مدير, إداري…
+- **Militaires et forces de l'ordre** (demande du patron, 8 novembre 2026) : le métier contient « militaire », « soldat », « armée », « police », « policier », « gendarme », « gendarmerie », « douane », « agent de sécurité », « vigile », « garde nationale / nomade », « GNNT », un grade (« sergent », « caporal », « adjudant », « colonel », « commandant », « capitaine », « lieutenant », « commissaire », « général »…), les fautes courantes (« policie », « douan »), et en arabe عسكري، جندي، شرطي، دركي، ضابط، جيش، حرس… Les grades qui existent aussi dans la vie civile ne comptent que s'ils **ouvrent** le métier (« Colonel », « Commandant de brigade ») : « directeur général », « employé général », « militant » ne sont **pas** des militaires. Ce public passe **avant** « Administrateurs et cadres » (« colonel » et « commandant » sont aussi dans la liste des métiers haut placés). Un étudiant ou un élève militaire reste étudiant ou élève.
 - Un client peut être dans deux publics (un homme étudiant) : le public du **métier** passe d'abord, et le genre reste toujours un filtre.
 
 ## Comment Zara cible (seulement des choses vraies)
@@ -28,7 +29,7 @@ Dans cet ordre, la première raison vraie gagne :
 | --- | --- | --- | --- |
 | 1 | **Article regardé de près**, pas commandé | le suivi de navigation de ce téléphone (plusieurs consultations, retours, variantes essayées, temps passé) ; regardé il y a moins de 30 jours | « Vous avez regardé cet article. Il vous attend toujours. » |
 | 2 | **Catégorie explorée** (au moins 2 articles regardés dedans) | le suivi de navigation : un article de cette catégorie que le client n'a pas encore vu (une vraie promotion passe en premier) | « Vous aimez « Montres » ? Voici un article à découvrir. » |
-| 3 | **Public du métier** : élève, étudiant, administrateur | le métier écrit dans le compte ; les prix viennent du catalogue | Élève : « Pour les élèves : un article à petit prix. » (un article du quart le moins cher de la boutique). Étudiant : « Pour les étudiants : … » (parmi les 40 % les moins chers, donc une autre annonce que celle des élèves). Administrateur : « Une sélection haut de gamme pour vous. » (le quart le plus cher). Une vraie promotion passe d'abord pour les élèves et étudiants. |
+| 3 | **Public du métier** : élève, étudiant, **militaire / forces de l'ordre**, administrateur | le métier écrit dans le compte ; les prix viennent du catalogue | Élève : « Pour les élèves : un article à petit prix. » (un article du quart le moins cher de la boutique). Étudiant : « Pour les étudiants : … » (parmi les 40 % les moins chers, donc une autre annonce que celle des élèves). Administrateur : « Une sélection haut de gamme pour vous. » (le quart le plus cher). Une vraie promotion passe d'abord pour les élèves et étudiants. |
 | 4 | **Public du genre** : femme ou homme | la catégorie de son genre (« Vêtements pour femmes », « Vêtements pour hommes » ; « Vitalité & Énergie Homme » seulement pour les mariés de 32 ans et plus, voir plus bas), la vraie promotion puis le plus récent d'abord | « Choisi pour vous : « Vêtements pour femmes ». » |
 | 5 | **Vraie promotion en cours** | ancien prix barré seulement pendant une vente flash ou une promotion de Zara, remise réelle de 5 à 60 % (`lib/promotions`) | « Prix réduit : -20 % jusqu'au 10 novembre » |
 
@@ -56,6 +57,16 @@ Admin → **Promotions intelligentes** (sous le délai d'affichage) : pour **cha
 L'écran se met à jour tout seul chaque minute. Interrupteur éteint : il indique « Éteint : rien n'est affiché aux clients (c'est seulement un aperçu) ».
 Un public sans annonce vraie (par exemple aucune femme en vente dans la catégorie « Vêtements pour femmes ») affiche « Aucune annonce vraie pour ce public pour le moment : Zara n'invente rien. »
 
+## L'annonce des militaires et forces de l'ordre : le badge « groupe sanguin »
+- L'article est **choisi par le patron** : « Bagde Groupe sanguin » (écusson brodé militaire, 5 000 FCFA ; fiche `/produit/bagde-groupe-sanguin`). Il est repéré par son **slug** dans `FORCES_PRODUCT_SLUGS` (`src/lib/adAudiences.ts`) : pour proposer d'autres articles à ce public, il suffit d'ajouter leur slug à cette liste.
+- Phrase : « Pensé pour les militaires et les forces de l'ordre. » ; raison : « Vous avez indiqué un métier militaire ou de sécurité (armée, police, gendarmerie…) dans votre compte, et cet article est conçu pour les militaires et les forces de l'ordre. » (aussi en arabe). **Aucune fausse rareté, aucun faux pourcentage.**
+- Un article de cette liste **épuisé, retiré de la vente ou sans photo n'est pas proposé** : Zara ne met jamais un autre article à sa place (le public « forces » n'a alors pas d'annonce, comme les autres publics sans article vrai).
+- Un militaire qui a **regardé de près** un autre article reçoit d'abord cet article (« Vous avez regardé… », raisons 1 et 2 du tableau) ; le badge vient ensuite.
+- Le badge est dans la catégorie « Sacs et Bagages » (aucun public de genre) : une femme gendarme et un homme militaire le reçoivent tous les deux.
+- Il reste en vente normalement partout (catégorie, recherche, fiche).
+- L'écran de l'administrateur « Annonces de Zara · 24 h sur 24 » (Promotions intelligentes) affiche ce 6ᵉ public avec le nombre de clients concernés (d'après leur métier) et l'annonce du moment.
+- Les annonces ne s'affichent que si l'interrupteur « Zara gère les publicités à l'écran » est allumé (il l'est aujourd'hui).
+
 ## Ce que le client peut faire
 - **Acheter maintenant** : la fiche de l'article. **Demander à Zara** : le chat de Zara présente cet article.
 - **✕** : l'annonce disparaît, et **15 secondes plus tard Zara en propose une autre** : un **autre article**, jamais celui qui vient d'être fermé (il n'est plus proposé pendant 24 h). L'annonce suivante a la même allure (boutons, « Pourquoi cette annonce ? ») et **une vraie raison** : un autre article regardé, une catégorie explorée, le public du client, une vraie promotion, ou, si Zara n'a rien d'autre, une **vraie nouveauté** (article ajouté à la boutique depuis moins de 30 jours, d'après sa date dans la base : « Une nouveauté à découvrir. — Cet article a été ajouté à la boutique il y a 5 jours. »). S'il n'y a aucune vraie raison, Zara ne montre rien (elle n'invente jamais). La nouveauté ne sert **que** pour l'annonce qui suit un ✕, jamais pour la première.
@@ -69,5 +80,5 @@ Un public sans annonce vraie (par exemple aucune femme en vente dans la catégor
 
 ## Code et tests
 - Règles (fonctions pures) : `src/lib/adTargeting.ts`, `src/lib/adAudiences.ts` (les publics) ; écran de l'administrateur : `src/components/ZaraAdsAudiences.tsx` ; carte : `src/components/TargetedAdCard.tsx` ; place dans l'accueil : `src/screens/HomeScreen.tsx`.
-- `node --import ./tests/zara/register.mjs tests/email/ad-targeting.test.ts` (129 contrôles : publics, métiers, genre, rotation de 6 h, écran de l'administrateur, ✕ et annonce suivante après 15 secondes, nouveautés, « Vitalité & Énergie » réservé aux mariés de 32 ans et plus).
+- `node --import ./tests/zara/register.mjs tests/email/ad-targeting.test.ts` (154 contrôles : publics, métiers, militaires et forces de l'ordre, genre, rotation de 6 h, écran de l'administrateur, ✕ et annonce suivante après 15 secondes, nouveautés, « Vitalité & Énergie » réservé aux mariés de 32 ans et plus).
 - Navigateur : `PARTS='€' node tests/zara/zara-ui.test.js <dist> <port>`.
