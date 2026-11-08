@@ -53,6 +53,7 @@ export type RootStackParamList = {
   InviteFriends: undefined;
   AdminInvites: undefined;
   AdminPartners: undefined;
+  AdminZaraSettings: undefined;
 };
 
 export type TabParamList = {

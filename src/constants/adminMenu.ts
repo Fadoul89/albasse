@@ -25,6 +25,7 @@ export type AdminRoute = Extract<
   | 'AdminWheel'
   | 'AdminInvites'
   | 'AdminPartners'
+  | 'AdminZaraSettings'
 >;
 
 export interface AdminMenuItem {
@@ -33,7 +34,7 @@ export interface AdminMenuItem {
   route: AdminRoute;
 }
 export interface AdminMenuGroup {
-  key: 'reports' | 'customers' | 'marketing' | 'shop' | 'settings';
+  key: 'reports' | 'customers' | 'marketing' | 'shop' | 'settings' | 'zara';
   icon: string;
   title: string;
   items: AdminMenuItem[];
@@ -96,5 +97,12 @@ export const ADMIN_MENU_GROUPS: AdminMenuGroup[] = [
       { icon: '💳', label: 'Paiement', route: 'AdminPaymentSettings' },
       { icon: '🚚', label: 'Livraison (Villes)', route: 'AdminCities' },
     ],
+  },
+  {
+    // à côté des Paramètres : tous les réglages de Zara réunis sur une page (docs/parametres-zara.md)
+    key: 'zara',
+    icon: '🤖',
+    title: 'Paramètres Zara',
+    items: [{ icon: '⚙️', label: 'Tous les réglages de Zara', route: 'AdminZaraSettings' }],
   },
 ];

@@ -9747,20 +9747,89 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         await page.goto(`${BASE}/admin/tableau-de-bord`, { waitUntil: 'load' });
         await page.getByTestId('admin-menu').waitFor({ timeout: 25000 });
         const groupOf = async (key) => (await page.getByTestId(`admin-menu-group-${key}`).innerText()).replace(/\s+/g, ' ');
-        const g = { reports: await groupOf('reports'), customers: await groupOf('customers'), marketing: await groupOf('marketing'), shop: await groupOf('shop'), settings: await groupOf('settings') };
+        const g = { reports: await groupOf('reports'), customers: await groupOf('customers'), marketing: await groupOf('marketing'), shop: await groupOf('shop'), settings: await groupOf('settings'), zara: await groupOf('zara') };
         check('tableau de bord : 5 themes (Rapports, Clients, Marketing, Boutique, Parametres)', /^📈 Rapports/.test(g.reports) && /^👥 Clients/.test(g.customers) && /^📣 Marketing/.test(g.marketing) && /^🛍️ Boutique/.test(g.shop) && /^⚙️ Paramètres/.test(g.settings), g);
         check('Rapports ensemble : performance par source, Zara, suivi de navigation, notifications', ['Performance par source', 'Statistiques de Zara', 'Suivi de navigation', 'Notifications'].every((l) => g.reports.includes(l)), g.reports);
         check('Clients ensemble : clients, meilleurs clients potentiels, rappels WhatsApp', ['Clients', 'Meilleurs clients potentiels', 'Rappels WhatsApp'].every((l) => g.customers.includes(l)), g.customers);
         check('Marketing ensemble : assistant marketing, Zara Marketing (e-mails), promotions, roue de la chance, affilies', ['Assistant marketing', 'Zara Marketing (e-mails)', 'Promotions intelligentes', 'Roue de la chance', 'Affiliés'].every((l) => g.marketing.includes(l)), g.marketing);
         check('Boutique : commandes et factures, produits, categories, voyage ; Parametres : contact, paiement, livraison', ['Commandes et factures', 'Produits', 'Catégories', 'Voyage'].every((l) => g.shop.includes(l)) && ['Informations de contact', 'Paiement', 'Livraison (Villes)'].every((l) => g.settings.includes(l)), { shop: g.shop, settings: g.settings });
+        // photo du tableau de bord en entier (ecran haut), puis retour a la taille du telephone
+        await page.setViewportSize({ width: 390, height: 2300 });
+        await sleep(700);
         await page.screenshot({ path: path.join(OUT, 'C8-tableau-de-bord.png') });
-        check('22 pages accessibles depuis le tableau de bord (dont Zara SEO, Parrainages et Mes partenaires)', (await page.locator('[data-testid^="admin-menu-Admin"]').count()) === 22);
+        await page.setViewportSize({ width: 390, height: 800 });
+        await sleep(400);
+        check('23 pages accessibles depuis le tableau de bord (dont Zara SEO, Parrainages, Mes partenaires et Paramètres Zara)', (await page.locator('[data-testid^="admin-menu-Admin"]').count()) === 23);
+        check('« Paramètres Zara » : un theme a cote des Parametres, avec « Tous les réglages de Zara »', /^🤖 Paramètres Zara/.test(g.zara) && g.zara.includes('Tous les réglages de Zara') && (await page.getByTestId('admin-menu-group-settings').boundingBox()).y < (await page.getByTestId('admin-menu-group-zara').boundingBox()).y, g.zara);
         check('« Mes partenaires (privé) » est dans le thème Boutique, à côté des produits', /Mes partenaires/.test(g.shop), g.shop);
         await page.getByTestId('admin-menu-AdminStoreSettings').click();
         await page.getByTestId('settings-legal-line').waitFor({ timeout: 15000 });
         check('un theme mene a la bonne page (Parametres › Informations de contact)', new URL(page.url()).pathname === '/admin/parametres/contact', page.url());
         check('aucune erreur (tableau de bord)', c.errs.length === 0, c.errs);
         await c.ctx.close();
+      }
+      // --- administrateur : « Paramètres Zara » = tous les reglages de Zara sur une page (memes interrupteurs que ailleurs ; Zara Marketing seulement en lecture)
+      {
+        const fa = mk(true);
+        const fsZ = { waOrder: true, zaraAds: false, zaraDelay: 5, zaraAutoFlash: false, pushNewProducts: true, inactiveEmails: false, telegramAbsent: false, patches: [] };
+        const c = await newVisitor(phone, { storage: { 'sb-xtitsmmccpkelxfjyqyh-auth-token': sessionFor(fa) }, fakeUser: fa, fakeStore: fsZ });
+        const { page } = c;
+        const hdrZ = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+        let mkaiWrites = 0;
+        await page.route('**/rest/v1/marketing_ai_settings*', async (route) => {
+          const m = route.request().method();
+          if (m === 'OPTIONS') return route.fulfill({ status: 204, headers: hdrZ });
+          if (m !== 'GET') { mkaiWrites++; return route.fulfill({ status: 204, headers: hdrZ }); }
+          return route.fulfill({ status: 200, headers: { ...hdrZ, 'content-type': 'application/json' }, body: JSON.stringify({ id: 1, mode: 'simulation', run_hour: 9, daily_limit: 50, require_approval: true }) });
+        });
+        await page.goto(`${BASE}/admin/tableau-de-bord`, { waitUntil: 'load' });
+        await page.getByTestId('admin-menu-AdminZaraSettings').click();
+        await page.getByTestId('zara-settings-screen').waitFor({ timeout: 25000 });
+        check('tableau de bord › « Tous les réglages de Zara » ouvre la page /admin/parametres-zara', new URL(page.url()).pathname === '/admin/parametres-zara', page.url());
+        await page.getByTestId('zara-ads-toggle').waitFor({ timeout: 25000 });
+        await page.getByTestId('zara-settings-marketing-mode').waitFor({ timeout: 15000 });
+        const body = (await page.locator('body').innerText()).replace(/\s+/g, ' ');
+        check('Paramètres Zara : les 3 parties (à l\'écran, messages envoyés, Zara Marketing)', /À l’écran des clients/.test(body) && /Messages que Zara envoie/.test(body) && /Zara Marketing \(e-mails\)/.test(body), body.slice(0, 300));
+        check('Paramètres Zara : tous les interrupteurs de Zara sont là (publicités, délai, Vente flash, nouveaux articles, e-mails absents, Telegram)',
+          (await page.getByTestId('zara-ads-switch').count()) === 1 && (await page.getByTestId('zara-delay').count()) === 1 && (await page.getByTestId('zara-auto-flash-switch').count()) === 1 &&
+          (await page.getByTestId('push-new-products-switch').count()) === 1 && (await page.getByTestId('inactive-emails-switch').count()) === 1 && (await page.getByTestId('telegram-absent-switch').count()) === 1);
+        check('Paramètres Zara : les états viennent de la base (pubs éteintes, nouveaux articles allumés)', /Désactivé/.test(await page.getByTestId('zara-ads-status').innerText()) && /Activé/.test(await page.getByTestId('push-new-products-status').innerText()));
+        check('Zara Marketing : état lu en lecture seule (Simulation, 50 e-mails au plus, approbation)', /Simulation/.test(await page.getByTestId('zara-settings-marketing-mode').innerText()) && /50 e-mails au plus par jour/.test(await page.getByTestId('zara-settings-marketing-detail').innerText()) && /approbation demandée/.test(await page.getByTestId('zara-settings-marketing-detail').innerText()));
+        check('Zara Marketing : aucun bouton « ACTIVER » ni interrupteur d\'envoi sur cette page (le verrou reste sur sa page)', (await page.getByText('ACTIVER', { exact: true }).count()) === 0 && (await page.getByText('Activer les envois').count()) === 0);
+        // photo de la page en entier (ecran haut), avant tout changement, puis retour a la taille du telephone
+        await page.setViewportSize({ width: 390, height: 2200 });
+        await sleep(700);
+        await page.screenshot({ path: path.join(OUT, 'C9-parametres-zara.png') });
+        await page.setViewportSize({ width: 390, height: 800 });
+        await sleep(2000); // les interrupteurs sont bloqués pendant la toute première lecture
+        await page.getByTestId('zara-ads-switch').click();
+        await page.getByText(/Sur l’accueil et dans les promotions, Zara met en avant/).waitFor({ timeout: 8000 });
+        check('interrupteur « Zara gère les publicités » : la base reçoit zara_ads_enabled = true', fsZ.patches.some((b) => b.zara_ads_enabled === true), fsZ.patches);
+        await page.getByTestId('zara-delay-10').click();
+        await page.getByText(/10 secondes après l’ouverture de l’accueil\./).first().waitFor({ timeout: 8000 });
+        check('délai : la base reçoit zara_ads_delay_seconds = 10', fsZ.patches.some((b) => b.zara_ads_delay_seconds === 10), fsZ.patches);
+        await page.getByTestId('zara-auto-flash-switch').click();
+        await page.getByText(/Zara choisit seule les articles de la Vente flash/).waitFor({ timeout: 8000 });
+        check('Vente flash automatique : la base reçoit zara_auto_flash_enabled = true', fsZ.patches.some((b) => b.zara_auto_flash_enabled === true), fsZ.patches);
+        check('Zara Marketing : rien n\'a été écrit dans ses réglages', mkaiWrites === 0, mkaiWrites);
+        await page.getByTestId('zara-settings-open-marketing').click();
+        await page.waitForURL(/\/admin\/zara-marketing$/, { timeout: 15000 });
+        check('« Ouvrir Zara Marketing » mène à la page de Zara Marketing', new URL(page.url()).pathname === '/admin/zara-marketing', page.url());
+        await page.goto(`${BASE}/admin/parametres-zara`, { waitUntil: 'load' });
+        await page.getByTestId('zara-settings-open-promotions').waitFor({ timeout: 25000 });
+        await page.getByTestId('zara-settings-open-promotions').click();
+        await page.waitForURL(/\/admin\/promotions$/, { timeout: 15000 });
+        check('« Promotions intelligentes » mène à sa page', new URL(page.url()).pathname === '/admin/promotions', page.url());
+        check('aucune erreur (Paramètres Zara)', c.errs.length === 0, c.errs);
+        check('aucune ecriture reelle (Paramètres Zara)', c.writes.every((w) => !/orders|profiles|marketing/.test(w)), c.writes);
+        await c.ctx.close();
+        // un client sans droits administrateur n'y entre pas
+        const nu = mk(false);
+        const n = await newVisitor(phone, { storage: { 'sb-xtitsmmccpkelxfjyqyh-auth-token': sessionFor(nu) }, fakeUser: nu, fakeStore: { waOrder: true, patches: [] } });
+        await n.page.goto(`${BASE}/admin/parametres-zara`, { waitUntil: 'load' });
+        await n.page.getByText('Accès réservé aux administrateurs.').waitFor({ timeout: 25000 });
+        check('un client qui n\'est pas administrateur : « Accès réservé aux administrateurs. », aucun interrupteur', (await n.page.getByTestId('zara-ads-switch').count()) === 0);
+        await n.ctx.close();
       }
       // --- administrateur : l'ecran « Zara Marketing » (3 controles, verrou, simulation, approbation, rapport) avec une fausse base et une fausse fonction
       {
