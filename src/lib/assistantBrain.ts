@@ -298,6 +298,15 @@ export function wantsCallback(text: string): boolean {
   return CALLBACK_RE.test(normalize(text));
 }
 
+// « J'ai oublié mon mot de passe », « changer mon mot de passe », « je n'arrive pas à me connecter », « نسيت كلمة السر » : Zara guide (docs/zara-mot-de-passe.md).
+// « code promo » / « code de parrainage » ne comptent pas : seul le code d'accès perdu compte. Motifs arabes déjà « lissés » (ة -> ه).
+const PASSWORD_RE =
+  /mot de passe|motdepasse|\bmdp\b|\bpassword\b|(oubli|perdu|perdre|retrouv|recuper)\w* (mon |ma |le |la |mes |l )?(compte|acces|identifiant|code(?! (promo|de parrainage|parrainage|de reduction|de remise|d invitation|cadeau)))|(arrive pas|peux pas|impossible)\b.{0,12}\b(connecter|connexion|entrer|rentrer|ouvrir mon compte)|كلمه (السر|المرور)|كلمه سر|كلمات السر|باسورد|الرقم السري|الرمز السري|نسيت (حسابي|رمزي|الرمز|الرقم السري)|استرجاع حسابي|استعاده حسابي/;
+
+export function wantsPassword(text: string): boolean {
+  return PASSWORD_RE.test(normalize(text));
+}
+
 export type Intent =
   | 'bot'
   | 'compliment'
@@ -330,6 +339,7 @@ export type Intent =
   | 'add'
   | 'install'
   | 'telegram'
+  | 'password'
   | 'tracking'
   | 'wholesale'
   | 'callback'
@@ -494,6 +504,8 @@ export function detectIntent(text: string): Intent {
   if (isThanksOnly(base, tokens)) return 'thanks';
   if (SMALLTALK.test(n)) return 'smalltalk';
   if (greetingKind(text) && base.length <= 3) return 'greeting';
+  // mot de passe oublié / à changer : avant « compte » et « connexion » (qui mènent à l'inscription)
+  if (wantsPassword(text)) return 'password';
   // le suivi de navigation passe avant « suivre ma commande » et les autres sujets
   if (trackingKind(text)) return 'tracking';
   if (wantsWholesale(text)) return 'wholesale';

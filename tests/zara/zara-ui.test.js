@@ -1775,6 +1775,25 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await boss.page.getByTestId('targeted-ad').scrollIntoViewIfNeeded();
       await boss.page.screenshot({ path: path.join(OUT, '€7-annonce-administrateur.png') });
       await boss.ctx.close();
+      // militaires et forces de l'ordre : le badge « groupe sanguin » choisi par le patron (lib/adAudiences, FORCES_PRODUCT_SLUGS)
+      const badgeLive = liveE.find((p) => p.slug === 'bagde-groupe-sanguin');
+      if (badgeLive && okP(badgeLive)) {
+        for (const metier of ['Militaire', 'Gendarme', 'Policier']) {
+          const f = await homeE({ user: memberE({ profession: metier }) });
+          await waitAdE(f.page);
+          check(`métier « ${metier} » : l'annonce est le badge « ${badgeLive.name.trim()} », « Pensé pour les militaires et les forces de l’ordre. »`, (await txt(f.page, 'targeted-ad-name')) === badgeLive.name.trim() && (await txt(f.page, 'targeted-ad-headline')) === 'Pensé pour les militaires et les forces de l’ordre.', [await txt(f.page, 'targeted-ad-name'), await txt(f.page, 'targeted-ad-headline')]);
+          if (metier === 'Militaire') {
+            check('la raison dit le métier écrit dans le compte, sans fausse rareté ni faux pourcentage', /Vous avez indiqué un métier militaire ou de sécurité/.test(await txt(f.page, 'targeted-ad-why')) && !/rare|plus que|%/i.test(await txt(f.page, 'targeted-ad')), await txt(f.page, 'targeted-ad-why'));
+            await f.page.getByTestId('targeted-ad').scrollIntoViewIfNeeded();
+            await f.page.screenshot({ path: path.join(OUT, '€10-annonce-militaire.png') });
+          }
+          await f.ctx.close();
+        }
+        const shop1 = await homeE({ user: memberE({ profession: 'commerçant' }) });
+        await sleep(6000);
+        if (await shop1.page.getByTestId('targeted-ad').count()) check('un commerçant ne reçoit pas l\'annonce des militaires', (await txt(shop1.page, 'targeted-ad-headline')) !== 'Pensé pour les militaires et les forces de l’ordre.');
+        await shop1.ctx.close();
+      } else console.log('SAUTE  militaires : le badge « groupe sanguin » n\'est pas en vente en ce moment');
       // homme : « Vitalité & Énergie Homme » est réservée aux mariés de 32 ans et plus (lib/adSensitive) ; un homme ordinaire reçoit autre chose, jamais la catégorie des femmes
       const menCat = catsE.find((c) => /homme/i.test(c.name));
       const menItems = menCat ? liveE.filter((p) => p.category_id === menCat.id && okP(p)) : [];
@@ -1824,6 +1843,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         { email: 'a1@gmail.com', gender: 'homme', profession: 'Administrateur' },
         { email: 'd1@gmail.com', gender: null, profession: 'Directeur' },
         { email: 'c1@gmail.com', gender: null, profession: 'commerçant' },
+        { email: 'f1@gmail.com', gender: 'homme', profession: 'militaire' },
+        { email: 'f2@gmail.com', gender: 'femme', profession: 'Gendarme' },
         { email: 'test1@gmail.com', gender: 'femme', profession: 'étudiant' }, // compte test : jamais compté
       ];
       await v.page.route(/\/rest\/v1\/profiles\?/, (rt) => {
@@ -1834,15 +1855,21 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.page.goto(`${BASE}/admin/promotions`, { waitUntil: 'load' });
       await v.page.getByTestId('zara-audiences').waitFor({ timeout: 25000 });
       await v.page.getByTestId('zara-audience-etudiant-count').filter({ hasText: /clients/ }).waitFor({ timeout: 15000 });
-      check('admin : « Annonces de Zara · 24 h sur 24 » avec les 5 publics (femmes, hommes, élèves, étudiants, administrateurs)', (await v.page.locator('[data-testid^="zara-audience-"][data-testid$="-count"]').count()) === 5);
+      check('admin : « Annonces de Zara · 24 h sur 24 » avec les 6 publics (femmes, hommes, élèves, étudiants, administrateurs, militaires et forces de l’ordre)', (await v.page.locator('[data-testid^="zara-audience-"][data-testid$="-count"]').count()) === 6);
       const cnt = async (k) => (await txt(v.page, `zara-audience-${k}-count`));
-      check('admin : les vrais nombres de clients par public (compte test non compté) : femmes 2, hommes 2, élèves 2, étudiants 3, administrateurs 2', (await cnt('femme')) === '2 clients' && (await cnt('homme')) === '2 clients' && (await cnt('eleve')) === '2 clients' && (await cnt('etudiant')) === '3 clients' && (await cnt('admin')) === '2 clients', [await cnt('femme'), await cnt('homme'), await cnt('eleve'), await cnt('etudiant'), await cnt('admin')]);
+      check('admin : les vrais nombres de clients par public (compte test non compté) : femmes 3, hommes 3, élèves 2, étudiants 3, administrateurs 2, militaires et forces de l’ordre 2', (await cnt('femme')) === '3 clients' && (await cnt('homme')) === '3 clients' && (await cnt('eleve')) === '2 clients' && (await cnt('etudiant')) === '3 clients' && (await cnt('admin')) === '2 clients' && (await cnt('forces')) === '2 clients', [await cnt('femme'), await cnt('homme'), await cnt('eleve'), await cnt('etudiant'), await cnt('admin'), await cnt('forces')]);
       await v.page.getByTestId('zara-audiences-status').filter({ hasText: /Allumé/ }).waitFor({ timeout: 10000 }).catch(() => {}); // l'écran dit « Éteint » un instant, le temps de lire le réglage
       check('admin : « Allumé » quand l’interrupteur est allumé, et « changement toutes les 6 heures, jour et nuit »', /Allumé/.test(await txt(v.page, 'zara-audiences-status')) && /toutes les 6 heures, jour et nuit \(00 h, 06 h, 12 h, 18 h\)\. Prochain changement : \d\d h \d\d/.test(await txt(v.page, 'zara-audiences-next')), [await txt(v.page, 'zara-audiences-status'), await txt(v.page, 'zara-audiences-next')]);
+      const badgeAdm = liveE.find((p) => p.slug === 'bagde-groupe-sanguin');
+      if (badgeAdm && okP(badgeAdm)) await v.page.getByTestId('zara-audience-forces-name').waitFor({ timeout: 20000 }).catch(() => {}); // les annonces se chargent un instant après les nombres de clients
       const names = [];
-      for (const k of ['femme', 'homme', 'eleve', 'etudiant', 'admin']) {
+      for (const k of ['femme', 'homme', 'eleve', 'etudiant', 'admin', 'forces']) {
         const has = (await v.page.getByTestId(`zara-audience-${k}-name`).count()) === 1;
         names.push([k, has ? await txt(v.page, `zara-audience-${k}-name`) : null]);
+      }
+      if (badgeAdm && okP(badgeAdm)) {
+        const forcesName = (await v.page.getByTestId('zara-audience-forces-name').count()) ? await txt(v.page, 'zara-audience-forces-name') : null;
+        check('admin : le public « militaires et forces de l’ordre » montre le badge « groupe sanguin » et « Pensé pour les militaires et les forces de l’ordre. »', forcesName === badgeAdm.name.trim() && /Pensé pour les militaires/.test(await txt(v.page, 'zara-audience-forces-headline')), forcesName);
       }
       check('admin : chaque public montre son annonce (nom de l’article, accroche) ou dit que Zara n’invente rien', names.every(([, n]) => n !== null) || (await v.page.locator('[data-testid$="-none"]').count()) > 0, names);
       check('admin : aucun des 5 publics ne reçoit un article « Vitalité & Énergie » (réservé aux mariés de 32 ans et plus)', names.every(([, n]) => !n || !vitNames.has(n)), names);
@@ -1871,6 +1898,58 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('aucune fausse rareté, fausse urgence ni pression dans l’annonce', !/dernier|plus que|stock limité|dépêch|ne ratez|offre limitée|exclusi|rare\b/i.test(await txt(v.page, 'targeted-ad')), await txt(v.page, 'targeted-ad'));
       check('aucune erreur (annonce ciblée)', v.errs.length === 0, v.errs);
       await v.ctx.close();
+    }
+
+    // i. Zara dans le chat : le client dit qu'il est militaire, policier, gendarme… -> le badge « groupe sanguin » ; le menu d'un client militaire a un bouton
+    {
+      const badgeC = liveE.find((p) => p.slug === 'bagde-groupe-sanguin');
+      if (badgeC && okP(badgeC)) {
+        const openChat = async (v) => {
+          await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
+          await sleep(2500);
+          await v.page.getByRole('button', { name: /Discuter avec Zara Kings|التحدث مع زارا كينغز/ }).click();
+          await sleep(1500);
+        };
+        // un visiteur écrit « je suis militaire »
+        {
+          const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
+          await openChat(v);
+          await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?|أنشئ حسابك/);
+          await ask(v.page, 'je suis militaire', /Respect à vous/, 20000);
+          await sleep(3000); // la carte de l'article et les phrases suivantes finissent de s'écrire
+          const panelText = await panelOf(v.page).innerText();
+          check('« je suis militaire » : Zara salue avec respect, dit pour qui est l\'article et montre le badge « groupe sanguin » dans le chat', /pensé pour les militaires et les forces de l’ordre/.test(panelText) && panelText.includes(badgeC.name.trim()), panelText.slice(-500));
+          await panelOf(v.page).getByText(/Respect à vous/).first().scrollIntoViewIfNeeded(); // la photo montre le salut de Zara et la carte du badge
+          await sleep(600);
+          await v.page.screenshot({ path: path.join(OUT, '€11-zara-chat-militaire.png') });
+          check('aucune fausse rareté ni faux pourcentage dans la réponse de Zara', !/dernier article|rare\b|stock limité|offre limitée/i.test(panelText.slice(panelText.indexOf('Respect à vous'))), panelText.slice(-300));
+          const before = (await panelOf(v.page).getByText(/Respect à vous/).count());
+          await typeIn(v.page, 'je suis policier et je cherche une montre');
+          await sleep(6000);
+          check('« je suis policier et je cherche une montre » : Zara répond à la montre, elle ne répète pas le badge', (await panelOf(v.page).getByText(/Respect à vous/).count()) === before, before);
+          check('aucune erreur (Zara et les militaires)', v.errs.length === 0, v.errs);
+          await v.ctx.close();
+        }
+        // un client connecté dont le compte dit « militaire » : bouton dans le menu ; un commerçant : pas de bouton
+        for (const [metier, hasChip] of [['Militaire', true], ['commerçant', false]]) {
+          const fu = memberE({ profession: metier });
+          const v = await newVisitor(phone, { storage: { [SKE]: fu.session }, fakeUser: fu });
+          await openChat(v);
+          await chip(v.page, '🔥 Promotions').first().waitFor({ timeout: 45000 });
+          const labels = await chipLabels(v.page);
+          check(`client connecté « ${metier} » : ${hasChip ? 'le menu de Zara a le bouton « 🪖 Badge groupe sanguin »' : 'pas de bouton « Badge groupe sanguin » (rien n\'est deviné)'}`, labels.includes('🪖 Badge groupe sanguin') === hasChip, labels);
+          if (hasChip) {
+            await chip(v.page, '🪖 Badge groupe sanguin').last().click();
+            await waitText(v.page, /Respect à vous/, 20000);
+            await sleep(3000);
+            check('le bouton montre le badge « groupe sanguin » dans le chat', (await panelOf(v.page).innerText()).includes(badgeC.name.trim()));
+            await panelOf(v.page).getByText(/Respect à vous/).first().scrollIntoViewIfNeeded();
+            await sleep(600);
+            await v.page.screenshot({ path: path.join(OUT, '€12-zara-menu-militaire.png') });
+          }
+          await v.ctx.close();
+        }
+      } else console.log('SAUTE  Zara et les militaires : le badge n\'est pas en vente en ce moment');
     }
   }
 
@@ -10742,6 +10821,91 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       {
         const { v } = await manage({ info: { login_email: 'patron@exemple.com', login_kind: 'email', orders: 0, is_admin: true } });
         check('compte administrateur : « ne se gère pas ici », aucun bouton', (await v.page.getByTestId('admin-account-isadmin').count()) === 1 && (await v.page.getByTestId('admin-account-close-open').count()) === 0 && (await v.page.getByTestId('admin-account-delete-open').count()) === 0);
+        await v.ctx.close();
+      }
+    }
+    // j. Zara et le mot de passe (docs/zara-mot-de-passe.md) : Zara guide sur l'écran « Mot de passe oublié » et dans le chat ; elle ne donne jamais de code
+    {
+      const HDRJ = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+      // l'écran : Zara se présente, puis change de phrase selon l'étape
+      {
+        const v = await newVisitor(phone, { lang: 'fr' });
+        await v.page.route(/\/rest\/v1\/rpc\/notify_admin_password_request/, (route) => (route.request().method() === 'OPTIONS' ? route.fulfill({ status: 204, headers: HDRJ, body: '' }) : route.fulfill({ status: 200, headers: { 'content-type': 'application/json', ...HDRJ }, body: 'null' })));
+        await v.page.route(/\/auth\/v1\/recover/, (route) => (route.request().method() === 'OPTIONS' ? route.fulfill({ status: 204, headers: HDRJ, body: '' }) : route.fulfill({ status: 200, headers: { 'content-type': 'application/json', ...HDRJ }, body: '{}' })));
+        await v.page.goto(`${BASE}/mot-de-passe-oublie`, { waitUntil: 'load' });
+        await v.page.getByTestId('forgot-identifier').waitFor({ timeout: 25000 });
+        const zara = v.page.getByTestId('forgot-zara');
+        check('écran « mot de passe oublié » : Zara (photo + bulle) se présente', (await zara.count()) === 1 && /Je suis Zara/.test(await zara.innerText()) && (await zara.locator('img').count()) >= 1, await zara.innerText().catch(() => ''));
+        check('Zara ne demande jamais le mot de passe : « Ne m’écrivez jamais votre mot de passe »', /Ne m’écrivez jamais votre mot de passe/.test(await zara.innerText()));
+        check('l\'écran ne cache rien : la case unique et « Continuer » sont toujours là', (await v.page.getByTestId('forgot-identifier').count()) === 1 && (await v.page.getByText('Continuer', { exact: true }).count()) === 1);
+        await v.page.screenshot({ path: path.join(OUT, '~10-zara-mot-de-passe-oublie.png') });
+        await v.page.getByTestId('forgot-identifier').fill('66 12 34 56');
+        await v.page.getByText('Continuer', { exact: true }).click();
+        await v.page.getByTestId('forgot-phone-help').waitFor({ timeout: 8000 });
+        check('après le téléphone : Zara renvoie vers WhatsApp, sans promettre de délai', /écrivez-nous sur WhatsApp/.test(await v.page.getByTestId('forgot-zara').innerText()) && !/minutes|prévenu/.test(await v.page.getByTestId('forgot-zara').innerText()));
+        await v.page.screenshot({ path: path.join(OUT, '~11-zara-apres-telephone.png') });
+        await v.page.goto(`${BASE}/mot-de-passe-oublie`, { waitUntil: 'load' });
+        await v.page.getByTestId('forgot-identifier').waitFor({ timeout: 25000 });
+        await v.page.getByTestId('forgot-identifier').fill('awa@example.com');
+        await v.page.getByText('Continuer', { exact: true }).click();
+        await v.page.getByTestId('forgot-email-sent').waitFor({ timeout: 8000 });
+        check('après l\'e-mail : Zara parle de la boîte e-mail et des spams', /boîte e-mail/.test(await v.page.getByTestId('forgot-zara').innerText()) && /spams/.test(await v.page.getByTestId('forgot-zara').innerText()));
+        check('aucune erreur de page (Zara sur « mot de passe oublié »)', v.errs.length === 0, v.errs);
+        await v.ctx.close();
+      }
+      // le chat : un visiteur écrit « j'ai oublié mon mot de passe » -> bouton vers l'écran « Mot de passe oublié »
+      {
+        const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
+        const { page } = v;
+        await page.goto(`${BASE}/`, { waitUntil: 'load' });
+        await sleep(2500);
+        await page.getByRole('button', { name: /Discuter avec Zara Kings|التحدث مع زارا كينغز/ }).click();
+        await waitText(page, /Créez votre compte gratuit(?:, Ali)?|أنشئ حسابك/);
+        await ask(page, "j'ai oublié mon mot de passe", /Touchez « Mot de passe oublié »/);
+        const chips = await chipLabels(page);
+        check('visiteur : Zara montre « 🔑 Mot de passe oublié » et WhatsApp', chips.includes('🔑 Mot de passe oublié') && chips.some((c) => /WhatsApp/i.test(c)), chips);
+        // « AS-000123 » est seulement l'exemple d'écriture du numéro client : le retirer, puis aucun code de 4 chiffres ou plus ne doit rester
+        check('visiteur : Zara ne donne aucun code (le seul numéro écrit est l\'exemple AS-000123)', !/\d{4,}/.test((await panelOf(page).innerText()).replace(/AS-000123/g, '')));
+        await sleep(2500); // la réponse finit de s'écrire avant la photo
+        await page.screenshot({ path: path.join(OUT, '~12-zara-chat-visiteur.png') });
+        await chip(page, '🔑 Mot de passe oublié').click();
+        await page.waitForURL(/\/mot-de-passe-oublie/, { timeout: 15000 });
+        check('le bouton ouvre l\'écran « Mot de passe oublié »', (await page.getByTestId('forgot-identifier').count()) === 1);
+        await v.ctx.close();
+      }
+      // en arabe
+      {
+        const v = await newVisitor(phone, { lang: 'ar', storage: { albasse_zara_name: 'Ali' } });
+        const { page } = v;
+        await page.goto(`${BASE}/`, { waitUntil: 'load' });
+        await sleep(2500);
+        await page.getByTestId('assistant-fab').click();
+        await waitText(page, /أنشئ حسابك|حسابك/, 25000);
+        await ask(page, 'نسيت كلمة السر', /اضغط «نسيت كلمة السر»/);
+        check('en arabe : « نسيت كلمة السر » -> Zara répond en arabe avec le bouton', (await chipLabels(page)).includes('🔑 نسيت كلمة السر'), await chipLabels(page));
+        await v.ctx.close();
+      }
+      // le chat : un client connecté -> le chemin vers « Compte » et SON numéro client
+      {
+        const fu = clientUser();
+        fu.profile.client_number = 123;
+        const v = await newVisitor(phone, { lang: 'fr', storage: { [SKT]: fu.session }, fakeUser: fu });
+        const { page } = v;
+        await page.goto(`${BASE}/`, { waitUntil: 'load' });
+        await sleep(2500);
+        await page.getByRole('button', { name: /Discuter avec Zara Kings|التحدث مع زارا كينغز/ }).click();
+        await sleep(1500);
+        await ask(page, 'comment changer mon mot de passe ?', /Gardez-le/, 20000);
+        const text = await panelOf(page).innerText();
+        check('client connecté : « Compte » puis « Changer mon mot de passe », et son numéro AS-000123', /« Compte »/.test(text) && /« Changer mon mot de passe »/.test(text) && /AS-000123/.test(text));
+        check('client connecté : Zara dit qu\'elle ne voit ni ne demande jamais le mot de passe', /ne vois jamais votre mot de passe/.test(text));
+        const chipsM = await chipLabels(page);
+        check('client connecté : le bouton est « 🔑 Changer mon mot de passe » (pas « Mot de passe oublié »)', chipsM.includes('🔑 Changer mon mot de passe') && !chipsM.includes('🔑 Mot de passe oublié'), chipsM);
+        await sleep(2500); // la réponse finit de s'écrire avant la photo
+        await page.screenshot({ path: path.join(OUT, '~13-zara-chat-client.png') });
+        await chip(page, '🔑 Changer mon mot de passe').click();
+        await page.getByTestId('password-change-open').waitFor({ timeout: 20000 });
+        check('le bouton ouvre « Compte » où se trouve « Changer mon mot de passe »', (await page.getByTestId('password-change-open').count()) === 1);
         await v.ctx.close();
       }
     }

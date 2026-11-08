@@ -36,7 +36,7 @@ export function ZaraAdsAudiences({ products, categories }: { products: Product[]
     )
       .then((rows) => {
         if (!alive) return;
-        const c = { femme: 0, homme: 0, eleve: 0, etudiant: 0, admin: 0 } as Record<Audience, number>;
+        const c = { femme: 0, homme: 0, eleve: 0, etudiant: 0, admin: 0, forces: 0 } as Record<Audience, number>;
         for (const r of rows) {
           if (isTestEmail(r.email)) continue;
           for (const a of audiencesOf(r)) c[a] += 1;

@@ -73,8 +73,10 @@ import {
   type Range,
 } from '../lib/assistantMarketing';
 import { fetchAffinity, fetchCartStatus, fetchLoyaltyPoints, fetchPaymentNumbers, fetchProductForCart, getCatalog, getCategories, getCities, getProductSales, getStoreInfo, logAssistantEvent, requestCallback, startChatToday, toCard, type AssistantProduct, type CallbackSource } from '../lib/assistantData';
-import { compareFacts, declaredStyle, jobFrom, jobKindOfProfession, rankForStyle, styleOrder, threeRanges, toneOf, type JobKind, type StyleKey } from '../lib/assistantPersona';
+import { compareFacts, declaredStyle, forcesFrom, jobFrom, jobKindOfProfession, rankForStyle, styleOrder, threeRanges, toneOf, type JobKind, type StyleKey } from '../lib/assistantPersona';
+import { FORCES_PRODUCT_SLUGS, isForcesProfession } from '../lib/adAudiences';
 import { callbackDays, callbackNote, dayFromText, LOW_STOCK_MAX, provenSales, type CallbackDay } from '../lib/assistantSales';
+import { formatClientNumber } from '../lib/clientNumber';
 import { adFacts, adLine, isSeniorProfession } from '../lib/zaraAds';
 import { alsoLine, confirmBecauseLine, giftOfferLine, giftPlacedLine, giftRecapLine, pickAlsoBought, productUrgencyLine, receivedLine, riskFreeLine, validityLine } from '../lib/assistantWords';
 import { clearIntent, currentDevice, markIntent } from '../lib/assistantAttribution';
@@ -163,6 +165,7 @@ export interface ChatAction {
     | 'invoice'
     | 'interest'
     | 'account'
+    | 'forgot'
     | 'callback'
     | 'callbackYes'
     | 'callbackFix'
@@ -492,11 +495,13 @@ const RANGES_SAY: Record<Lang, string> = { fr: 'trois gammes de prix', ar: 'ثل
 // le bouton « Blousons & manteaux » du menu envoie ces mots (reconnus par coldSeason.ts)
 const COLD_SAY: Record<Lang, string> = { fr: 'blousons et manteaux', ar: 'جاكيتات ومعاطف' };
 const COLD_QUERY: Record<Lang, string> = { fr: 'blouson manteau', ar: 'جاكيت معطف' };
+// Le bouton « Badge groupe sanguin » du menu (clients militaires et forces de l'ordre) envoie une phrase que Zara reconnaît (forcesFrom) ; le client voit le nom du bouton.
+const FORCES_SAY: Record<Lang, string> = { fr: 'je suis dans les forces de l’ordre', ar: 'انا في الجيش' };
 
 // Les boutons des anciens messages qui restent touchables : ceux qui mènent quelque part (promotions, catégories, un article précis,
 // la commande en cours, compte, WhatsApp, menu, installer). L'ancien « Voir mon panier » part : il n'y a plus de panier. Les réponses à une question passée (taille, jour, budget, pour qui, confirmer...) partent.
 const OLD_CHIP_KINDS = new Set<ChatAction['kind']>([
-  'say', 'whatsapp', 'register', 'login', 'orders', 'account', 'category', 'menu', 'checkout', 'link', 'policy', 'pair', 'add',
+  'say', 'whatsapp', 'register', 'login', 'forgot', 'orders', 'account', 'category', 'menu', 'checkout', 'link', 'policy', 'pair', 'add',
   'install', 'installHelp', 'iosGuide', 'interest', 'style', 'orderPage', 'invoice', 'categoryPage', 'openChrome', 'pushOn',
 ]);
 // Ces phrases parlent de ce qui est affiché en ce moment (le budget de ces articles, les comparer) : pas sur un ancien message.
@@ -597,6 +602,11 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
   };
 
   const isGuest = () => !useAuthStore.getState().isAuthenticated;
+  // Le client connecté dont le métier (écrit dans son compte) est militaire ou des forces de l'ordre (lib/adAudiences) : jamais deviné, jamais un visiteur.
+  const isForcesClient = () => {
+    const auth = useAuthStore.getState();
+    return auth.isAuthenticated && isForcesProfession(auth.profile?.profession);
+  };
   // Le client connecté, reconnu à son prénom (celui de son profil, relu sur le serveur) ; sinon null.
   const memberIdentity = (): { id: string; name: string } | null => {
     const auth = useAuthStore.getState();
@@ -617,6 +627,8 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     const actions: ChatAction[] = [];
     if (isGuest()) actions.push({ label: c.createAccount, kind: 'register', highlight: true }, { label: c.login, kind: 'login' });
     actions.push(sayBtn(c.promotions, 'promotions'), sayBtn(c.news, 'nouveautés'));
+    // un client qui a écrit un métier militaire ou de sécurité dans son compte : le badge « groupe sanguin » choisi pour eux, à un toucher
+    if (isForcesClient()) actions.push({ ...sayBtn(c.forcesBadge, FORCES_SAY[get().lang]), highlight: true });
     // saison fraîche (jusqu'à fin décembre) : blousons et manteaux à un toucher
     if (coldSeasonActive(Date.now())) actions.push(sayBtn(c.coldSeason, COLD_SAY[get().lang]));
     actions.push(sayBtn(c.advice, 'conseil'), sayBtn(c.categories, 'catégories'), sayBtn(c.delivery, 'livraison'));
@@ -2351,6 +2363,37 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     await say(t.telegram.offer, { actions: [chip, menuBtn()] });
   }
 
+  // « J'ai oublié mon mot de passe » / « changer mon mot de passe » : Zara GUIDE, elle ne donne jamais de code (elle ne peut pas savoir qui écrit).
+  // Client connecté : le chemin vers « Compte » + son numéro client. Sans connexion : le bouton vers l'écran « Mot de passe oublié » (l'équipe donne le code sur WhatsApp).
+  // Docs : docs/zara-mot-de-passe.md.
+  async function passwordReply() {
+    const t = T();
+    const auth = useAuthStore.getState();
+    if (!auth.isAuthenticated) {
+      await say(t.passwordGuest, { actions: [{ label: t.chip.forgotPassword, kind: 'forgot', highlight: true }, wa(), menuBtn()] });
+      return;
+    }
+    await say(t.passwordMember(formatClientNumber(auth.profile?.client_number)), { actions: [{ label: t.chip.changePassword, kind: 'account', highlight: true }, menuBtn()] });
+  }
+
+  // Le client dit qu'il est militaire, policier, gendarme… : Zara le salue avec respect et lui propose l'article choisi par le patron pour eux
+  // (FORCES_PRODUCT_SLUGS : le badge « groupe sanguin »), s'il est en vente ; sinon elle l'invite seulement à dire ce qu'il cherche (jamais un autre article à la place).
+  async function forcesReply() {
+    const t = T();
+    let catalog: CatalogProduct[] = [];
+    try {
+      catalog = await getCatalog();
+    } catch {
+      catalog = [];
+    }
+    const picks = catalog.filter((p) => FORCES_PRODUCT_SLUGS.includes(p.slug) && p.stock > 0);
+    if (picks.length === 0) {
+      await say(t.forces.none, { actions: [menuBtn(), wa()] });
+      return;
+    }
+    await showProducts(t.forces.intro, picks, null, catalog);
+  }
+
   // Le visiteur le demande lui-même (« comment installer l'application ? ») : réponse tout de suite.
   async function installReply() {
     markInstallTalk();
@@ -2849,6 +2892,14 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       await coldSeasonReply();
       return;
     }
+    // le client dit qu'il est militaire, policier, gendarme… (sans autre demande) : Zara lui propose le badge « groupe sanguin »
+    if (forcesFrom(text)) {
+      const need = parseNeed(text);
+      if (!need.slug && !need.who && !need.gift && parseBudget(text) === null) {
+        await forcesReply();
+        return;
+      }
+    }
     // psychologie commerciale : le client parle de son métier (valorisé, jamais déduit en budget) ou de ce qu'il aime
     const job = jobFrom(text);
     if (job) {
@@ -2982,6 +3033,9 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       }
       case 'telegram':
         await telegramReply();
+        return;
+      case 'password':
+        await passwordReply();
         return;
       case 'install':
         await installReply();

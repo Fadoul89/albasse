@@ -16,7 +16,7 @@
 import { normalize, matchCity, type City } from './assistantBrain';
 import { estimateInterest, topCategories, type BrowsingProfile, type ProductRecord } from './browsingInsights';
 import { genderOf, type Gender } from './clientGender';
-import { professionAudience, AUDIENCES, type Audience } from './adAudiences';
+import { professionAudience, AUDIENCES, FORCES_PRODUCT_SLUGS, type Audience } from './adAudiences';
 import { isHomeCity } from './deliveryRules';
 import { MOBILE_MONEY_ENABLED } from '../constants/shopRules';
 import { isVitalityCategory, vitalityAllowed } from './adSensitive';
@@ -50,6 +50,7 @@ export type AdReason =
   | { kind: 'gender'; gender: Gender; categoryName: string }
   | { kind: 'student'; level: 'eleve' | 'etudiant' }
   | { kind: 'executive' }
+  | { kind: 'forces' }
   | { kind: 'new'; days: number }; // seulement pour l'annonce qui suit un « ✕ » : un article vraiment ajouté à la boutique il y a `days` jours
 
 export interface TargetedAd {
@@ -185,6 +186,12 @@ export function pickTargetedAd(input: AdInput): TargetedAd | null {
     const p = rotate(cheap, pro === 'etudiant' ? 1 : 0);
     if (p) return { product: p, reason: { kind: 'student', level: pro } };
   }
+  if (pro === 'forces') {
+    // militaire, policier, gendarme… : les articles choisis par le patron pour eux (lib/adAudiences, FORCES_PRODUCT_SLUGS), s'ils sont en vente
+    const mine = pool.filter((p) => FORCES_PRODUCT_SLUGS.includes(p.slug)).sort((a, b) => a.name.localeCompare(b.name));
+    const p = rotate(mine);
+    if (p) return { product: p, reason: { kind: 'forces' } };
+  }
   if (pro === 'admin' && prices.length > 0) {
     // administrateur, cadre : le quart le plus haut de gamme de la boutique (les plus chers d'abord)
     const cut = prices[Math.min(prices.length - 1, Math.floor(prices.length * 0.75))];
@@ -237,6 +244,7 @@ export function adHeadline(reason: AdReason, lang: AdLang = 'fr'): string {
   if (reason.kind === 'gender') return lang === 'ar' ? `اخترنا ${reason.gender === 'femme' ? 'لكِ' : 'لك'}: «${reason.categoryName}».` : `Choisi pour vous : « ${reason.categoryName} ».`;
   if (reason.kind === 'student') return lang === 'ar' ? `${reason.level === 'eleve' ? 'للتلاميذ' : 'للطلاب'}: منتج بسعر صغير.` : `Pour les ${reason.level === 'eleve' ? 'élèves' : 'étudiants'} : un article à petit prix.`;
   if (reason.kind === 'executive') return lang === 'ar' ? 'مجموعة راقية مختارة لك.' : 'Une sélection haut de gamme pour vous.';
+  if (reason.kind === 'forces') return lang === 'ar' ? 'مصمم للعسكريين وقوات الأمن.' : 'Pensé pour les militaires et les forces de l’ordre.';
   if (reason.kind === 'new') return lang === 'ar' ? 'جديد يستحق الاكتشاف.' : 'Une nouveauté à découvrir.';
   const end = reason.endsAt ? (lang === 'ar' ? ` حتى ${dateLabel(reason.endsAt, lang)}` : ` jusqu’au ${dateLabel(reason.endsAt, lang)}`) : '';
   return lang === 'ar' ? `سعر مخفّض: -${reason.pct}%${end}` : `Prix réduit : -${reason.pct} %${end}`;
@@ -250,6 +258,7 @@ export function adWhy(reason: AdReason, lang: AdLang = 'fr'): string {
     if (reason.kind === 'gender') return `لماذا هذا الإعلان؟ لأنك اخترت «${reason.gender === 'femme' ? 'أنثى' : 'ذكر'}» في حسابك: هذا منتج من «${reason.categoryName}».`;
     if (reason.kind === 'student') return `لماذا هذا الإعلان؟ لأنك كتبت «${reason.level === 'eleve' ? 'تلميذ' : 'طالب'}» في حسابك، وهذا المنتج من الأقل سعراً في المتجر.`;
     if (reason.kind === 'executive') return 'لماذا هذا الإعلان؟ لأنك كتبت مهنة إدارية أو قيادية في حسابك، وهذا المنتج من الأرقى في المتجر.';
+    if (reason.kind === 'forces') return 'لماذا هذا الإعلان؟ لأنك كتبت مهنة عسكرية أو أمنية في حسابك، وهذا المنتج مصمم للعسكريين وقوات الأمن.';
     if (reason.kind === 'new') return `لماذا هذا الإعلان؟ أُضيف هذا المنتج إلى المتجر ${reason.days === 0 ? 'اليوم' : reason.days === 1 ? 'أمس' : `منذ ${reason.days} ${reason.days <= 10 ? 'أيام' : 'يوماً'}`}.`;
     return 'لماذا هذا الإعلان؟ إنه تخفيض حقيقي جارٍ الآن (السعر القديم مشطوب).';
   }
@@ -258,6 +267,7 @@ export function adWhy(reason: AdReason, lang: AdLang = 'fr'): string {
   if (reason.kind === 'gender') return `Pourquoi cette annonce ? Vous avez choisi « ${reason.gender === 'femme' ? 'Femme' : 'Homme'} » dans votre compte : voici un article de « ${reason.categoryName} ».`;
   if (reason.kind === 'student') return `Pourquoi cette annonce ? Vous avez indiqué « ${reason.level === 'eleve' ? 'élève' : 'étudiant'} » dans votre compte, et cet article fait partie des moins chers de la boutique.`;
   if (reason.kind === 'executive') return 'Pourquoi cette annonce ? Vous avez indiqué un métier d’administration ou de direction dans votre compte, et cet article fait partie des plus haut de gamme de la boutique.';
+  if (reason.kind === 'forces') return 'Pourquoi cette annonce ? Vous avez indiqué un métier militaire ou de sécurité (armée, police, gendarmerie…) dans votre compte, et cet article est conçu pour les militaires et les forces de l’ordre.';
   if (reason.kind === 'new') return `Pourquoi cette annonce ? Cet article a été ajouté à la boutique ${reason.days === 0 ? 'aujourd’hui' : reason.days === 1 ? 'hier' : `il y a ${reason.days} jours`}.`;
   return 'Pourquoi cette annonce ? C’est une vraie promotion en cours (l’ancien prix est barré).';
 }
@@ -337,6 +347,7 @@ export function previewAudiences(input: { products: AdProduct[]; categories: AdC
     eleve: { profession: 'élève' },
     etudiant: { profession: 'étudiant' },
     admin: { profession: 'administrateur' },
+    forces: { profession: 'militaire' },
   };
   const out = {} as Record<Audience, TargetedAd | null>;
   for (const a of AUDIENCES) out[a] = pickTargetedAd({ products: input.products, categories: input.categories, customer: customers[a], browsing: null, now: input.now, seed: input.seed });

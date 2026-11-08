@@ -120,6 +120,9 @@ export interface Texts {
     points: string;
     earnPoints: string;
     myAccount: string;
+    forgotPassword: string;
+    changePassword: string;
+    forcesBadge: string;
     giftIdea: string;
     wrap: string;
     policy: string;
@@ -219,6 +222,11 @@ export interface Texts {
     failed: string;
   };
   bot: string;
+  // mot de passe : Zara guide, elle ne voit ni ne demande jamais un mot de passe (docs/zara-mot-de-passe.md)
+  passwordMember(clientNumber: string | null): string;
+  passwordGuest: string;
+  // le client dit qu'il est militaire, policier, gendarme… : Zara lui propose l'article choisi pour eux (docs/zara-annonce-ciblee.md)
+  forces: { intro: string; none: string };
   alreadyMember: string;
   ordersLink: string;
   errorData: string;
@@ -534,6 +542,9 @@ const FR: Texts = {
     points: '🏆 Mes points',
     earnPoints: '🎁 Gagner des points',
     myAccount: '👤 Mon compte',
+    forgotPassword: '🔑 Mot de passe oublié',
+    changePassword: '🔑 Changer mon mot de passe',
+    forcesBadge: '🪖 Badge groupe sanguin',
     giftIdea: '🎁 Idée cadeau',
     wrap: '🎁 Emballage cadeau',
     policy: '📄 Conditions de retour',
@@ -745,6 +756,16 @@ const FR: Texts = {
     failed: '😕 Je n’ai pas pu enregistrer votre commande pour le moment. Vous pouvez réessayer, finaliser sur la page de commande, ou nous écrire sur WhatsApp.',
   },
   bot: 'Je suis l’assistante virtuelle d’Albasse Shopping : une assistante automatique, pas une personne. Pour parler à quelqu’un de l’équipe, écrivez-nous sur WhatsApp 👇',
+  passwordMember: (no) =>
+    `Pas de souci 🔑 Pour changer votre mot de passe : ouvrez « Compte », puis « Changer mon mot de passe ».${
+      no ? `\n\n🪪 Votre numéro client : ${no}. Gardez-le : il aide l’équipe à retrouver votre compte si vous perdez votre accès.` : ''
+    }\n\nJe ne vois jamais votre mot de passe et je ne le demande jamais.`,
+  passwordGuest:
+    'Pas de souci, je vous aide à retrouver votre compte 🔑 Touchez « Mot de passe oublié », puis écrivez votre téléphone, votre e-mail ou votre numéro client (AS-000123) : l’équipe vous donne un nouveau code sur WhatsApp.\n\nNe m’écrivez jamais votre mot de passe ici.',
+  forces: {
+    intro: 'Respect à vous 🙏 Voici un article pensé pour les militaires et les forces de l’ordre : l’écusson brodé « groupe sanguin », pour vos uniformes, vestes et équipements.',
+    none: 'Respect à vous 🙏 Dites-moi ce que vous cherchez, je vous aide avec plaisir.',
+  },
   alreadyMember: 'Vous êtes déjà connecté(e){nom} ✅ Retrouvez vos commandes à tout moment.',
   ordersLink: 'Retrouvez et suivez toutes vos commandes ici 👇',
   errorData: 'Je n’arrive pas à charger ces informations pour le moment. Réessayez dans un instant, ou écrivez-nous sur WhatsApp.',
@@ -1128,6 +1149,9 @@ const AR: Texts = {
     points: '🏆 نقاطي',
     earnPoints: '🎁 اكسب نقاطاً',
     myAccount: '👤 حسابي',
+    forgotPassword: '🔑 نسيت كلمة السر',
+    changePassword: '🔑 تغيير كلمة السر',
+    forcesBadge: '🪖 شارة فصيلة الدم',
     giftIdea: '🎁 فكرة هدية',
     wrap: '🎁 تغليف الهدايا',
     policy: '📄 شروط الإرجاع',
@@ -1341,6 +1365,16 @@ const AR: Texts = {
     failed: '😕 لم أستطع تسجيل طلبك الآن. يمكنك المحاولة من جديد، أو الإتمام من صفحة الطلب، أو مراسلتنا على واتساب.',
   },
   bot: 'أنا المساعدة الافتراضية لـ Albasse Shopping: مساعدة آلية وليست شخصا. للتحدث مع أحد أفراد الفريق، راسلنا على واتساب 👇',
+  passwordMember: (no) =>
+    `لا مشكلة 🔑 لتغيير كلمة السر: افتح «حسابي» ثم «تغيير كلمة السر».${
+      no ? `\n\n🪪 رقم عميلك: ${no}. احتفظ به: يساعد الفريق على إيجاد حسابك إذا فقدت الدخول.` : ''
+    }\n\nأنا لا أرى كلمة السر أبدا ولا أطلبها.`,
+  passwordGuest:
+    'لا مشكلة، سأساعدك على استعادة حسابك 🔑 اضغط «نسيت كلمة السر» ثم اكتب رقم هاتفك أو بريدك الإلكتروني أو رقم عميلك (AS-000123): يعطيك الفريق رمزا جديدا عبر واتساب.\n\nلا تكتب لي كلمة السر هنا أبدا.',
+  forces: {
+    intro: 'تحية احترام لك 🙏 هذا منتج مصمم للعسكريين وقوات الأمن: شارة فصيلة الدم المطرزة، لبدلاتك وسترتك ومعداتك.',
+    none: 'تحية احترام لك 🙏 قل لي ماذا تبحث عنه وسأساعدك بكل سرور.',
+  },
   alreadyMember: 'أنت مسجل بالفعل{nom} ✅ تجد طلباتك في أي وقت.',
   ordersLink: 'تابع كل طلباتك هنا 👇',
   errorData: 'لا أستطيع تحميل هذه المعلومات الآن. حاول بعد قليل، أو راسلنا على واتساب.',

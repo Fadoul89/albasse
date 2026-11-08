@@ -309,6 +309,10 @@ export function AssistantPanel() {
       case 'account':
         go(() => navigationRef.navigate('Tabs', { screen: 'Account' } as never));
         return;
+      // « Mot de passe oublié » : l'écran où le client écrit son téléphone, son e-mail ou son numéro client
+      case 'forgot':
+        go(() => navigationRef.navigate('ForgotPassword'));
+        return;
       // la catégorie elle-même s'affiche dans le chat (Zara) ; seul « Page » ouvre la page de la catégorie
       case 'categoryPage':
         if (action.payload) go(() => navigationRef.navigate('Category', { slug: action.payload as string }));
