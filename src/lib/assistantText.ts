@@ -227,6 +227,8 @@ export interface Texts {
   passwordGuest: string;
   // le client dit qu'il est militaire, policier, gendarme… : Zara lui propose l'article choisi pour eux (docs/zara-annonce-ciblee.md)
   forces: { intro: string; none: string };
+  // les émotions que le client écrit de lui-même (docs/zara-emotions.md) : plusieurs phrases par émotion, Zara ne dit pas deux fois la même de suite
+  emotion: Record<'dream' | 'setback' | 'fear' | 'doubt' | 'hardship', string[]>;
   alreadyMember: string;
   ordersLink: string;
   errorData: string;
@@ -765,6 +767,29 @@ const FR: Texts = {
   forces: {
     intro: 'Respect à vous 🙏 Voici un article pensé pour les militaires et les forces de l’ordre : l’écusson brodé « groupe sanguin », pour vos uniformes, vestes et équipements.',
     none: 'Respect à vous 🙏 Dites-moi ce que vous cherchez, je vous aide avec plaisir.',
+  },
+  emotion: {
+    dream: [
+      'Quel beau rêve{nom} 🌟 Je crois en vous : tout grand projet commence par un premier pas. Dites-moi ce que vous préparez, je vous aide à être à la hauteur.',
+      'J’adore votre ambition{nom} 💪 Ceux qui osent rêver sont ceux qui avancent. Racontez-moi votre projet : je vous aide à choisir avec soin.',
+      'C’est un très beau but{nom} ✨ Vous méritez d’y croire. Dites-moi pour quelle occasion vous vous préparez, et je vous conseille avec plaisir.',
+    ],
+    setback: [
+      'Je vous comprends{nom}, et ce n’est pas facile 🤍 Un échec ne dit rien de votre valeur : beaucoup de personnes se relèvent et repartent plus fortes. Je suis là si vous voulez en parler.',
+      'Merci de me l’avoir confié{nom} 🤍 Tout le monde traverse des moments difficiles. Vous n’êtes pas seul(e) et vous méritez le respect. Je reste à vos côtés, sans aucune pression.',
+    ],
+    fear: [
+      'C’est normal d’avoir peur de se tromper{nom}, et vous avez raison de poser la question 🤝 Voici des faits que vous pouvez vérifier vous-même :',
+      'Je comprends votre inquiétude{nom} 🤍 Il vaut mieux demander avant d’acheter. Voici ce qui vous protège vraiment :',
+    ],
+    doubt: [
+      'Vous avez raison de vérifier avant d’acheter{nom} 👍 Voici des faits que vous pouvez contrôler vous-même :',
+      'Votre prudence est une bonne chose{nom} 🤝 Ne me croyez pas sur parole : vérifiez ces points, vous les trouverez vrais :',
+    ],
+    hardship: [
+      'Je suis vraiment désolée d’apprendre cela{nom} 🤍 Il n’y a aucune pression de ma part : prenez soin de vous d’abord. Quand vous le voudrez, je suis là pour vous aider, et notre équipe répond aussi sur WhatsApp.',
+      'Courage{nom} 🤍 Je vous souhaite de la force et de la paix. Ne pensez pas aux achats pour l’instant : si un jour vous avez besoin d’aide ou d’un conseil, je suis là, sans aucune obligation.',
+    ],
   },
   alreadyMember: 'Vous êtes déjà connecté(e){nom} ✅ Retrouvez vos commandes à tout moment.',
   ordersLink: 'Retrouvez et suivez toutes vos commandes ici 👇',
@@ -1374,6 +1399,28 @@ const AR: Texts = {
   forces: {
     intro: 'تحية احترام لك 🙏 هذا منتج مصمم للعسكريين وقوات الأمن: شارة فصيلة الدم المطرزة، لبدلاتك وسترتك ومعداتك.',
     none: 'تحية احترام لك 🙏 قل لي ماذا تبحث عنه وسأساعدك بكل سرور.',
+  },
+  emotion: {
+    dream: [
+      'يا له من حلم جميل{nom} 🌟 أؤمن بك: كل مشروع كبير يبدأ بخطوة. قل لي ما الذي تجهّز له وسأساعدك لتكون في المستوى.',
+      'أحب طموحك{nom} 💪 من يجرؤ على الحلم هو من يتقدم. احكِ لي عن مشروعك وسأساعدك على الاختيار بعناية.',
+    ],
+    setback: [
+      'أفهمك{nom}، وهذا ليس سهلا 🤍 الفشل لا يقلل من قيمتك: كثيرون نهضوا وبدأوا من جديد أقوى. أنا هنا إن أردت أن تتحدث.',
+      'شكرا لأنك أخبرتني{nom} 🤍 كل إنسان يمر بأوقات صعبة. لست وحدك وأنت تستحق الاحترام. أنا بجانبك دون أي ضغط.',
+    ],
+    fear: [
+      'من الطبيعي أن تخاف من الخطأ{nom}، وأنت على حق في السؤال 🤝 إليك حقائق يمكنك التحقق منها بنفسك:',
+      'أتفهم قلقك{nom} 🤍 الأفضل أن تسأل قبل أن تشتري. إليك ما يحميك فعلا:',
+    ],
+    doubt: [
+      'أنت على حق في التحقق قبل الشراء{nom} 👍 إليك حقائق يمكنك التأكد منها بنفسك:',
+      'حذرك أمر جيد{nom} 🤝 لا تصدقني على كلامي فقط: تحقق من هذه النقاط:',
+    ],
+    hardship: [
+      'يؤسفني جدا سماع ذلك{nom} 🤍 لا ضغط مني إطلاقا: اعتن بنفسك أولا. وعندما تريد أنا هنا للمساعدة، وفريقنا يرد أيضا على واتساب.',
+      'تشجّع{nom} 🤍 أتمنى لك القوة والسكينة. لا تفكر في أي مشتريات الآن: وإن احتجت يوما إلى مساعدة أو نصيحة فأنا هنا دون أي التزام.',
+    ],
   },
   alreadyMember: 'أنت مسجل بالفعل{nom} ✅ تجد طلباتك في أي وقت.',
   ordersLink: 'تابع كل طلباتك هنا 👇',

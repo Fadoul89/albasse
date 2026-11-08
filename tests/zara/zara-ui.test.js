@@ -1988,6 +1988,62 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         }
       } else console.log('SAUTE  Zara et les militaires : le badge n\'est pas en vente en ce moment');
     }
+
+    // j. Zara et les émotions (docs/zara-emotions.md) : rêve, échec, peur, soupçon, difficulté
+    {
+      const openChatJ = async (v, lang = 'fr') => {
+        await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
+        await sleep(2500);
+        await v.page.getByRole('button', { name: /Discuter avec Zara Kings|التحدث مع زارا كينغز/ }).click();
+        await waitText(v.page, lang === 'ar' ? /أنشئ حسابك/ : /Créez votre compte gratuit(?:, Ali)?/);
+      };
+      const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
+      const { page } = v;
+      await openChatJ(v);
+      const lastText = async () => (await panelOf(page).innerText()).replace(/\s+/g, ' ');
+      // un rêve : encouragement, puis le conseil de Zara
+      await ask(page, 'je rêve de devenir quelqu\'un de respecté', /Quel beau rêve|J’adore votre ambition|C’est un très beau but/, 20000);
+      await sleep(1500);
+      check('rêve : Zara encourage (« Je crois en vous »…) et propose son conseil, sans rien promettre sur un article', /(Je crois en vous|Ceux qui osent rêver|Vous méritez d’y croire)/.test(await lastText()) && !/garanti|à coup sûr/i.test(await lastText()) && (await chipLabels(page)).includes('🎯 Conseil'), await chipLabels(page));
+      // un échec : soutien sans jugement
+      await ask(page, 'j\'ai raté mon entretien', /Je vous comprends|Merci de me l’avoir confié/, 20000);
+      await sleep(1500);
+      check('échec : Zara soutient sans juger (« un échec ne dit rien de votre valeur » ou « vous n\'êtes pas seul(e) »)', /(ne dit rien de votre valeur|Vous n’êtes pas seul)/.test(await lastText()));
+      // une peur : elle donne raison de vérifier, puis des FAITS
+      await ask(page, 'j\'ai peur de me faire arnaquer', /Votre confiance compte pour nous/, 25000);
+      const t3 = await lastText();
+      check('peur : « vous avez raison de poser la question » PUIS des faits vrais à vérifier (paiement à la réception, boutique)', /(C’est normal d’avoir peur|Je comprends votre inquiétude)/.test(t3) && /Votre confiance compte pour nous/.test(t3) && /vous ne payez qu’en recevant/.test(t3), t3.slice(-500));
+      await page.screenshot({ path: path.join(OUT, '€14-zara-peur.png') });
+      // un soupçon : jamais une accusation confirmée
+      await ask(page, 'je me méfie des sites en ligne', /Vous avez raison de vérifier|Votre prudence est une bonne chose/, 25000);
+      await sleep(2500);
+      const t4 = await lastText();
+      check('soupçon : Zara confirme la PRUDENCE du client et donne des faits à contrôler ; elle ne dit jamais « c\'est une arnaque »', /(Vous avez raison de vérifier|Votre prudence)/.test(t4) && !/c’est une arnaque|c'est une arnaque/i.test(t4), t4.slice(-300));
+      // une difficulté : aucune vente
+      const cardsBefore = await page.getByTestId('assistant-card-add').count();
+      await ask(page, 'je n\'ai plus d\'argent', /Je suis vraiment désolée|Courage/, 20000);
+      await sleep(2000);
+      const chipsH = await chipLabels(page);
+      check('difficulté (« je n\'ai plus d\'argent ») : Zara ne vend RIEN : pas de promotions, pas d\'article, seulement Menu et WhatsApp', !/(promotion|prix|commander)/i.test((await lastText()).split(/Je suis vraiment désolée|Courage/).pop() ?? '') && !chipsH.includes('🔥 Promotions') && chipsH.length <= 3 && (await page.getByTestId('assistant-card-add').count()) === cardsBefore, chipsH);
+      await page.screenshot({ path: path.join(OUT, '€15-zara-difficulte.png') });
+      // un rêve ET une demande : Zara encourage puis répond à la demande
+      await ask(page, 'je veux réussir mon entretien, je cherche une montre', /Quel beau rêve|J’adore votre ambition|C’est un très beau but|Voici/i, 25000);
+      await sleep(4000);
+      check('rêve + demande (« je veux réussir… je cherche une montre ») : Zara encourage PUIS montre des montres', (await page.getByTestId('assistant-card-add').count()) > cardsBefore, [cardsBefore, await page.getByTestId('assistant-card-add').count()]);
+      check('aucune erreur (Zara et les émotions)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+      // en arabe
+      const a = await newVisitor(phone, { lang: 'ar', storage: { albasse_zara_name: 'Ali' } });
+      await a.page.goto(`${BASE}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await a.page.getByTestId('assistant-fab').click();
+      await waitText(a.page, /أنشئ حسابك|حسابك/, 25000);
+      await ask(a.page, 'أحلم بحياة أفضل', /أؤمن بك|أحب طموحك/, 20000);
+      check('en arabe : « أحلم بحياة أفضل » -> Zara encourage en arabe', /(أؤمن بك|أحب طموحك)/.test(await panelOf(a.page).innerText()));
+      await ask(a.page, 'ما عندي فلوس', /يؤسفني جدا|تشجّع/, 20000);
+      check('en arabe : « ما عندي فلوس » -> douceur, aucune vente', !/(عرض|تخفيض|سعر)/.test(((await panelOf(a.page).innerText()).split(/يؤسفني جدا|تشجّع/).pop()) ?? ''));
+      await a.ctx.close();
+    }
   }
 
   // =============================================== 8. VENTE FLASH 24 H, ANCIEN PRIX SEULEMENT EN PROMOTION, ZARA CHOISIT LES ARTICLES ===============================================

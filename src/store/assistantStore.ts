@@ -75,6 +75,7 @@ import {
 import { fetchAffinity, fetchCartStatus, fetchLoyaltyPoints, fetchPaymentNumbers, fetchProductForCart, getCatalog, getCategories, getCities, getProductSales, getStoreInfo, logAssistantEvent, requestCallback, startChatToday, toCard, type AssistantProduct, type CallbackSource } from '../lib/assistantData';
 import { compareFacts, declaredStyle, forcesFrom, jobFrom, jobKindOfProfession, rankForStyle, styleOrder, threeRanges, toneOf, type JobKind, type StyleKey } from '../lib/assistantPersona';
 import { FORCES_PRODUCT_SLUGS, isForcesProfession } from '../lib/adAudiences';
+import { emotionFrom, type Emotion } from '../lib/assistantEmotion';
 import { callbackDays, callbackNote, dayFromText, LOW_STOCK_MAX, provenSales, type CallbackDay } from '../lib/assistantSales';
 import { formatClientNumber } from '../lib/clientNumber';
 import { adFacts, adLine, isSeniorProfession } from '../lib/zaraAds';
@@ -2376,6 +2377,50 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     await say(t.passwordMember(formatClientNumber(auth.profile?.client_number)), { actions: [{ label: t.chip.changePassword, kind: 'account', highlight: true }, menuBtn()] });
   }
 
+  // « Peur d'une arnaque », « je me méfie » : des faits VRAIS et contrôlables (paiement à la réception, boutique et sa carte, téléphone, depuis 2013).
+  async function trustAnswer() {
+    const t = T();
+    let info = { address: null as string | null, city: null as string | null, phone: null as string | null, mapsUrl: null as string | null };
+    try {
+      info = await getStoreInfo();
+    } catch {
+      // message de confiance sans l'adresse
+    }
+    const actions: ChatAction[] = [];
+    if (info.mapsUrl) actions.push({ label: t.chip.seeShop, kind: 'link', payload: info.mapsUrl });
+    actions.push(sayBtn(t.chip.promotions, 'promotions'), wa());
+    await say(trustReply(info, get().lang), { actions });
+  }
+
+  // Une émotion que le client écrit de lui-même (lib/assistantEmotion, docs/zara-emotions.md) : Zara répond d'abord à la PERSONNE.
+  //  - difficulté (argent, deuil, maladie, chômage) : aucune vente, aucune pression, l'équipe sur WhatsApp ;
+  //  - peur ou soupçon : elle donne raison au client de vérifier, puis lui donne des faits vrais qu'il peut contrôler ;
+  //  - rêve ou échec : une phrase chaleureuse, sans promesse sur un article ; s'il demande aussi un article, elle y répond ensuite.
+  // Retourne true si Zara a tout dit (rien d'autre à répondre), false si la réponse habituelle suit.
+  async function emotionReply(emotion: Emotion, text: string): Promise<boolean> {
+    const t = T();
+    const line = pickLine(t.emotion[emotion]);
+    if (emotion === 'hardship') {
+      await say(line, { actions: [menuBtn(), wa()] });
+      return true;
+    }
+    if (emotion === 'fear' || emotion === 'doubt') {
+      await say(line);
+      const intent = detectIntent(text);
+      if (intent === 'trust' || intent === 'returns' || intent === 'rules') return false; // la réponse vraie suit tout de suite par le chemin habituel
+      await trustAnswer();
+      return true;
+    }
+    const need = parseNeed(text);
+    const concrete = !!(need.slug || need.who || need.gift || occasionOf(text) || parseBudget(text) !== null);
+    if (concrete) {
+      await say(line);
+      return false;
+    }
+    await say(line, { actions: [sayBtn(t.chip.advice, 'conseil'), menuBtn(), wa()] });
+    return true;
+  }
+
   // Le client dit qu'il est militaire, policier, gendarme… : Zara le salue avec respect et lui propose l'article choisi par le patron pour eux
   // (FORCES_PRODUCT_SLUGS : le badge « groupe sanguin »), s'il est en vente ; sinon elle l'invite seulement à dire ce qu'il cherche (jamais un autre article à la place).
   async function forcesReply() {
@@ -2900,6 +2945,9 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         return;
       }
     }
+    // une émotion écrite par le client lui-même (rêve, échec, peur, soupçon, difficulté) : Zara répond d'abord à la personne (docs/zara-emotions.md)
+    const emotion = intent === 'password' ? null : emotionFrom(text);
+    if (emotion && (await emotionReply(emotion, text))) return;
     // psychologie commerciale : le client parle de son métier (valorisé, jamais déduit en budget) ou de ce qu'il aime
     const job = jobFrom(text);
     if (job) {
@@ -3104,19 +3152,9 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       case 'price':
         await priceObjection();
         return;
-      case 'trust': {
-        let info = { address: null as string | null, city: null as string | null, phone: null as string | null, mapsUrl: null as string | null };
-        try {
-          info = await getStoreInfo();
-        } catch {
-          // message de confiance sans l'adresse
-        }
-        const actions: ChatAction[] = [];
-        if (info.mapsUrl) actions.push({ label: t.chip.seeShop, kind: 'link', payload: info.mapsUrl });
-        actions.push(sayBtn(t.chip.promotions, 'promotions'), wa());
-        await say(trustReply(info, get().lang), { actions });
+      case 'trust':
+        await trustAnswer();
         return;
-      }
       case 'later':
         await laterClosing();
         return;
