@@ -10539,6 +10539,212 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         await v.ctx.close();
       }
     }
+    // i. « Gérer le compte » (équipe) : modifier la fiche, changer la connexion, fermer, supprimer, journal (docs/gestion-de-compte.md ; fausse base et fausse fonction)
+    {
+      const FNH = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'authorization, x-client-info, apikey, content-type', 'access-control-allow-methods': 'POST, OPTIONS' };
+      const manage = async ({ customer = custProfile({ client_number: 42, phone: '+235 66 11 11 11', email: 'aicha@gmail.com' }), info = { login_email: '23566111111@tel.albasseshopping.com', login_kind: 'phone', orders: 2, is_admin: false },
+        infoStatus = 200, fn = null, fnStatus = 200, logRows = [] } = {}) => {
+        const fu = adminUser();
+        const st = { info: { ...info }, edits: [], fnBodies: [], infoCalls: 0 };
+        const v = await newVisitor(phone, { lang: 'fr', storage: { [SKT]: fu.session }, fakeUser: fu, fakeStore: { waOrder: true, accountRequired: false, patches: [] } });
+        await v.page.route(/\/rest\/v1\//, (route) => {
+          const req = route.request();
+          const u = new URL(req.url());
+          if (req.method() === 'OPTIONS') return route.fallback();
+          const t = u.pathname.replace('/rest/v1/', '');
+          if (t === 'profiles' && !u.searchParams.get('id') && u.searchParams.get('is_admin') === 'eq.false') return jsonT(route, [customer]);
+          if (t === 'profiles' && /^in\./.test(u.searchParams.get('id') || '')) return jsonT(route, [{ id: fu.profile.id, full_name: 'Admin Albasse' }]);
+          if (t === 'rpc/admin_client_account_info') {
+            st.infoCalls++;
+            if (infoStatus !== 200) return jsonT(route, { code: 'PGRST202', message: 'Could not find the function public.admin_client_account_info(p_target) in the schema cache' }, infoStatus);
+            return jsonT(route, st.info);
+          }
+          if (t === 'rpc/admin_update_client_profile') {
+            const body = JSON.parse(req.postData() || '{}');
+            st.edits.push(body);
+            return jsonT(route, null);
+          }
+          if (t === 'client_account_log') return jsonT(route, logRows);
+          if (['orders', 'visitor_sessions', 'product_views', 'cart_events', 'customer_sanctions', 'favorites'].includes(t)) return jsonT(route, []);
+          return route.fallback();
+        });
+        await v.page.route(/\/functions\/v1\/admin-client-account/, (route) => {
+          const req = route.request();
+          if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: FNH });
+          const body = JSON.parse(req.postData() || '{}');
+          st.fnBodies.push(body);
+          const r = fn ? fn(body, st) : { ok: true, detail: 'ok' };
+          return route.fulfill({ status: fnStatus, headers: { 'content-type': 'application/json', ...FNH }, body: JSON.stringify(r) });
+        });
+        await v.page.goto(`${BASE}/admin/clients/${customer.id}`, { waitUntil: 'load' });
+        await v.page.getByTestId('admin-account-section').waitFor({ timeout: 25000 });
+        await sleep(1200);
+        return { v, st, customer };
+      };
+      const txt = (v, id) => v.page.getByTestId(id).innerText();
+
+      // 1. l'état du compte et les quatre boutons
+      {
+        const { v } = await manage({ logRows: [{ id: 'l1', created_at: '2026-11-08T09:30:00Z', admin_id: '66666666-6666-4666-8666-666666666666', action: 'edit', detail: 'fiche modifiée : nom, ville' }, { id: 'l2', created_at: '2026-11-07T10:00:00Z', admin_id: null, action: 'change_login', detail: 'connexion changée (numéro de téléphone)' }] });
+        check('Gérer le compte : « Par numéro de téléphone (+235 66 11 11 11) », 2 commandes, numéro client AS-000042', /Par numéro de téléphone \(\+235 66 11 11 11\)/.test(await txt(v, 'admin-account-login')) && /Commandes : 2 · Numéro client : AS-000042/.test(await txt(v, 'admin-account-orders')));
+        check('les quatre boutons : modifier, changer le numéro de connexion, fermer, supprimer', (await v.page.getByTestId('admin-account-edit-open').count()) === 1 && /Changer le numéro de connexion/.test(await txt(v, 'admin-account-login-open')) && (await v.page.getByTestId('admin-account-close-open').count()) === 1 && (await v.page.getByTestId('admin-account-delete-open').count()) === 1);
+        const logT = await txt(v, 'admin-account-log');
+        check('journal : date, action, détail et qui l\'a fait', /✏️ Fiche modifiée · fiche modifiée : nom, ville · par Admin Albasse/.test(logT) && /📱 Connexion changée · connexion changée \(numéro de téléphone\)/.test(logT), logT);
+        await v.page.getByTestId('admin-account-section').scrollIntoViewIfNeeded().catch(() => {});
+        await v.page.screenshot({ path: path.join(OUT, '~7-gerer-le-compte.png') });
+        check('aucune erreur (gérer le compte)', v.errs.length === 0, v.errs);
+        await v.ctx.close();
+      }
+
+      // 2. modifier la fiche
+      {
+        const { v, st, customer } = await manage();
+        await v.page.getByTestId('admin-account-edit-open').click();
+        await v.page.getByTestId('admin-account-edit').waitFor({ timeout: 8000 });
+        check('modifier la fiche d\'un compte « numéro » : nom, WhatsApp, e-mail de contact, ville, pays, adresse, profession — et PAS le téléphone', (await v.page.getByTestId('admin-account-field-full_name').count()) === 1 && (await v.page.getByTestId('admin-account-field-email').count()) === 1 && (await v.page.getByTestId('admin-account-field-whatsapp_number').count()) === 1 && (await v.page.getByTestId('admin-account-field-phone').count()) === 0);
+        check('le formulaire part des vraies valeurs de la fiche', (await v.page.getByTestId('admin-account-field-full_name').inputValue()) === customer.full_name && (await v.page.getByTestId('admin-account-field-email').inputValue()) === 'aicha@gmail.com');
+        await v.page.getByTestId('admin-account-edit-save').click();
+        await v.page.getByTestId('admin-account-message').waitFor({ timeout: 8000 });
+        check('rien changé : « Rien n\'a changé. », aucune demande à la base', /Rien n’a changé/.test(await txt(v, 'admin-account-message')) && st.edits.length === 0);
+        await v.page.getByTestId('admin-account-field-full_name').fill('A');
+        await v.page.getByTestId('admin-account-edit-save').click();
+        await sleep(500);
+        check('nom trop court : phrase claire, aucune demande à la base', /Le nom doit avoir entre 2 et 80 caractères/.test(await txt(v, 'admin-account-message')) && st.edits.length === 0);
+        await v.page.getByTestId('admin-account-field-full_name').fill(customer.full_name);
+        await v.page.getByTestId('admin-account-field-region').fill(' Moundou ');
+        await v.page.getByTestId('admin-account-field-profession').fill('Commerçante');
+        await v.page.getByTestId('admin-account-edit-save').click();
+        await v.page.getByText('Fiche modifiée ✓').waitFor({ timeout: 8000 });
+        check('enregistrer : la base reçoit SEULEMENT les champs changés (ville, profession), sans espaces autour', st.edits.length === 1 && st.edits[0].p_target === customer.id && JSON.stringify(st.edits[0].p_changes) === JSON.stringify({ region: 'Moundou', profession: 'Commerçante' }), st.edits);
+        check('le panneau se ferme et le message de réussite reste', (await v.page.getByTestId('admin-account-edit').count()) === 0 && /La fiche du client est à jour/.test(await txt(v, 'admin-account-message')));
+        await v.ctx.close();
+      }
+      {
+        // un ancien compte (e-mail) : le téléphone de contact se modifie, l'e-mail de connexion non
+        const { v } = await manage({ customer: custProfile({ client_number: 7 }), info: { login_email: 'aicha@gmail.com', login_kind: 'email', orders: 1, is_admin: false } });
+        check('ancien compte : « Par e-mail (aicha@gmail.com) » et « Changer l\'e-mail de connexion »', /Par e-mail \(aicha@gmail\.com\)/.test(await txt(v, 'admin-account-login')) && /Changer l’e-mail de connexion/.test(await txt(v, 'admin-account-login-open')));
+        await v.page.getByTestId('admin-account-edit-open').click();
+        await v.page.getByTestId('admin-account-edit').waitFor({ timeout: 8000 });
+        check('ancien compte : champ « Téléphone » présent, pas de champ « E-mail »', (await v.page.getByTestId('admin-account-field-phone').count()) === 1 && (await v.page.getByTestId('admin-account-field-email').count()) === 0);
+        await v.ctx.close();
+      }
+
+      // 3. changer le numéro de connexion
+      {
+        const { v, st, customer } = await manage({ fn: (body, state) => {
+          if (body.value === '66 11 11 11') return { ok: false, reason: 'same_login' };
+          if (body.value === '66 22 22 22') return { ok: false, reason: 'login_taken' };
+          if (body.value === 'abc') return { ok: false, reason: 'bad_phone' };
+          state.info.login_email = '23566778899@tel.albasseshopping.com';
+          return { ok: true, detail: 'connexion changée (numéro de téléphone)', login: state.info.login_email };
+        } });
+        await v.page.getByTestId('admin-account-login-open').click();
+        await v.page.getByTestId('admin-account-login-panel').waitFor({ timeout: 8000 });
+        check('panneau « numéro de connexion » : dit que l\'ancien numéro ne marchera plus et que le mot de passe reste', /NOUVEAU numéro et son mot de passe actuel/.test(await txt(v, 'admin-account-login-panel')) && /L’ancien numéro ne marchera plus/.test(await txt(v, 'admin-account-login-panel')));
+        await v.page.screenshot({ path: path.join(OUT, '~8-changer-numero-connexion.png') });
+        await v.page.getByTestId('admin-account-login-confirm').click({ force: true }).catch(() => {});
+        await sleep(400);
+        check('bouton « Changer la connexion » inactif tant que rien n\'est écrit : aucune demande', st.fnBodies.length === 0);
+        for (const [value, expect] of [['abc', /ce numéro n’est pas valable|Ce numéro n’est pas valable/], ['66 22 22 22', /déjà utilisée par un autre compte/], ['66 11 11 11', /déjà sa connexion actuelle/]]) {
+          await v.page.getByTestId('admin-account-login-input').fill(value);
+          await v.page.getByTestId('admin-account-login-confirm').click();
+          await v.page.getByTestId('admin-account-message').waitFor({ timeout: 8000 });
+          await sleep(300);
+          check(`« ${value} » : refus en phrase claire, rien n'a changé`, expect.test(await txt(v, 'admin-account-message')) && /Rien n’a été fait|Ce numéro|connexion/.test(await txt(v, 'admin-account-message')) && (await v.page.getByTestId('admin-account-login-panel').count()) === 1);
+        }
+        await v.page.getByTestId('admin-account-login-input').fill('66 77 88 99');
+        await v.page.getByTestId('admin-account-login-confirm').click();
+        await v.page.getByText('Connexion changée ✓').waitFor({ timeout: 8000 });
+        const last = st.fnBodies[st.fnBodies.length - 1];
+        check('nouveau numéro : la fonction reçoit l\'action, le client et le numéro écrit', last.action === 'change_login' && last.userId === customer.id && last.value === '66 77 88 99', last);
+        check('réussite : « Le client se connecte maintenant avec son nouveau numéro, et le même mot de passe. »', /nouveau numéro, et le même mot de passe/.test(await txt(v, 'admin-account-message')));
+        await sleep(800);
+        check('la connexion est relue : « +235 66 77 88 99 »', /\+235 66 77 88 99/.test(await txt(v, 'admin-account-login')));
+        await v.ctx.close();
+      }
+
+      // 4. fermer le compte
+      {
+        const { v, st, customer } = await manage({ fn: (body, state) => { state.info.login_kind = 'closed'; state.info.login_email = 'closed-000042@closed.albasseshopping.com'; return { ok: true, detail: 'compte fermé' }; } });
+        await v.page.getByTestId('admin-account-close-open').click();
+        await v.page.getByTestId('admin-account-close-panel').waitFor({ timeout: 8000 });
+        const panelT = await txt(v, 'admin-account-close-panel');
+        check('fermer : dit ce qui est effacé, que les 2 commandes sont GARDÉES, que le numéro est libéré et que c\'est définitif', /effacés/.test(panelT) && /2 commandes sont GARDÉES/.test(panelT) && /libéré/.test(panelT) && /ne peut pas être annulé/.test(panelT), panelT);
+        await v.page.screenshot({ path: path.join(OUT, '~9-fermer-le-compte.png') });
+        await v.page.getByTestId('admin-account-close-confirm').click({ force: true }).catch(() => {});
+        await sleep(400);
+        check('« Fermer le compte » inactif tant que « FERMER » n\'est pas tapé : aucune demande', st.fnBodies.length === 0);
+        await v.page.getByTestId('admin-account-close-confirm-input').fill('ferme');
+        await v.page.getByTestId('admin-account-close-confirm').click({ force: true }).catch(() => {});
+        await sleep(300);
+        check('« ferme » ne suffit pas', st.fnBodies.length === 0);
+        await v.page.getByTestId('admin-account-reason').fill('téléphone volé');
+        await v.page.getByTestId('admin-account-close-confirm-input').fill('fermer');
+        await v.page.getByTestId('admin-account-close-confirm').click();
+        await v.page.getByText('Compte fermé 🔒').waitFor({ timeout: 8000 });
+        check('« fermer » (minuscules) accepté : la fonction reçoit l\'action, le motif et la confirmation', st.fnBodies.length === 1 && st.fnBodies[0].action === 'close' && st.fnBodies[0].userId === customer.id && st.fnBodies[0].reason === 'téléphone volé' && st.fnBodies[0].confirm.toUpperCase() === 'FERMER', st.fnBodies);
+        await sleep(900);
+        check('après la fermeture : « Ce compte est fermé », plus aucun bouton', (await v.page.getByTestId('admin-account-closed').count()) === 1 && (await v.page.getByTestId('admin-account-edit-open').count()) === 0 && (await v.page.getByTestId('admin-account-delete-open').count()) === 0);
+        await v.ctx.close();
+      }
+
+      // 5. supprimer pour de bon
+      {
+        const { v, st } = await manage();
+        await v.page.getByTestId('admin-account-delete-open').click();
+        await v.page.getByTestId('admin-account-delete-panel').waitFor({ timeout: 8000 });
+        check('2 commandes : suppression refusée, « fermez le compte au lieu de le supprimer », aucune case de confirmation', /2 commandes/.test(await txt(v, 'admin-account-delete-refused')) && /fermez le compte/.test(await txt(v, 'admin-account-delete-refused')) && (await v.page.getByTestId('admin-account-delete-confirm-input').count()) === 0 && st.fnBodies.length === 0);
+        await v.ctx.close();
+      }
+      {
+        const { v, st, customer } = await manage({ info: { login_email: '23566111111@tel.albasseshopping.com', login_kind: 'phone', orders: 0, is_admin: false } });
+        await v.page.getByTestId('admin-account-delete-open').click();
+        await v.page.getByTestId('admin-account-delete-panel').waitFor({ timeout: 8000 });
+        check('sans commande : il faut taper le numéro client « AS-000042 »', /tapez AS-000042/.test(await txt(v, 'admin-account-delete-panel')));
+        await v.page.getByTestId('admin-account-delete-confirm-input').fill('AS-000041');
+        await v.page.getByTestId('admin-account-delete-confirm').click({ force: true }).catch(() => {});
+        await sleep(300);
+        check('mauvais numéro tapé : rien n\'est envoyé', st.fnBodies.length === 0);
+        await v.page.getByTestId('admin-account-delete-confirm-input').fill('as-000042');
+        await v.page.getByTestId('admin-account-delete-confirm').click();
+        await v.page.getByText('Compte supprimé 🗑️').waitFor({ timeout: 8000 });
+        check('bon numéro : la fonction reçoit « delete » avec la confirmation', st.fnBodies.length === 1 && st.fnBodies[0].action === 'delete' && st.fnBodies[0].userId === customer.id && st.fnBodies[0].confirm.toUpperCase() === 'AS-000042', st.fnBodies);
+        await sleep(900);
+        check('après la suppression : retour à la liste (on n\'est plus sur la fiche)', !new URL(v.page.url()).pathname.endsWith(customer.id), v.page.url());
+        await v.ctx.close();
+      }
+
+      // 6. les refus de la fonction et les cas particuliers
+      {
+        const { v } = await manage({ fn: () => ({ ok: false, reason: 'auth_error' }) });
+        await v.page.getByTestId('admin-account-close-open').click();
+        await v.page.getByTestId('admin-account-close-confirm-input').fill('FERMER');
+        await v.page.getByTestId('admin-account-close-confirm').click();
+        await v.page.getByTestId('admin-account-message').waitFor({ timeout: 8000 });
+        check('la connexion refuse : « rien n\'a été changé », le panneau reste ouvert pour réessayer', /rien n’a été changé/.test(await txt(v, 'admin-account-message')) && (await v.page.getByTestId('admin-account-close-panel').count()) === 1);
+        await v.ctx.close();
+      }
+      {
+        const { v } = await manage({ fn: () => ({ error: 'not found' }), fnStatus: 404 });
+        await v.page.getByTestId('admin-account-login-open').click();
+        await v.page.getByTestId('admin-account-login-input').fill('66 77 88 99');
+        await v.page.getByTestId('admin-account-login-confirm').click();
+        await v.page.getByTestId('admin-account-message').waitFor({ timeout: 8000 });
+        check('fonction pas encore installée (404) : « n\'est pas encore installée », aucune autre erreur', /admin-client-account » n’est pas encore installée/.test(await txt(v, 'admin-account-message')) && v.errs.length === 0, v.errs);
+        await v.ctx.close();
+      }
+      {
+        const { v } = await manage({ infoStatus: 404 });
+        check('script SQL pas lancé : une phrase claire, AUCUN bouton', /add-client-account-admin\.sql n’est pas encore lancé/.test(await txt(v, 'admin-account-problem')) && (await v.page.getByTestId('admin-account-edit-open').count()) === 0 && (await v.page.getByTestId('admin-account-close-open').count()) === 0);
+        check('la fiche du client marche quand même (mot de passe oublié, identité…)', (await v.page.getByTestId('admin-password-section').count()) === 1);
+        await v.ctx.close();
+      }
+      {
+        const { v } = await manage({ info: { login_email: 'patron@exemple.com', login_kind: 'email', orders: 0, is_admin: true } });
+        check('compte administrateur : « ne se gère pas ici », aucun bouton', (await v.page.getByTestId('admin-account-isadmin').count()) === 1 && (await v.page.getByTestId('admin-account-close-open').count()) === 0 && (await v.page.getByTestId('admin-account-delete-open').count()) === 0);
+        await v.ctx.close();
+      }
+    }
   }
 
   // =============================================== % HOMME / FEMME : INSCRIPTION, PROFIL, CARTE DE ZARA, ADMIN › CLIENTS ===============================================

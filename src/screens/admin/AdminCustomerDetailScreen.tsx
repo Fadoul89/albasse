@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Linking } from 'react-native';
-import type { RouteProp } from '@react-navigation/native';
+import { useNavigation, type RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../../navigation/types';
 import { colors, fonts, radius, spacing } from '../../theme';
 import { useAuthStore } from '../../store/authStore';
@@ -28,6 +28,7 @@ import { adminResetError, recoveryMessage, recoveryPhone } from '../../lib/passw
 import { formatClientNumber } from '../../lib/clientNumber';
 import { whatsappLink } from '../../lib/relanceMessage';
 import { GenderPicker } from '../../components/GenderPicker';
+import { AdminAccountManager } from '../../components/AdminAccountManager';
 import { genderLabel, genderOf, hasGenderColumn, type Gender } from '../../lib/clientGender';
 import { birthLabel, hasBirthColumn, hasMaritalColumn, maritalLabel } from '../../lib/clientBirthMarital';
 
@@ -41,6 +42,7 @@ export function AdminCustomerDetailScreen({ route }: Props) {
   const { userId } = route.params;
   const adminProfile = useAuthStore((s) => s.profile);
   const showToast = useToastStore((s) => s.show);
+  const navigation = useNavigation();
   const { customers, refresh: refreshCustomers } = useCustomers();
   const { orders, viewedProducts, cartAddCount, isLoading } = useCustomerActivity(userId);
   const { sanctions, refresh: refreshSanctions } = useCustomerSanctions(userId);
@@ -191,6 +193,8 @@ export function AdminCustomerDetailScreen({ route }: Props) {
             <Text style={styles.banBtnText}>🔴 BANNIR LE CLIENT</Text>
           </Pressable>
         )}
+
+        <AdminAccountManager profile={profile} onChanged={refreshCustomers} onDeleted={() => { refreshCustomers(); navigation.goBack(); }} />
 
         <Section title="🔑 Mot de passe oublié">
           <View testID="admin-password-section">
