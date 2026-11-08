@@ -13,11 +13,19 @@ Demande du patron (8 novembre 2026) : *« Donne à chaque client qui crée un co
 | Où | Quoi |
 | --- | --- |
 | **Compte › 🪪 Mon numéro client** (client) | Le numéro en grand, avec son téléphone et son e-mail, un bouton **Copier** et **« Me l'envoyer sur WhatsApp »** (message prêt : numéro, téléphone, e-mail). Un compte créé avec le numéro de téléphone n'affiche jamais l'adresse technique `@tel.albasseshopping.com`. |
-| **Mot de passe oublié** (client sans compte ouvert) | Une case **facultative « Numéro client »** : si le client le connaît, le message WhatsApp vers l'équipe ajoute « Mon numéro client : AS-000123 ». Mal écrit : une phrase simple, rien ne bloque. Vide : le message est celui d'avant. |
+| **Mot de passe oublié** (client sans compte ouvert) | **Une seule case : le téléphone, l'e-mail ou le numéro client** (voir plus bas). Avec le téléphone, une case **facultative « Numéro client »** s'ajoute : si le client le connaît, le message WhatsApp vers l'équipe ajoute « Mon numéro client : AS-000123 ». Mal écrit : une phrase simple, rien ne bloque. |
 | **Alerte Telegram « 🔑 Mot de passe oublié »** (équipe) | Une ligne **« 🪪 N° client : AS-000123 »** sous le téléphone. |
 | **Admin › Clients** (liste) | « 🪪 AS-000123 » sur chaque client ; la barre de recherche trouve par **numéro client** (« AS-000123 », « as 123 » ou « 123 » : exactement ce numéro, jamais « 12 » pour « 123 »), comme par nom ou téléphone. |
 | **Admin › Clients › fiche du client** | La ligne **« 🪪 Numéro client »** en haut de l'identité. |
 | **WhatsApp du nouveau code** (équipe → client) | Le message ajoute « Votre numéro client : AS-000123 (gardez-le : il aide à retrouver votre compte) ». |
+
+## « Mot de passe oublié » : téléphone, e-mail ou numéro client (demande du patron, 8 novembre)
+Constat dans la base : sur **114 comptes créés avec le numéro de téléphone, 88 ont aussi donné un e-mail** (facultatif). Leur connexion est le numéro ; l'e-mail n'est qu'écrit dans le profil. Quand l'un d'eux tapait **son e-mail** dans « Mot de passe oublié », **aucun lien ne partait** (Supabase ne connaît que l'adresse du numéro), l'écran disait quand même « un e-mail vient d'être envoyé », et l'alerte de l'équipe disait « rien à faire ». Maintenant :
+- **Le client écrit dans la même case** son téléphone, son e-mail **ou son numéro client** (« AS-000123 », « as 123 » ou « 123 » : 7 chiffres au plus = numéro client ; un téléphone a toujours 8 chiffres ou plus, il n'est jamais pris pour un numéro client).
+- **Numéro client** : l'écran dit « Nous avons noté votre numéro client (AS-000123) » et propose WhatsApp ; l'équipe reçoit l'alerte Telegram avec la fiche.
+- **E-mail d'un compte créé avec le numéro** : l'équipe reçoit l'alerte « Il attend un nouveau code » (avec la ligne « ✉️ Demande faite avec son e-mail : aucun lien ne part ») et le WhatsApp du client ; l'ancien compte (connexion par e-mail) reçoit toujours le lien, l'équipe est seulement prévenue.
+- **Après un e-mail**, l'écran ajoute « **Rien reçu ?** Votre compte a peut-être été créé avec votre numéro de téléphone » avec un bouton WhatsApp (message : l'e-mail écrit et « je n'ai pas reçu d'e-mail »). La phrase du dessus ne change pas : personne ne peut deviner quels e-mails ont un compte.
+- **Pas de lien automatique par e-mail pour les comptes créés avec le numéro** : l'e-mail donné à l'inscription n'est **pas vérifié** (une faute de frappe enverrait le lien à un inconnu, qui pourrait prendre le compte). L'équipe donne le code après avoir vérifié la personne.
 
 ## Comment s'en servir pour récupérer un compte
 1. Le client écrit sur WhatsApp (ou tape « Mot de passe oublié ») : il dit son **numéro client** s'il l'a gardé, sinon son nom et son téléphone.
@@ -34,7 +42,7 @@ Demande du patron (8 novembre 2026) : *« Donne à chaque client qui crée un co
 
 ## Mise en service (dans cet ordre)
 1. Supabase › SQL Editor : lancer **`add-client-number.sql`** (sans danger si on le relance : rien n'est renuméroté).
-2. Supabase › SQL Editor : relancer **`add-password-request-alert.sql`** (version mise à jour : l'alerte Telegram porte le numéro ; elle marche aussi sans le script du numéro).
+2. Supabase › SQL Editor : relancer **`add-password-request-alert.sql`** (version mise à jour : l'alerte Telegram porte le numéro, reconnaît le numéro client et l'e-mail d'un compte créé avec le numéro ; elle marche aussi sans le script du numéro).
 3. Publier le site (Netlify).
 - Avant l'étape 1, rien ne change pour les clients : la carte n'apparaît pas (le compte n'a pas de numéro), la liste et la fiche n'ont pas la ligne, aucun message d'erreur.
 - Vérifier après : `select client_number, full_name, phone from profiles order by client_number limit 20;`
@@ -46,6 +54,6 @@ Demande du patron (8 novembre 2026) : *« Donne à chaque client qui crée un co
 - Base : `add-client-number.sql` (colonne `profiles.client_number`, séquence, protection) ; alerte Telegram : `add-password-request-alert.sql`.
 
 ## Tests
-- Règles pures : `node --import ./tests/zara/register.mjs tests/email/client-number.test.ts` (28 contrôles) et `tests/email/password-recovery.test.ts` (32).
-- Base (Postgres local jetable, jamais la vraie) : `sh tests/sql/run-client-number.sh` (28 contrôles : numérotation dans l'ordre, relance sans renumérotation, nouveau compte, serveur, droits, protection contre les modifications, unicité, alerte avec et sans la colonne) ; `sh tests/sql/run-password-alert.sh` (44, inchangé).
+- Règles pures : `node --import ./tests/zara/register.mjs tests/email/client-number.test.ts` (35 contrôles) et `tests/email/password-recovery.test.ts` (32).
+- Base (Postgres local jetable, jamais la vraie) : `sh tests/sql/run-client-number.sh` (45 contrôles : numérotation dans l'ordre, relance sans renumérotation, nouveau compte, serveur, droits, protection contre les modifications, unicité, alerte avec et sans la colonne, e-mail d'un compte créé avec le numéro, numéro client écrit de plusieurs façons, numéros inconnus ou trop longs) ; `sh tests/sql/run-password-alert.sh` (44, inchangé).
 - Navigateur : partie `~` de `tests/zara/zara-ui.test.js` (carte du client, copie, WhatsApp, compte sans numéro, fiche et liste de l'équipe, recherche, « Mot de passe oublié »).
