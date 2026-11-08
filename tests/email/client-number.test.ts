@@ -1,6 +1,6 @@
 // Le numéro client (lib/clientNumber, docs/numero-client.md) : écriture AS-000123, lecture de ce que l'on tape, recherche de l'équipe, messages. Aucun réseau.
 // Lancer : node --import ./tests/zara/register.mjs tests/email/client-number.test.ts
-import { clientNumberLine, clientNumberMatches, forgotMessage, formatClientNumber, keepMessage, parseClientNumber } from '../../src/lib/clientNumber.ts';
+import { clientNumberLine, clientNumberMatches, forgotEmailMessage, forgotMessage, forgotNumberMessage, formatClientNumber, keepMessage, looksLikeClientNumber, parseClientNumber } from '../../src/lib/clientNumber.ts';
 import { recoveryMessage } from '../../src/lib/passwordRecovery.ts';
 
 let ok = 0;
@@ -57,5 +57,16 @@ check('« mot de passe oublié » sans numéro client, ou numéro mal écrit : l
 const k = keepMessage({ number: 123, phone: '66 12 34 56', email: 'amina@gmail.com' });
 check('message « garder mon numéro » : numéro, téléphone, e-mail', !!k && k.includes('AS-000123') && k.includes('66 12 34 56') && k.includes('amina@gmail.com'), k);
 check('compte sans e-mail visible : pas de ligne e-mail ; sans numéro : rien à envoyer', !keepMessage({ number: 123, phone: '66 12 34 56', email: null })!.includes('E-mail') && keepMessage({ number: undefined }) === null);
+
+// --- la case unique de « Mot de passe oublié » : téléphone, e-mail ou numéro client
+check('« AS-000123 », « as 123 », « 123 », « 000123 » sont des numéros client', ['AS-000123', 'as 123', 'AS123', '123', '000123', ' 42 '].every((t) => looksLikeClientNumber(t)));
+check('un téléphone (8 chiffres ou plus, avec ou sans espaces, +235) n\'est JAMAIS pris pour un numéro client', ['66123456', '66 12 34 56', '+235 66 12 34 56', '23566123456', '0023566123456'].every((t) => !looksLikeClientNumber(t)));
+check('un e-mail, un mot, du vide ne sont pas des numéros client', ['amina@gmail.com', 'as@gmail.com', 'AS-12@x.com', 'bonjour', '', '   ', '0', 'AS-', 'AS-abc'].every((t) => !looksLikeClientNumber(t)));
+check('7 chiffres au plus = numéro client, 8 = téléphone (frontière)', looksLikeClientNumber('1234567') && !looksLikeClientNumber('12345678'));
+check('absent → faux', !looksLikeClientNumber(null) && !looksLikeClientNumber(undefined));
+const n1 = forgotNumberMessage('as 123');
+check('message « mot de passe oublié » avec le numéro client seul : écrit proprement AS-000123', n1 === 'Bonjour Albasse Shopping, j\'ai oublié le mot de passe de mon compte. Mon numéro client : AS-000123. Pouvez-vous m\'aider ?', n1);
+const e1 = forgotEmailMessage('  fatime@gmail.com ');
+check('message « rien reçu » avec l\'e-mail : l\'e-mail, « je n\'ai pas reçu d\'e-mail »', e1 === 'Bonjour Albasse Shopping, j\'ai oublié le mot de passe de mon compte (e-mail fatime@gmail.com). Je n\'ai pas reçu d\'e-mail. Pouvez-vous m\'aider ?', e1);
 
 console.log(`\n${ok} contrôles réussis`);

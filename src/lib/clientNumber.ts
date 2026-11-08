@@ -28,6 +28,15 @@ export function clientNumberMatches(n: unknown, query: string): boolean {
   return parsed !== null && formatClientNumber(parsed) === shown;
 }
 
+// Dans la case « Mot de passe oublié » : est-ce un numéro client ? « AS-000123 » (avec AS), ou 7 chiffres au plus (« 123 »).
+// Un numéro de téléphone a toujours 8 chiffres ou plus : il n'est jamais pris pour un numéro client.
+export function looksLikeClientNumber(text: string | null | undefined): boolean {
+  const t = (text ?? '').trim();
+  if (!t || t.includes('@')) return false;
+  if (/^as/i.test(t)) return parseClientNumber(t) !== null;
+  return /^\d{1,7}$/.test(t) && parseClientNumber(t) !== null;
+}
+
 // La ligne ajoutée aux messages (WhatsApp du client vers l'équipe, de l'équipe vers le client) ; vide si le client n'a pas de numéro
 export function clientNumberLine(n: unknown): string {
   const shown = formatClientNumber(n);
@@ -39,6 +48,17 @@ export function forgotMessage(phone: string, clientNumberText: string): string {
   const parsed = parseClientNumber(clientNumberText);
   const num = parsed !== null ? formatClientNumber(parsed) : null;
   return `Bonjour Albasse Shopping, j'ai oublié le mot de passe de mon compte (numéro ${phone})${num ? `. Mon numéro client : ${num}` : ''}. Pouvez-vous m'aider ?`;
+}
+
+// « Mot de passe oublié » avec le numéro client seul (le client ne se souvient plus de son téléphone)
+export function forgotNumberMessage(clientNumberText: string): string {
+  const num = formatClientNumber(parseClientNumber(clientNumberText));
+  return `Bonjour Albasse Shopping, j'ai oublié le mot de passe de mon compte. Mon numéro client : ${num ?? clientNumberText.trim()}. Pouvez-vous m'aider ?`;
+}
+
+// « Mot de passe oublié » avec un e-mail : le lien n'est pas arrivé (compte créé avec le numéro de téléphone, ou e-mail mal écrit)
+export function forgotEmailMessage(email: string): string {
+  return `Bonjour Albasse Shopping, j'ai oublié le mot de passe de mon compte (e-mail ${email.trim()}). Je n'ai pas reçu d'e-mail. Pouvez-vous m'aider ?`;
 }
 
 // Le message que le client s'envoie à lui-même sur WhatsApp pour garder son numéro

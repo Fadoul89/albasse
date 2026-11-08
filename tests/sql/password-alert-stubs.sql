@@ -19,6 +19,10 @@ create table public.profiles (
 -- comme la vraie base : l'administrateur connecté est lu dans le réglage « test.is_admin »
 create function public.is_admin() returns boolean language sql stable security definer set search_path = public as $$ select coalesce(current_setting('test.is_admin', true), '') = 'on' $$;
 
+-- comme la vraie base : auth.users (la connexion d'un compte créé avec le numéro est une adresse « 235…@tel.albasseshopping.com »)
+create schema if not exists auth;
+create table auth.users (id uuid primary key, email text);
+
 -- le coffre-fort : le token du bot
 create schema vault;
 create table vault.decrypted_secrets (name text, decrypted_secret text);

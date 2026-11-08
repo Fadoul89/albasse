@@ -6,6 +6,12 @@
 -- Prérequis (déjà en place pour l'alerte de commande) : le token du bot dans le coffre-fort (nom « telegram_bot_token ») et un compte administrateur
 -- qui a lié Telegram (Compte › Lier Telegram). Sans cela, rien n'est envoyé et rien n'échoue.
 --
+-- Comment le client est retrouvé (une seule case sur l'écran « Mot de passe oublié ») :
+--   • son numéro de téléphone (8 derniers chiffres) ;
+--   • son numéro client « AS-000123 » (ou 123 : un numéro de téléphone a toujours au moins 8 chiffres) : add-client-number.sql, docs/numero-client.md ;
+--   • son e-mail : un ancien compte (connexion par e-mail) reçoit le lien par e-mail, l'équipe est seulement prévenue ; un compte créé avec le NUMÉRO
+--     qui a donné un vrai e-mail (facultatif) ne reçoit aucun lien (sa connexion est son numéro) : l'équipe est prévenue comme pour un numéro, « il attend un nouveau code ».
+--
 -- Garde-fous :
 --   • la fonction répond toujours pareil (rien), que le compte existe ou non : on ne peut pas deviner quels numéros ont un compte ;
 --   • un numéro ou e-mail inconnu n'envoie rien ; un compte administrateur non plus ;
@@ -48,6 +54,9 @@ declare
   v_num text;
   v_shown text;
   v_wa text;
+  v_cn integer;
+  v_phone_acct boolean := false;
+  v_by_email boolean := false;
 begin
   -- le petit journal ne garde que 30 jours
   delete from public.password_request_alerts where created_at < now() - interval '30 days';
@@ -56,11 +65,28 @@ begin
   end if;
 
   if position('@' in v_login) > 0 then
-    -- compte avec un vrai e-mail : le lien de réinitialisation part par e-mail, l'équipe est seulement prévenue
-    v_channel := 'email';
-    select p.id, p.full_name, p.phone, p.whatsapp_number, p.region, p.email, to_jsonb(p) ->> 'client_number' as client_number into v_p
+    -- un e-mail. Deux cas : un ancien compte (connexion par e-mail) reçoit le lien de réinitialisation par e-mail et l'équipe est seulement prévenue ;
+    -- un compte créé avec le NUMÉRO (qui a donné un vrai e-mail, facultatif) ne reçoit aucun lien : sa connexion est son numéro, l'équipe doit lui donner un nouveau code.
+    v_by_email := true;
+    select p.id, p.full_name, p.phone, p.whatsapp_number, p.region, p.email, to_jsonb(p) ->> 'client_number' as client_number,
+           (lower(coalesce(p.email, '')) like '%@tel.albasseshopping.com'
+            or exists (select 1 from auth.users u where u.id = p.id and lower(coalesce(u.email, '')) like '%@tel.albasseshopping.com')) as phone_acct into v_p
     from public.profiles p
     where lower(p.email) = lower(v_login) and not coalesce(p.is_admin, false)
+    order by p.created_at
+    limit 1;
+    v_phone_acct := coalesce(v_p.phone_acct, false);
+    v_channel := case when v_phone_acct then 'phone' else 'email' end;
+  elsif v_login ~* '^\s*as\s*[-–—:.]?\s*\d{1,9}\s*$' or v_login ~ '^\s*\d{1,7}\s*$' then
+    -- le numéro client (AS-000123, ou 123 : un numéro de téléphone a au moins 8 chiffres, jamais 7 ou moins)
+    v_channel := 'phone';
+    v_cn := nullif(regexp_replace(v_login, '\D', '', 'g'), '')::integer;
+    if v_cn is null or v_cn < 1 then
+      return;
+    end if;
+    select p.id, p.full_name, p.phone, p.whatsapp_number, p.region, p.email, to_jsonb(p) ->> 'client_number' as client_number into v_p
+    from public.profiles p
+    where (to_jsonb(p) ->> 'client_number') = v_cn::text and not coalesce(p.is_admin, false)
     limit 1;
   else
     -- compte créé avec le numéro : l'équipe doit donner un nouveau code. Le numéro est comparé sur ses 8 derniers chiffres (+235, 00235 ou rien devant).
@@ -119,6 +145,7 @@ begin
         || '📞 ' || v_shown || E'\n'
         || case when v_p.client_number is not null then '🪪 N° client : AS-' || lpad(v_p.client_number, 6, '0') || E'\n' else '' end
         || case when nullif(btrim(coalesce(v_p.region, '')), '') is not null then '📍 ' || btrim(v_p.region) || E'\n' else '' end
+        || case when v_by_email then '✉️ Demande faite avec son e-mail (compte créé avec le numéro : aucun lien ne part, il attend un code).' || E'\n' else '' end
         || 'Il attend un nouveau code.' || E'\n'
         || '👉 Sa fiche (puis « Donner un nouveau code ») : https://www.albasseshopping.com/admin/clients/' || v_p.id::text
         || case when v_wa is not null then E'\n' || '💬 WhatsApp : https://wa.me/' || v_wa else '' end;

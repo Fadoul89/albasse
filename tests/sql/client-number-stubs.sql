@@ -13,3 +13,7 @@ insert into public.profiles (id, email, full_name, phone, whatsapp_number, regio
   ('00000000-0000-4000-8000-000000000002', '23566123456@tel.albasseshopping.com', 'Éric Moussa', '66 12 34 56', null, 'N''Djamena', false, null, '2026-01-10'),
   ('00000000-0000-4000-8000-000000000003', 'amina@gmail.com', 'Amina', '99 88 77 66', '+235 99 88 77 66', 'Doba', false, null, '2026-01-05');
 insert into vault.decrypted_secrets values ('telegram_bot_token', '123456:FAKE-TOKEN-FOR-TESTS-ONLY-xxxxxxxxxxxxxxx');
+insert into auth.users (id, email) values
+  ('00000000-0000-4000-8000-000000000001', 'admin@exemple.com'),
+  ('00000000-0000-4000-8000-000000000002', '23566123456@tel.albasseshopping.com'),
+  ('00000000-0000-4000-8000-000000000003', 'amina@gmail.com');

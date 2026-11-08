@@ -10464,6 +10464,81 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('sans numéro client : le message WhatsApp est exactement celui d\'avant', /oublié le mot de passe de mon compte \(numéro 66 12 34 56\)\. Pouvez-vous m'aider \?/.test(url2) && !/numéro client/.test(url2), url2);
       await w.ctx.close();
     }
+    // h. « Mot de passe oublié » : une seule case (téléphone, e-mail ou numéro client) ; l'équipe est prévenue (la base reçoit ce qui est écrit)
+    {
+      const HDRH = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+      const openForgot = async () => {
+        const v = await newVisitor(phone, { lang: 'fr' });
+        const alerts = [];
+        await v.page.route(/\/rest\/v1\/rpc\/notify_admin_password_request/, (route) => {
+          const req = route.request();
+          if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: HDRH, body: '' });
+          alerts.push(JSON.parse(req.postData() || '{}'));
+          return route.fulfill({ status: 200, headers: { 'content-type': 'application/json', ...HDRH }, body: 'null' });
+        });
+        await v.page.route(/\/auth\/v1\/recover/, (route) => (route.request().method() === 'OPTIONS' ? route.fulfill({ status: 204, headers: HDRH, body: '' }) : route.fulfill({ status: 200, headers: { 'content-type': 'application/json', ...HDRH }, body: '{}' })));
+        await v.ctx.route('https://wa.me/**', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<html><body>whatsapp</body></html>' }));
+        await v.page.goto(`${BASE}/mot-de-passe-oublie`, { waitUntil: 'load' });
+        await v.page.getByTestId('forgot-identifier').waitFor({ timeout: 25000 });
+        return { v, alerts };
+      };
+      const whatsappOpened = async (v, label) => {
+        const [popup] = await Promise.all([v.ctx.waitForEvent('page', { timeout: 10000 }), v.page.getByText(label).click()]);
+        await popup.waitForLoadState('domcontentloaded').catch(() => {});
+        const url = decodeURIComponent(popup.url());
+        await popup.close();
+        return url;
+      };
+      // 1. le numéro client AS-000123
+      {
+        const { v, alerts } = await openForgot();
+        check('la case dit qu\'on peut écrire son numéro client', /numéro client/.test((await v.page.getByTestId('forgot-identifier').getAttribute('placeholder')) || ''));
+        await v.page.getByTestId('forgot-identifier').fill('as 123');
+        await v.page.getByText('Continuer', { exact: true }).click();
+        await v.page.getByTestId('forgot-number-help').waitFor({ timeout: 8000 });
+        check('numéro client « as 123 » : « Nous avons noté votre numéro client (AS-000123) », WhatsApp proposé', /AS-000123/.test(await v.page.getByTestId('forgot-number-help').innerText()) && (await v.page.getByText('💬 Écrire sur WhatsApp').count()) === 1);
+        check('numéro client : pas de deuxième case « numéro client » (il est déjà donné)', (await v.page.getByTestId('forgot-client-number').count()) === 0);
+        check('numéro client : la base reçoit exactement ce qui est écrit, une seule fois (l\'équipe est prévenue)', alerts.length === 1 && alerts[0].p_login === 'as 123' && Object.keys(alerts[0]).join(',') === 'p_login', alerts);
+        const url = await whatsappOpened(v, '💬 Écrire sur WhatsApp');
+        check('WhatsApp vers la boutique : « Mon numéro client : AS-000123 »', url.startsWith('https://wa.me/235') && /Mon numéro client : AS-000123/.test(url) && !/numéro 6/.test(url), url);
+        await v.page.screenshot({ path: path.join(OUT, '~5-oublie-numero-client.png') });
+        check('aucune erreur (mot de passe oublié avec le numéro client)', v.errs.length === 0, v.errs);
+        await v.ctx.close();
+      }
+      // 2. un téléphone de 8 chiffres n'est jamais pris pour un numéro client
+      {
+        const { v, alerts } = await openForgot();
+        await v.page.getByTestId('forgot-identifier').fill('66123456');
+        await v.page.getByText('Continuer', { exact: true }).click();
+        await v.page.getByTestId('forgot-phone-help').waitFor({ timeout: 8000 });
+        check('8 chiffres = un téléphone : la case « numéro client (facultatif) » est proposée, pas « Nous avons noté votre numéro client »', (await v.page.getByTestId('forgot-client-number').count()) === 1 && (await v.page.getByTestId('forgot-number-help').count()) === 0 && alerts.length === 1 && alerts[0].p_login === '66123456', alerts);
+        await v.ctx.close();
+      }
+      // 3. un e-mail : le lien part (si le compte a une connexion par e-mail) ; et si rien n'arrive, le client écrit sur WhatsApp
+      {
+        const { v, alerts } = await openForgot();
+        await v.page.getByTestId('forgot-identifier').fill('fatime@gmail.com');
+        await v.page.getByText('Continuer', { exact: true }).click();
+        await v.page.getByTestId('forgot-email-sent').waitFor({ timeout: 10000 });
+        const txt = await v.page.getByTestId('forgot-email-sent').innerText();
+        check('e-mail : « Si un compte existe… un e-mail vient d\'être envoyé » (toujours la même phrase)', /Si un compte existe avec l'adresse fatime@gmail\.com/.test(txt));
+        check('e-mail : « Rien reçu ? Votre compte a peut-être été créé avec votre numéro » + bouton WhatsApp', /Rien reçu \?/.test(txt) && (await v.page.getByTestId('forgot-email-whatsapp').count()) === 1);
+        check('e-mail : l\'équipe est prévenue (la base reçoit l\'e-mail écrit, une seule fois)', alerts.length === 1 && alerts[0].p_login === 'fatime@gmail.com', alerts);
+        const url = await whatsappOpened(v, '💬 Rien reçu ? Écrire sur WhatsApp');
+        check('WhatsApp « rien reçu » : l\'e-mail et « je n\'ai pas reçu d\'e-mail »', url.startsWith('https://wa.me/235') && /e-mail fatime@gmail\.com/.test(url) && /pas reçu d'e-mail/.test(url), url);
+        await v.page.screenshot({ path: path.join(OUT, '~6-oublie-email-rien-recu.png') });
+        await v.ctx.close();
+      }
+      // 4. n'importe quoi : refus clair, aucune alerte
+      {
+        const { v, alerts } = await openForgot();
+        await v.page.getByTestId('forgot-identifier').fill('AS-');
+        await v.page.getByText('Continuer', { exact: true }).click();
+        await v.page.getByText(/Merci de saisir un e-mail, un numéro de téléphone ou un numéro client/).first().waitFor({ timeout: 8000 });
+        check('« AS- » seul : « Merci de saisir un e-mail, un numéro de téléphone ou un numéro client », aucune alerte', alerts.length === 0 && (await v.page.getByTestId('forgot-phone-help').count()) === 0, alerts);
+        await v.ctx.close();
+      }
+    }
   }
 
   // =============================================== % HOMME / FEMME : INSCRIPTION, PROFIL, CARTE DE ZARA, ADMIN › CLIENTS ===============================================
