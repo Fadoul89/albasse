@@ -122,6 +122,7 @@ export interface Texts {
     myAccount: string;
     forgotPassword: string;
     changePassword: string;
+    forcesBadge: string;
     giftIdea: string;
     wrap: string;
     policy: string;
@@ -224,6 +225,8 @@ export interface Texts {
   // mot de passe : Zara guide, elle ne voit ni ne demande jamais un mot de passe (docs/zara-mot-de-passe.md)
   passwordMember(clientNumber: string | null): string;
   passwordGuest: string;
+  // le client dit qu'il est militaire, policier, gendarme… : Zara lui propose l'article choisi pour eux (docs/zara-annonce-ciblee.md)
+  forces: { intro: string; none: string };
   alreadyMember: string;
   ordersLink: string;
   errorData: string;
@@ -541,6 +544,7 @@ const FR: Texts = {
     myAccount: '👤 Mon compte',
     forgotPassword: '🔑 Mot de passe oublié',
     changePassword: '🔑 Changer mon mot de passe',
+    forcesBadge: '🪖 Badge groupe sanguin',
     giftIdea: '🎁 Idée cadeau',
     wrap: '🎁 Emballage cadeau',
     policy: '📄 Conditions de retour',
@@ -758,6 +762,10 @@ const FR: Texts = {
     }\n\nJe ne vois jamais votre mot de passe et je ne le demande jamais.`,
   passwordGuest:
     'Pas de souci, je vous aide à retrouver votre compte 🔑 Touchez « Mot de passe oublié », puis écrivez votre téléphone, votre e-mail ou votre numéro client (AS-000123) : l’équipe vous donne un nouveau code sur WhatsApp.\n\nNe m’écrivez jamais votre mot de passe ici.',
+  forces: {
+    intro: 'Respect à vous 🙏 Voici un article pensé pour les militaires et les forces de l’ordre : l’écusson brodé « groupe sanguin », pour vos uniformes, vestes et équipements.',
+    none: 'Respect à vous 🙏 Dites-moi ce que vous cherchez, je vous aide avec plaisir.',
+  },
   alreadyMember: 'Vous êtes déjà connecté(e){nom} ✅ Retrouvez vos commandes à tout moment.',
   ordersLink: 'Retrouvez et suivez toutes vos commandes ici 👇',
   errorData: 'Je n’arrive pas à charger ces informations pour le moment. Réessayez dans un instant, ou écrivez-nous sur WhatsApp.',
@@ -1143,6 +1151,7 @@ const AR: Texts = {
     myAccount: '👤 حسابي',
     forgotPassword: '🔑 نسيت كلمة السر',
     changePassword: '🔑 تغيير كلمة السر',
+    forcesBadge: '🪖 شارة فصيلة الدم',
     giftIdea: '🎁 فكرة هدية',
     wrap: '🎁 تغليف الهدايا',
     policy: '📄 شروط الإرجاع',
@@ -1362,6 +1371,10 @@ const AR: Texts = {
     }\n\nأنا لا أرى كلمة السر أبدا ولا أطلبها.`,
   passwordGuest:
     'لا مشكلة، سأساعدك على استعادة حسابك 🔑 اضغط «نسيت كلمة السر» ثم اكتب رقم هاتفك أو بريدك الإلكتروني أو رقم عميلك (AS-000123): يعطيك الفريق رمزا جديدا عبر واتساب.\n\nلا تكتب لي كلمة السر هنا أبدا.',
+  forces: {
+    intro: 'تحية احترام لك 🙏 هذا منتج مصمم للعسكريين وقوات الأمن: شارة فصيلة الدم المطرزة، لبدلاتك وسترتك ومعداتك.',
+    none: 'تحية احترام لك 🙏 قل لي ماذا تبحث عنه وسأساعدك بكل سرور.',
+  },
   alreadyMember: 'أنت مسجل بالفعل{nom} ✅ تجد طلباتك في أي وقت.',
   ordersLink: 'تابع كل طلباتك هنا 👇',
   errorData: 'لا أستطيع تحميل هذه المعلومات الآن. حاول بعد قليل، أو راسلنا على واتساب.',

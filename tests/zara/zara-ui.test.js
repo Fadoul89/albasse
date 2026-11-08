@@ -1899,6 +1899,58 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('aucune erreur (annonce ciblée)', v.errs.length === 0, v.errs);
       await v.ctx.close();
     }
+
+    // i. Zara dans le chat : le client dit qu'il est militaire, policier, gendarme… -> le badge « groupe sanguin » ; le menu d'un client militaire a un bouton
+    {
+      const badgeC = liveE.find((p) => p.slug === 'bagde-groupe-sanguin');
+      if (badgeC && okP(badgeC)) {
+        const openChat = async (v) => {
+          await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
+          await sleep(2500);
+          await v.page.getByRole('button', { name: /Discuter avec Zara Kings|التحدث مع زارا كينغز/ }).click();
+          await sleep(1500);
+        };
+        // un visiteur écrit « je suis militaire »
+        {
+          const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
+          await openChat(v);
+          await waitText(v.page, /Créez votre compte gratuit(?:, Ali)?|أنشئ حسابك/);
+          await ask(v.page, 'je suis militaire', /Respect à vous/, 20000);
+          await sleep(3000); // la carte de l'article et les phrases suivantes finissent de s'écrire
+          const panelText = await panelOf(v.page).innerText();
+          check('« je suis militaire » : Zara salue avec respect, dit pour qui est l\'article et montre le badge « groupe sanguin » dans le chat', /pensé pour les militaires et les forces de l’ordre/.test(panelText) && panelText.includes(badgeC.name.trim()), panelText.slice(-500));
+          await panelOf(v.page).getByText(/Respect à vous/).first().scrollIntoViewIfNeeded(); // la photo montre le salut de Zara et la carte du badge
+          await sleep(600);
+          await v.page.screenshot({ path: path.join(OUT, '€11-zara-chat-militaire.png') });
+          check('aucune fausse rareté ni faux pourcentage dans la réponse de Zara', !/dernier article|rare\b|stock limité|offre limitée/i.test(panelText.slice(panelText.indexOf('Respect à vous'))), panelText.slice(-300));
+          const before = (await panelOf(v.page).getByText(/Respect à vous/).count());
+          await typeIn(v.page, 'je suis policier et je cherche une montre');
+          await sleep(6000);
+          check('« je suis policier et je cherche une montre » : Zara répond à la montre, elle ne répète pas le badge', (await panelOf(v.page).getByText(/Respect à vous/).count()) === before, before);
+          check('aucune erreur (Zara et les militaires)', v.errs.length === 0, v.errs);
+          await v.ctx.close();
+        }
+        // un client connecté dont le compte dit « militaire » : bouton dans le menu ; un commerçant : pas de bouton
+        for (const [metier, hasChip] of [['Militaire', true], ['commerçant', false]]) {
+          const fu = memberE({ profession: metier });
+          const v = await newVisitor(phone, { storage: { [SKE]: fu.session }, fakeUser: fu });
+          await openChat(v);
+          await chip(v.page, '🔥 Promotions').first().waitFor({ timeout: 45000 });
+          const labels = await chipLabels(v.page);
+          check(`client connecté « ${metier} » : ${hasChip ? 'le menu de Zara a le bouton « 🪖 Badge groupe sanguin »' : 'pas de bouton « Badge groupe sanguin » (rien n\'est deviné)'}`, labels.includes('🪖 Badge groupe sanguin') === hasChip, labels);
+          if (hasChip) {
+            await chip(v.page, '🪖 Badge groupe sanguin').last().click();
+            await waitText(v.page, /Respect à vous/, 20000);
+            await sleep(3000);
+            check('le bouton montre le badge « groupe sanguin » dans le chat', (await panelOf(v.page).innerText()).includes(badgeC.name.trim()));
+            await panelOf(v.page).getByText(/Respect à vous/).first().scrollIntoViewIfNeeded();
+            await sleep(600);
+            await v.page.screenshot({ path: path.join(OUT, '€12-zara-menu-militaire.png') });
+          }
+          await v.ctx.close();
+        }
+      } else console.log('SAUTE  Zara et les militaires : le badge n\'est pas en vente en ce moment');
+    }
   }
 
   // =============================================== 8. VENTE FLASH 24 H, ANCIEN PRIX SEULEMENT EN PROMOTION, ZARA CHOISIT LES ARTICLES ===============================================

@@ -79,6 +79,24 @@ export function jobFrom(text: string): Job | null {
   return null;
 }
 
+// « Je suis militaire », « je suis dans la police », « je travaille à la gendarmerie », « أنا شرطي » : le client dit lui-même qu'il est militaire ou des forces de l'ordre.
+// Zara lui propose alors l'article choisi par le patron pour eux (badge groupe sanguin : FORCES_PRODUCT_SLUGS dans lib/adAudiences). Sa phrase doit être courte et
+// sans autre demande : « je suis militaire et je cherche une montre » ne compte pas (Zara répond à la montre).
+const FORCES_JOBS = ['militaire', 'soldat', 'policier', 'policiere', 'gendarme', 'douanier', 'douaniere', 'vigile', 'sergent', 'caporal', 'adjudant', 'colonel', 'commandant', 'capitaine', 'lieutenant', 'commissaire', 'parachutiste'];
+const FORCES_BODIES = ['armee nationale', 'armee', 'police nationale', 'police', 'gendarmerie nationale', 'gendarmerie', 'garde nationale', 'garde nomade', 'douane', 'forces armees', 'forces de l ordre', 'gnnt'];
+const AR_FORCES_JOBS = ['عسكري', 'جندي', 'شرطي', 'دركي', 'ضابط'];
+const AR_FORCES_BODIES = ['جيش', 'شرطه', 'درك', 'حرس', 'جمارك'];
+const FORCES_TAIL = '(?=$|\\s(?:et|depuis|chez|a|dans|je|j|alors|donc|avec|mais|qui|en|au|pour|ici|de|du|d)\\b)';
+const FORCES_JOB_RE = new RegExp(`(?:\\bje suis|\\bmoi c est|\\bje travaille comme|\\ben tant que|\\bmon metier est|\\bma profession est)\\s+(?:un |une |l |le |la |d |de |ancien |ancienne )*(${word(FORCES_JOBS)})\\b${FORCES_TAIL}`);
+const FORCES_BODY_RE = new RegExp(`(?:\\bje suis|\\bje travaille|\\bje sers|\\bj appartiens)\\s+(?:dans |a |au |de |pour )(?:l |la |le |les )?(${word(FORCES_BODIES)})\\b${FORCES_TAIL}`);
+const AR_FORCES_RE = new RegExp(`(?:انا|اشتغل|مهنتي|وظيفتي)\\s+(?:ك|ال)?(${word(AR_FORCES_JOBS)})|(?:اعمل|اشتغل|انا)\\s+(?:في\\s+|ب)(?:ال)?(${word(AR_FORCES_BODIES)})`);
+
+export function forcesFrom(text: string): boolean {
+  const n = normalize(text);
+  if (!n || n.split(' ').filter(Boolean).length > 12) return false;
+  return FORCES_JOB_RE.test(n) || FORCES_BODY_RE.test(n) || AR_FORCES_RE.test(n);
+}
+
 // Le métier écrit dans le compte du client (champ libre, rempli par lui) : même lecture, sans phrase autour.
 export function jobKindOfProfession(profession: string | null | undefined): JobKind | null {
   const n = normalize(profession ?? '');
