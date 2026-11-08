@@ -13,7 +13,7 @@ envoie **une seule** quand tout est vrai :
 
 | Règle | Réglage (par défaut) |
 |---|---|
-| Écart minimum depuis la dernière notification | `push_min_gap_minutes` = 180 (3 h) |
+| Écart minimum depuis la dernière notification | `push_min_gap_minutes` = 180 (3 h) par défaut ; **60 (1 h) depuis le 8 novembre 2026** (choix du patron : les notifications programmées partent plus près de l'heure choisie). Pour revenir à 3 h : `update store_settings set push_min_gap_minutes = 180 where id = 1;` |
 | Plafond de notifications automatiques par jour (heure du Tchad) | `push_max_per_day` = 2 |
 | Fenêtre d'envoi (heure du Tchad) | `push_window_start` = 9, `push_window_end` = 20 |
 | Heure très fréquentée : au-dessus de la moyenne des visiteurs de la fenêtre, sur 30 jours | automatique |
