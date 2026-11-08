@@ -75,6 +75,7 @@ import {
 import { fetchAffinity, fetchCartStatus, fetchLoyaltyPoints, fetchPaymentNumbers, fetchProductForCart, getCatalog, getCategories, getCities, getProductSales, getStoreInfo, logAssistantEvent, requestCallback, startChatToday, toCard, type AssistantProduct, type CallbackSource } from '../lib/assistantData';
 import { compareFacts, declaredStyle, jobFrom, jobKindOfProfession, rankForStyle, styleOrder, threeRanges, toneOf, type JobKind, type StyleKey } from '../lib/assistantPersona';
 import { callbackDays, callbackNote, dayFromText, LOW_STOCK_MAX, provenSales, type CallbackDay } from '../lib/assistantSales';
+import { formatClientNumber } from '../lib/clientNumber';
 import { adFacts, adLine, isSeniorProfession } from '../lib/zaraAds';
 import { alsoLine, confirmBecauseLine, giftOfferLine, giftPlacedLine, giftRecapLine, pickAlsoBought, productUrgencyLine, receivedLine, riskFreeLine, validityLine } from '../lib/assistantWords';
 import { clearIntent, currentDevice, markIntent } from '../lib/assistantAttribution';
@@ -163,6 +164,7 @@ export interface ChatAction {
     | 'invoice'
     | 'interest'
     | 'account'
+    | 'forgot'
     | 'callback'
     | 'callbackYes'
     | 'callbackFix'
@@ -496,7 +498,7 @@ const COLD_QUERY: Record<Lang, string> = { fr: 'blouson manteau', ar: 'جاكي�
 // Les boutons des anciens messages qui restent touchables : ceux qui mènent quelque part (promotions, catégories, un article précis,
 // la commande en cours, compte, WhatsApp, menu, installer). L'ancien « Voir mon panier » part : il n'y a plus de panier. Les réponses à une question passée (taille, jour, budget, pour qui, confirmer...) partent.
 const OLD_CHIP_KINDS = new Set<ChatAction['kind']>([
-  'say', 'whatsapp', 'register', 'login', 'orders', 'account', 'category', 'menu', 'checkout', 'link', 'policy', 'pair', 'add',
+  'say', 'whatsapp', 'register', 'login', 'forgot', 'orders', 'account', 'category', 'menu', 'checkout', 'link', 'policy', 'pair', 'add',
   'install', 'installHelp', 'iosGuide', 'interest', 'style', 'orderPage', 'invoice', 'categoryPage', 'openChrome', 'pushOn',
 ]);
 // Ces phrases parlent de ce qui est affiché en ce moment (le budget de ces articles, les comparer) : pas sur un ancien message.
@@ -2351,6 +2353,19 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     await say(t.telegram.offer, { actions: [chip, menuBtn()] });
   }
 
+  // « J'ai oublié mon mot de passe » / « changer mon mot de passe » : Zara GUIDE, elle ne donne jamais de code (elle ne peut pas savoir qui écrit).
+  // Client connecté : le chemin vers « Compte » + son numéro client. Sans connexion : le bouton vers l'écran « Mot de passe oublié » (l'équipe donne le code sur WhatsApp).
+  // Docs : docs/zara-mot-de-passe.md.
+  async function passwordReply() {
+    const t = T();
+    const auth = useAuthStore.getState();
+    if (!auth.isAuthenticated) {
+      await say(t.passwordGuest, { actions: [{ label: t.chip.forgotPassword, kind: 'forgot', highlight: true }, wa(), menuBtn()] });
+      return;
+    }
+    await say(t.passwordMember(formatClientNumber(auth.profile?.client_number)), { actions: [{ label: t.chip.changePassword, kind: 'account', highlight: true }, menuBtn()] });
+  }
+
   // Le visiteur le demande lui-même (« comment installer l'application ? ») : réponse tout de suite.
   async function installReply() {
     markInstallTalk();
@@ -2982,6 +2997,9 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       }
       case 'telegram':
         await telegramReply();
+        return;
+      case 'password':
+        await passwordReply();
         return;
       case 'install':
         await installReply();

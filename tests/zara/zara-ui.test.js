@@ -10745,6 +10745,91 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         await v.ctx.close();
       }
     }
+    // j. Zara et le mot de passe (docs/zara-mot-de-passe.md) : Zara guide sur l'écran « Mot de passe oublié » et dans le chat ; elle ne donne jamais de code
+    {
+      const HDRJ = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+      // l'écran : Zara se présente, puis change de phrase selon l'étape
+      {
+        const v = await newVisitor(phone, { lang: 'fr' });
+        await v.page.route(/\/rest\/v1\/rpc\/notify_admin_password_request/, (route) => (route.request().method() === 'OPTIONS' ? route.fulfill({ status: 204, headers: HDRJ, body: '' }) : route.fulfill({ status: 200, headers: { 'content-type': 'application/json', ...HDRJ }, body: 'null' })));
+        await v.page.route(/\/auth\/v1\/recover/, (route) => (route.request().method() === 'OPTIONS' ? route.fulfill({ status: 204, headers: HDRJ, body: '' }) : route.fulfill({ status: 200, headers: { 'content-type': 'application/json', ...HDRJ }, body: '{}' })));
+        await v.page.goto(`${BASE}/mot-de-passe-oublie`, { waitUntil: 'load' });
+        await v.page.getByTestId('forgot-identifier').waitFor({ timeout: 25000 });
+        const zara = v.page.getByTestId('forgot-zara');
+        check('écran « mot de passe oublié » : Zara (photo + bulle) se présente', (await zara.count()) === 1 && /Je suis Zara/.test(await zara.innerText()) && (await zara.locator('img').count()) >= 1, await zara.innerText().catch(() => ''));
+        check('Zara ne demande jamais le mot de passe : « Ne m’écrivez jamais votre mot de passe »', /Ne m’écrivez jamais votre mot de passe/.test(await zara.innerText()));
+        check('l\'écran ne cache rien : la case unique et « Continuer » sont toujours là', (await v.page.getByTestId('forgot-identifier').count()) === 1 && (await v.page.getByText('Continuer', { exact: true }).count()) === 1);
+        await v.page.screenshot({ path: path.join(OUT, '~10-zara-mot-de-passe-oublie.png') });
+        await v.page.getByTestId('forgot-identifier').fill('66 12 34 56');
+        await v.page.getByText('Continuer', { exact: true }).click();
+        await v.page.getByTestId('forgot-phone-help').waitFor({ timeout: 8000 });
+        check('après le téléphone : Zara renvoie vers WhatsApp, sans promettre de délai', /écrivez-nous sur WhatsApp/.test(await v.page.getByTestId('forgot-zara').innerText()) && !/minutes|prévenu/.test(await v.page.getByTestId('forgot-zara').innerText()));
+        await v.page.screenshot({ path: path.join(OUT, '~11-zara-apres-telephone.png') });
+        await v.page.goto(`${BASE}/mot-de-passe-oublie`, { waitUntil: 'load' });
+        await v.page.getByTestId('forgot-identifier').waitFor({ timeout: 25000 });
+        await v.page.getByTestId('forgot-identifier').fill('awa@example.com');
+        await v.page.getByText('Continuer', { exact: true }).click();
+        await v.page.getByTestId('forgot-email-sent').waitFor({ timeout: 8000 });
+        check('après l\'e-mail : Zara parle de la boîte e-mail et des spams', /boîte e-mail/.test(await v.page.getByTestId('forgot-zara').innerText()) && /spams/.test(await v.page.getByTestId('forgot-zara').innerText()));
+        check('aucune erreur de page (Zara sur « mot de passe oublié »)', v.errs.length === 0, v.errs);
+        await v.ctx.close();
+      }
+      // le chat : un visiteur écrit « j'ai oublié mon mot de passe » -> bouton vers l'écran « Mot de passe oublié »
+      {
+        const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' } });
+        const { page } = v;
+        await page.goto(`${BASE}/`, { waitUntil: 'load' });
+        await sleep(2500);
+        await page.getByRole('button', { name: /Discuter avec Zara Kings|التحدث مع زارا كينغز/ }).click();
+        await waitText(page, /Créez votre compte gratuit(?:, Ali)?|أنشئ حسابك/);
+        await ask(page, "j'ai oublié mon mot de passe", /Touchez « Mot de passe oublié »/);
+        const chips = await chipLabels(page);
+        check('visiteur : Zara montre « 🔑 Mot de passe oublié » et WhatsApp', chips.includes('🔑 Mot de passe oublié') && chips.some((c) => /WhatsApp/i.test(c)), chips);
+        // « AS-000123 » est seulement l'exemple d'écriture du numéro client : le retirer, puis aucun code de 4 chiffres ou plus ne doit rester
+        check('visiteur : Zara ne donne aucun code (le seul numéro écrit est l\'exemple AS-000123)', !/\d{4,}/.test((await panelOf(page).innerText()).replace(/AS-000123/g, '')));
+        await sleep(2500); // la réponse finit de s'écrire avant la photo
+        await page.screenshot({ path: path.join(OUT, '~12-zara-chat-visiteur.png') });
+        await chip(page, '🔑 Mot de passe oublié').click();
+        await page.waitForURL(/\/mot-de-passe-oublie/, { timeout: 15000 });
+        check('le bouton ouvre l\'écran « Mot de passe oublié »', (await page.getByTestId('forgot-identifier').count()) === 1);
+        await v.ctx.close();
+      }
+      // en arabe
+      {
+        const v = await newVisitor(phone, { lang: 'ar', storage: { albasse_zara_name: 'Ali' } });
+        const { page } = v;
+        await page.goto(`${BASE}/`, { waitUntil: 'load' });
+        await sleep(2500);
+        await page.getByTestId('assistant-fab').click();
+        await waitText(page, /أنشئ حسابك|حسابك/, 25000);
+        await ask(page, 'نسيت كلمة السر', /اضغط «نسيت كلمة السر»/);
+        check('en arabe : « نسيت كلمة السر » -> Zara répond en arabe avec le bouton', (await chipLabels(page)).includes('🔑 نسيت كلمة السر'), await chipLabels(page));
+        await v.ctx.close();
+      }
+      // le chat : un client connecté -> le chemin vers « Compte » et SON numéro client
+      {
+        const fu = clientUser();
+        fu.profile.client_number = 123;
+        const v = await newVisitor(phone, { lang: 'fr', storage: { [SKT]: fu.session }, fakeUser: fu });
+        const { page } = v;
+        await page.goto(`${BASE}/`, { waitUntil: 'load' });
+        await sleep(2500);
+        await page.getByRole('button', { name: /Discuter avec Zara Kings|التحدث مع زارا كينغز/ }).click();
+        await sleep(1500);
+        await ask(page, 'comment changer mon mot de passe ?', /Gardez-le/, 20000);
+        const text = await panelOf(page).innerText();
+        check('client connecté : « Compte » puis « Changer mon mot de passe », et son numéro AS-000123', /« Compte »/.test(text) && /« Changer mon mot de passe »/.test(text) && /AS-000123/.test(text));
+        check('client connecté : Zara dit qu\'elle ne voit ni ne demande jamais le mot de passe', /ne vois jamais votre mot de passe/.test(text));
+        const chipsM = await chipLabels(page);
+        check('client connecté : le bouton est « 🔑 Changer mon mot de passe » (pas « Mot de passe oublié »)', chipsM.includes('🔑 Changer mon mot de passe') && !chipsM.includes('🔑 Mot de passe oublié'), chipsM);
+        await sleep(2500); // la réponse finit de s'écrire avant la photo
+        await page.screenshot({ path: path.join(OUT, '~13-zara-chat-client.png') });
+        await chip(page, '🔑 Changer mon mot de passe').click();
+        await page.getByTestId('password-change-open').waitFor({ timeout: 20000 });
+        check('le bouton ouvre « Compte » où se trouve « Changer mon mot de passe »', (await page.getByTestId('password-change-open').count()) === 1);
+        await v.ctx.close();
+      }
+    }
   }
 
   // =============================================== % HOMME / FEMME : INSCRIPTION, PROFIL, CARTE DE ZARA, ADMIN › CLIENTS ===============================================

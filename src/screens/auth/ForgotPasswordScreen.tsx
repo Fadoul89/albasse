@@ -12,7 +12,8 @@ import { isSupabaseConfigured } from '../../lib/supabase';
 import { useStoreSettings } from '../../hooks/useStoreSettings';
 import { phoneDigits } from '../../lib/phoneAuth';
 import { alertPasswordRequest } from '../../lib/passwordRequestAlert';
-import { forgotEmailMessage, forgotMessage, forgotNumberMessage, looksLikeClientNumber, parseClientNumber } from '../../lib/clientNumber';
+import { forgotEmailMessage, forgotMessage, forgotNumberMessage, looksLikeClientNumber, parseClientNumber, zaraForgotLine } from '../../lib/clientNumber';
+import { ZaraSays } from '../../components/ZaraSays';
 
 export function ForgotPasswordScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -81,6 +82,8 @@ export function ForgotPasswordScreen() {
       <ScreenHeader title="Mot de passe oublié" showBack />
       <View style={styles.content}>
         <Text style={styles.brand}>ALBASSE SHOPPING</Text>
+        {/* Zara guide le client (elle n'ouvre pas son chat : un visiteur sans compte ne le voit pas quand le compte est obligatoire) */}
+        <ZaraSays testID="forgot-zara" text={zaraForgotLine(numberHelp || phoneHelp ? 'whatsapp' : sent ? 'emailSent' : 'start')} />
         {numberHelp ? (
           <View testID="forgot-phone-help">
             <Text style={styles.info} testID="forgot-number-help">
