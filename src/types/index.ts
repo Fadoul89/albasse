@@ -63,6 +63,8 @@ export interface Profile {
   phone: string | null;
   whatsapp_number: string | null;
   profession: string | null;
+  // numéro client (AS-000123, lib/clientNumber) ; absent (clé inconnue) tant que add-client-number.sql n'est pas lancé
+  client_number?: number;
   // « homme » ou « femme » ; absent (clé inconnue) tant que add-client-gender.sql n'est pas lancé, null tant que le client n'a pas choisi
   gender?: 'homme' | 'femme' | null;
   // « 1998-03-25 » et « celibataire » / « marie » ; absents (clés inconnues) tant que add-client-birth-marital.sql n'est pas lancé, null tant que le client n'a pas répondu

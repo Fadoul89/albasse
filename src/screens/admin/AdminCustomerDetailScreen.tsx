@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Linking } from 'react-native';
-import type { RouteProp } from '@react-navigation/native';
+import { useNavigation, type RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../../navigation/types';
 import { colors, fonts, radius, spacing } from '../../theme';
 import { useAuthStore } from '../../store/authStore';
@@ -25,8 +25,10 @@ import { GoldButton } from '../../components/GoldButton';
 import { visibleEmail } from '../../lib/phoneAuth';
 import { generateTempPassword } from '../../lib/guestAccount';
 import { adminResetError, recoveryMessage, recoveryPhone } from '../../lib/passwordRecovery';
+import { formatClientNumber } from '../../lib/clientNumber';
 import { whatsappLink } from '../../lib/relanceMessage';
 import { GenderPicker } from '../../components/GenderPicker';
+import { AdminAccountManager } from '../../components/AdminAccountManager';
 import { genderLabel, genderOf, hasGenderColumn, type Gender } from '../../lib/clientGender';
 import { birthLabel, hasBirthColumn, hasMaritalColumn, maritalLabel } from '../../lib/clientBirthMarital';
 
@@ -40,6 +42,7 @@ export function AdminCustomerDetailScreen({ route }: Props) {
   const { userId } = route.params;
   const adminProfile = useAuthStore((s) => s.profile);
   const showToast = useToastStore((s) => s.show);
+  const navigation = useNavigation();
   const { customers, refresh: refreshCustomers } = useCustomers();
   const { orders, viewedProducts, cartAddCount, isLoading } = useCustomerActivity(userId);
   const { sanctions, refresh: refreshSanctions } = useCustomerSanctions(userId);
@@ -134,7 +137,7 @@ export function AdminCustomerDetailScreen({ route }: Props) {
     const digits = recoveryPhone(profile);
     if (!digits || !newCode) return null;
     const first = (profile.full_name ?? '').trim().split(/\s+/)[0] ?? '';
-    return whatsappLink(digits, recoveryMessage({ firstName: first, loginEmail: newCode.loginEmail, code: newCode.code }));
+    return whatsappLink(digits, recoveryMessage({ firstName: first, loginEmail: newCode.loginEmail, code: newCode.code, clientNumber: profile.client_number }));
   };
 
   // Homme / Femme : l'administrateur choisit (ou remet « non précisé ») ; la base vérifie qu'il est administrateur (admin_set_client_gender)
@@ -191,6 +194,8 @@ export function AdminCustomerDetailScreen({ route }: Props) {
           </Pressable>
         )}
 
+        <AdminAccountManager profile={profile} onChanged={refreshCustomers} onDeleted={() => { refreshCustomers(); if (navigation.canGoBack()) navigation.goBack(); else navigation.navigate('AdminCustomers' as never); }} />
+
         <Section title="🔑 Mot de passe oublié">
           <View testID="admin-password-section">
             <Text style={styles.codeHelp}>
@@ -242,6 +247,11 @@ export function AdminCustomerDetailScreen({ route }: Props) {
         </Section>
 
         <Section title="👤 Identité">
+          {formatClientNumber(profile.client_number) ? (
+            <View testID="admin-client-number">
+              <Row label="🪪 Numéro client" value={formatClientNumber(profile.client_number)!} />
+            </View>
+          ) : null}
           <Row label="Nom et prénom" value={profile.full_name ?? '—'} />
           {hasGenderColumn(profile) ? (
             <View testID="admin-gender-section">

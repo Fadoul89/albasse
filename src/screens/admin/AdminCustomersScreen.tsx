@@ -29,6 +29,7 @@ import { GENDER_ICON, genderOf, hasGenderColumn } from '../../lib/clientGender';
 import { birthLabel, hasBirthColumn, hasMaritalColumn, maritalLabel, maritalOf, MARITAL_ICON } from '../../lib/clientBirthMarital';
 import { clampPage, pageCount, pageItems, pageRange, pageSlice } from '../../lib/pagination';
 import { isTestEmail } from '../../lib/testAccounts';
+import { clientNumberMatches, formatClientNumber } from '../../lib/clientNumber';
 import type { CustomerSummary } from '../../types';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
@@ -185,6 +186,7 @@ export function AdminCustomersScreen() {
         return (
           (p.full_name ?? '').toLowerCase().includes(q) ||
           (p.phone ?? '').toLowerCase().includes(q) ||
+          clientNumberMatches(p.client_number, q) ||
           (p.profession ?? '').toLowerCase().includes(q) ||
           (p.region ?? '').toLowerCase().includes(q) ||
           (p.country ?? '').toLowerCase().includes(q)
@@ -311,7 +313,7 @@ export function AdminCustomersScreen() {
                 setQuery(t);
                 setPage(1);
               }}
-              placeholder="Rechercher par nom, téléphone, profession, ville, pays…"
+              placeholder="Rechercher par nom, téléphone, n° client (AS-000123), profession, ville, pays…"
               placeholderTextColor={colors.creamFaint}
               style={styles.search}
             />
@@ -436,6 +438,9 @@ function CustomerRow({
         </Text>
         <Text style={styles.rowBadge}>{ACCOUNT_STATUS_LABEL[status]}</Text>
       </View>
+      {formatClientNumber(customer.profile.client_number) ? (
+        <Text style={styles.rowMeta} testID="customer-client-number">{`🪪 ${formatClientNumber(customer.profile.client_number)}`}</Text>
+      ) : null}
       {(highInterest || isAway || likes > 0) && (
         <View style={styles.tagsRow}>
           {highInterest && (

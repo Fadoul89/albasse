@@ -10206,6 +10206,48 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await c.ctx.close();
     }
 
+    // ---------- 1 bis. « Mon numéro client » dans Compte (add-client-number.sql, docs/numero-client.md)
+    {
+      const CAPTURE_OPEN_T = 'window.__opened = []; window.open = (u) => { window.__opened.push(String(u)); return null; };';
+      const fu = clientUser();
+      fu.profile = { ...fu.profile, client_number: 123, phone: '+235 66 12 34 56' };
+      const c = await newVisitor(phone, { lang: 'fr', storage: { [SKT]: fu.session }, fakeUser: fu, initScripts: [CAPTURE_OPEN_T] });
+      await c.ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: new URL(BASE).origin }).catch(() => {});
+      await c.page.goto(`${BASE}/compte`, { waitUntil: 'load' });
+      await c.page.getByTestId('client-number-card').waitFor({ timeout: 25000 });
+      check('Compte : la carte « Mon numéro client » montre AS-000123', (await c.page.getByTestId('client-number-value').innerText()).trim() === 'AS-000123');
+      const linkedT = await c.page.getByTestId('client-number-linked').innerText();
+      check('la carte le lie au téléphone et à l\'e-mail du compte', /\+235 66 12 34 56/.test(linkedT) && /test@example\.com/.test(linkedT), linkedT);
+      check('la carte dit que ce n\'est pas un mot de passe et que l\'équipe retrouve le compte plus vite', /Ce n’est pas un mot de passe/.test(await c.page.getByTestId('client-number-card').innerText()) && /plus vite/.test(await c.page.getByTestId('client-number-card').innerText()));
+      await c.page.getByTestId('client-number-card').scrollIntoViewIfNeeded().catch(() => {});
+      await c.page.screenshot({ path: path.join(OUT, '~1b-compte-numero-client.png') });
+      await c.page.getByTestId('client-number-copy').click();
+      await c.page.getByText('Numéro copié ✓').waitFor({ timeout: 8000 });
+      check('« Copier » : le numéro est dans le presse-papiers', (await c.page.evaluate(() => navigator.clipboard.readText())) === 'AS-000123');
+      await c.page.getByTestId('client-number-whatsapp').click();
+      await sleep(500);
+      const openedT = await c.page.evaluate(() => window.__opened || []);
+      const textT = decodeURIComponent((openedT[0] || '').split('text=')[1] || '');
+      check('« Me l\'envoyer sur WhatsApp » : message avec le numéro, le téléphone et l\'e-mail', openedT.length === 1 && openedT[0].startsWith('https://wa.me/?text=') && textT.includes('AS-000123') && textT.includes('+235 66 12 34 56') && textT.includes('test@example.com'), openedT);
+      check('aucune erreur (carte du numéro client)', c.errs.length === 0, c.errs);
+      check('aucune ecriture reelle (carte du numéro client)', (fu.patches || []).length === 0 && c.writes.every((w) => !/profiles/.test(w) || /visitor|login/.test(w)), c.writes);
+      await c.ctx.close();
+      // compte créé par un numéro (e-mail technique) : seulement le téléphone est montré, jamais l'adresse technique
+      const fp = clientUser();
+      fp.profile = { ...fp.profile, email: '23566123456@tel.albasseshopping.com', client_number: 7 };
+      const p = await newVisitor(phone, { lang: 'fr', storage: { [SKT]: fp.session }, fakeUser: fp });
+      await p.page.goto(`${BASE}/compte`, { waitUntil: 'load' });
+      await p.page.getByTestId('client-number-card').waitFor({ timeout: 25000 });
+      check('compte créé avec le numéro : « AS-000007 », le téléphone, et pas l\'adresse technique @tel.albasseshopping.com', (await p.page.getByTestId('client-number-value').innerText()).trim() === 'AS-000007' && !/@tel\./.test(await p.page.getByTestId('client-number-card').innerText()));
+      await p.ctx.close();
+      // script SQL pas encore lancé (le profil n'a pas de numéro) : la carte n'apparait pas, la page marche comme avant
+      const fo = clientUser();
+      const o = await openAccountT(fo);
+      await sleep(800);
+      check('sans numéro (script SQL pas lancé) : aucune carte, la page Compte marche comme avant', (await o.page.getByTestId('client-number-card').count()) === 0 && (await o.page.getByTestId('password-change-open').count()) === 1 && o.errs.length === 0, o.errs);
+      await o.ctx.close();
+    }
+
     // ---------- 2. l'administrateur donne un nouveau code (Admin › Clients › le client)
     const custId = 'aaaaaaaa-0000-4000-8000-000000000001';
     const custProfile = (extra = {}) => ({ id: custId, email: 'aicha@gmail.com', full_name: 'Aïcha Moussa', phone: '66111111', whatsapp_number: null, profession: null, region: "N'Djamena", country: 'Tchad', address: null, loyalty_points: 0, banned: false, role: 'customer', is_admin: false, is_affiliate: false, created_at: '2026-10-20T10:00:00Z', last_login_at: '2026-10-30T10:00:00Z', login_count: 2, fake_order_count: 0, ...extra });
@@ -10320,6 +10362,388 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const { v, seen } = await openDetail({ admin: false });
       check('client non administrateur : « Accès réservé aux administrateurs », aucune section, aucune demande', (await v.page.getByTestId('admin-password-section').count()) === 0 && (await v.page.getByText('Donner un nouveau code').count()) === 0 && seen.rpcs.length === 0);
       await v.ctx.close();
+    }
+    // f. numéro client : sur la fiche, dans le message WhatsApp du nouveau code, et dans la liste (recherche)
+    {
+      const { v, seen } = await openDetail({ customer: custProfile({ client_number: 42 }) });
+      check('fiche du client : « 🪪 Numéro client » AS-000042', /Numéro client/.test(await v.page.getByTestId('admin-client-number').innerText()) && /AS-000042/.test(await v.page.getByTestId('admin-client-number').innerText()));
+      await askNewCode(v);
+      await confirmNewCode(v);
+      await v.page.getByTestId('admin-new-code').waitFor({ timeout: 10000 });
+      const w = await whatsappT(v);
+      check('WhatsApp du nouveau code : dit aussi « Votre numéro client : AS-000042 »', w.text.includes('Votre numéro client : AS-000042') && w.text.includes('Voici votre nouveau code :'), w.text);
+      check('le code envoyé à la base n\'a rien à voir avec le numéro client (6 chiffres tirés au hasard)', seen.rpcs.length === 1 && /^\d{6}$/.test(seen.rpcs[0].new_password) && seen.rpcs[0].new_password !== '000042');
+      await v.ctx.close();
+      const nn = await openDetail({ customer: custProfile() });
+      check('fiche d\'un client sans numéro : aucune ligne « Numéro client »', (await nn.v.page.getByTestId('admin-client-number').count()) === 0);
+      await nn.v.ctx.close();
+    }
+    {
+      // la liste Admin › Clients : le numéro de chaque client, et la recherche par numéro
+      const fu = adminUser();
+      const clients = [
+        custProfile({ id: 'aaaaaaaa-0000-4000-8000-000000000011', full_name: 'Aïcha Moussa', phone: '66111111', email: 'aicha@gmail.com', client_number: 1 }),
+        custProfile({ id: 'aaaaaaaa-0000-4000-8000-000000000012', full_name: 'Brahim Oumar', phone: '66222222', email: '23566222222@tel.albasseshopping.com', client_number: 12 }),
+        custProfile({ id: 'aaaaaaaa-0000-4000-8000-000000000013', full_name: 'Zara Test', phone: '66333333', email: '23566333333@tel.albasseshopping.com', client_number: 123 }),
+        custProfile({ id: 'aaaaaaaa-0000-4000-8000-000000000014', full_name: 'Ancien Client', phone: '66444444', email: 'ancien@gmail.com' }),
+      ];
+      const v = await newVisitor(phone, { lang: 'fr', storage: { [SKT]: fu.session }, fakeUser: fu, fakeStore: { waOrder: true, accountRequired: false, patches: [] } });
+      await v.page.route(/\/rest\/v1\//, (route) => {
+        const req = route.request();
+        const u = new URL(req.url());
+        if (req.method() === 'OPTIONS') return route.fallback();
+        const t = u.pathname.replace('/rest/v1/', '');
+        if (t === 'profiles' && !u.searchParams.get('id') && u.searchParams.get('is_admin') === 'eq.false') return jsonT(route, clients);
+        if (t === 'rpc/browsing_overview') return jsonT(route, { rows: [] });
+        if (['orders', 'visitor_sessions', 'product_views', 'cart_events', 'customer_sanctions', 'favorites', 'visitor_product_interest', 'email_outbox', 'products'].includes(t)) return jsonT(route, []);
+        return route.fallback();
+      });
+      await v.page.goto(`${BASE}/admin/clients`, { waitUntil: 'load' });
+      await v.page.getByTestId('admin-customer-row').first().waitFor({ timeout: 25000 });
+      await sleep(1500);
+      const rows = () => v.page.getByTestId('admin-customer-row');
+      check('liste : 4 clients, 3 montrent leur numéro (AS-000001, AS-000012, AS-000123), l\'ancien sans numéro n\'en montre pas', (await rows().count()) === 4 && (await v.page.getByTestId('customer-client-number').allInnerTexts()).map((t) => t.replace(/\s+/g, ' ').trim()).join('|') === '🪪 AS-000001|🪪 AS-000012|🪪 AS-000123', await v.page.getByTestId('customer-client-number').allInnerTexts());
+      await v.page.screenshot({ path: path.join(OUT, '~4-liste-numero-client.png') });
+      const search = v.page.getByPlaceholder(/n° client/);
+      check('la barre de recherche dit qu\'on peut chercher par n° client', (await search.count()) === 1);
+      await search.fill('AS-000123');
+      await sleep(500);
+      check('recherche « AS-000123 » : un seul client (Zara Test)', (await rows().count()) === 1 && /Zara Test/.test(await rows().first().innerText()));
+      await search.fill('as 12');
+      await sleep(500);
+      check('recherche « as 12 » : AS-000012 seulement (pas AS-000123)', (await rows().count()) === 1 && /Brahim Oumar/.test(await rows().first().innerText()));
+      await search.fill('12');
+      await sleep(500);
+      check('recherche « 12 » seul : exactement le numéro 12 (Brahim), pas le 123', (await rows().count()) === 1 && /Brahim Oumar/.test(await rows().first().innerText()));
+      await search.fill('66444444');
+      await sleep(500);
+      check('recherche par téléphone : toujours comme avant (l\'ancien client)', (await rows().count()) === 1 && /Ancien Client/.test(await rows().first().innerText()));
+      await search.fill('Aïcha');
+      await sleep(500);
+      check('recherche par nom : toujours comme avant', (await rows().count()) === 1 && /Aïcha/.test(await rows().first().innerText()));
+      await search.fill('AS-000999');
+      await sleep(500);
+      check('numéro qui n\'existe pas : aucun client', (await rows().count()) === 0);
+      check('aucune erreur (liste des clients avec numéros)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+    // g. « Mot de passe oublié » : le client peut écrire son numéro client (facultatif), il part dans le message WhatsApp vers l'équipe
+    {
+      const v = await newVisitor(phone, { lang: 'fr' });
+      await v.page.goto(`${BASE}/mot-de-passe-oublie`, { waitUntil: 'load' });
+      await v.page.getByTestId('forgot-identifier').waitFor({ timeout: 25000 });
+      await v.page.getByTestId('forgot-identifier').fill('66 12 34 56');
+      await v.page.getByText('Continuer', { exact: true }).click();
+      await v.page.getByTestId('forgot-phone-help').waitFor({ timeout: 8000 });
+      check('« mot de passe oublié » (numéro) : une case « Numéro client (facultatif) »', (await v.page.getByTestId('forgot-client-number').count()) === 1);
+      await v.page.getByTestId('forgot-client-number').fill('abc');
+      await sleep(300);
+      check('numéro mal écrit : une phrase simple (« pas la bonne forme »), rien ne bloque', /pas la bonne forme/.test(await v.page.getByTestId('forgot-client-number-hint').innerText()));
+      await v.page.getByTestId('forgot-client-number').fill('as 123');
+      await sleep(300);
+      check('numéro bien écrit : la phrase d\'aide revient', /Votre numéro client est dans « Compte »/.test(await v.page.getByTestId('forgot-client-number-hint').innerText()));
+      await v.ctx.route('https://wa.me/**', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<html><body>whatsapp</body></html>' }));
+      const [popup] = await Promise.all([v.ctx.waitForEvent('page', { timeout: 10000 }), v.page.getByText('💬 Écrire sur WhatsApp').click()]);
+      await popup.waitForLoadState('domcontentloaded').catch(() => {});
+      const url = decodeURIComponent(popup.url());
+      await popup.close();
+      check('WhatsApp vers la boutique : le téléphone ET « Mon numéro client : AS-000123 »', url.startsWith('https://wa.me/235') && /numéro 66 12 34 56/.test(url) && /Mon numéro client : AS-000123/.test(url), url);
+      await v.ctx.close();
+      // sans numéro client : le message est celui d'avant
+      const w = await newVisitor(phone, { lang: 'fr' });
+      await w.page.goto(`${BASE}/mot-de-passe-oublie`, { waitUntil: 'load' });
+      await w.page.getByTestId('forgot-identifier').waitFor({ timeout: 25000 });
+      await w.page.getByTestId('forgot-identifier').fill('66 12 34 56');
+      await w.page.getByText('Continuer', { exact: true }).click();
+      await w.page.getByTestId('forgot-phone-help').waitFor({ timeout: 8000 });
+      await w.ctx.route('https://wa.me/**', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<html><body>whatsapp</body></html>' }));
+      const [pop2] = await Promise.all([w.ctx.waitForEvent('page', { timeout: 10000 }), w.page.getByText('💬 Écrire sur WhatsApp').click()]);
+      await pop2.waitForLoadState('domcontentloaded').catch(() => {});
+      const url2 = decodeURIComponent(pop2.url());
+      await pop2.close();
+      check('sans numéro client : le message WhatsApp est exactement celui d\'avant', /oublié le mot de passe de mon compte \(numéro 66 12 34 56\)\. Pouvez-vous m'aider \?/.test(url2) && !/numéro client/.test(url2), url2);
+      await w.ctx.close();
+    }
+    // h. « Mot de passe oublié » : une seule case (téléphone, e-mail ou numéro client) ; l'équipe est prévenue (la base reçoit ce qui est écrit)
+    {
+      const HDRH = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+      const openForgot = async () => {
+        const v = await newVisitor(phone, { lang: 'fr' });
+        const alerts = [];
+        await v.page.route(/\/rest\/v1\/rpc\/notify_admin_password_request/, (route) => {
+          const req = route.request();
+          if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: HDRH, body: '' });
+          alerts.push(JSON.parse(req.postData() || '{}'));
+          return route.fulfill({ status: 200, headers: { 'content-type': 'application/json', ...HDRH }, body: 'null' });
+        });
+        await v.page.route(/\/auth\/v1\/recover/, (route) => (route.request().method() === 'OPTIONS' ? route.fulfill({ status: 204, headers: HDRH, body: '' }) : route.fulfill({ status: 200, headers: { 'content-type': 'application/json', ...HDRH }, body: '{}' })));
+        await v.ctx.route('https://wa.me/**', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<html><body>whatsapp</body></html>' }));
+        await v.page.goto(`${BASE}/mot-de-passe-oublie`, { waitUntil: 'load' });
+        await v.page.getByTestId('forgot-identifier').waitFor({ timeout: 25000 });
+        return { v, alerts };
+      };
+      const whatsappOpened = async (v, label) => {
+        const [popup] = await Promise.all([v.ctx.waitForEvent('page', { timeout: 10000 }), v.page.getByText(label).click()]);
+        await popup.waitForLoadState('domcontentloaded').catch(() => {});
+        const url = decodeURIComponent(popup.url());
+        await popup.close();
+        return url;
+      };
+      // 1. le numéro client AS-000123
+      {
+        const { v, alerts } = await openForgot();
+        check('la case dit qu\'on peut écrire son numéro client', /numéro client/.test((await v.page.getByTestId('forgot-identifier').getAttribute('placeholder')) || ''));
+        await v.page.getByTestId('forgot-identifier').fill('as 123');
+        await v.page.getByText('Continuer', { exact: true }).click();
+        await v.page.getByTestId('forgot-number-help').waitFor({ timeout: 8000 });
+        check('numéro client « as 123 » : « Nous avons noté votre numéro client (AS-000123) », WhatsApp proposé', /AS-000123/.test(await v.page.getByTestId('forgot-number-help').innerText()) && (await v.page.getByText('💬 Écrire sur WhatsApp').count()) === 1);
+        check('numéro client : pas de deuxième case « numéro client » (il est déjà donné)', (await v.page.getByTestId('forgot-client-number').count()) === 0);
+        check('numéro client : la base reçoit exactement ce qui est écrit, une seule fois (l\'équipe est prévenue)', alerts.length === 1 && alerts[0].p_login === 'as 123' && Object.keys(alerts[0]).join(',') === 'p_login', alerts);
+        const url = await whatsappOpened(v, '💬 Écrire sur WhatsApp');
+        check('WhatsApp vers la boutique : « Mon numéro client : AS-000123 »', url.startsWith('https://wa.me/235') && /Mon numéro client : AS-000123/.test(url) && !/numéro 6/.test(url), url);
+        await v.page.screenshot({ path: path.join(OUT, '~5-oublie-numero-client.png') });
+        check('aucune erreur (mot de passe oublié avec le numéro client)', v.errs.length === 0, v.errs);
+        await v.ctx.close();
+      }
+      // 2. un téléphone de 8 chiffres n'est jamais pris pour un numéro client
+      {
+        const { v, alerts } = await openForgot();
+        await v.page.getByTestId('forgot-identifier').fill('66123456');
+        await v.page.getByText('Continuer', { exact: true }).click();
+        await v.page.getByTestId('forgot-phone-help').waitFor({ timeout: 8000 });
+        check('8 chiffres = un téléphone : la case « numéro client (facultatif) » est proposée, pas « Nous avons noté votre numéro client »', (await v.page.getByTestId('forgot-client-number').count()) === 1 && (await v.page.getByTestId('forgot-number-help').count()) === 0 && alerts.length === 1 && alerts[0].p_login === '66123456', alerts);
+        await v.ctx.close();
+      }
+      // 3. un e-mail : le lien part (si le compte a une connexion par e-mail) ; et si rien n'arrive, le client écrit sur WhatsApp
+      {
+        const { v, alerts } = await openForgot();
+        await v.page.getByTestId('forgot-identifier').fill('fatime@gmail.com');
+        await v.page.getByText('Continuer', { exact: true }).click();
+        await v.page.getByTestId('forgot-email-sent').waitFor({ timeout: 10000 });
+        const txt = await v.page.getByTestId('forgot-email-sent').innerText();
+        check('e-mail : « Si un compte existe… un e-mail vient d\'être envoyé » (toujours la même phrase)', /Si un compte existe avec l'adresse fatime@gmail\.com/.test(txt));
+        check('e-mail : « Rien reçu ? Votre compte a peut-être été créé avec votre numéro » + bouton WhatsApp', /Rien reçu \?/.test(txt) && (await v.page.getByTestId('forgot-email-whatsapp').count()) === 1);
+        check('e-mail : l\'équipe est prévenue (la base reçoit l\'e-mail écrit, une seule fois)', alerts.length === 1 && alerts[0].p_login === 'fatime@gmail.com', alerts);
+        const url = await whatsappOpened(v, '💬 Rien reçu ? Écrire sur WhatsApp');
+        check('WhatsApp « rien reçu » : l\'e-mail et « je n\'ai pas reçu d\'e-mail »', url.startsWith('https://wa.me/235') && /e-mail fatime@gmail\.com/.test(url) && /pas reçu d'e-mail/.test(url), url);
+        await v.page.screenshot({ path: path.join(OUT, '~6-oublie-email-rien-recu.png') });
+        await v.ctx.close();
+      }
+      // 4. n'importe quoi : refus clair, aucune alerte
+      {
+        const { v, alerts } = await openForgot();
+        await v.page.getByTestId('forgot-identifier').fill('AS-');
+        await v.page.getByText('Continuer', { exact: true }).click();
+        await v.page.getByText(/Merci de saisir un e-mail, un numéro de téléphone ou un numéro client/).first().waitFor({ timeout: 8000 });
+        check('« AS- » seul : « Merci de saisir un e-mail, un numéro de téléphone ou un numéro client », aucune alerte', alerts.length === 0 && (await v.page.getByTestId('forgot-phone-help').count()) === 0, alerts);
+        await v.ctx.close();
+      }
+    }
+    // i. « Gérer le compte » (équipe) : modifier la fiche, changer la connexion, fermer, supprimer, journal (docs/gestion-de-compte.md ; fausse base et fausse fonction)
+    {
+      const FNH = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'authorization, x-client-info, apikey, content-type', 'access-control-allow-methods': 'POST, OPTIONS' };
+      const manage = async ({ customer = custProfile({ client_number: 42, phone: '+235 66 11 11 11', email: 'aicha@gmail.com' }), info = { login_email: '23566111111@tel.albasseshopping.com', login_kind: 'phone', orders: 2, is_admin: false },
+        infoStatus = 200, fn = null, fnStatus = 200, logRows = [] } = {}) => {
+        const fu = adminUser();
+        const st = { info: { ...info }, edits: [], fnBodies: [], infoCalls: 0 };
+        const v = await newVisitor(phone, { lang: 'fr', storage: { [SKT]: fu.session }, fakeUser: fu, fakeStore: { waOrder: true, accountRequired: false, patches: [] } });
+        await v.page.route(/\/rest\/v1\//, (route) => {
+          const req = route.request();
+          const u = new URL(req.url());
+          if (req.method() === 'OPTIONS') return route.fallback();
+          const t = u.pathname.replace('/rest/v1/', '');
+          if (t === 'profiles' && !u.searchParams.get('id') && u.searchParams.get('is_admin') === 'eq.false') return jsonT(route, [customer]);
+          if (t === 'profiles' && /^in\./.test(u.searchParams.get('id') || '')) return jsonT(route, [{ id: fu.profile.id, full_name: 'Admin Albasse' }]);
+          if (t === 'rpc/admin_client_account_info') {
+            st.infoCalls++;
+            if (infoStatus !== 200) return jsonT(route, { code: 'PGRST202', message: 'Could not find the function public.admin_client_account_info(p_target) in the schema cache' }, infoStatus);
+            return jsonT(route, st.info);
+          }
+          if (t === 'rpc/admin_update_client_profile') {
+            const body = JSON.parse(req.postData() || '{}');
+            st.edits.push(body);
+            return jsonT(route, null);
+          }
+          if (t === 'client_account_log') return jsonT(route, logRows);
+          if (['orders', 'visitor_sessions', 'product_views', 'cart_events', 'customer_sanctions', 'favorites'].includes(t)) return jsonT(route, []);
+          return route.fallback();
+        });
+        await v.page.route(/\/functions\/v1\/admin-client-account/, (route) => {
+          const req = route.request();
+          if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: FNH });
+          const body = JSON.parse(req.postData() || '{}');
+          st.fnBodies.push(body);
+          const r = fn ? fn(body, st) : { ok: true, detail: 'ok' };
+          return route.fulfill({ status: fnStatus, headers: { 'content-type': 'application/json', ...FNH }, body: JSON.stringify(r) });
+        });
+        await v.page.goto(`${BASE}/admin/clients/${customer.id}`, { waitUntil: 'load' });
+        await v.page.getByTestId('admin-account-section').waitFor({ timeout: 25000 });
+        await sleep(1200);
+        return { v, st, customer };
+      };
+      const txt = (v, id) => v.page.getByTestId(id).innerText();
+
+      // 1. l'état du compte et les quatre boutons
+      {
+        const { v } = await manage({ logRows: [{ id: 'l1', created_at: '2026-11-08T09:30:00Z', admin_id: '66666666-6666-4666-8666-666666666666', action: 'edit', detail: 'fiche modifiée : nom, ville' }, { id: 'l2', created_at: '2026-11-07T10:00:00Z', admin_id: null, action: 'change_login', detail: 'connexion changée (numéro de téléphone)' }] });
+        check('Gérer le compte : « Par numéro de téléphone (+235 66 11 11 11) », 2 commandes, numéro client AS-000042', /Par numéro de téléphone \(\+235 66 11 11 11\)/.test(await txt(v, 'admin-account-login')) && /Commandes : 2 · Numéro client : AS-000042/.test(await txt(v, 'admin-account-orders')));
+        check('les quatre boutons : modifier, changer le numéro de connexion, fermer, supprimer', (await v.page.getByTestId('admin-account-edit-open').count()) === 1 && /Changer le numéro de connexion/.test(await txt(v, 'admin-account-login-open')) && (await v.page.getByTestId('admin-account-close-open').count()) === 1 && (await v.page.getByTestId('admin-account-delete-open').count()) === 1);
+        const logT = await txt(v, 'admin-account-log');
+        check('journal : date, action, détail et qui l\'a fait', /✏️ Fiche modifiée · fiche modifiée : nom, ville · par Admin Albasse/.test(logT) && /📱 Connexion changée · connexion changée \(numéro de téléphone\)/.test(logT), logT);
+        await v.page.getByTestId('admin-account-section').scrollIntoViewIfNeeded().catch(() => {});
+        await v.page.screenshot({ path: path.join(OUT, '~7-gerer-le-compte.png') });
+        check('aucune erreur (gérer le compte)', v.errs.length === 0, v.errs);
+        await v.ctx.close();
+      }
+
+      // 2. modifier la fiche
+      {
+        const { v, st, customer } = await manage();
+        await v.page.getByTestId('admin-account-edit-open').click();
+        await v.page.getByTestId('admin-account-edit').waitFor({ timeout: 8000 });
+        check('modifier la fiche d\'un compte « numéro » : nom, WhatsApp, e-mail de contact, ville, pays, adresse, profession — et PAS le téléphone', (await v.page.getByTestId('admin-account-field-full_name').count()) === 1 && (await v.page.getByTestId('admin-account-field-email').count()) === 1 && (await v.page.getByTestId('admin-account-field-whatsapp_number').count()) === 1 && (await v.page.getByTestId('admin-account-field-phone').count()) === 0);
+        check('le formulaire part des vraies valeurs de la fiche', (await v.page.getByTestId('admin-account-field-full_name').inputValue()) === customer.full_name && (await v.page.getByTestId('admin-account-field-email').inputValue()) === 'aicha@gmail.com');
+        await v.page.getByTestId('admin-account-edit-save').click();
+        await v.page.getByTestId('admin-account-message').waitFor({ timeout: 8000 });
+        check('rien changé : « Rien n\'a changé. », aucune demande à la base', /Rien n’a changé/.test(await txt(v, 'admin-account-message')) && st.edits.length === 0);
+        await v.page.getByTestId('admin-account-field-full_name').fill('A');
+        await v.page.getByTestId('admin-account-edit-save').click();
+        await sleep(500);
+        check('nom trop court : phrase claire, aucune demande à la base', /Le nom doit avoir entre 2 et 80 caractères/.test(await txt(v, 'admin-account-message')) && st.edits.length === 0);
+        await v.page.getByTestId('admin-account-field-full_name').fill(customer.full_name);
+        await v.page.getByTestId('admin-account-field-region').fill(' Moundou ');
+        await v.page.getByTestId('admin-account-field-profession').fill('Commerçante');
+        await v.page.getByTestId('admin-account-edit-save').click();
+        await v.page.getByText('Fiche modifiée ✓').waitFor({ timeout: 8000 });
+        check('enregistrer : la base reçoit SEULEMENT les champs changés (ville, profession), sans espaces autour', st.edits.length === 1 && st.edits[0].p_target === customer.id && JSON.stringify(st.edits[0].p_changes) === JSON.stringify({ region: 'Moundou', profession: 'Commerçante' }), st.edits);
+        check('le panneau se ferme et le message de réussite reste', (await v.page.getByTestId('admin-account-edit').count()) === 0 && /La fiche du client est à jour/.test(await txt(v, 'admin-account-message')));
+        await v.ctx.close();
+      }
+      {
+        // un ancien compte (e-mail) : le téléphone de contact se modifie, l'e-mail de connexion non
+        const { v } = await manage({ customer: custProfile({ client_number: 7 }), info: { login_email: 'aicha@gmail.com', login_kind: 'email', orders: 1, is_admin: false } });
+        check('ancien compte : « Par e-mail (aicha@gmail.com) » et « Changer l\'e-mail de connexion »', /Par e-mail \(aicha@gmail\.com\)/.test(await txt(v, 'admin-account-login')) && /Changer l’e-mail de connexion/.test(await txt(v, 'admin-account-login-open')));
+        await v.page.getByTestId('admin-account-edit-open').click();
+        await v.page.getByTestId('admin-account-edit').waitFor({ timeout: 8000 });
+        check('ancien compte : champ « Téléphone » présent, pas de champ « E-mail »', (await v.page.getByTestId('admin-account-field-phone').count()) === 1 && (await v.page.getByTestId('admin-account-field-email').count()) === 0);
+        await v.ctx.close();
+      }
+
+      // 3. changer le numéro de connexion
+      {
+        const { v, st, customer } = await manage({ fn: (body, state) => {
+          if (body.value === '66 11 11 11') return { ok: false, reason: 'same_login' };
+          if (body.value === '66 22 22 22') return { ok: false, reason: 'login_taken' };
+          if (body.value === 'abc') return { ok: false, reason: 'bad_phone' };
+          state.info.login_email = '23566778899@tel.albasseshopping.com';
+          return { ok: true, detail: 'connexion changée (numéro de téléphone)', login: state.info.login_email };
+        } });
+        await v.page.getByTestId('admin-account-login-open').click();
+        await v.page.getByTestId('admin-account-login-panel').waitFor({ timeout: 8000 });
+        check('panneau « numéro de connexion » : dit que l\'ancien numéro ne marchera plus et que le mot de passe reste', /NOUVEAU numéro et son mot de passe actuel/.test(await txt(v, 'admin-account-login-panel')) && /L’ancien numéro ne marchera plus/.test(await txt(v, 'admin-account-login-panel')));
+        await v.page.screenshot({ path: path.join(OUT, '~8-changer-numero-connexion.png') });
+        await v.page.getByTestId('admin-account-login-confirm').click({ force: true }).catch(() => {});
+        await sleep(400);
+        check('bouton « Changer la connexion » inactif tant que rien n\'est écrit : aucune demande', st.fnBodies.length === 0);
+        for (const [value, expect] of [['abc', /ce numéro n’est pas valable|Ce numéro n’est pas valable/], ['66 22 22 22', /déjà utilisée par un autre compte/], ['66 11 11 11', /déjà sa connexion actuelle/]]) {
+          await v.page.getByTestId('admin-account-login-input').fill(value);
+          await v.page.getByTestId('admin-account-login-confirm').click();
+          await v.page.getByTestId('admin-account-message').waitFor({ timeout: 8000 });
+          await sleep(300);
+          check(`« ${value} » : refus en phrase claire, rien n'a changé`, expect.test(await txt(v, 'admin-account-message')) && /Rien n’a été fait|Ce numéro|connexion/.test(await txt(v, 'admin-account-message')) && (await v.page.getByTestId('admin-account-login-panel').count()) === 1);
+        }
+        await v.page.getByTestId('admin-account-login-input').fill('66 77 88 99');
+        await v.page.getByTestId('admin-account-login-confirm').click();
+        await v.page.getByText('Connexion changée ✓').waitFor({ timeout: 8000 });
+        const last = st.fnBodies[st.fnBodies.length - 1];
+        check('nouveau numéro : la fonction reçoit l\'action, le client et le numéro écrit', last.action === 'change_login' && last.userId === customer.id && last.value === '66 77 88 99', last);
+        check('réussite : « Le client se connecte maintenant avec son nouveau numéro, et le même mot de passe. »', /nouveau numéro, et le même mot de passe/.test(await txt(v, 'admin-account-message')));
+        await sleep(800);
+        check('la connexion est relue : « +235 66 77 88 99 »', /\+235 66 77 88 99/.test(await txt(v, 'admin-account-login')));
+        await v.ctx.close();
+      }
+
+      // 4. fermer le compte
+      {
+        const { v, st, customer } = await manage({ fn: (body, state) => { state.info.login_kind = 'closed'; state.info.login_email = 'closed-000042@closed.albasseshopping.com'; return { ok: true, detail: 'compte fermé' }; } });
+        await v.page.getByTestId('admin-account-close-open').click();
+        await v.page.getByTestId('admin-account-close-panel').waitFor({ timeout: 8000 });
+        const panelT = await txt(v, 'admin-account-close-panel');
+        check('fermer : dit ce qui est effacé, que les 2 commandes sont GARDÉES, que le numéro est libéré et que c\'est définitif', /effacés/.test(panelT) && /2 commandes sont GARDÉES/.test(panelT) && /libéré/.test(panelT) && /ne peut pas être annulé/.test(panelT), panelT);
+        await v.page.screenshot({ path: path.join(OUT, '~9-fermer-le-compte.png') });
+        await v.page.getByTestId('admin-account-close-confirm').click({ force: true }).catch(() => {});
+        await sleep(400);
+        check('« Fermer le compte » inactif tant que « FERMER » n\'est pas tapé : aucune demande', st.fnBodies.length === 0);
+        await v.page.getByTestId('admin-account-close-confirm-input').fill('ferme');
+        await v.page.getByTestId('admin-account-close-confirm').click({ force: true }).catch(() => {});
+        await sleep(300);
+        check('« ferme » ne suffit pas', st.fnBodies.length === 0);
+        await v.page.getByTestId('admin-account-reason').fill('téléphone volé');
+        await v.page.getByTestId('admin-account-close-confirm-input').fill('fermer');
+        await v.page.getByTestId('admin-account-close-confirm').click();
+        await v.page.getByText('Compte fermé 🔒').waitFor({ timeout: 8000 });
+        check('« fermer » (minuscules) accepté : la fonction reçoit l\'action, le motif et la confirmation', st.fnBodies.length === 1 && st.fnBodies[0].action === 'close' && st.fnBodies[0].userId === customer.id && st.fnBodies[0].reason === 'téléphone volé' && st.fnBodies[0].confirm.toUpperCase() === 'FERMER', st.fnBodies);
+        await sleep(900);
+        check('après la fermeture : « Ce compte est fermé », plus aucun bouton', (await v.page.getByTestId('admin-account-closed').count()) === 1 && (await v.page.getByTestId('admin-account-edit-open').count()) === 0 && (await v.page.getByTestId('admin-account-delete-open').count()) === 0);
+        await v.ctx.close();
+      }
+
+      // 5. supprimer pour de bon
+      {
+        const { v, st } = await manage();
+        await v.page.getByTestId('admin-account-delete-open').click();
+        await v.page.getByTestId('admin-account-delete-panel').waitFor({ timeout: 8000 });
+        check('2 commandes : suppression refusée, « fermez le compte au lieu de le supprimer », aucune case de confirmation', /2 commandes/.test(await txt(v, 'admin-account-delete-refused')) && /fermez le compte/.test(await txt(v, 'admin-account-delete-refused')) && (await v.page.getByTestId('admin-account-delete-confirm-input').count()) === 0 && st.fnBodies.length === 0);
+        await v.ctx.close();
+      }
+      {
+        const { v, st, customer } = await manage({ info: { login_email: '23566111111@tel.albasseshopping.com', login_kind: 'phone', orders: 0, is_admin: false } });
+        await v.page.getByTestId('admin-account-delete-open').click();
+        await v.page.getByTestId('admin-account-delete-panel').waitFor({ timeout: 8000 });
+        check('sans commande : il faut taper le numéro client « AS-000042 »', /tapez AS-000042/.test(await txt(v, 'admin-account-delete-panel')));
+        await v.page.getByTestId('admin-account-delete-confirm-input').fill('AS-000041');
+        await v.page.getByTestId('admin-account-delete-confirm').click({ force: true }).catch(() => {});
+        await sleep(300);
+        check('mauvais numéro tapé : rien n\'est envoyé', st.fnBodies.length === 0);
+        await v.page.getByTestId('admin-account-delete-confirm-input').fill('as-000042');
+        await v.page.getByTestId('admin-account-delete-confirm').click();
+        await v.page.getByText('Compte supprimé 🗑️').waitFor({ timeout: 8000 });
+        check('bon numéro : la fonction reçoit « delete » avec la confirmation', st.fnBodies.length === 1 && st.fnBodies[0].action === 'delete' && st.fnBodies[0].userId === customer.id && st.fnBodies[0].confirm.toUpperCase() === 'AS-000042', st.fnBodies);
+        await sleep(900);
+        check('après la suppression : retour à la liste (on n\'est plus sur la fiche)', !new URL(v.page.url()).pathname.endsWith(customer.id), v.page.url());
+        await v.ctx.close();
+      }
+
+      // 6. les refus de la fonction et les cas particuliers
+      {
+        const { v } = await manage({ fn: () => ({ ok: false, reason: 'auth_error' }) });
+        await v.page.getByTestId('admin-account-close-open').click();
+        await v.page.getByTestId('admin-account-close-confirm-input').fill('FERMER');
+        await v.page.getByTestId('admin-account-close-confirm').click();
+        await v.page.getByTestId('admin-account-message').waitFor({ timeout: 8000 });
+        check('la connexion refuse : « rien n\'a été changé », le panneau reste ouvert pour réessayer', /rien n’a été changé/.test(await txt(v, 'admin-account-message')) && (await v.page.getByTestId('admin-account-close-panel').count()) === 1);
+        await v.ctx.close();
+      }
+      {
+        const { v } = await manage({ fn: () => ({ error: 'not found' }), fnStatus: 404 });
+        await v.page.getByTestId('admin-account-login-open').click();
+        await v.page.getByTestId('admin-account-login-input').fill('66 77 88 99');
+        await v.page.getByTestId('admin-account-login-confirm').click();
+        await v.page.getByTestId('admin-account-message').waitFor({ timeout: 8000 });
+        check('fonction pas encore installée (404) : « n\'est pas encore installée », aucune autre erreur', /admin-client-account » n’est pas encore installée/.test(await txt(v, 'admin-account-message')) && v.errs.length === 0, v.errs);
+        await v.ctx.close();
+      }
+      {
+        const { v } = await manage({ infoStatus: 404 });
+        check('script SQL pas lancé : une phrase claire, AUCUN bouton', /add-client-account-admin\.sql n’est pas encore lancé/.test(await txt(v, 'admin-account-problem')) && (await v.page.getByTestId('admin-account-edit-open').count()) === 0 && (await v.page.getByTestId('admin-account-close-open').count()) === 0);
+        check('la fiche du client marche quand même (mot de passe oublié, identité…)', (await v.page.getByTestId('admin-password-section').count()) === 1);
+        await v.ctx.close();
+      }
+      {
+        const { v } = await manage({ info: { login_email: 'patron@exemple.com', login_kind: 'email', orders: 0, is_admin: true } });
+        check('compte administrateur : « ne se gère pas ici », aucun bouton', (await v.page.getByTestId('admin-account-isadmin').count()) === 1 && (await v.page.getByTestId('admin-account-close-open').count()) === 0 && (await v.page.getByTestId('admin-account-delete-open').count()) === 0);
+        await v.ctx.close();
+      }
     }
   }
 

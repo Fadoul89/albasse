@@ -2,6 +2,7 @@
 //  - le client connecté change lui-même son mot de passe dans « Compte » ;
 //  - l'équipe donne un nouveau code de 6 chiffres depuis Admin › Clients et l'envoie sur WhatsApp.
 import { isPhoneLoginEmail, phoneDigits, prettyPhone } from './phoneAuth';
+import { clientNumberLine } from './clientNumber';
 
 export const MIN_PASSWORD_LENGTH = 6;
 export const MAX_PASSWORD_LENGTH = 72; // limite du chiffrement bcrypt utilisé par la base
@@ -58,7 +59,7 @@ export function loginHow(loginEmail: string): LoginHow {
 }
 
 // Message WhatsApp prêt à envoyer avec le nouveau code (l'administrateur peut le modifier avant).
-export function recoveryMessage(o: { firstName: string; loginEmail: string; code: string }): string {
+export function recoveryMessage(o: { firstName: string; loginEmail: string; code: string; clientNumber?: number | null }): string {
   const how = loginHow(o.loginEmail);
   const hello = o.firstName.trim() ? `Bonjour ${o.firstName.trim()},` : 'Bonjour,';
   const who = how.kind === 'phone' ? `votre numéro ${how.value}` : `votre e-mail ${how.value}`;
@@ -67,7 +68,10 @@ export function recoveryMessage(o: { firstName: string; loginEmail: string; code
     `Voici votre nouveau code : ${o.code}`,
     `Connectez-vous avec ${who} et ce code : ${SITE_URL}`,
     'Vous pourrez le changer dans « Compte » › « Changer mon mot de passe ».',
-  ].join('\n');
+    clientNumberLine(o.clientNumber),
+  ]
+    .filter((line) => line !== '')
+    .join('\n');
 }
 
 // Le numéro à qui écrire (WhatsApp du client, sinon son téléphone) ; null si aucun numéro valable.

@@ -12,6 +12,7 @@ import { visibleEmail } from '../lib/phoneAuth';
 import { GoldButton } from '../components/GoldButton';
 import { ProfileEditor } from '../components/ProfileEditor';
 import { ChangePasswordCard } from '../components/ChangePasswordCard';
+import { ClientNumberCard } from '../components/ClientNumberCard';
 import { useCustomerMessages } from '../hooks/useCustomerMessages';
 import { useToastStore } from '../store/toastStore';
 import { supabase } from '../lib/supabase';
@@ -164,6 +165,8 @@ export function AccountScreen() {
 
         <LoyaltyCard points={profile.loyalty_points ?? 0} />
       </View>
+
+      <ClientNumberCard profile={profile} />
 
       {invites.state === 'ready' && invites.progress ? (
         <Pressable style={styles.inviteCard} onPress={() => navigation.navigate('InviteFriends')} testID="account-invite-card">
