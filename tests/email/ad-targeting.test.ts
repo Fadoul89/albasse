@@ -283,6 +283,37 @@ const withAdult = [...shop, adultPromo];
 check('un article 18+ n\'est jamais choisi : ni en promotion, ni pour un homme, ni pour un élève, ni pour un administrateur', [{ gender: 'homme' }, { profession: 'élève' }, { profession: 'administrateur' }, null].every((c) => pickTargetedAd({ products: withAdult, categories: cats, customer: c, browsing: null, now: NOW, seed: 0 })?.product.id !== 'ad1'));
 check('même regardé de près, un article 18+ n\'est pas rappelé dans l\'accueil', pickTargetedAd({ products: withAdult, categories: cats, browsing: viewMany(emptyProfile('v10', NOW - 5 * DAY), adultPromo, 3, NOW - 2 * DAY), now: NOW, seed: 0 })?.product.id !== 'ad1');
 
+// --- « Maison & Mobilier » : proposé beaucoup plus aux femmes qu'aux hommes (demande du patron, 8 novembre 2026) -------------------------------------------
+const homeCats: AdCategory[] = [...cats, { id: 'c-home', slug: 'maison-mobilier', name: 'Maison & Mobilier' }, { id: 'c-sofa', slug: 'canapes', name: 'Canapés', parent_id: 'c-home' }];
+const homeShop: AdProduct[] = [
+  ...shop,
+  mk('h1', 'c-home', { price: 30000, created_at: '2026-10-05T00:00:00Z' }),
+  mk('h2', 'c-home', { price: 45000, created_at: '2026-10-12T00:00:00Z' }),
+  mk('h3', 'c-sofa', { price: 90000, created_at: '2026-10-18T00:00:00Z' }),
+];
+const isHomeAd = (ad: { product: AdProduct } | null) => !!ad && ['c-home', 'c-sofa'].includes(ad.product.category_id ?? '');
+const homeAt = (customer: Record<string, unknown>, s: number, products: AdProduct[] = homeShop, cs: AdCategory[] = homeCats) => pickTargetedAd({ products, categories: cs, customer, browsing: null, now: NOW, seed: s });
+const share = (gender: string, products: AdProduct[] = homeShop) => Array.from({ length: 600 }, (_, s) => (isHomeAd(homeAt({ gender }, s, products)) ? 1 : 0) as number).reduce((a, b) => a + b, 0) / 600;
+check('femme : « Maison & Mobilier » 4 tranches de 6 h sur 6 (environ 67 %)', Math.abs(share('femme') - 4 / 6) < 0.01, share('femme'));
+check('homme : « Maison & Mobilier » 1 tranche sur 6 (environ 17 %)', Math.abs(share('homme') - 1 / 6) < 0.01, share('homme'));
+check('les femmes reçoivent « Maison & Mobilier » environ 4 fois plus que les hommes', share('femme') / share('homme') >= 3.5, [share('femme'), share('homme')]);
+check('le choix est fixe pendant une tranche de 6 h et change à la suivante (jamais au hasard : même client, même tranche = même annonce)', homeAt({ gender: 'femme' }, 7)?.product.id === homeAt({ gender: 'femme' }, 7)?.product.id && JSON.stringify(Array.from({ length: 6 }, (_, s) => isHomeAd(homeAt({ gender: 'femme' }, s)))) === '[true,true,true,true,false,false]', Array.from({ length: 6 }, (_, s) => isHomeAd(homeAt({ gender: 'femme' }, s))));
+check('homme : seulement la tranche 0 sur 6 ; les 5 autres : sa catégorie « Vêtements pour hommes »', JSON.stringify(Array.from({ length: 6 }, (_, s) => isHomeAd(homeAt({ gender: 'homme' }, s)))) === '[true,false,false,false,false,false]' && Array.from({ length: 5 }, (_, s) => homeAt({ gender: 'homme' }, s + 1)?.product.category_id).every((c) => c === 'c-menwear'));
+check('sans genre choisi : aucun ciblage « maison » (Zara ne devine rien, et sans raison vraie : aucune annonce)', Array.from({ length: 12 }, (_, s) => homeAt({}, s)).every((a) => a === null) && Array.from({ length: 12 }, (_, s) => homeAt({ gender: 'bizarre' }, s)).every((a) => a === null));
+check('les sous-catégories de « Maison & Mobilier » (ici « Canapés ») comptent aussi', new Set(Array.from({ length: 12 }, (_, s) => homeAt({ gender: 'femme' }, s)?.product.id).filter((id) => ['h1', 'h2', 'h3'].includes(id ?? ''))).size === 3);
+const aHome = homeAt({ gender: 'femme' }, 0);
+check('l\'annonce maison dit la vraie raison : le genre choisi dans le compte et le nom du rayon (aucune fausse rareté)', aHome?.reason.kind === 'gender' && /Vous avez choisi « Femme » dans votre compte/.test(adWhy(aHome.reason)) && /Choisi pour vous/.test(adHeadline(aHome.reason)) && !/rare|plus que|%|dernier/i.test(adHeadline(aHome.reason) + adWhy(aHome.reason)), aHome && [adHeadline(aHome.reason), adWhy(aHome.reason)]);
+const noWomenCat = homeShop.filter((p) => p.category_id !== 'c-women');
+check('une femme sans article de sa catégorie reçoit toujours « Maison & Mobilier » (jamais rien)', Array.from({ length: 12 }, (_, s) => isHomeAd(homeAt({ gender: 'femme' }, s, noWomenCat))).every(Boolean));
+const noMenCat = homeShop.filter((p) => p.category_id !== 'c-menwear');
+check('un homme sans article de sa catégorie ne reçoit PAS « Maison & Mobilier » à la place (seulement pendant sa tranche)', Array.from({ length: 12 }, (_, s) => ({ s, ad: homeAt({ gender: 'homme' }, s, noMenCat) })).every(({ s, ad }) => (s % 6 === 0 ? isHomeAd(ad) : !isHomeAd(ad))));
+check('un homme ne reçoit jamais une catégorie réservée aux femmes (comme avant), même pendant sa tranche « maison »', Array.from({ length: 60 }, (_, s) => homeAt({ gender: 'homme' }, s)?.product.category_id).every((c) => c !== 'c-women'));
+check('sans « Maison & Mobilier » en vente : rien ne change pour les femmes et les hommes (leur catégorie, comme avant)', Array.from({ length: 12 }, (_, s) => homeAt({ gender: 'femme' }, s, shop, cats)?.product.category_id).every((c) => c === 'c-women') && Array.from({ length: 12 }, (_, s) => homeAt({ gender: 'homme' }, s, shop, cats)?.product.category_id).every((c) => c === 'c-menwear'));
+const hv = viewMany(emptyProfile('v8', NOW - 3 * DAY), watchA, 3, NOW - 2 * DAY);
+check('les raisons vraies passent avant : une femme qui a regardé un article de près reçoit cet article (« Vous avez regardé »), pas « Maison & Mobilier »', pickTargetedAd({ products: [...homeShop, watchA], categories: homeCats, customer: { gender: 'femme' }, browsing: hv, now: NOW, seed: 0 })?.reason.kind === 'viewed');
+check('le métier passe avant : une étudiante reçoit l\'annonce des étudiants, pas « Maison & Mobilier »', homeAt({ gender: 'femme', profession: 'étudiante' }, 0)?.reason.kind === 'student');
+check('une vraie promotion dans « Maison & Mobilier » passe en premier pour la femme', (() => { const promo = mk('hp', 'c-home', { price: 20000, compare_at_price: 30000, promo_ends_at: iso(NOW + DAY), created_at: '2026-09-01T00:00:00Z' }); return Array.from({ length: 4 }, (_, s) => pickTargetedAd({ products: [...homeShop, promo], categories: homeCats, customer: { gender: 'femme' }, browsing: null, now: NOW, seed: s })?.product.id).every((id) => id === 'hp' || ['h1', 'h2', 'h3'].includes(id ?? '')); })());
+
 // --- 24 h sur 24 : les annonces changent toutes les 6 heures, jour et nuit --------------------------------------------------------------------------
 const slotStart = adSeed(NOW) * 6 * 3600_000 - 3600_000; // les tranches suivent l'heure du Tchad (UTC+1)
 check('Zara change les annonces toutes les 6 heures (4 fois par jour) : même tranche pendant 6 h, la suivante ensuite', AD_ROTATE_HOURS === 6 && adSeed(slotStart) === adSeed(slotStart + 6 * 3600_000 - 1) && adSeed(slotStart + 6 * 3600_000) === adSeed(slotStart) + 1);
