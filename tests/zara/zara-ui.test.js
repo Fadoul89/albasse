@@ -9753,7 +9753,12 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         check('Clients ensemble : clients, meilleurs clients potentiels, rappels WhatsApp', ['Clients', 'Meilleurs clients potentiels', 'Rappels WhatsApp'].every((l) => g.customers.includes(l)), g.customers);
         check('Marketing ensemble : assistant marketing, Zara Marketing (e-mails), promotions, roue de la chance, affilies', ['Assistant marketing', 'Zara Marketing (e-mails)', 'Promotions intelligentes', 'Roue de la chance', 'Affiliés'].every((l) => g.marketing.includes(l)), g.marketing);
         check('Boutique : commandes et factures, produits, categories, voyage ; Parametres : contact, paiement, livraison', ['Commandes et factures', 'Produits', 'Catégories', 'Voyage'].every((l) => g.shop.includes(l)) && ['Informations de contact', 'Paiement', 'Livraison (Villes)'].every((l) => g.settings.includes(l)), { shop: g.shop, settings: g.settings });
+        // photo du tableau de bord en entier (ecran haut), puis retour a la taille du telephone
+        await page.setViewportSize({ width: 390, height: 2300 });
+        await sleep(700);
         await page.screenshot({ path: path.join(OUT, 'C8-tableau-de-bord.png') });
+        await page.setViewportSize({ width: 390, height: 800 });
+        await sleep(400);
         check('23 pages accessibles depuis le tableau de bord (dont Zara SEO, Parrainages, Mes partenaires et Paramètres Zara)', (await page.locator('[data-testid^="admin-menu-Admin"]').count()) === 23);
         check('« Paramètres Zara » : un theme a cote des Parametres, avec « Tous les réglages de Zara »', /^🤖 Paramètres Zara/.test(g.zara) && g.zara.includes('Tous les réglages de Zara') && (await page.getByTestId('admin-menu-group-settings').boundingBox()).y < (await page.getByTestId('admin-menu-group-zara').boundingBox()).y, g.zara);
         check('« Mes partenaires (privé) » est dans le thème Boutique, à côté des produits', /Mes partenaires/.test(g.shop), g.shop);
@@ -9791,7 +9796,12 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         check('Paramètres Zara : les états viennent de la base (pubs éteintes, nouveaux articles allumés)', /Désactivé/.test(await page.getByTestId('zara-ads-status').innerText()) && /Activé/.test(await page.getByTestId('push-new-products-status').innerText()));
         check('Zara Marketing : état lu en lecture seule (Simulation, 50 e-mails au plus, approbation)', /Simulation/.test(await page.getByTestId('zara-settings-marketing-mode').innerText()) && /50 e-mails au plus par jour/.test(await page.getByTestId('zara-settings-marketing-detail').innerText()) && /approbation demandée/.test(await page.getByTestId('zara-settings-marketing-detail').innerText()));
         check('Zara Marketing : aucun bouton « ACTIVER » ni interrupteur d\'envoi sur cette page (le verrou reste sur sa page)', (await page.getByText('ACTIVER', { exact: true }).count()) === 0 && (await page.getByText('Activer les envois').count()) === 0);
-        await sleep(2500); // les interrupteurs sont bloqués pendant la toute première lecture
+        // photo de la page en entier (ecran haut), avant tout changement, puis retour a la taille du telephone
+        await page.setViewportSize({ width: 390, height: 2200 });
+        await sleep(700);
+        await page.screenshot({ path: path.join(OUT, 'C9-parametres-zara.png') });
+        await page.setViewportSize({ width: 390, height: 800 });
+        await sleep(2000); // les interrupteurs sont bloqués pendant la toute première lecture
         await page.getByTestId('zara-ads-switch').click();
         await page.getByText(/Sur l’accueil et dans les promotions, Zara met en avant/).waitFor({ timeout: 8000 });
         check('interrupteur « Zara gère les publicités » : la base reçoit zara_ads_enabled = true', fsZ.patches.some((b) => b.zara_ads_enabled === true), fsZ.patches);
@@ -9802,7 +9812,6 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         await page.getByText(/Zara choisit seule les articles de la Vente flash/).waitFor({ timeout: 8000 });
         check('Vente flash automatique : la base reçoit zara_auto_flash_enabled = true', fsZ.patches.some((b) => b.zara_auto_flash_enabled === true), fsZ.patches);
         check('Zara Marketing : rien n\'a été écrit dans ses réglages', mkaiWrites === 0, mkaiWrites);
-        await page.screenshot({ path: path.join(OUT, 'C9-parametres-zara.png'), fullPage: true });
         await page.getByTestId('zara-settings-open-marketing').click();
         await page.waitForURL(/\/admin\/zara-marketing$/, { timeout: 15000 });
         check('« Ouvrir Zara Marketing » mène à la page de Zara Marketing', new URL(page.url()).pathname === '/admin/zara-marketing', page.url());
