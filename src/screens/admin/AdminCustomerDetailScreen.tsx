@@ -25,6 +25,7 @@ import { GoldButton } from '../../components/GoldButton';
 import { visibleEmail } from '../../lib/phoneAuth';
 import { generateTempPassword } from '../../lib/guestAccount';
 import { adminResetError, recoveryMessage, recoveryPhone } from '../../lib/passwordRecovery';
+import { formatClientNumber } from '../../lib/clientNumber';
 import { whatsappLink } from '../../lib/relanceMessage';
 import { GenderPicker } from '../../components/GenderPicker';
 import { genderLabel, genderOf, hasGenderColumn, type Gender } from '../../lib/clientGender';
@@ -134,7 +135,7 @@ export function AdminCustomerDetailScreen({ route }: Props) {
     const digits = recoveryPhone(profile);
     if (!digits || !newCode) return null;
     const first = (profile.full_name ?? '').trim().split(/\s+/)[0] ?? '';
-    return whatsappLink(digits, recoveryMessage({ firstName: first, loginEmail: newCode.loginEmail, code: newCode.code }));
+    return whatsappLink(digits, recoveryMessage({ firstName: first, loginEmail: newCode.loginEmail, code: newCode.code, clientNumber: profile.client_number }));
   };
 
   // Homme / Femme : l'administrateur choisit (ou remet « non précisé ») ; la base vérifie qu'il est administrateur (admin_set_client_gender)
@@ -242,6 +243,11 @@ export function AdminCustomerDetailScreen({ route }: Props) {
         </Section>
 
         <Section title="👤 Identité">
+          {formatClientNumber(profile.client_number) ? (
+            <View testID="admin-client-number">
+              <Row label="🪪 Numéro client" value={formatClientNumber(profile.client_number)!} />
+            </View>
+          ) : null}
           <Row label="Nom et prénom" value={profile.full_name ?? '—'} />
           {hasGenderColumn(profile) ? (
             <View testID="admin-gender-section">

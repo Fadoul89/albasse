@@ -58,7 +58,7 @@ begin
   if position('@' in v_login) > 0 then
     -- compte avec un vrai e-mail : le lien de réinitialisation part par e-mail, l'équipe est seulement prévenue
     v_channel := 'email';
-    select p.id, p.full_name, p.phone, p.whatsapp_number, p.region, p.email into v_p
+    select p.id, p.full_name, p.phone, p.whatsapp_number, p.region, p.email, to_jsonb(p) ->> 'client_number' as client_number into v_p
     from public.profiles p
     where lower(p.email) = lower(v_login) and not coalesce(p.is_admin, false)
     limit 1;
@@ -72,7 +72,7 @@ begin
     if length(v_digits) < 8 then
       return;
     end if;
-    select p.id, p.full_name, p.phone, p.whatsapp_number, p.region, p.email into v_p
+    select p.id, p.full_name, p.phone, p.whatsapp_number, p.region, p.email, to_jsonb(p) ->> 'client_number' as client_number into v_p
     from public.profiles p
     where not coalesce(p.is_admin, false)
       and (
@@ -117,6 +117,7 @@ begin
     txt := '🔑 Mot de passe oublié' || E'\n'
         || coalesce(nullif(btrim(coalesce(v_p.full_name, '')), ''), 'Client') || E'\n'
         || '📞 ' || v_shown || E'\n'
+        || case when v_p.client_number is not null then '🪪 N° client : AS-' || lpad(v_p.client_number, 6, '0') || E'\n' else '' end
         || case when nullif(btrim(coalesce(v_p.region, '')), '') is not null then '📍 ' || btrim(v_p.region) || E'\n' else '' end
         || 'Il attend un nouveau code.' || E'\n'
         || '👉 Sa fiche (puis « Donner un nouveau code ») : https://www.albasseshopping.com/admin/clients/' || v_p.id::text
@@ -124,6 +125,7 @@ begin
   else
     txt := '🔑 Mot de passe oublié (par e-mail)' || E'\n'
         || coalesce(nullif(btrim(coalesce(v_p.full_name, '')), ''), 'Client') || ' · ' || v_p.email || E'\n'
+        || case when v_p.client_number is not null then '🪪 N° client : AS-' || lpad(v_p.client_number, 6, '0') || E'\n' else '' end
         || 'A demandé un lien de réinitialisation par e-mail : rien à faire, sauf s''il vous écrit.' || E'\n'
         || '👉 Sa fiche : https://www.albasseshopping.com/admin/clients/' || v_p.id::text;
   end if;

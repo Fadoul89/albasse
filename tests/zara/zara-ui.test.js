@@ -10206,6 +10206,48 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await c.ctx.close();
     }
 
+    // ---------- 1 bis. « Mon numéro client » dans Compte (add-client-number.sql, docs/numero-client.md)
+    {
+      const CAPTURE_OPEN_T = 'window.__opened = []; window.open = (u) => { window.__opened.push(String(u)); return null; };';
+      const fu = clientUser();
+      fu.profile = { ...fu.profile, client_number: 123, phone: '+235 66 12 34 56' };
+      const c = await newVisitor(phone, { lang: 'fr', storage: { [SKT]: fu.session }, fakeUser: fu, initScripts: [CAPTURE_OPEN_T] });
+      await c.ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: new URL(BASE).origin }).catch(() => {});
+      await c.page.goto(`${BASE}/compte`, { waitUntil: 'load' });
+      await c.page.getByTestId('client-number-card').waitFor({ timeout: 25000 });
+      check('Compte : la carte « Mon numéro client » montre AS-000123', (await c.page.getByTestId('client-number-value').innerText()).trim() === 'AS-000123');
+      const linkedT = await c.page.getByTestId('client-number-linked').innerText();
+      check('la carte le lie au téléphone et à l\'e-mail du compte', /\+235 66 12 34 56/.test(linkedT) && /test@example\.com/.test(linkedT), linkedT);
+      check('la carte dit que ce n\'est pas un mot de passe et que l\'équipe retrouve le compte plus vite', /Ce n’est pas un mot de passe/.test(await c.page.getByTestId('client-number-card').innerText()) && /plus vite/.test(await c.page.getByTestId('client-number-card').innerText()));
+      await c.page.getByTestId('client-number-card').scrollIntoViewIfNeeded().catch(() => {});
+      await c.page.screenshot({ path: path.join(OUT, '~1b-compte-numero-client.png') });
+      await c.page.getByTestId('client-number-copy').click();
+      await c.page.getByText('Numéro copié ✓').waitFor({ timeout: 8000 });
+      check('« Copier » : le numéro est dans le presse-papiers', (await c.page.evaluate(() => navigator.clipboard.readText())) === 'AS-000123');
+      await c.page.getByTestId('client-number-whatsapp').click();
+      await sleep(500);
+      const openedT = await c.page.evaluate(() => window.__opened || []);
+      const textT = decodeURIComponent((openedT[0] || '').split('text=')[1] || '');
+      check('« Me l\'envoyer sur WhatsApp » : message avec le numéro, le téléphone et l\'e-mail', openedT.length === 1 && openedT[0].startsWith('https://wa.me/?text=') && textT.includes('AS-000123') && textT.includes('+235 66 12 34 56') && textT.includes('test@example.com'), openedT);
+      check('aucune erreur (carte du numéro client)', c.errs.length === 0, c.errs);
+      check('aucune ecriture reelle (carte du numéro client)', (fu.patches || []).length === 0 && c.writes.every((w) => !/profiles/.test(w) || /visitor|login/.test(w)), c.writes);
+      await c.ctx.close();
+      // compte créé par un numéro (e-mail technique) : seulement le téléphone est montré, jamais l'adresse technique
+      const fp = clientUser();
+      fp.profile = { ...fp.profile, email: '23566123456@tel.albasseshopping.com', client_number: 7 };
+      const p = await newVisitor(phone, { lang: 'fr', storage: { [SKT]: fp.session }, fakeUser: fp });
+      await p.page.goto(`${BASE}/compte`, { waitUntil: 'load' });
+      await p.page.getByTestId('client-number-card').waitFor({ timeout: 25000 });
+      check('compte créé avec le numéro : « AS-000007 », le téléphone, et pas l\'adresse technique @tel.albasseshopping.com', (await p.page.getByTestId('client-number-value').innerText()).trim() === 'AS-000007' && !/@tel\./.test(await p.page.getByTestId('client-number-card').innerText()));
+      await p.ctx.close();
+      // script SQL pas encore lancé (le profil n'a pas de numéro) : la carte n'apparait pas, la page marche comme avant
+      const fo = clientUser();
+      const o = await openAccountT(fo);
+      await sleep(800);
+      check('sans numéro (script SQL pas lancé) : aucune carte, la page Compte marche comme avant', (await o.page.getByTestId('client-number-card').count()) === 0 && (await o.page.getByTestId('password-change-open').count()) === 1 && o.errs.length === 0, o.errs);
+      await o.ctx.close();
+    }
+
     // ---------- 2. l'administrateur donne un nouveau code (Admin › Clients › le client)
     const custId = 'aaaaaaaa-0000-4000-8000-000000000001';
     const custProfile = (extra = {}) => ({ id: custId, email: 'aicha@gmail.com', full_name: 'Aïcha Moussa', phone: '66111111', whatsapp_number: null, profession: null, region: "N'Djamena", country: 'Tchad', address: null, loyalty_points: 0, banned: false, role: 'customer', is_admin: false, is_affiliate: false, created_at: '2026-10-20T10:00:00Z', last_login_at: '2026-10-30T10:00:00Z', login_count: 2, fake_order_count: 0, ...extra });
@@ -10320,6 +10362,107 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const { v, seen } = await openDetail({ admin: false });
       check('client non administrateur : « Accès réservé aux administrateurs », aucune section, aucune demande', (await v.page.getByTestId('admin-password-section').count()) === 0 && (await v.page.getByText('Donner un nouveau code').count()) === 0 && seen.rpcs.length === 0);
       await v.ctx.close();
+    }
+    // f. numéro client : sur la fiche, dans le message WhatsApp du nouveau code, et dans la liste (recherche)
+    {
+      const { v, seen } = await openDetail({ customer: custProfile({ client_number: 42 }) });
+      check('fiche du client : « 🪪 Numéro client » AS-000042', /Numéro client/.test(await v.page.getByTestId('admin-client-number').innerText()) && /AS-000042/.test(await v.page.getByTestId('admin-client-number').innerText()));
+      await askNewCode(v);
+      await confirmNewCode(v);
+      await v.page.getByTestId('admin-new-code').waitFor({ timeout: 10000 });
+      const w = await whatsappT(v);
+      check('WhatsApp du nouveau code : dit aussi « Votre numéro client : AS-000042 »', w.text.includes('Votre numéro client : AS-000042') && w.text.includes('Voici votre nouveau code :'), w.text);
+      check('le code envoyé à la base n\'a rien à voir avec le numéro client (6 chiffres tirés au hasard)', seen.rpcs.length === 1 && /^\d{6}$/.test(seen.rpcs[0].new_password) && seen.rpcs[0].new_password !== '000042');
+      await v.ctx.close();
+      const nn = await openDetail({ customer: custProfile() });
+      check('fiche d\'un client sans numéro : aucune ligne « Numéro client »', (await nn.v.page.getByTestId('admin-client-number').count()) === 0);
+      await nn.v.ctx.close();
+    }
+    {
+      // la liste Admin › Clients : le numéro de chaque client, et la recherche par numéro
+      const fu = adminUser();
+      const clients = [
+        custProfile({ id: 'aaaaaaaa-0000-4000-8000-000000000011', full_name: 'Aïcha Moussa', phone: '66111111', email: 'aicha@gmail.com', client_number: 1 }),
+        custProfile({ id: 'aaaaaaaa-0000-4000-8000-000000000012', full_name: 'Brahim Oumar', phone: '66222222', email: '23566222222@tel.albasseshopping.com', client_number: 12 }),
+        custProfile({ id: 'aaaaaaaa-0000-4000-8000-000000000013', full_name: 'Zara Test', phone: '66333333', email: '23566333333@tel.albasseshopping.com', client_number: 123 }),
+        custProfile({ id: 'aaaaaaaa-0000-4000-8000-000000000014', full_name: 'Ancien Client', phone: '66444444', email: 'ancien@gmail.com' }),
+      ];
+      const v = await newVisitor(phone, { lang: 'fr', storage: { [SKT]: fu.session }, fakeUser: fu, fakeStore: { waOrder: true, accountRequired: false, patches: [] } });
+      await v.page.route(/\/rest\/v1\//, (route) => {
+        const req = route.request();
+        const u = new URL(req.url());
+        if (req.method() === 'OPTIONS') return route.fallback();
+        const t = u.pathname.replace('/rest/v1/', '');
+        if (t === 'profiles' && !u.searchParams.get('id') && u.searchParams.get('is_admin') === 'eq.false') return jsonT(route, clients);
+        if (t === 'rpc/browsing_overview') return jsonT(route, { rows: [] });
+        if (['orders', 'visitor_sessions', 'product_views', 'cart_events', 'customer_sanctions', 'favorites', 'visitor_product_interest', 'email_outbox', 'products'].includes(t)) return jsonT(route, []);
+        return route.fallback();
+      });
+      await v.page.goto(`${BASE}/admin/clients`, { waitUntil: 'load' });
+      await v.page.getByTestId('admin-customer-row').first().waitFor({ timeout: 25000 });
+      await sleep(1500);
+      const rows = () => v.page.getByTestId('admin-customer-row');
+      check('liste : 4 clients, 3 montrent leur numéro (AS-000001, AS-000012, AS-000123), l\'ancien sans numéro n\'en montre pas', (await rows().count()) === 4 && (await v.page.getByTestId('customer-client-number').allInnerTexts()).map((t) => t.replace(/\s+/g, ' ').trim()).join('|') === '🪪 AS-000001|🪪 AS-000012|🪪 AS-000123', await v.page.getByTestId('customer-client-number').allInnerTexts());
+      await v.page.screenshot({ path: path.join(OUT, '~4-liste-numero-client.png') });
+      const search = v.page.getByPlaceholder(/n° client/);
+      check('la barre de recherche dit qu\'on peut chercher par n° client', (await search.count()) === 1);
+      await search.fill('AS-000123');
+      await sleep(500);
+      check('recherche « AS-000123 » : un seul client (Zara Test)', (await rows().count()) === 1 && /Zara Test/.test(await rows().first().innerText()));
+      await search.fill('as 12');
+      await sleep(500);
+      check('recherche « as 12 » : AS-000012 seulement (pas AS-000123)', (await rows().count()) === 1 && /Brahim Oumar/.test(await rows().first().innerText()));
+      await search.fill('12');
+      await sleep(500);
+      check('recherche « 12 » seul : exactement le numéro 12 (Brahim), pas le 123', (await rows().count()) === 1 && /Brahim Oumar/.test(await rows().first().innerText()));
+      await search.fill('66444444');
+      await sleep(500);
+      check('recherche par téléphone : toujours comme avant (l\'ancien client)', (await rows().count()) === 1 && /Ancien Client/.test(await rows().first().innerText()));
+      await search.fill('Aïcha');
+      await sleep(500);
+      check('recherche par nom : toujours comme avant', (await rows().count()) === 1 && /Aïcha/.test(await rows().first().innerText()));
+      await search.fill('AS-000999');
+      await sleep(500);
+      check('numéro qui n\'existe pas : aucun client', (await rows().count()) === 0);
+      check('aucune erreur (liste des clients avec numéros)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+    // g. « Mot de passe oublié » : le client peut écrire son numéro client (facultatif), il part dans le message WhatsApp vers l'équipe
+    {
+      const v = await newVisitor(phone, { lang: 'fr' });
+      await v.page.goto(`${BASE}/mot-de-passe-oublie`, { waitUntil: 'load' });
+      await v.page.getByTestId('forgot-identifier').waitFor({ timeout: 25000 });
+      await v.page.getByTestId('forgot-identifier').fill('66 12 34 56');
+      await v.page.getByText('Continuer', { exact: true }).click();
+      await v.page.getByTestId('forgot-phone-help').waitFor({ timeout: 8000 });
+      check('« mot de passe oublié » (numéro) : une case « Numéro client (facultatif) »', (await v.page.getByTestId('forgot-client-number').count()) === 1);
+      await v.page.getByTestId('forgot-client-number').fill('abc');
+      await sleep(300);
+      check('numéro mal écrit : une phrase simple (« pas la bonne forme »), rien ne bloque', /pas la bonne forme/.test(await v.page.getByTestId('forgot-client-number-hint').innerText()));
+      await v.page.getByTestId('forgot-client-number').fill('as 123');
+      await sleep(300);
+      check('numéro bien écrit : la phrase d\'aide revient', /Votre numéro client est dans « Compte »/.test(await v.page.getByTestId('forgot-client-number-hint').innerText()));
+      await v.ctx.route('https://wa.me/**', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<html><body>whatsapp</body></html>' }));
+      const [popup] = await Promise.all([v.ctx.waitForEvent('page', { timeout: 10000 }), v.page.getByText('💬 Écrire sur WhatsApp').click()]);
+      await popup.waitForLoadState('domcontentloaded').catch(() => {});
+      const url = decodeURIComponent(popup.url());
+      await popup.close();
+      check('WhatsApp vers la boutique : le téléphone ET « Mon numéro client : AS-000123 »', url.startsWith('https://wa.me/235') && /numéro 66 12 34 56/.test(url) && /Mon numéro client : AS-000123/.test(url), url);
+      await v.ctx.close();
+      // sans numéro client : le message est celui d'avant
+      const w = await newVisitor(phone, { lang: 'fr' });
+      await w.page.goto(`${BASE}/mot-de-passe-oublie`, { waitUntil: 'load' });
+      await w.page.getByTestId('forgot-identifier').waitFor({ timeout: 25000 });
+      await w.page.getByTestId('forgot-identifier').fill('66 12 34 56');
+      await w.page.getByText('Continuer', { exact: true }).click();
+      await w.page.getByTestId('forgot-phone-help').waitFor({ timeout: 8000 });
+      await w.ctx.route('https://wa.me/**', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<html><body>whatsapp</body></html>' }));
+      const [pop2] = await Promise.all([w.ctx.waitForEvent('page', { timeout: 10000 }), w.page.getByText('💬 Écrire sur WhatsApp').click()]);
+      await pop2.waitForLoadState('domcontentloaded').catch(() => {});
+      const url2 = decodeURIComponent(pop2.url());
+      await pop2.close();
+      check('sans numéro client : le message WhatsApp est exactement celui d\'avant', /oublié le mot de passe de mon compte \(numéro 66 12 34 56\)\. Pouvez-vous m'aider \?/.test(url2) && !/numéro client/.test(url2), url2);
+      await w.ctx.close();
     }
   }
 

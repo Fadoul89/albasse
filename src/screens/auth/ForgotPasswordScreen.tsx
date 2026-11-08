@@ -12,6 +12,7 @@ import { isSupabaseConfigured } from '../../lib/supabase';
 import { useStoreSettings } from '../../hooks/useStoreSettings';
 import { phoneDigits } from '../../lib/phoneAuth';
 import { alertPasswordRequest } from '../../lib/passwordRequestAlert';
+import { forgotMessage, parseClientNumber } from '../../lib/clientNumber';
 
 export function ForgotPasswordScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -21,12 +22,14 @@ export function ForgotPasswordScreen() {
   const [sent, setSent] = useState(false);
   // compte créé avec le numéro : pas d'e-mail pour envoyer le lien, l'équipe aide sur WhatsApp
   const [phoneHelp, setPhoneHelp] = useState<string | null>(null);
+  // numéro client (AS-000123), facultatif : il aide l'équipe à retrouver le bon compte, même si le client a changé de téléphone
+  const [clientNo, setClientNo] = useState('');
   const showToast = useToastStore((s) => s.show);
   const { settings } = useStoreSettings();
 
   const askOnWhatsApp = () => {
     const shop = phoneDigits(settings.whatsapp ?? '') ?? '23560605151';
-    const text = `Bonjour Albasse Shopping, j'ai oublié le mot de passe de mon compte (numéro ${phoneHelp}). Pouvez-vous m'aider ?`;
+    const text = forgotMessage(phoneHelp ?? '', clientNo);
     Linking.openURL(`https://wa.me/${shop}?text=${encodeURIComponent(text)}`);
   };
 
@@ -73,6 +76,21 @@ export function ForgotPasswordScreen() {
             <Text style={styles.info}>
               Votre compte a été créé avec votre numéro de téléphone. Écrivez-nous sur WhatsApp : notre équipe vous donne
               un nouveau code. Vous pourrez ensuite le changer dans « Compte » › « Changer mon mot de passe ».
+            </Text>
+            <TextInput
+              value={clientNo}
+              onChangeText={setClientNo}
+              testID="forgot-client-number"
+              placeholder="Numéro client (facultatif, ex. AS-000123)"
+              placeholderTextColor={accountFieldPlaceholder}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              style={accountField}
+            />
+            <Text style={styles.small} testID="forgot-client-number-hint">
+              {clientNo.trim() && parseClientNumber(clientNo) === null
+                ? 'Ce numéro n’a pas la bonne forme (exemple : AS-000123). Vous pouvez aussi laisser vide.'
+                : 'Votre numéro client est dans « Compte ». Si vous le connaissez, l’équipe retrouve votre compte plus vite.'}
             </Text>
             <GoldButton label="💬 Écrire sur WhatsApp" onPress={askOnWhatsApp} style={{ marginTop: spacing.md }} />
           </View>
@@ -122,4 +140,5 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   info: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 14, lineHeight: 21, marginBottom: spacing.md },
+  small: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 12, lineHeight: 17, marginTop: 4 },
 });

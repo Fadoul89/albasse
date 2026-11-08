@@ -38,6 +38,9 @@ Un ancien compte (avec e-mail) donne « 🔑 Mot de passe oublié (par e-mail) �
 - Lire le journal (Supabase › SQL Editor) : `select * from password_request_alerts order by created_at desc;`
 - Code : fonction `notify_admin_password_request` (`add-password-request-alert.sql`), appelée par `src/lib/passwordRequestAlert.ts` depuis `src/screens/auth/ForgotPasswordScreen.tsx`.
 
+## 4. Le numéro client aide à retrouver le bon compte (demande du patron, 8 novembre)
+Chaque compte a un **numéro client** `AS-000123` (docs/numero-client.md), visible par le client dans **Compte › 🪪 Mon numéro client**. Il le garde (copie, capture, WhatsApp) et le donne à l'équipe s'il perd l'accès ; l'équipe le tape dans **Admin › Clients** pour ouvrir la bonne fiche, vérifie la personne, puis donne un nouveau code comme ci-dessus. L'alerte Telegram et le message du nouveau code portent aussi le numéro. **Ce n'est pas un mot de passe** : il n'ouvre aucun compte.
+
 ## Sécurité
 - La fonction `admin_set_client_password` est réservée aux administrateurs (`is_admin()`), refusée pour un compte administrateur, code de 6 à 72 caractères.
 - Le code n'est **jamais gardé en clair** (la base le chiffre en bcrypt, comme Supabase). Le petit journal `admin_password_resets` note seulement : quel client, quel administrateur, quand. Il est lisible par les administrateurs seulement.
