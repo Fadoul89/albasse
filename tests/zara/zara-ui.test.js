@@ -52,9 +52,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   // rank : rang du jour renvoye par la fonction de la base (null : fonction pas installee). fakeUser : compte simule (token : reponse a une connexion par mot de passe ; delay : lenteur du profil en ms). fakeOrders : { list: [...], patches: [] } = fausse table des commandes.
   // zaraInstall : par defaut, le visiteur a deja repondu « Plus tard » a l'installation (Zara ne la propose pas) ; null = vrai nouveau
   // visiteur, pour les parties qui testent l'installation
-  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, fakeSales = null, fakeAffinity = null, fakeCallbacks = null, fakePushes = null, fakeStore = null, fakeCats = null, fakeOnline = null, fakeRecent = null, fakeUnsub = null, initScripts = [], zaraInstall = 'dismissed', zaraPush = 'later', installAfterSignUp = '1', pushPerm = null, pushAnswer = 'granted', fakeAi = null, autoOpen = false, fakePromos = null, fakeTelegram = null, fakeInvites = null } = {}) {
-    // Zara s'ouvre seule sur l'Accueil apres 8 s : par defaut c'est deja « fait » pour ce visiteur (les autres tests gardent leur deroulement) ; autoOpen: true = vrai nouveau visiteur
-    if (!autoOpen) session = { albasse_assistant_autoopen_seen: '1', ...session };
+  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, fakeSales = null, fakeAffinity = null, fakeCallbacks = null, fakePushes = null, fakeStore = null, fakeCats = null, fakeOnline = null, fakeRecent = null, fakeUnsub = null, initScripts = [], zaraInstall = 'dismissed', zaraPush = 'later', installAfterSignUp = '1', pushPerm = null, pushAnswer = 'granted', fakeAi = null, fakePromos = null, fakeTelegram = null, fakeInvites = null } = {}) {
     const ctx = await b.newContext(opts);
     if (cookies) await ctx.addCookies(cookies);
     if (lang) storage = { albasse_zara_lang: lang, ...storage };
@@ -844,10 +842,10 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     check('delai de 8 s : la fenetre s’ouvre ensuite avec la phrase de Zara', true);
     await promoLate.ctx.close();
 
-    // f2. client CONNECTE : la carte s'affiche d'abord, puis Zara ouvre son chat 10 s plus tard, en fenetre du bas (pas en plein ecran)
+    // f2. client CONNECTE : la carte s'affiche, Zara N'OUVRE PLUS son chat toute seule (demande du patron, 7 novembre 2026) ; il s'ouvre seulement au toucher, en fenetre du bas
     {
       const m = memberWith(null);
-      const c = await newVisitor(phone, { storage: { [SK7]: m.session }, fakeUser: m, fakeStore: { zaraAds: true, zaraDelay: 3, waOrder: true, patches: [] }, autoOpen: true });
+      const c = await newVisitor(phone, { storage: { [SK7]: m.session }, fakeUser: m, fakeStore: { zaraAds: true, zaraDelay: 3, waOrder: true, patches: [] } });
       const t0 = Date.now();
       await c.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await c.page.getByTestId('zara-ad').waitFor({ timeout: 25000 });
@@ -858,13 +856,14 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         return { visibleDansEcran: r.y >= 0 && r.y + r.height <= innerHeight, libre: !!top && el.contains(top) };
       }));
       check('client connecte : la carte de Zara s\'affiche (apres 3 s), dans l\'ecran et PAS cachee par le chat', seen.visibleDansEcran && seen.libre, seen);
-      // l'ancienne regle ouvrait le chat a 8 s : maintenant la carte reste seule jusqu'a 3 s + 10 s
-      const wait11 = Math.max(0, 11000 - (Date.now() - t0));
-      await sleep(wait11);
-      check('11 s apres l\'arrivee (Zara s\'ouvrait a 8 s avant) : le chat n\'est pas encore ouvert, la carte est toujours visible', (await panelOf(c.page).count()) === 0 && (await c.page.getByTestId('zara-ad').count()) === 1);
+      // avant, le chat s'ouvrait seul 10 s apres la carte : maintenant, 22 s apres l'arrivee, rien ne s'est ouvert et la carte est toujours la
+      await sleep(Math.max(0, 22000 - (Date.now() - t0)));
+      check('22 s apres l\'arrivee : le chat de Zara ne s\'est PAS ouvert tout seul, la carte est toujours visible', (await panelOf(c.page).count()) === 0 && (await c.page.getByTestId('zara-ad').count()) === 1);
+      check('Zara n\'a demarre aucune conversation toute seule', c.chatStarts.length === 0, c.chatStarts);
+      await c.page.screenshot({ path: path.join(OUT, '7f2-apres-22-secondes-chat-ferme.png') });
+      // le client touche le bouton rond : le chat s'ouvre, en fenetre du bas (pas en plein ecran)
+      await c.page.getByRole('button', { name: FAB_NAME }).click();
       await panelOf(c.page).waitFor({ timeout: 12000 });
-      const openedAfter = Date.now() - t0;
-      check('Zara ouvre son chat environ 10 s apres l\'apparition de la carte (entre 12 s et 19 s apres l\'arrivee)', openedAfter >= 12000 && openedAfter <= 19000, openedAfter);
       await sleep(700);
       const pb = await panelOf(c.page).boundingBox();
       const vp = c.page.viewportSize();
@@ -872,7 +871,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const tagline = await c.page.getByTestId('home-tagline').boundingBox();
       check('le haut de l\'accueil reste visible au-dessus de la fenetre de Zara', !!tagline && tagline.y + tagline.height < pb.y, { tagline, pb });
       await c.page.screenshot({ path: path.join(OUT, '7f2-pub-puis-chat-du-bas.png') });
-      check('aucune erreur (client connecte, publicite puis chat)', c.errs.length === 0, c.errs);
+      check('aucune erreur (client connecte, publicite puis chat ouvert au toucher)', c.errs.length === 0, c.errs);
       await c.ctx.close();
     }
 
@@ -2699,63 +2698,50 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await r.ctx.close();
     }
 
-    // --- L9b. Zara prend la parole la premiere : sur l'Accueil, 8 secondes apres l'arrivee, elle ouvre toute seule la conversation (une fois par visite)
+    // --- L9b. Zara N'OUVRE JAMAIS son chat toute seule (demande du patron, 7 novembre 2026) : ni sur l'Accueil, ni ailleurs. La petite bulle et le bouton rond restent ; la fenetre ne s'ouvre qu'au toucher
     {
-      const v = await newVisitor(phone, { lang: 'fr', autoOpen: true, fakeStore: { waOrder: true, patches: [], zaraAds: false }, rank: 5 });
+      const fakeAudio = (state) => `window.__ding = { created: 0, started: 0 };
+        window.AudioContext = class { constructor() { window.__ding.created++; this.state = '${state}'; this.currentTime = 0; this.destination = {}; }
+          createGain() { return { gain: { setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() {} }; }
+          createOscillator() { return { frequency: { setValueAtTime() {} }, connect() {}, start() { window.__ding.started++; }, stop() {} }; }
+          close() { return Promise.resolve(); } };`;
+      const v = await newVisitor(phone, { lang: 'fr', fakeStore: { waOrder: true, patches: [], zaraAds: false }, rank: 5, initScripts: [fakeAudio('running')] });
       await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
-      await sleep(6500);
-      check('avant 8 secondes : rien ne s\'ouvre, et la petite bulle ne passe pas juste avant', (await panelOf(v.page).count()) === 0 && (await v.page.getByTestId('assistant-teaser').count()) === 0);
-      await waitText(v.page, /Bienvenue chez Albasse Shopping/, 12000);
-      check('Accueil : Zara ouvre toute seule la conversation et se presente', (await panelOf(v.page).count()) === 1);
-      check('une seule conversation comptee pour l\'ouverture automatique', v.chatStarts.length === 1, v.chatStarts);
+      await sleep(7000);
+      check('Accueil, nouveau visiteur : la petite bulle de Zara apparait vers 5 s (comme avant), la fenetre reste fermee', (await v.page.getByTestId('assistant-teaser').count()) === 1 && (await panelOf(v.page).count()) === 0);
+      await sleep(21000);
+      check('Accueil, 28 s apres l\'arrivee : Zara ne s\'est pas ouverte toute seule (ni a 8 s, ni apres)', (await panelOf(v.page).count()) === 0 && v.chatStarts.length === 0, v.chatStarts);
+      check('aucun son non plus (plus de « ding » d\'ouverture)', (await v.page.evaluate(() => window.__ding)).created === 0);
+      check('le bouton rond de Zara est toujours la', (await v.page.getByRole('button', { name: FAB_NAME }).count()) === 1);
+      await v.page.getByRole('button', { name: FAB_NAME }).click();
+      await waitText(v.page, /Bienvenue chez Albasse Shopping/);
+      check('le visiteur touche le bouton : Zara s\'ouvre et se presente, une seule conversation', (await panelOf(v.page).count()) === 1 && v.chatStarts.length === 1, v.chatStarts);
       await panelOf(v.page).getByRole('button', { name: 'Fermer', exact: true }).click();
       await sleep(2000);
       check('le visiteur ferme Zara : elle ne se rouvre pas, le bouton rond revient', (await panelOf(v.page).count()) === 0 && (await v.page.getByRole('button', { name: FAB_NAME }).count()) === 1);
       await v.page.reload({ waitUntil: 'load' });
       await sleep(9500);
-      check('meme visite, page rechargee : Zara ne se rouvre pas seule et la bulle ne revient pas', (await panelOf(v.page).count()) === 0 && (await v.page.getByTestId('assistant-teaser').count()) === 0);
-      check('aucune erreur (ouverture automatique)', v.errs.length === 0, v.errs);
+      check('meme visite, page rechargee : Zara ne se rouvre pas seule', (await panelOf(v.page).count()) === 0);
+      check('aucune erreur (Zara reste fermee)', v.errs.length === 0, v.errs);
       await v.ctx.close();
 
-      // hors Accueil : pas d'ouverture automatique, la petite bulle reste comme avant
-      const o = await newVisitor(phone, { lang: 'fr', autoOpen: true, fakeStore: { waOrder: true, patches: [], zaraAds: false } });
+      // le visiteur qui touche la petite bulle : le chat s'ouvre (le toucher reste le seul moyen)
+      const t = await newVisitor(phone, { lang: 'fr', fakeStore: { waOrder: true, patches: [], zaraAds: false }, rank: 7 });
+      await t.page.goto(`${BASE}/`, { waitUntil: 'load' });
+      await t.page.getByTestId('assistant-teaser').waitFor({ timeout: 15000 });
+      check('avant le toucher sur la bulle : la fenetre est fermee', (await panelOf(t.page).count()) === 0);
+      await t.page.getByTestId('assistant-teaser').click();
+      await waitText(t.page, /Bienvenue chez Albasse Shopping/);
+      check('toucher la petite bulle ouvre Zara : une seule conversation comptee', (await panelOf(t.page).count()) === 1 && t.chatStarts.length === 1, t.chatStarts);
+      await t.ctx.close();
+
+      // hors Accueil : rien ne change, la petite bulle apparait comme avant et la fenetre reste fermee
+      const o = await newVisitor(phone, { lang: 'fr', fakeStore: { waOrder: true, patches: [], zaraAds: false } });
       await o.page.goto(`${BASE}/contact`, { waitUntil: 'load' });
       await sleep(9500);
       check('page Contact : Zara ne s\'ouvre pas seule', (await panelOf(o.page).count()) === 0);
       check('page Contact : la petite bulle apparait comme avant', (await o.page.getByTestId('assistant-teaser').count()) === 1);
       await o.ctx.close();
-
-      // le visiteur qui touche le bouton avant les 8 secondes : une seule ouverture, une seule conversation comptee
-      const t = await newVisitor(phone, { lang: 'fr', autoOpen: true, fakeStore: { waOrder: true, patches: [], zaraAds: false }, rank: 7 });
-      await t.page.goto(`${BASE}/`, { waitUntil: 'load' });
-      await sleep(2500);
-      await t.page.getByRole('button', { name: FAB_NAME }).click();
-      await waitText(t.page, /Bienvenue chez Albasse Shopping/);
-      await sleep(8000);
-      check('Zara deja ouverte par le visiteur : pas de deuxieme ouverture ni de deuxieme conversation', (await panelOf(t.page).count()) === 1 && t.chatStarts.length === 1, t.chatStarts);
-      await t.ctx.close();
-
-      // le son : un faux « audio » compte ce que Zara joue (le vrai son ne peut pas etre entendu ici)
-      const fakeAudio = (state) => `window.__ding = { created: 0, started: 0, closed: 0 };
-        window.AudioContext = class { constructor() { window.__ding.created++; this.state = '${state}'; this.currentTime = 0; this.destination = {}; }
-          createGain() { return { gain: { setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() {} }; }
-          createOscillator() { return { frequency: { setValueAtTime() {} }, connect() {}, start() { window.__ding.started++; }, stop() {} }; }
-          close() { window.__ding.closed++; return Promise.resolve(); } };`;
-      const s1 = await newVisitor(phone, { lang: 'fr', autoOpen: true, fakeStore: { waOrder: true, patches: [], zaraAds: false }, initScripts: [fakeAudio('running')] });
-      await s1.page.goto(`${BASE}/`, { waitUntil: 'load' });
-      await sleep(6500);
-      const before = await s1.page.evaluate(() => window.__ding);
-      check('avant l\'ouverture automatique : aucun son', before.created === 0 && before.started === 0, before);
-      await waitText(s1.page, /Bienvenue chez Albasse Shopping/, 12000);
-      const played = await s1.page.evaluate(() => window.__ding);
-      check('telephone qui autorise le son : un petit « ding » de deux notes quand Zara s\'ouvre', played.created === 1 && played.started === 2, played);
-      await s1.ctx.close();
-      const s2 = await newVisitor(phone, { lang: 'fr', autoOpen: true, fakeStore: { waOrder: true, patches: [], zaraAds: false }, initScripts: [fakeAudio('suspended')] });
-      await s2.page.goto(`${BASE}/`, { waitUntil: 'load' });
-      await waitText(s2.page, /Bienvenue chez Albasse Shopping/, 20000);
-      const muted = await s2.page.evaluate(() => window.__ding);
-      check('telephone qui refuse le son (visiteur n\'a rien touche) : Zara s\'ouvre en silence, sans erreur', (await panelOf(s2.page).count()) === 1 && muted.started === 0 && muted.closed === 1 && s2.errs.length === 0, { muted, errs: s2.errs });
-      await s2.ctx.close();
     }
 
     // --- L9c. un mot mal ecrit : « Vouliez-vous dire… ? » dans la barre de recherche et dans le chat de Zara

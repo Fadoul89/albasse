@@ -34,17 +34,17 @@ Les faits sont les mêmes pour tous : un article abondant n'est jamais présent�
 
 ## Qui voit la publicité, et le chat de Zara
 - La carte s'affiche sur l'accueil pour les clients **connectés** avec leur compte (avec « Compte obligatoire à l'entrée », un visiteur sans compte ne voit que la page d'inscription : la carte attend derrière).
-- **Le chat de Zara ne cache plus la publicité** : quand Zara gère les publicités et qu'une carte va s'afficher, Zara ouvre son chat **10 secondes après l'apparition de la carte** (au lieu de 8 secondes après l'arrivée). Avec un délai de 5 s : carte à 5 s, chat à 15 s. Avec 30 s : chat à 40 s (un délai court est donc conseillé). Sans publicité à montrer (interrupteur éteint, aucun fait vrai), le chat s'ouvre à 8 s comme avant.
+- **Le chat de Zara ne s'ouvre plus tout seul** (demande du patron, 7 novembre 2026 : « Arrête l'ouverture automatique de la fenêtre du chat de Zara »). Avant, Zara ouvrait son chat toute seule (8 secondes après l'arrivée sur l'accueil, ou 10 secondes après l'apparition de la carte de publicité) avec un petit « ding ». **Tout cela est supprimé** : la fenêtre ne s'ouvre que si le visiteur touche le **bouton rond de Zara** ou la **petite bulle** (la bulle de bienvenue, qui apparaît 5 secondes après l'arrivée — 10 secondes pour un client connecté — et reste 10 secondes, comme avant l'ouverture automatique). La carte de publicité reste donc seule à l'écran, sans fenêtre par-dessus. Les rappels (« Activez les notifications », « Installez l'application ») ne passent plus par une ouverture automatique : ils sont dits dans la petite bulle et dans le chat, quand le visiteur le touche. Aucun son n'est joué.
 - **Sur téléphone, la fenêtre de Zara n'est plus en plein écran** : c'est une fenêtre qui monte du bas, sur environ 60 % de la zone visible (au moins 360 px), avec des coins arrondis ; le haut de la page reste visible. Quand le clavier s'ouvre, elle se réduit et la zone de saisie reste au-dessus du clavier. Sur ordinateur : toujours la carte de 400 px en bas à droite.
-- Réglages dans le code : `SHEET_RATIO` et `SHEET_MIN_HEIGHT` (`src/components/AssistantPanel.tsx`), `ZARA_AD_TO_CHAT_MS` (`src/store/zaraAdSignal.ts`).
+- Réglages dans le code : `SHEET_RATIO` et `SHEET_MIN_HEIGHT` (`src/components/AssistantPanel.tsx`).
 
 ## Données
 - Commandes réelles : fonction `assistant_product_sales` (totaux par article, jamais un nom de client), commandes non annulées et non signalées « fausses ».
 - Stock : celui du catalogue.
 
 ## Tests
-- `node --import ./tests/zara/register.mjs tests/email/zara-ads.test.ts` (54 contrôles, dont l'heure d'ouverture du chat)
-- navigateur : `PARTS=7E … node tests/zara/zara-ui.test.js <dist> <port>` (7 : publicité puis chat chez un client connecté ; E : fenêtre du bas et clavier)
+- `node --import ./tests/zara/register.mjs tests/email/zara-ads.test.ts` (49 contrôles)
+- navigateur : `PARTS=7E … node tests/zara/zara-ui.test.js <dist> <port>` (7 : publicité chez un client connecté, chat qui ne s'ouvre pas tout seul, puis ouvert au toucher ; E : fenêtre du bas et clavier ; L9b : Zara reste fermée sur l'accueil)
 
 ## Articles « Vitalité & Énergie »
 La carte « Zara vous conseille » ne propose jamais un article « Vitalité & Énergie » (sauf à un client marié de 32 ans et plus, d'après son compte) : voir `docs/zara-annonce-ciblee.md` (rubrique « Vitalité & Énergie »).
