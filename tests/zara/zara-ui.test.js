@@ -1804,13 +1804,17 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         check('homme sans réponses « marié » et « âge » : jamais un article « Vitalité & Énergie » dans l\'annonce', !vitNames.has(nmHim), nmHim);
         await him.page.getByTestId('targeted-ad').scrollIntoViewIfNeeded();
       }
+      // « Maison & Mobilier » : proposé beaucoup plus aux femmes (4 tranches de 6 h sur 6) qu'aux hommes (1 sur 6) : l'annonce d'une femme ou d'un homme vient donc de sa catégorie OU de « Maison & Mobilier »
+      const homeCatE = catsE.find((c) => c.slug === 'maison-mobilier');
+      const homeItemsE = homeCatE ? liveE.filter((p) => p.category_id === homeCatE.id && okP(p)) : [];
       if (menItems.length > 0) {
         const born40 = new Date(Date.now() - 40 * 365.25 * DAY - 40 * DAY).toISOString().slice(0, 10);
         const mhim = await homeE({ user: memberE({ gender: 'homme', marital_status: 'marie', birth_date: born40 }) });
         await sleep(6000);
         await waitAdE(mhim.page);
         const nmHim = await txt(mhim.page, 'targeted-ad-name');
-        check(`homme marié de 40 ans : un article de la catégorie « ${menCat.name} »`, menItems.some((p) => p.name.trim() === nmHim) && (await txt(mhim.page, 'targeted-ad-headline')) === `Choisi pour vous : « ${menCat.name.trim()} ».`, nmHim);
+        const hlHim = await txt(mhim.page, 'targeted-ad-headline');
+        check(`homme marié de 40 ans : un article de la catégorie « ${menCat.name} » (ou, 1 tranche de 6 h sur 6, de « Maison & Mobilier »)`, (menItems.some((p) => p.name.trim() === nmHim) && hlHim === `Choisi pour vous : « ${menCat.name.trim()} ».`) || (homeItemsE.some((p) => p.name.trim() === nmHim) && hlHim === 'Choisi pour vous : « Maison & Mobilier ».'), [nmHim, hlHim]);
         check('la raison dit « Homme » choisi dans le compte', /Vous avez choisi « Homme » dans votre compte/.test(await txt(mhim.page, 'targeted-ad-why')), await txt(mhim.page, 'targeted-ad-why'));
         await mhim.page.getByTestId('targeted-ad').scrollIntoViewIfNeeded();
         await mhim.page.screenshot({ path: path.join(OUT, '€8-annonce-homme.png') });
@@ -1828,9 +1832,42 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         const her = await homeE({ user: memberE({ gender: 'femme' }) });
         await waitAdE(her.page);
         const nmHer = await txt(her.page, 'targeted-ad-name');
-        check(`femme : un article de la catégorie « ${womenCat.name} »`, womenItems.some((p) => p.name.trim() === nmHer) && (await txt(her.page, 'targeted-ad-headline')) === `Choisi pour vous : « ${womenCat.name.trim()} ».`, nmHer);
+        const hlHer = await txt(her.page, 'targeted-ad-headline');
+        check(`femme : un article de la catégorie « ${womenCat.name} » ou de « Maison & Mobilier » (4 tranches de 6 h sur 6)`, (womenItems.some((p) => p.name.trim() === nmHer) && hlHer === `Choisi pour vous : « ${womenCat.name.trim()} ».`) || (homeItemsE.some((p) => p.name.trim() === nmHer) && hlHer === 'Choisi pour vous : « Maison & Mobilier ».'), [nmHer, hlHer]);
         await her.ctx.close();
       } else console.log('SAUTE  femme : aucun article en vente dans une catégorie « femme »');
+      // « Maison & Mobilier » dans une tranche précise : l'horloge du navigateur est réglée sur le début d'une tranche de 6 h (numéro divisible par 6)
+      // -> la femme ET l'homme reçoivent « Maison & Mobilier » ; 4 tranches plus tard : la femme a sa catégorie, l'homme aussi
+      if (homeItemsE.length > 0) {
+        const SLOT = 6 * 3600 * 1000;
+        const seedNow = Math.floor((Date.now() + 3600 * 1000) / SLOT);
+        const at = (k) => (seedNow - (seedNow % 6) + 6 + k) * SLOT - 3600 * 1000 + 60 * 1000;
+        const adAt = async (gender, k, shot) => {
+          const v = await homeE({ user: memberE({ gender }) });
+          await v.page.clock.setFixedTime(at(k));
+          await v.page.reload({ waitUntil: 'load' });
+          await waitAdE(v.page);
+          const out = { name: await txt(v.page, 'targeted-ad-name'), headline: await txt(v.page, 'targeted-ad-headline'), why: await txt(v.page, 'targeted-ad-why') };
+          if (shot) {
+            await v.page.getByTestId('targeted-ad').scrollIntoViewIfNeeded();
+            await sleep(3500); // la photo de l'article finit de charger avant la capture
+            await v.page.screenshot({ path: path.join(OUT, shot) });
+          }
+          await v.ctx.close();
+          return out;
+        };
+        const isHomeOut = (o) => homeItemsE.some((p) => p.name.trim() === o.name) && o.headline === 'Choisi pour vous : « Maison & Mobilier ».';
+        const w0 = await adAt('femme', 0, '€13-annonce-femme-maison.png');
+        check('tranche 0 sur 6 : la femme reçoit un article de « Maison & Mobilier », avec la raison « Vous avez choisi « Femme » dans votre compte »', isHomeOut(w0) && /Vous avez choisi « Femme » dans votre compte/.test(w0.why), w0);
+        const m0 = await adAt('homme', 0);
+        check('tranche 0 sur 6 : l\'homme reçoit aussi « Maison & Mobilier » (sa seule tranche sur 6)', isHomeOut(m0) && /Vous avez choisi « Homme » dans votre compte/.test(m0.why), m0);
+        const w2 = await adAt('femme', 2);
+        check('tranche 2 sur 6 : la femme reçoit encore « Maison & Mobilier » (4 tranches sur 6)', isHomeOut(w2), w2);
+        const m2 = await adAt('homme', 2);
+        check('tranche 2 sur 6 : l\'homme ne reçoit PAS « Maison & Mobilier » (il reçoit sa catégorie)', !isHomeOut(m2) && !homeItemsE.some((p) => p.name.trim() === m2.name), m2);
+        const w4 = await adAt('femme', 4);
+        check('tranche 4 sur 6 : la femme reçoit sa catégorie, pas « Maison & Mobilier » (les 2 tranches restantes)', !isHomeOut(w4) && !homeItemsE.some((p) => p.name.trim() === w4.name), w4);
+      } else console.log('SAUTE  Maison & Mobilier : aucun article en vente dans cette catégorie');
     }
 
     // g3. l'écran de l'administrateur : l'annonce de chaque public, le nombre de clients, le prochain changement (Zara travaille 24 h sur 24)

@@ -118,7 +118,7 @@ export function ScheduledPushes({ products }: { products: Product[] }) {
       <Text style={styles.helper}>
         Choisissez un article, écrivez un message court, puis le jour et l'heure (heure du Tchad). À l'heure dite, la
         notification part sur tous les téléphones abonnés, avec la photo de l'article ; un toucher ouvre sa fiche. Zara
-        n'envoie jamais deux notifications en même temps : s'il y en a une partie depuis moins de 3 heures, la suivante
+        n'envoie jamais deux notifications en même temps : s'il y en a une partie depuis moins de 1 heure, la suivante
         attend. Les ventes flash (et les nouveaux articles, si vous rallumez l'interrupteur ci-dessous) sont envoyées par Zara
         aux heures où le plus de monde est sur le site (au plus 2 par jour, de 9 h à 20 h), regroupées en une seule
         quand il y en a plusieurs.

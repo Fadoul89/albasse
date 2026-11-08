@@ -67,6 +67,14 @@ export const AD_MAX_CLOSES = 3; // …mais au plus 3 fois sur 24 h : au 3ᵉ « 
 export const AD_ROTATE_HOURS = 6; // Zara change les annonces 4 fois par jour, jour et nuit (24 h sur 24)
 export const POOL_SIZE = 5; // parmi les 5 meilleurs choix, un par jour (les choix tournent sans jamais sortir de la liste vraie)
 
+// « Maison & Mobilier » proposé BEAUCOUP plus aux femmes qu'aux hommes (demande du patron, 8 novembre 2026). Seulement d'après le genre que le client a CHOISI dans son compte
+// (jamais d'après le prénom). Sur 6 tranches de 6 heures qui se suivent : une femme reçoit « Maison & Mobilier » 4 fois (les 2 autres : sa catégorie, « Vêtements pour femmes »),
+// un homme 1 fois (les 5 autres : sa catégorie), soit environ 4 fois plus pour les femmes. Un client sans genre choisi n'est pas concerné. Les raisons vraies (article regardé,
+// catégorie explorée, métier) passent toujours avant.
+export const HOME_CATEGORY_SLUG = 'maison-mobilier';
+export const HOME_SLOTS_OF_6: Record<Gender, number> = { femme: 4, homme: 1 };
+export const homeLeanSlot = (gender: Gender, seed: number): boolean => ((Math.floor(seed) % 6) + 6) % 6 < HOME_SLOTS_OF_6[gender];
+
 // Le numéro de la « tranche de 6 heures » en cours : le choix de Zara reste le même pendant 6 heures, puis change tout seul.
 // Les tranches suivent l'heure du Tchad (UTC+1, sans changement d'heure) : changement à 00 h, 06 h, 12 h et 18 h à N'Djamena.
 const ZONE_OFFSET_MS = 3600 * 1000;
@@ -202,9 +210,18 @@ export function pickTargetedAd(input: AdInput): TargetedAd | null {
   const g = genderOf(input.customer?.gender);
   if (g) {
     // la catégorie de son genre (« Vêtements pour femmes », « Vitalité & Énergie Homme »), une vraie promotion d'abord, puis le plus récent
-    const mine = pool.filter((p) => audienceOfProduct(p) === g).sort((a, b) => byPromo(a, b) || ms(b.created_at) - ms(a.created_at) || a.name.localeCompare(b.name));
-    const p = rotate(mine);
-    if (p) return { product: p, reason: { kind: 'gender', gender: g, categoryName: (catById.get(p.category_id ?? '')?.name ?? '').trim() } };
+    const byRecent = (a: AdProduct, b: AdProduct) => byPromo(a, b) || ms(b.created_at) - ms(a.created_at) || a.name.localeCompare(b.name);
+    const mine = pool.filter((p) => audienceOfProduct(p) === g).sort(byRecent);
+    // « Maison & Mobilier » (et ses sous-catégories) : beaucoup plus souvent aux femmes (HOME_SLOTS_OF_6). Une femme qui n'a pas d'article de sa catégorie en reçoit toujours un de la maison ;
+    // un homme n'en reçoit que pendant sa tranche (jamais en remplacement).
+    const homeCat = input.categories.find((c) => c.slug === HOME_CATEGORY_SLUG);
+    const home = homeCat ? pool.filter((p) => inFamily(input.categories, p.category_id, homeCat.id)).sort(byRecent) : [];
+    const homeNow = homeLeanSlot(g, seed);
+    const order = g === 'femme' ? (homeNow ? [home, mine] : [mine, home]) : homeNow ? [home, mine] : [mine];
+    for (const list of order) {
+      const p = rotate(list);
+      if (p) return { product: p, reason: { kind: 'gender', gender: g, categoryName: (catById.get(p.category_id ?? '')?.name ?? '').trim() } };
+    }
   }
   // 4. une vraie promotion en cours (la plus forte remise d'abord) : l'ancien prix barré n'existe que pendant la promotion
   const promos = pool
