@@ -93,7 +93,6 @@ export interface Texts {
     menu: string;
     budget: string;
     withCategory(name: string): string;
-    seeShop: string;
     affiliate: string;
     shopAddress: string;
     payCash: string;
@@ -296,7 +295,7 @@ export interface Texts {
   cityPay: string;
   serviceNote(home: boolean): string;
   rules: string;
-  contact: { hours(h: string): string; delivery: string; ask: string };
+  contact: { email(e: string): string; delivery: string; ask: string };
   howToOrder: string;
   // l'article commandé dans la conversation (plus de panier : une commande = un article)
   cart: {
@@ -518,9 +517,8 @@ const FR: Texts = {
     menu: '🏠 Menu',
     budget: '💰 Mon budget',
     withCategory: (name) => `➕ Avec : ${name}`,
-    seeShop: '📍 Voir la boutique',
     affiliate: '🤝 Programme d’affiliation',
-    shopAddress: '📍 Adresse de la boutique',
+    shopAddress: '✉️ Nous contacter',
     payCash: '💵 À la livraison',
     payAirtel: '📱 Airtel Money',
     payMoov: '📲 Moov Money',
@@ -648,7 +646,7 @@ const FR: Texts = {
       }
     },
     personal: (kind) => {
-      const shop = '\nPour l’adresse de la boutique, touchez le bouton ci-dessous 👇';
+      const shop = '\nPour nous contacter, touchez le bouton ci-dessous 👇';
       const team = '\nPour joindre l’équipe de la boutique, touchez le bouton WhatsApp ci-dessous 👇';
       switch (kind) {
         case 'address':
@@ -893,7 +891,7 @@ const FR: Texts = {
   serviceNote: (home) =>
     `🕗 Nos services de livraison sont ouverts de ${DELIVERY_HOURS}.\n⏳ Pour éviter les fausses commandes, chaque commande est valable ${ORDER_VALIDITY_HOURS} h${home ? '.' : ' : réglez dans ce délai.'}`,
   rules: `⏳ Pour éviter les fausses commandes, chaque commande est valable ${ORDER_VALIDITY_HOURS} h. Passé ce délai, une commande restée en attente (non réglée) est signalée comme fausse commande.\nHors ${HOME_CITY}, réglez à l'avance : Airtel Money ${PAYMENT.airtel} ou Moov Money ${PAYMENT.moov}.`,
-  contact: { hours: (h) => `🕗 Boutique : ${h}`, delivery: `🚚 Livraison : de ${DELIVERY_HOURS}`, ask: 'Pour une question, écrivez-nous sur WhatsApp 👇' },
+  contact: { email: (e) => `✉️ E-mail : ${e}`, delivery: `🚚 Livraison : de ${DELIVERY_HOURS}`, ask: 'Pour une question, écrivez-nous sur WhatsApp 👇' },
   howToOrder: `Commander est simple 👇\n💬 Je peux finaliser votre commande avec vous, ici : touchez « Commander » sous l’article qui vous plaît.\nOu sur le site :\n1. Ouvrez le produit qui vous plaît\n2. Choisissez la couleur, la taille et la quantité\n3. Touchez « Commander »\n4. Indiquez votre nom, téléphone, ville et adresse\n5. Payez : à la livraison à N’Djamena, à l’avance (Airtel Money ou Moov Money) dans les autres villes\n🎁 En option : emballage cadeau, ${fcfa(GIFT_WRAP_FEE)} (touchez l’image cadeau)\n⏳ Pour éviter les fausses commandes, chaque commande est valable ${ORDER_VALIDITY_HOURS} h.`,
 
   cart: {
@@ -1151,9 +1149,8 @@ const AR: Texts = {
     menu: '🏠 القائمة',
     budget: '💰 ميزانيتي',
     withCategory: (name) => `➕ مع: ${name}`,
-    seeShop: '📍 عرض المتجر',
     affiliate: '🤝 برنامج الشراكة',
-    shopAddress: '📍 عنوان المتجر',
+    shopAddress: '✉️ تواصل معنا',
     payCash: '💵 عند الاستلام',
     payAirtel: '📱 Airtel Money',
     payMoov: '📲 Moov Money',
@@ -1283,7 +1280,7 @@ const AR: Texts = {
       }
     },
     personal: (kind) => {
-      const shop = '\nلعنوان المتجر، اضغط على الزر أدناه 👇';
+      const shop = '\nللتواصل معنا، اضغط على الزر أدناه 👇';
       const team = '\nللتحدث مع فريق المتجر، اضغط على زر واتساب أدناه 👇';
       switch (kind) {
         case 'address':
@@ -1521,7 +1518,7 @@ const AR: Texts = {
   serviceNote: (home) =>
     `🕗 خدمات التوصيل لدينا تعمل ${AR_HOURS}.\n⏳ لتجنب الطلبات الوهمية، كل طلب صالح لمدة ${ORDER_VALIDITY_HOURS} ساعة${home ? '.' : ': ادفع خلال هذه المدة.'}`,
   rules: `⏳ لتجنب الطلبات الوهمية، كل طلب صالح لمدة ${ORDER_VALIDITY_HOURS} ساعة. بعد هذه المدة، يُبلَّغ عن الطلب المتروك قيد الانتظار (غير المدفوع) على أنه طلب وهمي.\nخارج إنجامينا، ادفع مسبقا: Airtel Money ${PAYMENT.airtel} أو Moov Money ${PAYMENT.moov}.`,
-  contact: { hours: (h) => `🕗 المتجر: ${h}`, delivery: `🚚 التوصيل: ${AR_HOURS}`, ask: 'لأي سؤال، راسلنا على واتساب 👇' },
+  contact: { email: (e) => `✉️ البريد الإلكتروني: ${e}`, delivery: `🚚 التوصيل: ${AR_HOURS}`, ask: 'لأي سؤال، راسلنا على واتساب 👇' },
   howToOrder: `الطلب سهل 👇\n💬 يمكنني إتمام طلبك معك هنا: اضغط «اطلب» تحت المنتج الذي يعجبك.\nأو من الموقع:\n1. افتح المنتج الذي يعجبك\n2. اختر اللون والمقاس والكمية\n3. اضغط على «Commander» (اطلب)\n4. اكتب اسمك وهاتفك ومدينتك وعنوانك\n5. ادفع: عند الاستلام في إنجامينا، ومسبقا (Airtel Money أو Moov Money) في المدن الأخرى\n🎁 اختياري: تغليف الهدايا بـ ${fcfa(GIFT_WRAP_FEE)} (اضغط على صورة الهدية)\n⏳ لتجنب الطلبات الوهمية، كل طلب صالح لمدة ${ORDER_VALIDITY_HOURS} ساعة.`,
 
   cart: {

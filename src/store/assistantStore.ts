@@ -48,7 +48,6 @@ import {
   decodeRange,
   dominantSlug,
   encodeRange,
-  formatPhone,
   giftWrapPitch,
   giftWrapReply,
   isBroad,
@@ -3167,18 +3166,15 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         return;
       }
       case 'contact': {
+        // Seulement l'e-mail, la livraison et WhatsApp : ni adresse de boutique, ni horaires de boutique, ni téléphone (demande du patron, 9 novembre 2026)
         const lines: string[] = [];
         try {
           const info = await getStoreInfo();
-          const where = [info.address, info.city].filter(Boolean).join(', ');
-          if (where) lines.push(`📍 ${where}`);
-          if (info.hours) lines.push(t.contact.hours(info.hours));
-          const phone = formatPhone(info.phone);
-          if (phone) lines.push(`📞 ${phone}`);
+          if (info.email) lines.push(t.contact.email(info.email));
         } catch {
           // on garde les horaires de livraison et WhatsApp
         }
-        lines.splice(Math.min(lines.length, 2), 0, t.contact.delivery);
+        lines.push(t.contact.delivery);
         lines.push(t.contact.ask);
         await say(lines.join('\n'), { actions: [wa(), menuBtn()] });
         return;

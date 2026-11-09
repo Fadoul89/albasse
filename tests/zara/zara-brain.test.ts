@@ -101,7 +101,7 @@ async function main() {
     ['Zara, quelle est ton adresse ?', 'personal'], ['Tu habites où ?', 'personal'], ['où habites-tu', 'personal'], ['Zara, donne-moi ton numéro', 'personal'], ['Je veux ton WhatsApp personnel', 'personal'],
     ['Je veux t’appeler', 'personal'], ['quel âge as-tu ?', 'personal'], ['tu es mariée ?', 'personal'], ['tu as des enfants ?', 'personal'], ['comment te contacter', 'personal'],
     // la boutique, elle, répond normalement (adresse, numéro, horaires)
-    ['adresse de la boutique', 'contact'], ['numéro whatsapp', 'contact'], ['votre numéro', 'contact'], ['où est la boutique', 'contact'], ['horaires', 'contact'],
+    ['adresse de la boutique', 'contact'], ['✉️ Nous contacter', 'contact'], ['numéro whatsapp', 'contact'], ['votre numéro', 'contact'], ['où est la boutique', 'contact'], ['horaires', 'contact'],
     // des phrases de vente restent des phrases de vente
     ['à plus de 10 000 FCFA', 'search'], ['une belle robe', 'search'], ['vous êtes fiables ?', 'trust'], ['je vais réfléchir', 'later'], ['plus tard', 'later'], ['merci', 'thanks'],
   ];
@@ -115,7 +115,7 @@ async function main() {
     ['تصبح على خير', 'goodbye'], ['مع السلامة', 'goodbye'], ['إلى اللقاء', 'goodbye'],
     ['انت جميلة', 'compliment'], ['ماشاء الله عليك', 'compliment'], ['احبك', 'compliment'],
     ['ما هو عنوانك', 'personal'], ['اين تسكنين', 'personal'], ['اعطني رقمك', 'personal'], ['اريد ان اتصل بك', 'personal'], ['واتسابك', 'personal'], ['كم عمرك', 'personal'], ['هل انت متزوجة', 'personal'],
-    ['عنوان المتجر', 'contact'], ['رقم الواتساب', 'contact'], ['ساعات العمل', 'contact'],
+    ['عنوان المتجر', 'contact'], ['✉️ تواصل معنا', 'contact'], ['رقم الواتساب', 'contact'], ['ساعات العمل', 'contact'],
   ];
   for (const [input, expected] of talkAr) ok(`« ${input} » -> ${expected}`, b.detectIntent(input) === expected, b.detectIntent(input));
 

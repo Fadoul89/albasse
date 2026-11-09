@@ -586,7 +586,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   const [promoRow] = (await get('products?select=name,slug,price,compare_at_price,stock,images&is_active=eq.true&slug=eq.rolex&limit=1'));
   const lowStock = (await get('products?select=id,name,slug,price,stock,images&is_active=eq.true&stock=gte.1&stock=lte.5&order=created_at.desc&limit=20')).find((p) => (p.images || [])[0] && p.name.trim().length < 40);
   const realProduct = (await get('products?select=*&is_active=eq.true&stock=gt.0&slug=eq.rolex&limit=1'))[0];
-  const storeRow = (await get('store_settings?select=hours,address,city,phone&limit=1'))[0] || {};
+  const storeRow = (await get('store_settings?select=hours,address,city,phone,email&limit=1'))[0] || {};
   console.log('info  produit promo :', promoRow && promoRow.name, '| produit a stock bas :', lowStock && `${lowStock.name} (${lowStock.stock})`, '| horaires boutique :', storeRow.hours);
 
   // =============================================== 6. ACCUEIL : HORLOGE DES VILLES DU TCHAD ===============================================
@@ -8599,7 +8599,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const { page } = v;
       await openZara(page, 'fr');
       const cases = [
-        ['Zara, quelle est ton adresse ?', /Je suis votre assistante virtuelle, disponible en ligne pour vous aider ! Vous pouvez me retrouver ici sur Albasse Shopping\.|Je n’ai pas d’adresse comme une personne/, ['📍 Adresse de la boutique', '🏠 Menu']],
+        ['Zara, quelle est ton adresse ?', /Je suis votre assistante virtuelle, disponible en ligne pour vous aider ! Vous pouvez me retrouver ici sur Albasse Shopping\.|Je n’ai pas d’adresse comme une personne/, ['✉️ Nous contacter', '🏠 Menu']],
         ['Tu habites où ?', /Je n’ai pas de domicile comme une personne|Je n’ai pas de maison/, ['🏠 Menu']],
         ['Zara, donne-moi ton numéro', /Je n’ai pas de numéro personnel\. Je travaille en ligne comme assistante virtuelle de marketing digital chez Albasse Shopping|Je n’ai pas de téléphone personnel/, ['💬 WhatsApp', '🏠 Menu']],
         ['Je veux ton WhatsApp personnel', /Je n’ai pas de WhatsApp personnel|Je n’ai pas de WhatsApp à moi/, ['💬 WhatsApp', '🏠 Menu']],
@@ -8613,11 +8613,13 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         check(`« ${q} » : assistante virtuelle, aucun numero ni adresse invente, boutons ${chips.join(' + ')}`, !/\d{3,}|\+\s?\d|rue |avenue |quartier/i.test(reply) && got.join('|') === chips.join('|'), { reply: reply.slice(0, 160), got });
       }
       await page.screenshot({ path: path.join(OUT, 'T3-perso.png') });
-      // le bouton « Adresse de la boutique » donne la VRAIE adresse (donnees de la boutique), pas celle de Zara
+      // le bouton « Nous contacter » : SEULEMENT l'e-mail (demande du patron, 9 novembre 2026) : ni adresse de boutique, ni horaires de boutique, ni telephone
       await ask(page, 'Zara, quelle est ton adresse ?', /Je suis votre assistante virtuelle, disponible|Je n’ai pas d’adresse/);
-      await tap(page, 'Adresse de la boutique', /Pour une question, écrivez-nous sur WhatsApp/);
+      await tap(page, 'Nous contacter', /Pour une question, écrivez-nous sur WhatsApp/);
       const shop = await lastMatching(page, /Pour une question, écrivez-nous sur WhatsApp/);
-      check('« Adresse de la boutique » : les vraies informations de la boutique (adresse, horaires de la base), pas celles de Zara', /📍|🕗/.test(shop), shop);
+      check('« Nous contacter » : l\'e-mail de la base, et NI adresse (📍, Marché Central), NI horaires de boutique (🕗), NI telephone (📞, +235, 60 60 51 51)', (storeRow.email ? shop.includes(`✉️ E-mail : ${storeRow.email}`) : true) && !/📍|🕗|📞|Boutique :|Marché Central|\+235|60 60 51 51|\d{2} \d{2} \d{2} \d{2}/.test(shop) && (storeRow.address ? !shop.includes(storeRow.address) : true), shop);
+      check('« Nous contacter » : la livraison et WhatsApp restent (bouton WhatsApp, sans numero ecrit)', /🚚 Livraison : de /.test(shop) && (await chipLabels(page)).includes('💬 WhatsApp'), await chipLabels(page));
+      await page.screenshot({ path: path.join(OUT, 'T3b-contact-email.png') });
       // les questions sur la boutique, elles, continuent de marcher
       await ask(page, 'numéro whatsapp de la boutique', /Pour une question, écrivez-nous sur WhatsApp/);
       check('« numéro whatsapp de la boutique » : reponse de la boutique (contact officiel), pas « je n\'ai pas de numero »', true);
@@ -8637,7 +8639,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await ask(page, 'انت جميلة', /(شكراً جزيلاً|ما أجمل كلامك|هذا لطف منك)/);
       await ask(page, 'ما هو عنوانك', /(أنا مساعدتك الافتراضية|أنا مساعدة افتراضية)/);
       const addrChips = await chipLabels(page);
-      check('en arabe : « ما هو عنوانك » -> assistante virtuelle + bouton « عنوان المتجر »', addrChips.includes('📍 عنوان المتجر'), addrChips);
+      check('en arabe : « ما هو عنوانك » -> assistante virtuelle + bouton « تواصل معنا »', addrChips.includes('✉️ تواصل معنا'), addrChips);
       await ask(page, 'اعطني رقمك', /ليس لدي (رقم|هاتف) شخصي/);
       const numChips = await chipLabels(page);
       const numReply = await lastMatching(page, /ليس لدي (رقم|هاتف) شخصي/);
