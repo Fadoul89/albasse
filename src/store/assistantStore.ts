@@ -167,6 +167,7 @@ export interface ChatAction {
     | 'interest'
     | 'account'
     | 'forgot'
+    | 'affiliate'
     | 'callback'
     | 'callbackYes'
     | 'callbackFix'
@@ -502,7 +503,7 @@ const FORCES_SAY: Record<Lang, string> = { fr: 'je suis dans les forces de l’o
 // Les boutons des anciens messages qui restent touchables : ceux qui mènent quelque part (promotions, catégories, un article précis,
 // la commande en cours, compte, WhatsApp, menu, installer). L'ancien « Voir mon panier » part : il n'y a plus de panier. Les réponses à une question passée (taille, jour, budget, pour qui, confirmer...) partent.
 const OLD_CHIP_KINDS = new Set<ChatAction['kind']>([
-  'say', 'whatsapp', 'register', 'login', 'forgot', 'orders', 'account', 'category', 'menu', 'checkout', 'link', 'policy', 'pair', 'add',
+  'say', 'whatsapp', 'register', 'login', 'forgot', 'affiliate', 'orders', 'account', 'category', 'menu', 'checkout', 'link', 'policy', 'pair', 'add',
   'install', 'installHelp', 'iosGuide', 'interest', 'style', 'orderPage', 'invoice', 'categoryPage', 'openChrome', 'pushOn',
 ]);
 // Ces phrases parlent de ce qui est affiché en ce moment (le budget de ces articles, les comparer) : pas sur un ancien message.
@@ -2377,23 +2378,15 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     await say(t.passwordMember(formatClientNumber(auth.profile?.client_number)), { actions: [{ label: t.chip.changePassword, kind: 'account', highlight: true }, menuBtn()] });
   }
 
-  // « Peur d'une arnaque », « je me méfie » : des faits VRAIS et contrôlables (paiement à la réception, boutique et sa carte, téléphone, depuis 2013).
+  // « Peur d'une arnaque », « je me méfie » : des faits VRAIS et contrôlables (paiement à la réception, « depuis 2013 », plateforme marketplace).
+  // Ni adresse de boutique, ni téléphone, ni carte : Albasse Shopping est maintenant une plateforme marketplace (demande du patron, 9 novembre 2026).
   async function trustAnswer() {
-    const t = T();
-    let info = { address: null as string | null, city: null as string | null, phone: null as string | null, mapsUrl: null as string | null };
-    try {
-      info = await getStoreInfo();
-    } catch {
-      // message de confiance sans l'adresse
-    }
-    const actions: ChatAction[] = [];
-    if (info.mapsUrl) actions.push({ label: t.chip.seeShop, kind: 'link', payload: info.mapsUrl });
-    actions.push(sayBtn(t.chip.promotions, 'promotions'), wa());
-    await say(trustReply(info, get().lang), { actions });
+    await say(trustReply(get().lang), { actions: [sayBtn(T().chip.promotions, 'promotions'), wa()] });
   }
 
   // Une émotion que le client écrit de lui-même (lib/assistantEmotion, docs/zara-emotions.md) : Zara répond d'abord à la PERSONNE.
-  //  - difficulté (argent, deuil, maladie, chômage) : aucune vente, aucune pression, l'équipe sur WhatsApp ;
+  //  - difficulté (deuil, maladie) : aucune vente, aucune pression, l'équipe sur WhatsApp ;
+  //  - manque d'argent : aucune vente non plus, mais le programme d'affiliation Albasse Shopping (gratuit, commission sur les commandes livrées par son lien) ;
   //  - peur ou soupçon : elle donne raison au client de vérifier, puis lui donne des faits vrais qu'il peut contrôler ;
   //  - rêve ou échec : une phrase chaleureuse, sans promesse sur un article ; s'il demande aussi un article, elle y répond ensuite.
   // Retourne true si Zara a tout dit (rien d'autre à répondre), false si la réponse habituelle suit.
@@ -2402,6 +2395,11 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     const line = pickLine(t.emotion[emotion]);
     if (emotion === 'hardship') {
       await say(line, { actions: [menuBtn(), wa()] });
+      return true;
+    }
+    // « Je n'ai plus d'argent » : aucune vente ; le programme d'affiliation, gratuit, présenté tel qu'il est (le bouton ouvre la candidature)
+    if (emotion === 'money') {
+      await say(line, { actions: [{ label: t.chip.affiliate, kind: 'affiliate', highlight: true }, menuBtn(), wa()] });
       return true;
     }
     if (emotion === 'fear' || emotion === 'doubt') {

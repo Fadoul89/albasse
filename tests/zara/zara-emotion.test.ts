@@ -1,4 +1,4 @@
-// Zara et les émotions du client (docs/zara-emotions.md) : rêve, échec, peur, soupçon, difficulté. Aucun réseau.
+// Zara et les émotions du client (docs/zara-emotions.md) : rêve, échec, peur, soupçon, difficulté, manque d'argent. Aucun réseau.
 // Lancer : node --import ./tests/zara/register.mjs tests/zara/zara-emotion.test.ts
 import { emotionFrom } from '../../src/lib/assistantEmotion.ts';
 import { detectIntent } from '../../src/lib/assistantBrain.ts';
@@ -20,7 +20,8 @@ const groups: Record<string, string[]> = {
   setback: ['j\'ai raté mon entretien', 'j\'ai échoué à mon examen', 'je n\'ai pas de chance', 'on s\'est moqué de moi', 'je me sens nul', 'j\'ai tout perdu', 'je suis découragé', 'j\'ai honte de moi', 'فشلت في الامتحان', 'رسبت هذه السنة', 'انا محبط'],
   fear: ['j\'ai peur de me faire arnaquer', 'j\'ai peur que la taille ne convienne pas', 'je m\'inquiète pour la livraison', 'je crains que ce soit de la copie', 'je suis stressé', 'انا خايف من النصب', 'اخاف ان لا يصل الطلب', 'انا قلق'],
   doubt: ['je me méfie', 'j\'ai des doutes sur ce site', 'je ne vous fais pas confiance', 'c\'est louche', 'je soupçonne une arnaque', 'on m\'a dit que c\'est une arnaque', 'اشك في هذا الموقع', 'لا اثق في المتاجر عبر الانترنت'],
-  hardship: ['je n\'ai plus d\'argent', 'je suis au chômage', 'je suis sans travail', 'j\'ai perdu mon travail', 'mon père est décédé', 'ma mère est malade', 'je suis en deuil', 'j\'ai des dettes', 'je n\'ai pas les moyens', 'je suis malade', 'ما عندي فلوس', 'انا عاطل عن العمل', 'توفي ابي', 'عندي ديون'],
+  hardship: ['mon père est décédé', 'ma mère est malade', 'je suis en deuil', 'je suis malade', 'j\'ai perdu ma mère', 'توفي ابي', 'انا مريض'],
+  money: ['je n\'ai plus d\'argent', 'je n\'ai plus d\'argent du tout', 'je suis au chômage', 'je suis sans travail', 'j\'ai perdu mon travail', 'j\'ai des dettes', 'je n\'ai pas les moyens', 'je suis fauché', 'je suis ruiné', 'ما عندي فلوس', 'انا عاطل عن العمل', 'عندي ديون'],
 };
 for (const [emotion, list] of Object.entries(groups)) {
   const bad = list.filter((t) => emotionFrom(t) !== emotion);
@@ -54,7 +55,9 @@ check('une phrase très longue (plus de 40 mots) n\'est jamais lue comme une ém
 check('texte vide ou espaces : aucune émotion', emotionFrom('') === null && emotionFrom('   ') === null);
 
 // --- la difficulté passe avant tout : Zara ne vend rien
-check('« je n\'ai plus d\'argent et j\'ai peur » : difficulté d\'abord (aucune vente)', emotionFrom('je n\'ai plus d\'argent et j\'ai peur') === 'hardship');
+check('« je n\'ai plus d\'argent et j\'ai peur » : le manque d\'argent d\'abord (aucune vente, le programme d\'affiliation)', emotionFrom('je n\'ai plus d\'argent et j\'ai peur') === 'money');
+check('« mon père est décédé et je n\'ai plus d\'argent » : le deuil d\'abord (aucune proposition du tout, même pas l\'affiliation)', emotionFrom('mon père est décédé et je n\'ai plus d\'argent') === 'hardship');
+check('« je suis malade et au chômage » : la maladie d\'abord (aucune proposition)', emotionFrom('je suis malade et au chômage') === 'hardship');
 check('« j\'ai raté mon examen, je rêve de réussir » : l\'échec d\'abord (soutien avant l\'ambition)', emotionFrom('j\'ai raté mon examen, je rêve de réussir') === 'setback');
 check('« je me méfie, j\'ai peur » : le soupçon d\'abord (les faits à vérifier)', emotionFrom('je me méfie, j\'ai peur') === 'doubt');
 
@@ -63,17 +66,24 @@ check('« j\'ai peur d\'une arnaque » reste le sujet « confiance » du chat (l
 check('« comment changer mon mot de passe » reste le sujet mot de passe', detectIntent('comment changer mon mot de passe') === 'password');
 
 // --- les textes
-const EMOTIONS = ['dream', 'setback', 'fear', 'doubt', 'hardship'] as const;
+const EMOTIONS = ['dream', 'setback', 'fear', 'doubt', 'hardship', 'money'] as const;
+const NO_MONEY = ['dream', 'setback', 'fear', 'doubt', 'hardship'] as const; // « garanti » n'a sa place que dans « aucun gain n'est garanti »
 for (const lang of ['fr', 'ar'] as const) {
   const t = texts(lang);
   for (const e of EMOTIONS) check(`[${lang}] ${e} : au moins 2 phrases différentes (Zara ne répète pas la même)`, t.emotion[e].length >= 2 && new Set(t.emotion[e]).size === t.emotion[e].length);
-  const all = EMOTIONS.flatMap((e) => t.emotion[e]).join('\n');
+  const all = NO_MONEY.flatMap((e) => t.emotion[e]).join('\n');
   check(`[${lang}] aucune promesse de réussite, de santé ni de résultat`, !/garanti|à coup sûr|100 ?%|guéri|vous allez (?:réussir|guérir)|ستنجح حتما|مضمون|ستشفى/i.test(all), all.slice(0, 80));
-  check(`[${lang}] aucune culpabilité ni pression d'achat (pas de « dernière chance », « ne ratez pas »)`, !/dernière chance|ne ratez|dépêchez|avant qu'il|آخر فرصة|لا تفوت|أسرع/i.test(all));
-  check(`[${lang}] difficulté : aucun prix, aucune promotion, aucune invitation à commander ni à acheter`, !t.emotion.hardship.some((l) => /promotion|prix|FCFA|commander|offre|عرض|سعر|اطلب|تخفيض/i.test(l)), t.emotion.hardship);
+  check(`[${lang}] aucune culpabilité ni pression d'achat (pas de « dernière chance », « ne ratez pas »)`, !/dernière chance|ne ratez|dépêchez|avant qu'il|آخر فرصة|لا تفوت|أسرع/i.test(all + '\n' + t.emotion.money.join('\n')));
+  check(`[${lang}] difficulté (deuil, maladie) : aucun prix, aucune promotion, aucune invitation à commander ni à acheter, aucune affiliation`, !t.emotion.hardship.some((l) => /promotion|prix|FCFA|commander|offre|affiliation|commission|عرض|سعر|اطلب|تخفيض|عمولة|الشراكة/i.test(l)), t.emotion.hardship);
+  check(`[${lang}] manque d'argent : le programme d'affiliation Albasse Shopping est proposé, gratuit, avec la commission sur les commandes livrées par SON lien`, t.emotion.money.every((l) => (lang === 'fr' ? /programme d’affiliation Albasse Shopping/.test(l) && /gratuit/.test(l) && /commission/.test(l) && /livrée/.test(l) : /Albasse Shopping/.test(l) && /مجاني/.test(l) && /عمولة/.test(l) && /يُسلَّم/.test(l))), t.emotion.money);
+  check(`[${lang}] manque d'argent : le taux dépend de l'article, l'équipe valide la candidature, AUCUN gain n'est promis (jamais « gagnez », « revenu », « argent facile »)`, t.emotion.money.every((l) => (lang === 'fr' ? /(?:dépend de|selon) l’article/.test(l) && /valid/.test(l) && /(?:rien vous promettre|aucun gain)/.test(l) : /حسب المنتج/.test(l) && /(?:يراجع|يوافق)/.test(l) && /(?:لا أستطيع أن أعدك|لا يوجد أي ربح)/.test(l))) && !t.emotion.money.some((l) => /gagnez|gagner|revenu|riche|facile|garanti|rapidement|ستربح|ستكسب|ثراء|سهل|فورا/i.test(l.replace(/ربح مضمون/g, ''))), t.emotion.money);
+  check(`[${lang}] manque d'argent : aucun prix, aucune promotion, aucune invitation à commander`, !t.emotion.money.some((l) => /promotion|prix|FCFA|commandez|achetez|عرض|سعر|اطلب|اشتر|تخفيض/i.test(l)), t.emotion.money);
   check(`[${lang}] peur et soupçon : la phrase annonce des faits à vérifier (elle finit par « : »)`, [...t.emotion.fear, ...t.emotion.doubt].every((l) => l.trim().endsWith(':')));
   check(`[${lang}] peur et soupçon : Zara ne confirme JAMAIS une accusation (pas de « vous avez raison, c'est une arnaque »)`, ![...t.emotion.fear, ...t.emotion.doubt].some((l) => /c.?est une arnaque|ils vous ont|on vous a menti|هم نصابون/i.test(l)));
+  // le message de confiance : « plateforme marketplace », ni adresse de boutique ni téléphone (demande du patron)
+  check(`[${lang}] confiance : Albasse Shopping est une plateforme marketplace, sans adresse de boutique ni téléphone`, (lang === 'fr' ? /plateforme marketplace/.test(t.trust) && !/Boutique|Marché Central|📍/.test(t.trust) : /منصة/.test(t.trust) && !/المتجر:|📍/.test(t.trust)) && !/📞|\+?235|60 60 51 51/.test(t.trust), t.trust);
 }
-check('[fr] chaque phrase de Zara est écrite au féminin quand elle parle d\'elle (« désolée »)', texts('fr').emotion.hardship[0].includes('désolée'));
+check('[fr] chaque phrase de Zara est écrite au féminin quand elle parle d\'elle (« désolée »)', texts('fr').emotion.hardship[0].includes('désolée') && texts('fr').emotion.money[0].includes('désolée'));
+check('[fr] confiance : toujours « Votre confiance compte pour nous », « depuis 2013 » et le paiement à la réception à N\'Djamena', /Votre confiance compte pour nous/.test(texts('fr').trust) && /depuis 2013/.test(texts('fr').trust) && /ne payez qu’en recevant votre commande/.test(texts('fr').trust));
 
 console.log(`\n${ok} contrôles réussis`);

@@ -1989,7 +1989,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       } else console.log('SAUTE  Zara et les militaires : le badge n\'est pas en vente en ce moment');
     }
 
-    // j. Zara et les émotions (docs/zara-emotions.md) : rêve, échec, peur, soupçon, difficulté
+    // j. Zara et les émotions (docs/zara-emotions.md) : rêve, échec, peur, soupçon, difficulté (deuil), manque d'argent (affiliation)
     {
       const openChatJ = async (v, lang = 'fr') => {
         await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
@@ -2012,20 +2012,36 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       // une peur : elle donne raison de vérifier, puis des FAITS
       await ask(page, 'j\'ai peur de me faire arnaquer', /Votre confiance compte pour nous/, 25000);
       const t3 = await lastText();
-      check('peur : « vous avez raison de poser la question » PUIS des faits vrais à vérifier (paiement à la réception, boutique)', /(C’est normal d’avoir peur|Je comprends votre inquiétude)/.test(t3) && /Votre confiance compte pour nous/.test(t3) && /vous ne payez qu’en recevant/.test(t3), t3.slice(-500));
+      check('peur : « vous avez raison de poser la question » PUIS des faits vrais à vérifier (paiement à la réception, depuis 2013, plateforme marketplace)', /(C’est normal d’avoir peur|Je comprends votre inquiétude)/.test(t3) && /Votre confiance compte pour nous/.test(t3) && /vous ne payez qu’en recevant/.test(t3) && /plateforme marketplace/.test(t3), t3.slice(-500));
+      const peurTail = t3.split(/Votre confiance compte pour nous/).pop() ?? '';
+      check('peur : Zara ne dit JAMAIS « Boutique : Marché Central, N\'Djamena » ni le numéro de téléphone (+235 60 60 51 51) ; pas de bouton « Voir la boutique »', !/Boutique :|Marché Central|\+235|60 60 51 51|📍|📞/.test(peurTail) && !(await chipLabels(page)).some((c) => /Voir la boutique/.test(c)), [peurTail, await chipLabels(page)]);
       await page.screenshot({ path: path.join(OUT, '€14-zara-peur.png') });
       // un soupçon : jamais une accusation confirmée
       await ask(page, 'je me méfie des sites en ligne', /Vous avez raison de vérifier|Votre prudence est une bonne chose/, 25000);
       await sleep(2500);
       const t4 = await lastText();
       check('soupçon : Zara confirme la PRUDENCE du client et donne des faits à contrôler ; elle ne dit jamais « c\'est une arnaque »', /(Vous avez raison de vérifier|Votre prudence)/.test(t4) && !/c’est une arnaque|c'est une arnaque/i.test(t4), t4.slice(-300));
-      // une difficulté : aucune vente
+      // un deuil : aucune vente, aucune proposition
       const cardsBefore = await page.getByTestId('assistant-card-add').count();
-      await ask(page, 'je n\'ai plus d\'argent', /Je suis vraiment désolée|Courage/, 20000);
+      await ask(page, 'mon père est décédé', /Je suis vraiment désolée|Courage/, 20000);
       await sleep(2000);
       const chipsH = await chipLabels(page);
-      check('difficulté (« je n\'ai plus d\'argent ») : Zara ne vend RIEN : pas de promotions, pas d\'article, seulement Menu et WhatsApp', !/(promotion|prix|commander)/i.test((await lastText()).split(/Je suis vraiment désolée|Courage/).pop() ?? '') && !chipsH.includes('🔥 Promotions') && chipsH.length <= 3 && (await page.getByTestId('assistant-card-add').count()) === cardsBefore, chipsH);
+      check('deuil (« mon père est décédé ») : Zara ne vend RIEN et ne propose RIEN : pas de promotions, pas d\'article, pas d\'affiliation, seulement Menu et WhatsApp', !/(promotion|prix|commander|affiliation|commission)/i.test((await lastText()).split(/Je suis vraiment désolée|Courage/).pop() ?? '') && !chipsH.includes('🔥 Promotions') && !chipsH.some((c) => /affiliation/i.test(c)) && chipsH.length <= 3 && (await page.getByTestId('assistant-card-add').count()) === cardsBefore, chipsH);
       await page.screenshot({ path: path.join(OUT, '€15-zara-difficulte.png') });
+      // plus d'argent : aucune vente, mais le programme d'affiliation Albasse Shopping, présenté tel qu'il est
+      await ask(page, 'je n\'ai plus d\'argent', /Je suis désolée d’apprendre cela|Courage/, 20000);
+      await sleep(2000);
+      const chipsM = await chipLabels(page);
+      const textM = (await lastText()).split(/Je suis désolée d’apprendre cela|Courage/).pop() ?? '';
+      check('plus d\'argent : Zara propose « notre programme d\'affiliation Albasse Shopping » : gratuit, commission sur les commandes livrées par SON lien, taux selon l\'article, équipe qui valide, AUCUN gain promis', /programme d’affiliation Albasse Shopping/.test(textM) && /gratuit/.test(textM) && /commission/.test(textM) && /livrée/.test(textM) && /(dépend de|selon) l’article/.test(textM) && /(rien vous promettre|aucun gain)/.test(textM) && !/gagnez|revenu|garanti|argent facile/i.test(textM), textM);
+      check('plus d\'argent : le bouton « Programme d\'affiliation » est en avant ; aucune promotion, aucun article, aucun prix', chipsM.includes('🤝 Programme d’affiliation') && !chipsM.includes('🔥 Promotions') && (await page.getByTestId('assistant-card-add').count()) === cardsBefore && !/FCFA/.test(textM), chipsM);
+      await page.screenshot({ path: path.join(OUT, '€15b-zara-affiliation.png') });
+      await chip(page, 'Programme d’affiliation').click();
+      await page.waitForURL(/devenir-affilie/, { timeout: 15000 });
+      await page.getByText(/Programme d.affiliation ALBASSE SHOPPING/).first().waitFor({ timeout: 15000 }).catch(() => {});
+      check('le bouton ouvre la page « Devenir affilié » (invite à créer un compte ou à se connecter)', /devenir-affilie/.test(page.url()) && ((await page.getByText(/Programme d.affiliation ALBASSE SHOPPING/).count()) >= 1), page.url());
+      await page.screenshot({ path: path.join(OUT, '€15c-page-affilie.png') });
+      await openChatJ(v);
       // un rêve ET une demande : Zara encourage puis répond à la demande
       await ask(page, 'je veux réussir mon entretien, je cherche une montre', /Quel beau rêve|J’adore votre ambition|C’est un très beau but|Voici/i, 25000);
       await sleep(4000);
@@ -2040,8 +2056,10 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await waitText(a.page, /أنشئ حسابك|حسابك/, 25000);
       await ask(a.page, 'أحلم بحياة أفضل', /أؤمن بك|أحب طموحك/, 20000);
       check('en arabe : « أحلم بحياة أفضل » -> Zara encourage en arabe', /(أؤمن بك|أحب طموحك)/.test(await panelOf(a.page).innerText()));
-      await ask(a.page, 'ما عندي فلوس', /يؤسفني جدا|تشجّع/, 20000);
-      check('en arabe : « ما عندي فلوس » -> douceur, aucune vente', !/(عرض|تخفيض|سعر)/.test(((await panelOf(a.page).innerText()).split(/يؤسفني جدا|تشجّع/).pop()) ?? ''));
+      await ask(a.page, 'ما عندي فلوس', /يؤسفني سماع ذلك|تشجّع/, 20000);
+      const textAr = ((await panelOf(a.page).innerText()).split(/يؤسفني سماع ذلك|تشجّع/).pop()) ?? '';
+      check('en arabe : « ما عندي فلوس » -> douceur, programme d\'affiliation (gratuit, عمولة), aucun gain promis, aucune vente', /برنامج الشراكة/.test(textAr) && /مجاني/.test(textAr) && /عمولة/.test(textAr) && !/(عرض|تخفيض|سعر)/.test(textAr), textAr);
+      check('en arabe : le bouton « برنامج الشراكة » est proposé', (await chipLabels(a.page)).includes('🤝 برنامج الشراكة'), await chipLabels(a.page));
       await a.ctx.close();
     }
   }
@@ -2647,7 +2665,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     await ask(page, 'vous êtes fiables ?', /Votre confiance compte pour nous/);
     const trustText = await panelOf(page).getByText(/Votre confiance compte pour nous/).last().innerText();
     check('confiance : « premiere plateforme de vente en ligne du Tchad, depuis 2013 », Service Qualite Garantie, paiement a la reception a N\'Djamena', /la première plateforme de vente en ligne du Tchad, depuis 2013/.test(trustText) && /Service, Qualité, Garantie/.test(trustText) && /ne payez qu’en recevant votre commande/.test(trustText), trustText);
-    check('confiance : adresse de la boutique et telephone reels', (storeRow.address ? trustText.includes(storeRow.address) : true) && /\+235 60 60 51 51/.test(trustText), trustText);
+    check('confiance : « plateforme marketplace », et NI adresse de boutique (Marché Central), NI telephone (+235 60 60 51 51)', /plateforme marketplace/.test(trustText) && !/Boutique :|📍|📞|\+235|60 60 51 51/.test(trustText) && !(storeRow.address ? trustText.includes(storeRow.address) : false), trustText);
     await ask(page, 'depuis quand existez-vous ?', /Nous sommes dans ce domaine depuis 2013/);
     check('« depuis quand » : Albasse Shopping, premiere plateforme du Tchad, depuis 2013', true);
     await ask(page, 'je vais réfléchir', /Pas de souci(?:, Fatimé)? 😊/);

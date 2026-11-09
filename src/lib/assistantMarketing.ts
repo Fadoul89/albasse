@@ -382,21 +382,15 @@ export function productPitch(p: CatalogProduct, lang: Lang = 'fr'): string {
 export const orderReminder = (name: string, total: number, lang: Lang = 'fr') => texts(lang).orderReminder(name, total);
 export const priceReply = (maxPct: number | null, lang: Lang = 'fr') => texts(lang).priceReply(maxPct);
 
-export interface TrustInfo {
-  address?: string | null;
-  city?: string | null;
-  phone?: string | null;
-}
-
 export function formatPhone(phone: string | null | undefined): string | null {
   const d = (phone ?? '').replace(/\D/g, '');
   const m = /^(235)?(\d{2})(\d{2})(\d{2})(\d{2})$/.exec(d);
   return m ? `+235 ${m[2]} ${m[3]} ${m[4]} ${m[5]}` : phone ? phone : null;
 }
 
-export function trustReply(info: TrustInfo, lang: Lang = 'fr'): string {
-  const where = [info.address, info.city].filter(Boolean).join(', ');
-  return texts(lang).trust(where, formatPhone(info.phone));
+// Message de confiance : des faits vrais, SANS adresse de boutique ni téléphone (Albasse Shopping est maintenant une plateforme marketplace).
+export function trustReply(lang: Lang = 'fr'): string {
+  return texts(lang).trust;
 }
 
 export const laterReply = (lang: Lang = 'fr') => texts(lang).later;

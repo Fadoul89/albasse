@@ -94,6 +94,7 @@ export interface Texts {
     budget: string;
     withCategory(name: string): string;
     seeShop: string;
+    affiliate: string;
     shopAddress: string;
     payCash: string;
     payAirtel: string;
@@ -228,7 +229,7 @@ export interface Texts {
   // le client dit qu'il est militaire, policier, gendarme… : Zara lui propose l'article choisi pour eux (docs/zara-annonce-ciblee.md)
   forces: { intro: string; none: string };
   // les émotions que le client écrit de lui-même (docs/zara-emotions.md) : plusieurs phrases par émotion, Zara ne dit pas deux fois la même de suite
-  emotion: Record<'dream' | 'setback' | 'fear' | 'doubt' | 'hardship', string[]>;
+  emotion: Record<'dream' | 'setback' | 'fear' | 'doubt' | 'hardship' | 'money', string[]>;
   alreadyMember: string;
   ordersLink: string;
   errorData: string;
@@ -269,7 +270,7 @@ export interface Texts {
   priceReply(maxPct: number | null): string;
   cheaperIntro: string;
   noCheaper: string;
-  trust(where: string, phone: string | null): string;
+  trust: string;
   later: string;
   about: string;
   returns: string;
@@ -518,6 +519,7 @@ const FR: Texts = {
     budget: '💰 Mon budget',
     withCategory: (name) => `➕ Avec : ${name}`,
     seeShop: '📍 Voir la boutique',
+    affiliate: '🤝 Programme d’affiliation',
     shopAddress: '📍 Adresse de la boutique',
     payCash: '💵 À la livraison',
     payAirtel: '📱 Airtel Money',
@@ -790,6 +792,12 @@ const FR: Texts = {
       'Je suis vraiment désolée d’apprendre cela{nom} 🤍 Il n’y a aucune pression de ma part : prenez soin de vous d’abord. Quand vous le voudrez, je suis là pour vous aider, et notre équipe répond aussi sur WhatsApp.',
       'Courage{nom} 🤍 Je vous souhaite de la force et de la paix. Ne pensez pas aux achats pour l’instant : si un jour vous avez besoin d’aide ou d’un conseil, je suis là, sans aucune obligation.',
     ],
+    // « je n'ai plus d'argent » : de la douceur, rien à acheter, et le programme d'affiliation Albasse Shopping, présenté tel qu'il est
+    // (gratuit ; commission sur les commandes livrées par SON lien ; taux selon l'article ; candidature validée par l'équipe ; aucun gain promis).
+    money: [
+      'Je suis désolée d’apprendre cela{nom} 🤍 Vous n’avez rien à acheter. Si vous le souhaitez, voici notre programme d’affiliation Albasse Shopping : il est gratuit, vous partagez nos articles avec votre lien, et vous recevez une commission sur chaque commande livrée grâce à votre lien. Le taux dépend de l’article, notre équipe valide chaque candidature, et je ne peux rien vous promettre sur les gains.',
+      'Courage{nom} 🤍 Aucune pression de ma part. Je peux vous présenter notre programme d’affiliation Albasse Shopping : gratuit, il permet de recevoir une commission quand une commande livrée vient de votre lien. Le taux change selon l’article, la candidature est validée par notre équipe, et aucun gain n’est promis.',
+    ],
   },
   alreadyMember: 'Vous êtes déjà connecté(e){nom} ✅ Retrouvez vos commandes à tout moment.',
   ordersLink: 'Retrouvez et suivez toutes vos commandes ici 👇',
@@ -839,15 +847,11 @@ const FR: Texts = {
     ].join('\n'),
   cheaperIntro: 'Je comprends{nom}. Voici des alternatives moins chères :',
   noCheaper: 'C’est déjà le prix le plus bas de cette sélection. Je peux vous montrer nos promotions, ou chercher dans un autre budget 😊',
-  trust: (where, phone) =>
-    [
-      'Votre confiance compte pour nous 🤝 Albasse Shopping, c’est la première plateforme de vente en ligne du Tchad, depuis 2013 : Service, Qualité, Garantie.',
-      `💵 À ${HOME_CITY}, vous ne payez qu’en recevant votre commande.`,
-      where ? `📍 Boutique : ${where}` : null,
-      phone ? `📞 ${phone}` : null,
-    ]
-      .filter(Boolean)
-      .join('\n'),
+  // Albasse Shopping est maintenant une plateforme marketplace : plus d'adresse de boutique ni de téléphone dans ce message (demande du patron, 9 novembre 2026).
+  trust: [
+    'Votre confiance compte pour nous 🤝 Albasse Shopping, c’est la première plateforme de vente en ligne du Tchad, depuis 2013 : Service, Qualité, Garantie. Nous sommes maintenant une plateforme marketplace.',
+    `💵 À ${HOME_CITY}, vous ne payez qu’en recevant votre commande.`,
+  ].join('\n'),
   later: 'Pas de souci{nom} 😊 Prenez votre temps. Touchez le cœur ❤️ sur un produit pour le retrouver dans vos favoris (avec un compte gratuit). Je reste là si vous avez une question !',
   about: 'Albasse Shopping est la première plateforme de vente en ligne du Tchad. Nous sommes dans ce domaine depuis 2013 : Service, Qualité, Garantie 🤝\nNotre site officiel : https://albasseshopping.com',
   returns: [
@@ -1148,6 +1152,7 @@ const AR: Texts = {
     budget: '💰 ميزانيتي',
     withCategory: (name) => `➕ مع: ${name}`,
     seeShop: '📍 عرض المتجر',
+    affiliate: '🤝 برنامج الشراكة',
     shopAddress: '📍 عنوان المتجر',
     payCash: '💵 عند الاستلام',
     payAirtel: '📱 Airtel Money',
@@ -1421,6 +1426,10 @@ const AR: Texts = {
       'يؤسفني جدا سماع ذلك{nom} 🤍 لا ضغط مني إطلاقا: اعتن بنفسك أولا. وعندما تريد أنا هنا للمساعدة، وفريقنا يرد أيضا على واتساب.',
       'تشجّع{nom} 🤍 أتمنى لك القوة والسكينة. لا تفكر في أي مشتريات الآن: وإن احتجت يوما إلى مساعدة أو نصيحة فأنا هنا دون أي التزام.',
     ],
+    money: [
+      'يؤسفني سماع ذلك{nom} 🤍 لا يلزمك شراء أي شيء. إن أردت، هذا برنامج الشراكة (الأفلييت) في Albasse Shopping: مجاني، تشارك منتجاتنا برابطك الخاص وتحصل على عمولة عن كل طلب يُسلَّم عبر رابطك. تختلف النسبة حسب المنتج، ويراجع فريقنا كل طلب انضمام، ولا أستطيع أن أعدك بأي أرباح.',
+      'تشجّع{nom} 🤍 لا ضغط مني. يمكنني أن أعرّفك ببرنامج الشراكة في Albasse Shopping: مجاني، وتصلك عمولة عندما يُسلَّم طلب جاء عبر رابطك. تختلف النسبة حسب المنتج، ويوافق فريقنا على الطلبات، ولا يوجد أي ربح مضمون.',
+    ],
   },
   alreadyMember: 'أنت مسجل بالفعل{nom} ✅ تجد طلباتك في أي وقت.',
   ordersLink: 'تابع كل طلباتك هنا 👇',
@@ -1467,15 +1476,10 @@ const AR: Texts = {
     ].join('\n'),
   cheaperIntro: 'أفهمك{nom}. إليك بدائل أرخص:',
   noCheaper: 'هذا بالفعل أقل سعر في هذه المجموعة. يمكنني أن أعرض عليك عروضنا، أو أبحث في ميزانية أخرى 😊',
-  trust: (where, phone) =>
-    [
-      'ثقتك تهمّنا 🤝 Albasse Shopping هي أول منصة للبيع عبر الإنترنت في تشاد، منذ عام 2013: خدمة، جودة، ضمان.',
-      '💵 في إنجامينا، لا تدفع إلا عند استلام طلبك.',
-      where ? `📍 المتجر: ${where}` : null,
-      phone ? `📞 ${phone}` : null,
-    ]
-      .filter(Boolean)
-      .join('\n'),
+  trust: [
+    'ثقتك تهمّنا 🤝 Albasse Shopping هي أول منصة للبيع عبر الإنترنت في تشاد، منذ عام 2013: خدمة، جودة، ضمان. نحن الآن منصة سوق إلكتروني (ماركت بليس).',
+    '💵 في إنجامينا، لا تدفع إلا عند استلام طلبك.',
+  ].join('\n'),
   later: 'لا مشكلة{nom} 😊 خذ وقتك. اضغط على القلب ❤️ في أي منتج لتجده في مفضلتك (مع حساب مجاني). أنا هنا إن كان لديك سؤال!',
   about: 'Albasse Shopping هي أول منصة للبيع عبر الإنترنت في تشاد. نعمل في هذا المجال منذ عام 2013: خدمة، جودة، ضمان 🤝\nموقعنا الرسمي: https://albasseshopping.com',
   returns: [

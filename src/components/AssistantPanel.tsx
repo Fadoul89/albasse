@@ -313,6 +313,10 @@ export function AssistantPanel() {
       case 'forgot':
         go(() => navigationRef.navigate('ForgotPassword'));
         return;
+      // « Programme d'affiliation » : la candidature (l'écran invite à créer un compte ou à se connecter si besoin)
+      case 'affiliate':
+        go(() => navigationRef.navigate('AffiliateApply'));
+        return;
       // la catégorie elle-même s'affiche dans le chat (Zara) ; seul « Page » ouvre la page de la catégorie
       case 'categoryPage':
         if (action.payload) go(() => navigationRef.navigate('Category', { slug: action.payload as string }));
