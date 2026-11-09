@@ -2,7 +2,7 @@
 // Lancer : node --import ./tests/zara/register.mjs tests/email/zara-words.test.ts
 import {
   GIFT_ADMIN_BADGE, GIFT_CLIENT_LINE, GIFT_INVOICE, MIN_BOUGHT_CUSTOMERS, alsoLine, confirmBecauseLine, finishLabel, giftOfferLine, giftPlacedLine, giftRecapLine,
-  hasChatGift, nextRealDeadline, parseAffinity, pickAlsoBought, receivedLine, riskFreeLine, urgencyLine, validityLine,
+  hasChatGift, nextRealDeadline, parseAffinity, pickAlsoBought, protectionLine, receivedLine, riskFreeLine, urgencyLine, validityLine,
 } from '../../src/lib/assistantWords.ts';
 
 let ok = 0;
@@ -35,6 +35,11 @@ check('immédiat : seulement un fait (l\'équipe reçoit la commande)', /vient d
 check('N\'Djamena : « vous payez seulement quand vous recevez » (vrai : paiement à la livraison)', /à N’Djamena, vous payez seulement quand vous recevez/.test(riskFreeLine('fr', true)));
 check('autres villes : PAS « payez à la réception » (faux là-bas), mais le retour sous 72 h d\'un article incorrect ou défectueux', !/payez seulement quand vous recevez/.test(riskFreeLine('fr', false)) && /72 heures/.test(riskFreeLine('fr', false)) && /frais de retour sont à notre charge/.test(riskFreeLine('fr', false)));
 check('arabe : mêmes deux assurances', /إنجامينا/.test(riskFreeLine('ar', true)) && /72/.test(riskFreeLine('ar', false)));
+
+// --- LA PROTECTION du client, dite avant et après l'achat (demande du patron du 9 novembre 2026)
+check('protection (fr) : « jamais à regretter votre achat » + mauvais article ou autre article que celui commandé : on peut annuler', /n’aurez jamais à regretter votre achat/.test(protectionLine('fr')) && /mauvais article/.test(protectionLine('fr')) && /un autre que celui que vous avez commandé/.test(protectionLine('fr')) && /vous pouvez annuler/.test(protectionLine('fr')), protectionLine('fr'));
+check('protection (fr) : la vraie règle de retour (72 h, photo ou vidéo, frais à notre charge), jamais une condition cachée', /72 h/.test(protectionLine('fr')) && /photo ou une vidéo/.test(protectionLine('fr')) && /frais de retour sont à notre charge/.test(protectionLine('fr')));
+check('protection (ar) : même promesse et mêmes conditions', /لن تندم أبداً/.test(protectionLine('ar')) && /خاطئ/.test(protectionLine('ar')) && /72/.test(protectionLine('ar')) && /الإلغاء/.test(protectionLine('ar')), protectionLine('ar'));
 
 // --- COURTE DURÉE : seulement une vraie échéance
 const now = Date.parse('2026-11-02T10:00:00Z');
@@ -73,10 +78,10 @@ check('achats insuffisants : la navigation prend le relais', pickAlsoBought(aff(
 check('phrase d\'achat : « 50 % des clients qui ont acheté « A » ont aussi acheté « B » »', alsoLine(p!, 'A', 'B', 'fr') === '👥 50 % des clients qui ont acheté « A » ont aussi acheté « B ».');
 check('phrase de navigation : « des visiteurs qui ont REGARDÉ » (jamais « acheté »)', /des visiteurs qui ont regardé « A » ont aussi regardé « B »/.test(alsoLine(v!, 'A', 'B', 'fr')) && !/acheté/.test(alsoLine(v!, 'A', 'B', 'fr')));
 check('arabe : les deux phrases', /اشتروا أيضاً/.test(alsoLine(p!, 'A', 'B', 'ar')) && /شاهدوا أيضاً/.test(alsoLine(v!, 'A', 'B', 'ar')));
-check('JAMAIS un « 50 % » écrit en dur : tout pourcentage vient du calcul', !/\b50 ?%/.test([giftOfferLine('fr'), giftRecapLine('fr'), giftPlacedLine('fr'), confirmBecauseLine('fr'), riskFreeLine('fr', true), riskFreeLine('fr', false), validityLine('fr')].join(' ')));
+check('JAMAIS un « 50 % » écrit en dur : tout pourcentage vient du calcul', !/\b50 ?%/.test([giftOfferLine('fr'), giftRecapLine('fr'), giftPlacedLine('fr'), confirmBecauseLine('fr'), riskFreeLine('fr', true), riskFreeLine('fr', false), validityLine('fr'), protectionLine('fr')].join(' ')));
 
 // --- VOUS : Zara parle à la personne
-const all2 = [giftOfferLine('fr'), giftRecapLine('fr'), giftPlacedLine('fr'), confirmBecauseLine('fr'), receivedLine('fr'), riskFreeLine('fr', true), riskFreeLine('fr', false), validityLine('fr')].join(' ');
+const all2 = [giftOfferLine('fr'), giftRecapLine('fr'), giftPlacedLine('fr'), confirmBecauseLine('fr'), receivedLine('fr'), riskFreeLine('fr', true), riskFreeLine('fr', false), validityLine('fr'), protectionLine('fr')].join(' ');
 check('« vous » partout, jamais « tu » ni « ton » dans les textes à un client', !/\b(tu|ton|ta|tes|toi|te)\b/i.test(all2.replace(/N’Djamena/g, '')), all2.match(/\b(tu|ton|ta|tes|toi|te)\b/gi));
 check('aucune promesse de santé, d\'effet ou de résultat', !/santé|effet|soigne|guéri|performance|virilité|résultat garanti/i.test(all2));
 

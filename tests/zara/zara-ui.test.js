@@ -8676,12 +8676,18 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         await waitText(c.page, /Récapitulatif de votre commande/);
         const recap = await panelOf(c.page).getByText(/Récapitulatif de votre commande/).last().innerText();
         check("recapitulatif : paiement a la livraison, en especes ; le bon total", /💵 Paiement à la livraison, en espèces/.test(recap) && noMobileMoney(recap) && new RegExp(`Total : ${numRe(price + homeFee)} FCFA`).test(recap), recap);
+        check('AVANT l\'achat (recapitulatif) : « vous n\'aurez jamais à regretter votre achat… mauvais article, ou un autre que celui que vous avez commandé, vous pouvez annuler » + la vraie regle (72 h, photo ou video, frais a notre charge)', /n’aurez jamais à regretter votre achat/.test(recap) && /mauvais article, ou un autre que celui que vous avez commandé, vous pouvez annuler/.test(recap) && /72 h/.test(recap) && /photo ou une vidéo/.test(recap) && /frais de retour sont à notre charge/.test(recap), recap.slice(-420));
         await c.page.screenshot({ path: path.join(OUT, '¤1-recapitulatif-ndjamena.png') });
         await typeIn(c.page, 'oui');
         await waitText(c.page, /a bien été enregistrée/);
         const b = db.created[0];
         const done = await panelOf(c.page).getByText(/a bien été enregistrée/).last().innerText();
         check('enregistre : paiement a la livraison, bon total ; la confirmation ne parle ni d\'Airtel ni de Moov ni de numero', db.created.length === 1 && b.payment_method === 'cash_on_delivery' && b.total === price + homeFee && /Vous payez en espèces directement à la livraison/.test(done) && noMobileMoney(done) && !/Envoyez .* au /.test(done), { b, done });
+        check('APRES l\'achat (confirmation) : la meme protection est repetee (mauvais article ou autre article : on peut annuler)', /n’aurez jamais à regretter votre achat/.test(done) && /mauvais article, ou un autre que celui que vous avez commandé, vous pouvez annuler/.test(done), done.slice(-500));
+        await sleep(1500);
+        await panelOf(c.page).getByText(/a bien été enregistrée/).last().evaluate((el) => el.scrollIntoView({ block: 'end' }));
+        await sleep(600);
+        await c.page.screenshot({ path: path.join(OUT, '¤1b-confirmation-ndjamena.png') });
         check('aucune erreur (N\'Djamena sans Airtel ni Moov)', realErrs(c).length === 0, c.errs);
         await c.ctx.close();
       }
@@ -8697,7 +8703,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         await waitText(c.page, /Dans quelle ville doit-on vous livrer/);
         await tapExact(c.page, farCity.name, /Pour le moment, les commandes pour .* se prennent sur WhatsApp/);
         const out = await panelOf(c.page).getByText(/Pour le moment, les commandes pour .* se prennent sur WhatsApp/).last().innerText();
-        check(`${farCity.name} : Zara explique (commande sur WhatsApp, deja ecrite, a N'Djamena on paie a la livraison), sans Airtel ni Moov`, out.includes(farCity.name) && /déjà écrite/.test(out) && /À N'Djamena/.test(out) && noMobileMoney(out), out);
+        check(`${farCity.name} : Zara explique (commande sur WhatsApp, deja ecrite, a N'Djamena on paie a la livraison), sans Airtel ni Moov`, out.includes(farCity.name) && /déjà écrite/.test(out) && /À N'Djamena/.test(out) && noMobileMoney(out) && /n’aurez jamais à regretter votre achat/.test(out) && /vous pouvez annuler/.test(out), out);
         const chips = await chipLabels(c.page);
         check('boutons : « Commander sur WhatsApp », « Ville » (changer), annuler ; aucun bouton de paiement', chips.join('|') === '💬 Commander sur WhatsApp|🏙️ Ville|Annuler la commande', chips);
         check('aucune question de paiement, aucune commande enregistree', (await panelOf(c.page).getByText(/Comment souhaitez-vous payer|Souhaitez-vous l’emballage cadeau/).count()) === 0 && db.created.length === 0);
@@ -8748,7 +8754,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         await waitText(c.page, /في أي مدينة/);
         await tapExact(c.page, farCity.name, /تُؤخذ الطلبات إلى/);
         const outAr = await panelOf(c.page).getByText(/تُؤخذ الطلبات إلى/).last().innerText();
-        check('arabe : la commande se prend sur WhatsApp, sans Airtel ni Moov', /واتساب/.test(outAr) && noMobileMoney(outAr) && (await chipLabels(c.page)).includes('💬 اطلب عبر واتساب') && db.created.length === 0, { outAr, chips: await chipLabels(c.page) });
+        check('arabe : la commande se prend sur WhatsApp, sans Airtel ni Moov, avec la protection (لن تندم أبداً)', /واتساب/.test(outAr) && noMobileMoney(outAr) && /لن تندم أبداً/.test(outAr) && (await chipLabels(c.page)).includes('💬 اطلب عبر واتساب') && db.created.length === 0, { outAr, chips: await chipLabels(c.page) });
         await c.ctx.close();
       }
 

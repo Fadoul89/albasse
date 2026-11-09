@@ -18,6 +18,7 @@ Le code est dans `src/lib/assistantWords.ts` (fonctions pures, testées dans `te
 | **IMMÉDIAT** | confirmation | « Notre équipe vient de recevoir votre commande » : la commande arrive tout de suite dans l'admin (et l'alerte Telegram). |
 | **COURTE DURÉE** | récapitulatif | **Seulement une vraie échéance** : la fin de la vente flash ou de la promotion de l'article (« Ce prix se termine dans 5 h »), sinon les **48 h de validité** de la commande. Jamais de compte à rebours inventé. |
 | **« X % des clients ont aussi acheté ceci »** | début de la commande | Voir plus bas : le pourcentage est calculé avec les vraies commandes, avec des seuils. |
+| **PROTECTION** (demande du patron, 9 novembre 2026) | **avant l'achat** : au récapitulatif (juste au-dessus de « Confirmer la commande ») et quand la commande part sur WhatsApp (hors N'Djamena) ; **après l'achat** : dans le message de confirmation | « Chez Albasse Shopping, vous n'aurez jamais à regretter votre achat. Si vous recevez un mauvais article, ou un autre que celui que vous avez commandé, vous pouvez annuler. » Elle est suivie de la **vraie règle de retour** (écrivez-nous dans les 72 h après la réception, avec une photo ou une vidéo ; frais de retour à notre charge), la même que « Nos conditions de retour ». |
 | **« Finalisez votre commande »** | bouton du menu, rappels, « Annuler la commande » | Remplace « Terminer ma commande » partout (chat, tests, aide). |
 
 En arabe, les mêmes phrases existent (« أكمل طلبك الآن », « هدية مفاجأة مجانية », « بدون مخاطرة »…).
