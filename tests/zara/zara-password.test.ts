@@ -76,6 +76,18 @@ check('écran : trois phrases différentes selon l’étape', new Set([start, wa
 check('écran : Zara se présente et ne demande jamais le mot de passe', /Zara/.test(start) && /jamais/.test(start) && /mot de passe/.test(start));
 check('écran : après le téléphone ou le numéro client, elle renvoie vers WhatsApp', /WhatsApp/.test(wa));
 check('écran : après l’e-mail, elle parle de la boîte e-mail et des spams', /e-mail/.test(sent) && /spam/.test(sent));
-check('écran : jamais « j’ai prévenu l’équipe » ni un délai promis (l’alerte est un plus et peut ne pas partir)', ![start, wa, sent].some((s) => /prévenu|en quelques minutes|tout de suite|immédiatement|sous \d/.test(s)), [start, wa, sent]);
+const none = zaraForgotLine('noAccount');
+check('écran : aucun compte trouvé → Zara le dit gentiment et propose de créer un compte (jamais WhatsApp)', /aucun compte/.test(none) && /créez votre compte/.test(none) && !/WhatsApp/.test(none) && new Set([start, wa, sent, none]).size === 4, none);
+check('écran : jamais « j’ai prévenu l’équipe » ni un délai promis (l’alerte est un plus et peut ne pas partir)', ![start, wa, sent, none].some((s) => /prévenu|en quelques minutes|tout de suite|immédiatement|sous \d/.test(s)), [start, wa, sent, none]);
+
+// --- « Mot de passe oublié » : on confirme d'abord que la personne a un compte ICI (demande du patron, 9 novembre 2026)
+import { noAccountText, readAccountAnswer } from '../../src/lib/accountCheckRules.ts';
+check('la base répond vrai : compte trouvé', readAccountAnswer(true, null) === true);
+check('la base répond faux : aucun compte', readAccountAnswer(false, null) === false);
+check('erreur, fonction absente (script pas lancé) ou réponse bizarre : on ne sait pas (null), l’écran fait comme avant', readAccountAnswer(null, { message: 'Could not find the function' }) === null && readAccountAnswer(undefined, null) === null && readAccountAnswer('oui', null) === null && readAccountAnswer({ id: 1 }, null) === null);
+const t1 = noAccountText('phone', '66 50 36 76');
+check('aucun compte (téléphone) : le texte nomme le numéro, propose e-mail ou numéro client, et la création d’un compte gratuit', /aucun compte avec le numéro 66 50 36 76/.test(t1) && /e-mail ou votre numéro client/.test(t1) && /Créez-le gratuitement/.test(t1), t1);
+check('aucun compte (e-mail et numéro client) : le texte nomme ce que le client a écrit', /aucun compte avec l’e-mail a@b\.com/.test(noAccountText('email', 'a@b.com')) && /aucun compte avec le numéro client AS-000999/.test(noAccountText('clientNumber', 'AS-000999')));
+check('aucun compte : jamais un nom ni une fiche, jamais « WhatsApp »', ![t1, noAccountText('email', 'a@b.com'), noAccountText('clientNumber', 'AS-1')].some((x) => /WhatsApp|nom|fiche/.test(x)));
 
 console.log(`\n${ok} contrôles réussis`);

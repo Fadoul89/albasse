@@ -62,3 +62,14 @@ Zara parle sur l'écran « Mot de passe oublié » et, pour un client connecté,
 - Base (Postgres local jetable, jamais la vraie) : `sh tests/sql/run-admin-password.sh` (29 contrôles : droits, refus, code bcrypt qui ouvre le compte, journal).
 - Alerte Telegram, base (Postgres local jetable) : `sh tests/sql/run-password-alert.sh` (44 contrôles : numéros écrits de toutes les façons, e-mail, inconnu, administrateur, 1 alerte / 30 min, 20 / heure, sans token, plusieurs administrateurs, journal, droits).
 - Alerte Telegram, navigateur : partie `2` de `tests/zara/zara-ui.test.js` (la base reçoit le numéro écrit, alerte en panne sans gêne pour le client, e-mail, champ vide).
+
+## D'abord : la personne a-t-elle un compte ICI ? (demande du patron, 9 novembre 2026)
+Un jour, quelqu'un **sans aucun compte** a écrit sur WhatsApp « j'ai oublié le mot de passe de mon compte (numéro …) ». L'écran « Mot de passe oublié » lui avait dit d'écrire à l'équipe sans rien vérifier.
+
+Maintenant, **avant** de prévenir l'équipe (alerte Telegram) ou de proposer WhatsApp, l'écran demande à la base : « ce compte existe-t-il ? » (e-mail, numéro de téléphone ou numéro client).
+- **Compte trouvé** : tout se passe comme avant (lien par e-mail, ou WhatsApp + alerte pour l'équipe).
+- **Aucun compte** : l'équipe n'est **pas** prévenue, il n'y a **pas** de bouton WhatsApp. L'écran dit « Nous ne trouvons aucun compte avec le numéro … », propose d'essayer un autre numéro, e-mail ou numéro client, et le bouton **« Créer mon compte »**. Zara dit la même chose gentiment.
+- **On ne sait pas** (script SQL pas encore lancé, réseau, erreur) : l'écran marche **exactement comme avant** : un vrai client n'est jamais bloqué.
+
+La base répond **seulement vrai ou faux** (script `add-account-check.sql`, fonction `account_exists_for_login`) : jamais un nom, un numéro, une adresse. L'inscription dit déjà « Un compte existe déjà avec ce numéro » : ce n'est pas plus ouvert.
+
