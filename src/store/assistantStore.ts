@@ -75,6 +75,7 @@ import {
 import { fetchAffinity, fetchCartStatus, fetchLoyaltyPoints, fetchPaymentNumbers, fetchProductForCart, getCatalog, getCategories, getCities, getProductSales, getStoreInfo, logAssistantEvent, requestCallback, startChatToday, toCard, type AssistantProduct, type CallbackSource } from '../lib/assistantData';
 import { compareFacts, declaredStyle, forcesFrom, jobFrom, jobKindOfProfession, rankForStyle, styleOrder, threeRanges, toneOf, type JobKind, type StyleKey } from '../lib/assistantPersona';
 import { FORCES_PRODUCT_SLUGS, isForcesProfession } from '../lib/adAudiences';
+import { emotionFrom, type Emotion } from '../lib/assistantEmotion';
 import { callbackDays, callbackNote, dayFromText, LOW_STOCK_MAX, provenSales, type CallbackDay } from '../lib/assistantSales';
 import { formatClientNumber } from '../lib/clientNumber';
 import { adFacts, adLine, isSeniorProfession } from '../lib/zaraAds';
@@ -166,6 +167,7 @@ export interface ChatAction {
     | 'interest'
     | 'account'
     | 'forgot'
+    | 'affiliate'
     | 'callback'
     | 'callbackYes'
     | 'callbackFix'
@@ -501,7 +503,7 @@ const FORCES_SAY: Record<Lang, string> = { fr: 'je suis dans les forces de l’o
 // Les boutons des anciens messages qui restent touchables : ceux qui mènent quelque part (promotions, catégories, un article précis,
 // la commande en cours, compte, WhatsApp, menu, installer). L'ancien « Voir mon panier » part : il n'y a plus de panier. Les réponses à une question passée (taille, jour, budget, pour qui, confirmer...) partent.
 const OLD_CHIP_KINDS = new Set<ChatAction['kind']>([
-  'say', 'whatsapp', 'register', 'login', 'forgot', 'orders', 'account', 'category', 'menu', 'checkout', 'link', 'policy', 'pair', 'add',
+  'say', 'whatsapp', 'register', 'login', 'forgot', 'affiliate', 'orders', 'account', 'category', 'menu', 'checkout', 'link', 'policy', 'pair', 'add',
   'install', 'installHelp', 'iosGuide', 'interest', 'style', 'orderPage', 'invoice', 'categoryPage', 'openChrome', 'pushOn',
 ]);
 // Ces phrases parlent de ce qui est affiché en ce moment (le budget de ces articles, les comparer) : pas sur un ancien message.
@@ -2376,6 +2378,47 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     await say(t.passwordMember(formatClientNumber(auth.profile?.client_number)), { actions: [{ label: t.chip.changePassword, kind: 'account', highlight: true }, menuBtn()] });
   }
 
+  // « Peur d'une arnaque », « je me méfie » : des faits VRAIS et contrôlables (paiement à la réception, « depuis 2013 », plateforme marketplace).
+  // Ni adresse de boutique, ni téléphone, ni carte : Albasse Shopping est maintenant une plateforme marketplace (demande du patron, 9 novembre 2026).
+  async function trustAnswer() {
+    await say(trustReply(get().lang), { actions: [sayBtn(T().chip.promotions, 'promotions'), wa()] });
+  }
+
+  // Une émotion que le client écrit de lui-même (lib/assistantEmotion, docs/zara-emotions.md) : Zara répond d'abord à la PERSONNE.
+  //  - difficulté (deuil, maladie) : aucune vente, aucune pression, l'équipe sur WhatsApp ;
+  //  - manque d'argent : aucune vente non plus, mais le programme d'affiliation Albasse Shopping (gratuit, commission sur les commandes livrées par son lien) ;
+  //  - peur ou soupçon : elle donne raison au client de vérifier, puis lui donne des faits vrais qu'il peut contrôler ;
+  //  - rêve ou échec : une phrase chaleureuse, sans promesse sur un article ; s'il demande aussi un article, elle y répond ensuite.
+  // Retourne true si Zara a tout dit (rien d'autre à répondre), false si la réponse habituelle suit.
+  async function emotionReply(emotion: Emotion, text: string): Promise<boolean> {
+    const t = T();
+    const line = pickLine(t.emotion[emotion]);
+    if (emotion === 'hardship') {
+      await say(line, { actions: [menuBtn(), wa()] });
+      return true;
+    }
+    // « Je n'ai plus d'argent » : aucune vente ; le programme d'affiliation, gratuit, présenté tel qu'il est (le bouton ouvre la candidature)
+    if (emotion === 'money') {
+      await say(line, { actions: [{ label: t.chip.affiliate, kind: 'affiliate', highlight: true }, menuBtn(), wa()] });
+      return true;
+    }
+    if (emotion === 'fear' || emotion === 'doubt') {
+      await say(line);
+      const intent = detectIntent(text);
+      if (intent === 'trust' || intent === 'returns' || intent === 'rules') return false; // la réponse vraie suit tout de suite par le chemin habituel
+      await trustAnswer();
+      return true;
+    }
+    const need = parseNeed(text);
+    const concrete = !!(need.slug || need.who || need.gift || occasionOf(text) || parseBudget(text) !== null);
+    if (concrete) {
+      await say(line);
+      return false;
+    }
+    await say(line, { actions: [sayBtn(t.chip.advice, 'conseil'), menuBtn(), wa()] });
+    return true;
+  }
+
   // Le client dit qu'il est militaire, policier, gendarme… : Zara le salue avec respect et lui propose l'article choisi par le patron pour eux
   // (FORCES_PRODUCT_SLUGS : le badge « groupe sanguin »), s'il est en vente ; sinon elle l'invite seulement à dire ce qu'il cherche (jamais un autre article à la place).
   async function forcesReply() {
@@ -2900,6 +2943,9 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         return;
       }
     }
+    // une émotion écrite par le client lui-même (rêve, échec, peur, soupçon, difficulté) : Zara répond d'abord à la personne (docs/zara-emotions.md)
+    const emotion = intent === 'password' ? null : emotionFrom(text);
+    if (emotion && (await emotionReply(emotion, text))) return;
     // psychologie commerciale : le client parle de son métier (valorisé, jamais déduit en budget) ou de ce qu'il aime
     const job = jobFrom(text);
     if (job) {
@@ -3104,19 +3150,9 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       case 'price':
         await priceObjection();
         return;
-      case 'trust': {
-        let info = { address: null as string | null, city: null as string | null, phone: null as string | null, mapsUrl: null as string | null };
-        try {
-          info = await getStoreInfo();
-        } catch {
-          // message de confiance sans l'adresse
-        }
-        const actions: ChatAction[] = [];
-        if (info.mapsUrl) actions.push({ label: t.chip.seeShop, kind: 'link', payload: info.mapsUrl });
-        actions.push(sayBtn(t.chip.promotions, 'promotions'), wa());
-        await say(trustReply(info, get().lang), { actions });
+      case 'trust':
+        await trustAnswer();
         return;
-      }
       case 'later':
         await laterClosing();
         return;
