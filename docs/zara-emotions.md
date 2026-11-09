@@ -28,8 +28,8 @@ Si plusieurs émotions sont dans la même phrase, le **deuil ou la maladie** pas
 - **Donner l'adresse ou le téléphone de la boutique** dans le message de confiance : Albasse Shopping est maintenant une plateforme marketplace. Plus de « 📍 Boutique : Marché Central, N'Djamena », plus de « 📞 +235 60 60 51 51 », plus de bouton « Voir la boutique » dans ce message.
 - **Deviner** : rien n'est lu entre les lignes. « Un cadeau pour un malade » ou « j'ai perdu mon mot de passe » ne sont **pas** des émotions (le client parle d'un article ou d'un compte).
 
-## Ce qui ne change pas ailleurs (à décider avec le patron)
-Quand un client demande **lui-même** les contacts (« quelle est votre adresse ? », « numéro de la boutique »), la réponse « contact » de Zara donne encore l'adresse, les horaires et le téléphone enregistrés dans la base, avec le bouton WhatsApp. Cette réponse n'a pas été modifiée : elle n'est pas dans la demande du 9 novembre (qui parle du message de confiance).
+## La réponse « contact » (décidé avec le patron le 9 novembre 2026)
+Quand un client demande lui-même les contacts (« quelle est votre adresse ? », « numéro de la boutique », « nous contacter »), Zara ne donne **plus** l'adresse de la boutique, les horaires de la boutique ni le téléphone. Elle donne **seulement l'e-mail** (celui des réglages de la boutique, `store_settings.email`), les horaires de **livraison** et le bouton **WhatsApp** (sans écrire le numéro). Le bouton « 📍 Adresse de la boutique » est devenu « ✉️ Nous contacter » (« ✉️ تواصل معنا » en arabe).
 
 ## Ce qui ne change pas
 Les anciens sujets de Zara (confiance, retours, mot de passe, occasions comme le mariage, recherche d'article) répondent comme avant. Une émotion ajoute **une phrase chaleureuse avant** la réponse habituelle ; quand le client demande aussi un article, Zara l'encourage puis lui montre l'article.
