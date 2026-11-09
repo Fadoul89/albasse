@@ -7,6 +7,7 @@
 //   IMMÉDIAT    : la commande est enregistrée tout de suite et l'équipe la reçoit à l'instant.
 //   COURTE DURÉE: seulement une vraie échéance (fin de la vente flash ou de la promotion, stock réellement bas, commande valable 48 h).
 //   « X % des clients ont aussi acheté ceci » : un VRAI pourcentage tiré des vraies commandes (au moins 5 clients), sinon une vraie statistique de navigation.
+//   PROTECTION  : « vous n'aurez jamais à regretter votre achat ; un mauvais article, ou un autre que celui commandé : vous pouvez annuler » (règle de retour : 72 h, photo ou vidéo).
 //   « Finalisez votre commande » : le bouton et les rappels qui mènent à la confirmation.
 // Aucun chiffre inventé, aucune fausse rareté, aucune fausse urgence : sans donnée solide, Zara ne dit rien.
 // Des fonctions pures, sans réseau : testées dans tests/email/zara-words.test.ts.
@@ -30,6 +31,9 @@ const FR = {
   riskFreeHome: '✅ Sans risque : à N’Djamena, vous payez seulement quand vous recevez votre commande.',
   riskFreeOther: '✅ Sans risque : si vous recevez un article incorrect ou défectueux, écrivez-nous dans les 72 heures après la réception (avec une photo ou une vidéo) : les frais de retour sont à notre charge.',
   validity: `⏳ Votre commande reste valable ${ORDER_VALIDITY_HOURS} heures : confirmez-la avant.`,
+  // demande du patron (9 novembre 2026) : à chaque client, avant l'achat ET après. Le « jamais de regret » s'appuie sur la vraie règle de retour (72 h, photo ou vidéo, frais à notre charge).
+  protection:
+    '🤝 Chez Albasse Shopping, vous n’aurez jamais à regretter votre achat. Si vous recevez un mauvais article, ou un autre que celui que vous avez commandé, vous pouvez annuler : écrivez-nous dans les 72 h après la réception, avec une photo ou une vidéo (les frais de retour sont à notre charge).',
 };
 
 const AR = {
@@ -43,6 +47,8 @@ const AR = {
   riskFreeHome: '✅ بدون مخاطرة: في إنجامينا تدفع فقط عندما تستلم طلبك.',
   riskFreeOther: '✅ بدون مخاطرة: إذا وصلك منتج خاطئ أو معيب، راسلنا خلال 72 ساعة من الاستلام (مع صورة أو فيديو): تكاليف الإرجاع علينا.',
   validity: `⏳ يبقى طلبك صالحاً ${ORDER_VALIDITY_HOURS} ساعة: أكّده قبل ذلك.`,
+  protection:
+    '🤝 مع Albasse Shopping لن تندم أبداً على شرائك. إذا وصلك منتج خاطئ، أو منتج آخر غير الذي طلبته، يمكنك الإلغاء: راسلنا خلال 72 ساعة من الاستلام مع صورة أو فيديو (تكاليف الإرجاع علينا).',
 };
 
 const pick = (lang: WordsLang) => (lang === 'ar' ? AR : FR);
@@ -63,6 +69,9 @@ export const GIFT_CLIENT_LINE = FR.surpriseClient;
 
 // --- sans risque : seulement les vraies assurances de la boutique (selon la ville) ---
 export const riskFreeLine = (lang: WordsLang, home: boolean): string => (home ? pick(lang).riskFreeHome : pick(lang).riskFreeOther);
+
+// --- la protection du client : dite à chaque client avant l'achat (récapitulatif, commande hors N'Djamena) et après (confirmation) ---
+export const protectionLine = (lang: WordsLang): string => pick(lang).protection;
 
 // --- courte durée : seulement une vraie échéance ---
 export interface UrgencyInput {

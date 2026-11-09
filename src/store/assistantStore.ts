@@ -79,7 +79,7 @@ import { emotionFrom, type Emotion } from '../lib/assistantEmotion';
 import { callbackDays, callbackNote, dayFromText, LOW_STOCK_MAX, provenSales, type CallbackDay } from '../lib/assistantSales';
 import { formatClientNumber } from '../lib/clientNumber';
 import { adFacts, adLine, isSeniorProfession } from '../lib/zaraAds';
-import { alsoLine, confirmBecauseLine, giftOfferLine, giftPlacedLine, giftRecapLine, pickAlsoBought, productUrgencyLine, receivedLine, riskFreeLine, validityLine } from '../lib/assistantWords';
+import { alsoLine, confirmBecauseLine, giftOfferLine, giftPlacedLine, giftRecapLine, pickAlsoBought, productUrgencyLine, protectionLine, receivedLine, riskFreeLine, validityLine } from '../lib/assistantWords';
 import { clearIntent, currentDevice, markIntent } from '../lib/assistantAttribution';
 import { pushReminderNow, recordPushReminder } from '../lib/pushReminder';
 import { getWebPushIssue, isWebPushBlocked, PUSH_PERMISSION_NOT_GRANTED, subscribeToWebPush } from '../lib/webPushSubscription';
@@ -1699,7 +1699,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       city: d.city.name,
       siteUrl: item ? `https://www.albasseshopping.com/produit/${item.product.slug}` : null,
     });
-    await say(T().checkout.outsideCity(d.city.name), {
+    await say(`${T().checkout.outsideCity(d.city.name)}\n\n${protectionLine(get().lang)}`, {
       fast: true,
       actions: [{ label: T().chip.orderWhatsApp, kind: 'link', payload: url, highlight: true }, { label: T().chip.editCity, kind: 'orderEdit', payload: 'city' }, cancelOrderChip()],
     });
@@ -1840,7 +1840,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     const lang = get().lang;
     // mots qui vendent : le cadeau (GRATUIT), « parce que » (IMMÉDIAT), la vraie échéance (COURTE DURÉE : fin de la promotion, sinon les 48 h de validité)
     const urgency = productUrgencyLine(items[0]?.product, lang);
-    const sellLines = [giftRecapLine(lang), confirmBecauseLine(lang), urgency ?? validityLine(lang)];
+    const sellLines = [giftRecapLine(lang), confirmBecauseLine(lang), urgency ?? validityLine(lang), protectionLine(lang)];
     await say(
       [T().checkout.recap({
         lines: items.map((i) => ({ name: shortName(i.product.name), variant: variantText(i.size, i.color), qty: i.quantity, subtotal: i.product.price * i.quantity })),
@@ -1971,6 +1971,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     const points = Math.floor(total / LOYALTY_FCFA_PER_POINT); // la base ajoute floor(total / 5000) points quand la commande est livrée
     if (points >= 1) lines.push(T().loyalty.orderPoints(points));
     lines.push(T().serviceNote(home));
+    lines.push(protectionLine(get().lang)); // la protection du client, répétée après l'achat (demande du patron)
     lines.push(c.invoiceReady);
     const telegramChip = telegramOfferChip();
     if (telegramChip) lines.push(T().telegram.tip);
