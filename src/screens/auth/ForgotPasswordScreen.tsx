@@ -14,6 +14,7 @@ import { phoneDigits } from '../../lib/phoneAuth';
 import { alertPasswordRequest } from '../../lib/passwordRequestAlert';
 import { forgotEmailMessage, forgotMessage, forgotNumberMessage, looksLikeClientNumber, parseClientNumber, zaraForgotLine } from '../../lib/clientNumber';
 import { ZaraSays } from '../../components/ZaraSays';
+import { accountExists, noAccountText, type LoginKind } from '../../lib/accountCheck';
 
 export function ForgotPasswordScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -27,6 +28,8 @@ export function ForgotPasswordScreen() {
   const [numberHelp, setNumberHelp] = useState<string | null>(null);
   // numéro client (AS-000123), facultatif : il aide l'équipe à retrouver le bon compte, même si le client a changé de téléphone
   const [clientNo, setClientNo] = useState('');
+  // aucun compte trouvé avec ce que le client a écrit : on ne prévient pas l'équipe et on ne propose pas WhatsApp (il n'y a rien à retrouver), on propose de créer un compte
+  const [noAccount, setNoAccount] = useState<{ kind: LoginKind; shown: string } | null>(null);
   const showToast = useToastStore((s) => s.show);
   const { settings } = useStoreSettings();
 
@@ -50,15 +53,26 @@ export function ForgotPasswordScreen() {
       showToast('Entrez votre e-mail ou votre numéro de téléphone.', { title: 'Champ manquant', type: 'error' });
       return;
     }
-    if (!email.includes('@')) {
+    const isEmail = email.includes('@');
+    const isNumber = !isEmail && looksLikeClientNumber(email);
+    if (!isEmail && !isNumber && !phoneDigits(email)) {
+      showToast('Merci de saisir un e-mail, un numéro de téléphone ou un numéro client (AS-000123).', { title: 'Invalide', type: 'error' });
+      return;
+    }
+    // d'abord : cette personne a-t-elle un compte ICI ? Aucun compte : rien n'est envoyé à l'équipe, on propose de créer un compte.
+    // Réponse inconnue (null) : on continue comme avant (un vrai client n'est jamais bloqué).
+    setLoading(true);
+    const exists = await accountExists(email);
+    setLoading(false);
+    if (exists === false) {
+      setNoAccount({ kind: isEmail ? 'email' : isNumber ? 'clientNumber' : 'phone', shown: email.trim() });
+      return;
+    }
+    if (!isEmail) {
       // le numéro client (AS-000123) : l'équipe est prévenue sur Telegram avec la fiche, le client écrit sur WhatsApp
-      if (looksLikeClientNumber(email)) {
+      if (isNumber) {
         void alertPasswordRequest(email);
         setNumberHelp(email.trim());
-        return;
-      }
-      if (!phoneDigits(email)) {
-        showToast('Merci de saisir un e-mail, un numéro de téléphone ou un numéro client (AS-000123).', { title: 'Invalide', type: 'error' });
         return;
       }
       // l'équipe est prévenue sur Telegram (sans attendre que le client écrive sur WhatsApp) ; jamais bloquant
@@ -83,8 +97,16 @@ export function ForgotPasswordScreen() {
       <View style={styles.content}>
         <Text style={styles.brand}>ALBASSE SHOPPING</Text>
         {/* Zara guide le client (elle n'ouvre pas son chat : un visiteur sans compte ne le voit pas quand le compte est obligatoire) */}
-        <ZaraSays testID="forgot-zara" text={zaraForgotLine(numberHelp || phoneHelp ? 'whatsapp' : sent ? 'emailSent' : 'start')} />
-        {numberHelp ? (
+        <ZaraSays testID="forgot-zara" text={zaraForgotLine(noAccount ? 'noAccount' : numberHelp || phoneHelp ? 'whatsapp' : sent ? 'emailSent' : 'start')} />
+        {noAccount ? (
+          <View testID="forgot-no-account">
+            <Text style={styles.info} testID="forgot-no-account-text">
+              {noAccountText(noAccount.kind, noAccount.shown)}
+            </Text>
+            <GoldButton label="Créer mon compte" onPress={() => navigation.navigate('Register')} testID="forgot-create-account" style={{ marginTop: spacing.sm }} />
+            <GoldButton label="Écrire un autre numéro ou e-mail" variant="outline" onPress={() => setNoAccount(null)} testID="forgot-try-again" style={{ marginTop: spacing.sm }} />
+          </View>
+        ) : numberHelp ? (
           <View testID="forgot-phone-help">
             <Text style={styles.info} testID="forgot-number-help">
               Nous avons noté votre numéro client ({parseClientNumber(numberHelp) !== null ? `AS-${String(parseClientNumber(numberHelp)).padStart(6, '0')}` : numberHelp}). Écrivez-nous sur WhatsApp : notre équipe retrouve votre

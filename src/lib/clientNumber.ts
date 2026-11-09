@@ -63,9 +63,10 @@ export function forgotEmailMessage(email: string): string {
 
 // Ce que Zara dit sur l'écran « Mot de passe oublié » (docs/zara-mot-de-passe.md). Elle ne promet jamais ce qu'elle ne peut pas garantir :
 // pas de délai de réponse, pas de « j'ai prévenu l'équipe » (l'alerte est un plus, elle peut ne pas partir) ; elle ne demande jamais de mot de passe.
-export type ZaraForgotStage = 'start' | 'whatsapp' | 'emailSent';
+export type ZaraForgotStage = 'start' | 'whatsapp' | 'emailSent' | 'noAccount';
 export function zaraForgotLine(stage: ZaraForgotStage): string {
   if (stage === 'whatsapp') return 'Merci 🙏 Pour aller plus vite, écrivez-nous sur WhatsApp : l’équipe retrouve votre compte et vous donne un nouveau code.';
+  if (stage === 'noAccount') return 'Je ne trouve aucun compte avec cette information 🙏 Vérifiez-la, ou créez votre compte : c’est gratuit et rapide.';
   if (stage === 'emailSent') return 'Voilà ✉️ Regardez dans votre boîte e-mail, et aussi dans les spams. Rien reçu ? Écrivez-nous sur WhatsApp.';
   return 'Bonjour 👋 Je suis Zara. Je vous aide à retrouver votre compte, étape par étape. Ne m’écrivez jamais votre mot de passe : je ne le demande pas.';
 }

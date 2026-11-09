@@ -27,3 +27,7 @@ Aucune table ni colonne ajoutée : rien à lancer dans Supabase. Le numéro clie
 - Écran : `src/screens/auth/ForgotPasswordScreen.tsx`, composant `src/components/ZaraSays.tsx`, phrases `zaraForgotLine` dans `src/lib/clientNumber.ts`.
 - Chat : détection `wantsPassword` / intention `password` (`src/lib/assistantBrain.ts`), textes FR/AR (`src/lib/assistantText.ts`), réponse `passwordReply` et bouton `forgot` (`src/store/assistantStore.ts`, `src/components/AssistantPanel.tsx`).
 - Tests : `tests/zara/zara-password.test.ts` (48 contrôles : phrases reconnues et non reconnues, textes FR/AR, aucune promesse fausse) ; navigateur : partie `~` de `tests/zara/zara-ui.test.js` (bloc « j. Zara et le mot de passe »).
+
+## Aucun compte trouvé (9 novembre 2026)
+Sur l'écran « Mot de passe oublié », Zara vérifie d'abord (via la base) que la personne a un compte. Sans compte, elle dit : « Je ne trouve aucun compte avec cette information 🙏 Vérifiez-la, ou créez votre compte : c'est gratuit et rapide. » : pas de WhatsApp, pas d'alerte pour l'équipe. Détails : `docs/recuperer-compte.md`.
+

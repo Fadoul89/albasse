@@ -7306,6 +7306,16 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         pwdAlerts.push(JSON.parse(req.postData() || '{}'));
         return pwdAlertFails ? route.fulfill({ status: 404, headers: { 'content-type': 'application/json', ...CORSH }, body: JSON.stringify({ code: 'PGRST202', message: 'Could not find the function public.notify_admin_password_request' }) }) : route.fulfill({ status: 204, headers: CORSH, body: '' });
       });
+      // « cette personne a-t-elle un compte ICI ? » (fonction account_exists_for_login) : interceptee. Par defaut le compte existe ; « none » = aucun compte ; « down » = fonction absente (script pas lance)
+      const accountChecks = [];
+      let accountAnswer = 'yes';
+      await v.page.route(/\/rest\/v1\/rpc\/account_exists_for_login/, (route) => {
+        const req = route.request();
+        if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORSH, body: '' });
+        accountChecks.push(JSON.parse(req.postData() || '{}'));
+        if (accountAnswer === 'down') return route.fulfill({ status: 404, headers: { 'content-type': 'application/json', ...CORSH }, body: JSON.stringify({ code: 'PGRST202', message: 'Could not find the function public.account_exists_for_login' }) });
+        return route.fulfill({ status: 200, headers: { 'content-type': 'application/json', ...CORSH }, body: accountAnswer === 'none' ? 'false' : 'true' });
+      });
       await v.page.route(/\/auth\/v1\/recover/, (route) => (route.request().method() === 'OPTIONS' ? route.fulfill({ status: 204, headers: CORSH, body: '' }) : route.fulfill({ status: 200, headers: { 'content-type': 'application/json', ...CORSH }, body: '{}' })));
       await wall(v.page).getByTestId('login-forgot').click();
       await v.page.waitForURL(/\/mot-de-passe-oublie/, { timeout: 15000 });
@@ -7339,6 +7349,50 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await shown(v.page, 'Continuer').click();
       await v.page.getByText(/un e-mail contenant un lien de réinitialisation/).waitFor({ timeout: 8000 });
       check('mot de passe oublie (e-mail) : le lien part par e-mail ET l\'equipe est prevenue (e-mail sans espaces autour)', pwdAlerts.length === 3 && pwdAlerts[2].p_login === 'awa@example.com', pwdAlerts);
+      check('un compte existe : la base est interrogee avec ce que le client a ecrit (une seule case, rien d\'autre)', accountChecks.length === 3 && accountChecks[0].p_login === '66 12 34 56' && Object.keys(accountChecks[0]).join() === 'p_login', accountChecks);
+      // AUCUN compte avec ce numero (demande du patron) : l'equipe n'est PAS prevenue, pas de WhatsApp, on propose de creer un compte
+      accountAnswer = 'none';
+      await v.page.goto(`${BASE}/mot-de-passe-oublie`, { waitUntil: 'load' });
+      await v.page.getByTestId('forgot-identifier').waitFor({ timeout: 15000 });
+      await sleep(600);
+      await v.page.getByTestId('forgot-identifier').locator('visible=true').fill('66 50 36 76');
+      await shown(v.page, 'Continuer').click();
+      await v.page.getByTestId('forgot-no-account').waitFor({ timeout: 8000 });
+      const noAcc = (await v.page.getByTestId('forgot-no-account-text').innerText()).replace(/\s+/g, ' ');
+      check('AUCUN compte avec ce numero : « Nous ne trouvons aucun compte avec le numero 66 50 36 76 » + « Creer mon compte »', /Nous ne trouvons aucun compte avec le numéro 66 50 36 76/.test(noAcc) && /Créez-le gratuitement/.test(noAcc) && (await v.page.getByTestId('forgot-create-account').count()) === 1, noAcc);
+      check('AUCUN compte : pas de bouton WhatsApp, pas de « votre compte a ete cree avec votre numero »', (await shown(v.page, '💬 Écrire sur WhatsApp').count()) === 0 && (await v.page.getByTestId('forgot-phone-help').count()) === 0 && (await v.page.getByText(/Votre compte a été créé avec votre numéro/).count()) === 0);
+      check('AUCUN compte : l\'equipe n\'est PAS prevenue (aucune alerte Telegram de plus)', pwdAlerts.length === 3, pwdAlerts.length);
+      check('AUCUN compte : Zara le dit gentiment (« Je ne trouve aucun compte avec cette information »)', (await v.page.getByTestId('forgot-zara').innerText()).includes('Je ne trouve aucun compte avec cette information'));
+      await v.page.screenshot({ path: path.join(OUT, '§1-aucun-compte.png') });
+      // « Écrire un autre numéro » : on revient a la case
+      await v.page.getByTestId('forgot-try-again').click();
+      await v.page.getByTestId('forgot-identifier').waitFor({ timeout: 8000 });
+      // un e-mail et un numero client inconnus : meme chose
+      await v.page.getByTestId('forgot-identifier').locator('visible=true').fill('inconnu@example.com');
+      await shown(v.page, 'Continuer').click();
+      await v.page.getByTestId('forgot-no-account').waitFor({ timeout: 8000 });
+      const noMail = (await v.page.getByTestId('forgot-no-account-text').innerText()).replace(/\s+/g, ' ');
+      check('AUCUN compte avec cet e-mail : aucun lien demande, aucune alerte, « aucun compte avec l\'e-mail inconnu@example.com »', /aucun compte avec l’e-mail inconnu@example\.com/.test(noMail) && pwdAlerts.length === 3, noMail);
+      await v.page.getByTestId('forgot-try-again').click();
+      await v.page.getByTestId('forgot-identifier').waitFor({ timeout: 8000 });
+      await v.page.getByTestId('forgot-identifier').locator('visible=true').fill('AS-000999');
+      await shown(v.page, 'Continuer').click();
+      await v.page.getByTestId('forgot-no-account').waitFor({ timeout: 8000 });
+      check('AUCUN compte avec ce numero client : « aucun compte avec le numero client AS-000999 », aucune alerte', /aucun compte avec le numéro client AS-000999/.test((await v.page.getByTestId('forgot-no-account-text').innerText()).replace(/\s+/g, ' ')) && pwdAlerts.length === 3);
+      // « Creer mon compte » ouvre l'inscription
+      await v.page.getByTestId('forgot-create-account').click();
+      await v.page.waitForURL(/\/inscription/, { timeout: 10000 });
+      check('« Creer mon compte » ouvre l\'inscription', /\/inscription/.test(v.page.url()), v.page.url());
+      // la fonction n'est pas encore dans la base (script pas lance) ou tombe en panne : l'ecran marche exactement comme avant, un vrai client n'est jamais bloque
+      accountAnswer = 'down';
+      await v.page.goto(`${BASE}/mot-de-passe-oublie`, { waitUntil: 'load' });
+      await v.page.getByTestId('forgot-identifier').waitFor({ timeout: 15000 });
+      await sleep(600);
+      await v.page.getByTestId('forgot-identifier').locator('visible=true').fill('66 12 34 56');
+      await shown(v.page, 'Continuer').click();
+      await v.page.getByTestId('forgot-phone-help').waitFor({ timeout: 8000 });
+      check('fonction de verification absente (404) : l\'aide WhatsApp s\'affiche comme avant, aucune erreur pour le client', pwdAlerts.length === 4 && (await v.page.getByText(/Envoi impossible|Could not find|PGRST|aucun compte/i).count()) === 0, pwdAlerts.length);
+      accountAnswer = 'yes';
       // rien d'ecrit ou n'importe quoi : refuse, aucune alerte
       await v.page.goto(`${BASE}/mot-de-passe-oublie`, { waitUntil: 'load' });
       await v.page.getByTestId('forgot-identifier').waitFor({ timeout: 15000 });
@@ -7348,7 +7402,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.page.getByTestId('forgot-identifier').locator('visible=true').fill('abc');
       await shown(v.page, 'Continuer').click();
       await sleep(700);
-      check('champ vide ou texte sans numero : refuse par le site, aucune alerte envoyee', pwdAlerts.length === 3 && (await v.page.getByTestId('forgot-phone-help').count()) === 0, pwdAlerts.length);
+      check('champ vide ou texte sans numero : refuse par le site, aucune alerte envoyee, aucune verification de compte', pwdAlerts.length === 4 && accountChecks.length === 7 && (await v.page.getByTestId('forgot-phone-help').count()) === 0, [pwdAlerts.length, accountChecks.length]);
       check('aucune erreur de page (mot de passe oublie)', v.errs.length === 0, v.errs);
       await v.ctx.close();
     }
