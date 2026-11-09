@@ -54,7 +54,9 @@ export function invoiceBreakdown(order: Pick<Order, 'items' | 'total' | 'gift_wr
   const rows = (order.items ?? []).map((i) => {
     const quantity = Number(i.quantity) || 1;
     const unitPrice = Number(i.unit_price) || 0;
-    return { name: String(i.product_name ?? '').replace(/\s+/g, ' ').trim(), variant: variantOf(i), quantity, unitPrice, total: unitPrice * quantity };
+    // offre élèves/étudiants : le code est écrit à côté de l'article (le prix de la facture est déjà le prix payé)
+    const variant = [variantOf(i), i.promo_code ? `Code ${i.promo_code}` : ''].filter(Boolean).join(' · ');
+    return { name: String(i.product_name ?? '').replace(/\s+/g, ' ').trim(), variant, quantity, unitPrice, total: unitPrice * quantity };
   });
   const itemsTotal = rows.reduce((s, r) => s + r.total, 0);
   const loyaltyDiscount = Number(order.loyalty_discount) || 0;

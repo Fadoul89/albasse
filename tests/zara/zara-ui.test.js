@@ -1501,6 +1501,9 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       return pct >= 5 && pct <= 60 ? Math.round(pct) : null;
     };
     const livePromos = liveE.filter((p) => okP(p) && realPromo(p) !== null);
+    // l'offre élèves/étudiants du patron (lib/studentOffer) : URBANSOLE à 12 500 FCFA, réservée ; elle n'existe que si l'article est en vente à plus de 12 500 FCFA
+    const offerRow = liveE.find((p) => p.slug === 'urbansole' && okP(p) && Number(p.price) > 12500);
+    const spaced = (n) => String(Math.round(Number(n))).replace(/\B(?=(\d{3})+(?!\d))/g, '[\\s\u00a0\u202f]');
     const byCat = new Map();
     for (const p of pool) byCat.set(p.category_id, [...(byCat.get(p.category_id) || []), p]);
     const bigCat = [...byCat.entries()].find(([, list]) => list.length >= 4);
@@ -1750,6 +1753,72 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await v.ctx.close();
     }
 
+    // g3. l'offre élèves/étudiants : la GRANDE AFFICHE (URBANSOLE à 12 500 FCFA, code EE26), réservée aux élèves et étudiants (docs/offre-eleves-etudiants.md)
+    if (offerRow) {
+      const list = Number(offerRow.price);
+      const pct = Math.round(((list - 12500) / list) * 100);
+      // un étudiant (en français)
+      {
+        const v = await homeE({ user: memberE({ profession: 'Étudiant' }) });
+        await waitAdE(v.page);
+        const poster = v.page.getByTestId('student-offer-poster');
+        check('étudiant : la grande affiche « 🎓 OFFRE RÉSERVÉE AUX ÉLÈVES ET ÉTUDIANTS » avec le nom de l’article', (await poster.count()) === 1 && (await txt(v.page, 'student-offer-badge')) === '🎓 OFFRE RÉSERVÉE AUX ÉLÈVES ET ÉTUDIANTS' && (await txt(v.page, 'targeted-ad-name')) === offerRow.name.trim(), await txt(v.page, 'targeted-ad-name'));
+        check('l’affiche : « Offre uniquement pour les élèves et étudiants : 12 500 FCFA »', (await txt(v.page, 'targeted-ad-headline')) === 'Offre uniquement pour les élèves et étudiants : 12 500 FCFA', await txt(v.page, 'targeted-ad-headline'));
+        check(`l’affiche : le prix de l'offre 12 500 FCFA et le VRAI prix normal « au lieu de ${Math.round(list)} FCFA »`, /^12[\s\u00a0\u202f]500 FCFA$/.test(await txt(v.page, 'student-offer-price')) && new RegExp(`^au lieu de ${spaced(list)} FCFA$`).test(await txt(v.page, 'student-offer-old-price')), [await txt(v.page, 'student-offer-price'), await txt(v.page, 'student-offer-old-price')]);
+        check(`l’affiche : la vraie remise « -${pct} % », le code « EE26 appliqué automatiquement », « Offre uniquement pour les élèves et étudiants »`, (await txt(v.page, 'student-offer-pct')) === `-${pct} %` && (await txt(v.page, 'student-offer-code')).includes('Code EE26 appliqué automatiquement') && (await txt(v.page, 'student-offer-only')) === 'Offre uniquement pour les élèves et étudiants');
+        check('l’affiche : le bouton « Commander avec le code EE26 », « Demander à Zara », le ✕ et « Pourquoi cette annonce ? »', (await txt(v.page, 'targeted-ad-buy')) === 'Commander avec le code EE26' && /Demander à Zara/.test(await txt(v.page, 'targeted-ad-ask')) && (await v.page.getByTestId('targeted-ad-close').count()) === 1 && /Pourquoi cette annonce \? Vous avez indiqué « étudiant » dans votre compte : cette offre \(code EE26\) est réservée aux élèves et étudiants/.test(await txt(v.page, 'targeted-ad-why')), await txt(v.page, 'targeted-ad-why'));
+        const box = await v.page.getByTestId('targeted-ad').boundingBox();
+        check('l’affiche tient dans la largeur du téléphone', !!box && box.x >= 0 && box.x + box.width <= 391, box);
+        // photo de l'affiche ENTIÈRE : écran plus haut le temps de la photo, affiche au milieu (le bandeau du haut et la barre du bas ne la cachent pas)
+        await v.page.setViewportSize({ width: 390, height: 1180 });
+        await v.page.getByTestId('targeted-ad').evaluate((el) => el.scrollIntoView({ block: 'center' }));
+        await sleep(900);
+        await v.page.screenshot({ path: path.join(OUT, '€16-grande-affiche-etudiants.png') });
+        await v.page.setViewportSize({ width: 390, height: 844 });
+        await sleep(500);
+        // le bouton ouvre la fiche : le prix de l'offre pour l'étudiant, le prix normal barré, la ligne « code EE26 appliqué automatiquement »
+        await v.page.getByTestId('targeted-ad-buy').click();
+        await v.page.getByTestId('student-offer-line').waitFor({ timeout: 20000 });
+        check('fiche article (étudiant) : 12 500 FCFA, le prix normal barré, « code EE26 appliqué automatiquement »', /^12[\s\u00a0\u202f]500 FCFA$/.test(await txt(v.page, 'product-price')) && new RegExp(`^${spaced(list)} FCFA$`).test(await txt(v.page, 'product-student-list-price')) && /Offre élèves et étudiants : 12[\s\u00a0\u202f]500 FCFA au lieu de .* \(code EE26 appliqué automatiquement\)/.test(await txt(v.page, 'student-offer-line')), await txt(v.page, 'student-offer-line'));
+        await v.page.getByTestId('student-offer-line').evaluate((el) => el.scrollIntoView({ block: 'center' }));
+        await sleep(700);
+        await v.page.screenshot({ path: path.join(OUT, '€17-fiche-etudiant.png') });
+        check('aucune erreur de page (affiche étudiant)', v.errs.length === 0, v.errs);
+        await v.ctx.close();
+      }
+      // un élève, en arabe
+      {
+        const v = await homeE({ user: memberE({ profession: 'تلميذ' }), lang: 'ar' });
+        await waitAdE(v.page);
+        check('élève (arabe) : la grande affiche en arabe (عرض حصري للتلاميذ، الكود EE26 يُطبَّق تلقائياً)', (await v.page.getByTestId('student-offer-poster').count()) === 1 && /عرض حصري للتلاميذ والطلاب/.test(await txt(v.page, 'student-offer-badge')) && /عرض حصري للتلاميذ/.test(await txt(v.page, 'targeted-ad-headline')) && /الكود EE26 يُطبَّق تلقائياً/.test(await txt(v.page, 'student-offer-code')) && /اطلب الآن بالكود EE26/.test(await txt(v.page, 'targeted-ad-buy')), await txt(v.page, 'targeted-ad-headline'));
+        await v.ctx.close();
+      }
+      // un client qui n'est ni élève ni étudiant (ni métier écrit) : PAS d'affiche, PAS de prix d'offre sur la fiche
+      for (const [label, extra] of [['sans métier', {}], ['commerçant', { profession: 'Commerçant' }]]) {
+        const v = await homeE({ user: memberE(extra), profile: profileJson([rec(viewedP)]) });
+        await waitAdE(v.page);
+        check(`client ${label} : aucune grande affiche de l'offre (réservée aux élèves et étudiants)`, (await v.page.getByTestId('student-offer-poster').count()) === 0 && !/12[\s\u00a0\u202f]500/.test(await v.page.getByTestId('targeted-ad').innerText()));
+        await v.ctx.close();
+      }
+      {
+        const v = await homeE({ user: memberE({ profession: 'Commerçant' }) });
+        await v.page.goto(`${BASE}/produit/urbansole`, { waitUntil: 'load' });
+        await v.page.getByTestId('product-price').waitFor({ timeout: 25000 });
+        await sleep(800);
+        check(`fiche article (commerçant) : le prix NORMAL ${Math.round(list)} FCFA, aucune ligne d'offre, aucun prix barré`, new RegExp(`^${spaced(list)} FCFA$`).test(await txt(v.page, 'product-price')) && (await v.page.getByTestId('student-offer-line').count()) === 0 && (await v.page.getByTestId('product-student-list-price').count()) === 0, await txt(v.page, 'product-price'));
+        await v.ctx.close();
+      }
+      // « ✕ » : l'affiche disparaît (l'article n'est plus proposé pendant 24 h)
+      {
+        const v = await homeE({ user: memberE({ profession: 'Étudiante' }) });
+        await waitAdE(v.page);
+        await v.page.getByTestId('targeted-ad-close').click();
+        await sleep(1200);
+        check('« ✕ » : la grande affiche disparaît', (await v.page.getByTestId('student-offer-poster').count()) === 0);
+        await v.ctx.close();
+      }
+    } else console.log("SAUTE  offre élèves/étudiants : URBANSOLE n'est pas en vente à plus de 12 500 FCFA en ce moment");
+
     // g2. les publics : élève, étudiant, administrateur, homme (d'après le compte du client)
     {
       const prices = pool.map((p) => Number(p.price)).sort((a, b) => a - b);
@@ -1761,9 +1830,15 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         const v = await homeE({ user: memberE({ profession: metier }) });
         await waitAdE(v.page);
         const nm = await txt(v.page, 'targeted-ad-name');
-        const pr = Number((await txt(v.page, 'targeted-ad-price')).replace(/\D/g, ''));
-        check(`métier « ${metier} » : « Pour les ${level} : un article à petit prix. », un article parmi les moins chers (au plus ${cutLow(maxCut)} FCFA)`, (await txt(v.page, 'targeted-ad-headline')) === `Pour les ${level} : un article à petit prix.` && pr <= cutLow(maxCut), { nm, pr, cut: cutLow(maxCut) });
-        check(`la raison dit « ${label} » écrit dans le compte`, (await txt(v.page, 'targeted-ad-why')).includes(`Vous avez indiqué « ${label} » dans votre compte`), await txt(v.page, 'targeted-ad-why'));
+        if (offerRow) {
+          // l'offre du patron passe avant l'article « petit prix » : la grande affiche (voir g3)
+          check(`métier « ${metier} » : la grande affiche de l'offre (URBANSOLE à 12 500 FCFA) au lieu de l'article « petit prix »`, (await v.page.getByTestId('student-offer-poster').count()) === 1 && nm === offerRow.name.trim(), nm);
+          check(`la raison dit « ${label} » écrit dans le compte et « offre réservée aux élèves et étudiants (code EE26) »`, (await txt(v.page, 'targeted-ad-why')).includes(`Vous avez indiqué « ${label} » dans votre compte`) && /réservée aux élèves et étudiants/.test(await txt(v.page, 'targeted-ad-why')), await txt(v.page, 'targeted-ad-why'));
+        } else {
+          const pr = Number((await txt(v.page, 'targeted-ad-price')).replace(/\D/g, ''));
+          check(`métier « ${metier} » : « Pour les ${level} : un article à petit prix. », un article parmi les moins chers (au plus ${cutLow(maxCut)} FCFA)`, (await txt(v.page, 'targeted-ad-headline')) === `Pour les ${level} : un article à petit prix.` && pr <= cutLow(maxCut), { nm, pr, cut: cutLow(maxCut) });
+          check(`la raison dit « ${label} » écrit dans le compte`, (await txt(v.page, 'targeted-ad-why')).includes(`Vous avez indiqué « ${label} » dans votre compte`), await txt(v.page, 'targeted-ad-why'));
+        }
         await v.page.getByTestId('targeted-ad').scrollIntoViewIfNeeded();
         await v.page.screenshot({ path: path.join(OUT, label === 'élève' ? '€5-annonce-eleve.png' : '€6-annonce-etudiant.png') });
         await v.ctx.close();
@@ -1910,7 +1985,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       }
       check('admin : chaque public montre son annonce (nom de l’article, accroche) ou dit que Zara n’invente rien', names.every(([, n]) => n !== null) || (await v.page.locator('[data-testid$="-none"]').count()) > 0, names);
       check('admin : aucun des 5 publics ne reçoit un article « Vitalité & Énergie » (réservé aux mariés de 32 ans et plus)', names.every(([, n]) => !n || !vitNames.has(n)), names);
-      check('admin : accroches des publics (élèves, étudiants, administrateurs)', /Pour les élèves/.test(await txt(v.page, 'zara-audience-eleve-headline')) && /Pour les étudiants/.test(await txt(v.page, 'zara-audience-etudiant-headline')) && /haut de gamme/.test(await txt(v.page, 'zara-audience-admin-headline')));
+      check('admin : accroches des publics (élèves, étudiants, administrateurs)', (offerRow ? /Offre uniquement pour les élèves et étudiants : 12 500 FCFA/.test(await txt(v.page, 'zara-audience-eleve-headline')) && /Offre uniquement pour les élèves et étudiants : 12 500 FCFA/.test(await txt(v.page, 'zara-audience-etudiant-headline')) : /Pour les élèves/.test(await txt(v.page, 'zara-audience-eleve-headline')) && /Pour les étudiants/.test(await txt(v.page, 'zara-audience-etudiant-headline'))) && /haut de gamme/.test(await txt(v.page, 'zara-audience-admin-headline')));
       await sleep(6500); // le message d'un autre bloc de la page (statistiques) disparaît tout seul
       await v.page.getByText('Annonces de Zara · 24 h sur 24').scrollIntoViewIfNeeded();
       await v.page.evaluate(() => { const el = document.querySelector('[data-testid="zara-audiences"]'); let p = el && el.parentElement; while (p) { if (p.scrollHeight > p.clientHeight + 50 && getComputedStyle(p).overflowY !== 'visible') { p.scrollTop = el.getBoundingClientRect().top - p.getBoundingClientRect().top + p.scrollTop - 110; break; } p = p.parentElement; } });
@@ -8746,6 +8821,65 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         await c.page.screenshot({ path: path.join(OUT, '¤1b-confirmation-ndjamena.png') });
         check('aucune erreur (N\'Djamena sans Airtel ni Moov)', realErrs(c).length === 0, c.errs);
         await c.ctx.close();
+      }
+
+      // ¤3. l'offre élèves/étudiants (URBANSOLE, code EE26) : à la commande, le prix de l'offre pour un élève ou un étudiant, le prix NORMAL pour les autres
+      {
+        const urban = (await get('products?select=*&is_active=eq.true&stock=gt.0&slug=eq.urbansole&limit=1'))[0];
+        if (urban && Number(urban.price) > 12500) {
+          const listP = Number(urban.price);
+          const cartWith = (product) => JSON.stringify({ state: { items: [{ id: `${urban.id}__nc__ns`, product, quantity: 1, color: null, size: null }], updatedAt: Date.now() }, version: 1 });
+          const runOrder = async (label, profession, product, expectPrice, expectOffer, shot, staleNote = false) => {
+            const fu = mkMember('Awa Test');
+            if (profession) fu.profile.profession = profession;
+            const db = newDb();
+            const c = await newVisitor(phone, { storage: { 'sb-xtitsmmccpkelxfjyqyh-auth-token': fu.session, 'albasse-cart': cartWith(product) }, session: seedOf('fr'), fakeUser: fu, fakeOrders: db });
+            await openOrderChat(c);
+            // le panier garde l'offre mais ce compte n'y a plus droit : Zara le dit honnêtement (« le prix a changé »), puis la commande reprend au prix normal
+            if (staleNote) {
+              await ask(c.page, 'je veux commander', /a changé : 12[\s\u00a0\u202f]500 FCFA → 15[\s\u00a0\u202f]000 FCFA/);
+              check(`${label} : Zara dit « Le prix de « URBANSOLE » a changé : 12 500 FCFA → 15 000 FCFA » (jamais le prix de l'offre à un client sans droit)`, true);
+            }
+            await ask(c.page, 'je veux commander', /Quelle est votre adresse de livraison/);
+            await typeIn(c.page, 'Farcha, face à la pharmacie');
+            await waitText(c.page, /Dans quelle ville doit-on vous livrer/);
+            await typeIn(c.page, homeCity.name);
+            await waitText(c.page, /Voulez-vous choisir le jour et l’heure/);
+            await typeIn(c.page, 'passer');
+            await waitText(c.page, /Souhaitez-vous l’emballage cadeau/);
+            await typeIn(c.page, 'non merci');
+            await waitText(c.page, /Récapitulatif de votre commande/);
+            const recap = await panelOf(c.page).getByText(/Récapitulatif de votre commande/).last().innerText();
+            check(`${label} : le récapitulatif dit ${expectPrice} FCFA pour l'article et le bon total (${expectPrice + homeFee} FCFA)`, new RegExp(`× 1 : ${numRe(expectPrice)} FCFA`).test(recap) && new RegExp(`Total : ${numRe(expectPrice + homeFee)} FCFA`).test(recap), recap);
+            check(`${label} : ${expectOffer ? 'le récapitulatif dit « Offre élèves et étudiants … (code EE26 appliqué automatiquement) »' : 'aucune ligne d’offre dans le récapitulatif'}`, expectOffer ? /🎓 Offre élèves et étudiants : 12[\s\u00a0\u202f]500 FCFA au lieu de .* \(code EE26 appliqué automatiquement\)/.test(recap) : !/Offre élèves et étudiants|EE26/.test(recap), recap);
+            if (shot) await c.page.screenshot({ path: path.join(OUT, shot) });
+            await typeIn(c.page, 'oui');
+            await waitText(c.page, /a bien été enregistrée/);
+            const b = db.created[0];
+            const it = b && b.items && b.items[0];
+            check(`${label} : la commande enregistrée a le prix ${expectPrice} FCFA, le bon total, ${expectOffer ? 'le code EE26 et le prix normal (pour l’équipe et la facture)' : 'aucun code ni prix d’offre'}`, db.created.length === 1 && !!it && it.unit_price === expectPrice && b.total === expectPrice + homeFee && (expectOffer ? it.promo_code === 'EE26' && it.list_price === listP : it.promo_code === undefined && it.list_price === undefined), it);
+            check(`aucune erreur (${label})`, realErrs(c).length === 0, c.errs);
+            await c.ctx.close();
+          };
+          await runOrder('élève/étudiant (Zara)', 'étudiant', urban, 12500, true, '€18-recapitulatif-etudiant.png');
+          await runOrder('client commerçant (Zara)', 'Commerçant', urban, listP, false);
+          await runOrder('client sans métier, panier resté à 12 500 (Zara)', null, { ...urban, price: 12500, student_offer: { code: 'EE26', list_price: listP } }, listP, false, undefined, true);
+          // la page de commande du site (pas Zara) : même règle
+          for (const [label, profession, expect] of [['élève/étudiant (page de commande)', 'étudiant', 12500], ['client commerçant (page de commande)', 'Commerçant', listP]]) {
+            const fu = mkMember('Awa Test');
+            fu.profile.profession = profession;
+            const db = newDb();
+            const c = await newVisitor(phone, { storage: { 'sb-xtitsmmccpkelxfjyqyh-auth-token': fu.session, 'albasse-cart': cartWith(urban) }, session: seedOf('fr'), fakeUser: fu, fakeOrders: db });
+            await c.page.goto(`${BASE}/commande`, { waitUntil: 'load' });
+            await c.page.getByTestId('checkout-item').waitFor({ timeout: 25000 });
+            await sleep(1500);
+            const itemTxt = (await c.page.getByTestId('checkout-item').innerText()).replace(/\s+/g, ' ');
+            const hasOffer = (await c.page.getByTestId('checkout-student-offer').count()) === 1;
+            check(`${label} : l'article est à ${expect} FCFA${expect === 12500 ? ' avec « code EE26 appliqué automatiquement »' : ', sans ligne d\'offre'}`, new RegExp(`${numRe(expect)}[\\s\u00a0\u202f]FCFA`).test(itemTxt) && hasOffer === (expect === 12500) && (expect !== 12500 || /code EE26 appliqué automatiquement/.test(itemTxt)), itemTxt);
+            if (expect === 12500) await c.page.screenshot({ path: path.join(OUT, '€19-commande-site-etudiant.png') });
+            await c.ctx.close();
+          }
+        } else console.log("SAUTE  commande élèves/étudiants : URBANSOLE n'est pas en vente à plus de 12 500 FCFA en ce moment");
       }
 
       // ¤2. une autre ville : Zara envoie sur WhatsApp, rien n'est enregistre, on peut changer de ville

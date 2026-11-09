@@ -92,6 +92,7 @@ import { getBrowsingProfile, getVisitorId, recordSuggestion, setTrackingChoice, 
 import { createOrder, generateOrderId } from '../lib/orders';
 import { askZaraAi } from '../lib/zaraAi';
 import { fetchLoyaltyStatus, loyaltyDiscount, type LoyaltyStatus } from '../lib/loyaltyDiscount';
+import { asksStudentOffer, dealFromPrice, isStudentCustomer, offerTexts, settleStudentPrice, STUDENT_OFFER, studentDeal } from '../lib/studentOffer';
 import { trackTikTokEvent } from '../lib/tiktokPixel';
 import { initiatePayment } from '../lib/payments';
 import { getLoyaltyStatus, LOYALTY_FCFA_PER_POINT } from '../lib/loyalty';
@@ -498,6 +499,8 @@ const COLD_SAY: Record<Lang, string> = { fr: 'blousons et manteaux', ar: 'جاك
 const COLD_QUERY: Record<Lang, string> = { fr: 'blouson manteau', ar: 'جاكيت معطف' };
 // Le bouton « Badge groupe sanguin » du menu (clients militaires et forces de l'ordre) envoie une phrase que Zara reconnaît (forcesFrom) ; le client voit le nom du bouton.
 const FORCES_SAY: Record<Lang, string> = { fr: 'je suis dans les forces de l’ordre', ar: 'انا في الجيش' };
+// Le bouton « Offre élèves et étudiants » du menu (clients dont le métier est élève ou étudiant) envoie cette phrase que Zara reconnaît (asksStudentOffer)
+const STUDENT_SAY: Record<Lang, string> = { fr: 'offre élèves et étudiants', ar: 'عرض التلاميذ والطلاب' };
 
 // Les boutons des anciens messages qui restent touchables : ceux qui mènent quelque part (promotions, catégories, un article précis,
 // la commande en cours, compte, WhatsApp, menu, installer). L'ancien « Voir mon panier » part : il n'y a plus de panier. Les réponses à une question passée (taille, jour, budget, pour qui, confirmer...) partent.
@@ -608,6 +611,11 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     const auth = useAuthStore.getState();
     return auth.isAuthenticated && isForcesProfession(auth.profile?.profession);
   };
+  // Le client connecté dont le métier (écrit dans son compte) est élève ou étudiant : jamais deviné, jamais un visiteur.
+  const isStudentClient = () => {
+    const auth = useAuthStore.getState();
+    return auth.isAuthenticated && isStudentCustomer(auth.profile);
+  };
   // Le client connecté, reconnu à son prénom (celui de son profil, relu sur le serveur) ; sinon null.
   const memberIdentity = (): { id: string; name: string } | null => {
     const auth = useAuthStore.getState();
@@ -630,6 +638,8 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     actions.push(sayBtn(c.promotions, 'promotions'), sayBtn(c.news, 'nouveautés'));
     // un client qui a écrit un métier militaire ou de sécurité dans son compte : le badge « groupe sanguin » choisi pour eux, à un toucher
     if (isForcesClient()) actions.push({ ...sayBtn(c.forcesBadge, FORCES_SAY[get().lang]), highlight: true });
+    // un élève ou un étudiant (métier écrit dans son compte) : l'offre du patron (URBANSOLE, code EE26) à un toucher
+    if (isStudentClient()) actions.push({ ...sayBtn(c.studentOffer, STUDENT_SAY[get().lang]), highlight: true });
     // saison fraîche (jusqu'à fin décembre) : blousons et manteaux à un toucher
     if (coldSeasonActive(Date.now())) actions.push(sayBtn(c.coldSeason, COLD_SAY[get().lang]));
     actions.push(sayBtn(c.advice, 'conseil'), sayBtn(c.categories, 'catégories'), sayBtn(c.delivery, 'livraison'));
@@ -1519,14 +1529,18 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         stop(0);
         return i;
       }
-      if (r.price !== i.product.price && !noted.has(`p${i.product.id}`)) {
+      // offre élèves/étudiants : le prix « frais » est celui qui s'applique à CE client (le prix de l'offre s'il y a droit), jamais un faux « le prix a changé »
+      const fresh = settleStudentPrice({ ...i.product, price: r.price, compare_at_price: r.compare_at_price, stock: r.stock, student_offer: undefined }, useAuthStore.getState().profile);
+      // l'offre élèves/étudiants vient seulement d'être appliquée (le prix de la base n'a pas bougé) : ce n'est pas « le prix a changé », le récapitulatif dit « code EE26 appliqué »
+      const offerJustApplied = !!fresh.student_offer && !i.product.student_offer && r.price === i.product.price;
+      if (fresh.price !== i.product.price && !offerJustApplied && !noted.has(`p${i.product.id}`)) {
         noted.add(`p${i.product.id}`);
-        notes.push(T().cart.priceChanged(name, fcfa(i.product.price), fcfa(r.price)));
+        notes.push(T().cart.priceChanged(name, fcfa(i.product.price), fcfa(fresh.price)));
       }
       if (r.stock <= 0 || qtyOf(i.product.id) > r.stock) stop(Math.max(0, r.stock));
-      if (r.price !== i.product.price || r.stock !== i.product.stock || r.compare_at_price !== i.product.compare_at_price) {
+      if (fresh.price !== i.product.price || r.stock !== i.product.stock || r.compare_at_price !== i.product.compare_at_price) {
         changed = true;
-        return { ...i, product: { ...i.product, price: r.price, compare_at_price: r.compare_at_price, stock: r.stock } };
+        return { ...i, product: fresh };
       }
       return i;
     });
@@ -1839,7 +1853,10 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     const lang = get().lang;
     // mots qui vendent : le cadeau (GRATUIT), « parce que » (IMMÉDIAT), la vraie échéance (COURTE DURÉE : fin de la promotion, sinon les 48 h de validité)
     const urgency = productUrgencyLine(items[0]?.product, lang);
-    const sellLines = [giftRecapLine(lang), confirmBecauseLine(lang), urgency ?? validityLine(lang), protectionLine(lang)];
+    // offre élèves/étudiants : le récapitulatif dit au client pourquoi son prix est celui de l'offre (code EE26, appliqué automatiquement)
+    const offerMark = items[0]?.product.student_offer;
+    const offerDeal = offerMark ? dealFromPrice(offerMark.list_price) : null;
+    const sellLines = [...(offerDeal ? [offerTexts.line(offerDeal, lang)] : []), giftRecapLine(lang), confirmBecauseLine(lang), urgency ?? validityLine(lang), protectionLine(lang)];
     await say(
       [T().checkout.recap({
         lines: items.map((i) => ({ name: shortName(i.product.name), variant: variantText(i.size, i.color), qty: i.quantity, subtotal: i.product.price * i.quantity })),
@@ -2419,6 +2436,36 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     return true;
   }
 
+  // Le client écrit le code (« EE26 ») ou demande l'offre élèves/étudiants : Zara dit la vérité selon son compte (lib/studentOffer, docs/offre-eleves-etudiants.md).
+  //  - élève ou étudiant (métier écrit dans son compte) : l'article au prix de l'offre, le code s'applique tout seul ;
+  //  - autre client : l'offre est réservée, et Zara explique comment y avoir droit (écrire « élève » ou « étudiant » dans « Métier ») ;
+  //  - article épuisé, retiré, ou prix déjà ≤ 12 500 : aucune offre, Zara ne promet rien.
+  async function studentOfferReply() {
+    const lang = get().lang;
+    const profile = useAuthStore.getState().profile;
+    let catalog: CatalogProduct[] = [];
+    try {
+      catalog = await getCatalog();
+    } catch {
+      catalog = [];
+    }
+    const product = catalog.find((p) => p.slug === STUDENT_OFFER.slug && p.stock > 0);
+    if (!product || !dealFromPrice(product.price)) {
+      await say(offerTexts.zaraNone(lang), { actions: [menuBtn(), wa()] });
+      return;
+    }
+    const deal = studentDeal({ slug: product.slug, price: product.price }, profile);
+    if (deal) {
+      await showProducts(offerTexts.zaraYes(deal, lang), [product], null, catalog);
+      return;
+    }
+    if (isGuest()) {
+      await say(offerTexts.zaraNoGuest(lang), { actions: [{ label: T().chip.createAccount, kind: 'register', highlight: true }, { label: T().chip.login, kind: 'login' }, menuBtn()] });
+      return;
+    }
+    await say(offerTexts.zaraNoMember(lang), { actions: [{ label: offerTexts.chipAccount(lang), kind: 'account', highlight: true }, menuBtn()] });
+  }
+
   // Le client dit qu'il est militaire, policier, gendarme… : Zara le salue avec respect et lui propose l'article choisi par le patron pour eux
   // (FORCES_PRODUCT_SLUGS : le badge « groupe sanguin »), s'il est en vente ; sinon elle l'invite seulement à dire ce qu'il cherche (jamais un autre article à la place).
   async function forcesReply() {
@@ -2933,6 +2980,11 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     // saison fraîche (jusqu'à fin décembre) : « manteau », « blouson », « il fait froid »… -> les vrais modèles ; avec un budget écrit, la recherche normale s'en charge
     if (intent === 'search' && coldSeasonActive(Date.now()) && wantsColdSeason(text) && parseBudget(text) === null) {
       await coldSeasonReply();
+      return;
+    }
+    // le code « EE26 » ou « offre élèves et étudiants » : Zara dit si CE client y a droit (docs/offre-eleves-etudiants.md)
+    if (asksStudentOffer(text)) {
+      await studentOfferReply();
       return;
     }
     // le client dit qu'il est militaire, policier, gendarme… (sans autre demande) : Zara lui propose le badge « groupe sanguin »

@@ -56,6 +56,9 @@ check('numéro de facture sans numéro de commande : repère de 8 caractères', 
   check('sans cadeau ni remise : livraison 0 (gratuite ou à définir)', free.delivery === 0 && free.giftWrap === 0 && free.loyaltyDiscount === 0);
   const odd = invoiceBreakdown(mk({ total: 50000 }));
   check('total plus petit que les articles : livraison jamais négative', odd.delivery === 0);
+  // offre élèves/étudiants (code EE26) : le prix de la facture est le prix payé (12 500), le code est écrit à côté de l'article, la livraison reste juste
+  const student = invoiceBreakdown(mk({ items: [{ product_id: 'u1', product_name: 'URBANSOLE', product_image: null, unit_price: 12500, quantity: 2, color: 'Noir', size: '42', list_price: 15000, promo_code: 'EE26' }], total: 27500 }));
+  check('offre élèves/étudiants : 2 × 12 500 = 25 000 + livraison 2 500 = 27 500, la ligne dit « Taille 42 · Noir · Code EE26 »', student.rows[0].unitPrice === 12500 && student.itemsTotal === 25000 && student.delivery === 2500 && student.rows[0].variant === 'Taille 42 · Noir · Code EE26', student);
 }
 
 // recherche

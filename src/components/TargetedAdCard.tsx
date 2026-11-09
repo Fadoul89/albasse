@@ -14,6 +14,7 @@ import type { City } from '../lib/assistantBrain';
 import { getBrowsingProfile } from '../lib/browsingTracker';
 import { AD_ADVERTISER, AD_CTA, AD_LABEL, addClosedAd, adHeadline, adWhy, closedState, deliveryLine, parseClosedAds, pickTargetedAd, type ClosedAd } from '../lib/adTargeting';
 import { shownOldPrice } from '../lib/promotions';
+import { dealFromPrice, offerTexts } from '../lib/studentOffer';
 import { colors, fonts, radius, spacing } from '../theme';
 
 const LOGO = require('../../assets/logo.jpg');
@@ -78,6 +79,81 @@ export function TargetedAdCard({ products, categories }: { products: Product[]; 
     setClock(at);
     AsyncStorage.setItem(CLOSED_KEY, JSON.stringify(next)).catch(() => {});
   };
+
+  // la GRANDE AFFICHE de l'offre élèves/étudiants (lib/studentOffer) : URBANSOLE à 12 500 FCFA, code EE26, réservée aux élèves et étudiants
+  if (ad.reason.kind === 'studentOffer') {
+    const deal = dealFromPrice(ad.reason.listPrice);
+    if (deal) {
+      const buy = () => navigation.navigate('Product', { slug: p.slug });
+      return (
+        <View style={styles.wrap} testID="targeted-ad">
+          <View style={styles.poster} testID="student-offer-poster">
+            <View style={styles.posterBand}>
+              <Text style={styles.posterBandText} testID="student-offer-badge">{offerTexts.badge(lang)}</Text>
+            </View>
+            <View style={styles.posterBody}>
+              <View style={styles.header}>
+                <Image source={LOGO} style={styles.logo} contentFit="cover" />
+                <View style={styles.headerText}>
+                  <View style={styles.nameRow}>
+                    <Text style={styles.advertiser} numberOfLines={1}>{AD_ADVERTISER}</Text>
+                    <View style={styles.verified}>
+                      <Text style={styles.verifiedText}>✓</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.sub} testID="targeted-ad-label">{`${AD_LABEL[lang]} · Zara`}</Text>
+                </View>
+                <Pressable style={styles.closeBtn} onPress={close} hitSlop={10} accessibilityRole="button" accessibilityLabel={text.close} testID="targeted-ad-close">
+                  <Text style={styles.closeText}>✕</Text>
+                </Pressable>
+              </View>
+
+              <Text style={[styles.posterHeadline, align]} testID="targeted-ad-headline">
+                {adHeadline(ad.reason, lang)}
+              </Text>
+
+              <Pressable onPress={buy} accessibilityRole="button" accessibilityLabel={`${p.name.trim()} : ${text.buy}`} testID="targeted-ad-image">
+                <Image source={{ uri: p.images[0] }} style={styles.posterImage} contentFit="contain" />
+                <View style={styles.pctBadge} testID="student-offer-pct">
+                  <Text style={styles.pctText}>{offerTexts.pct(deal, lang)}</Text>
+                </View>
+              </Pressable>
+
+              <Text style={[styles.posterName, align]} numberOfLines={2} testID="targeted-ad-name">{p.name.trim()}</Text>
+              <View style={styles.posterPriceRow}>
+                <Text style={styles.posterPrice} testID="student-offer-price">{offerTexts.price(deal)}</Text>
+                <Text style={styles.posterOld} testID="student-offer-old-price">{offerTexts.instead(deal, lang)}</Text>
+              </View>
+
+              <View style={styles.codeBox} testID="student-offer-code">
+                <Text style={styles.codeText}>{`🎟️ ${offerTexts.auto(deal, lang)}`}</Text>
+              </View>
+              <Text style={[styles.posterOnly, align]} testID="student-offer-only">{offerTexts.only(lang)}</Text>
+
+              {delivery ? (
+                <Text style={[styles.delivery, align]} testID="targeted-ad-delivery">
+                  {delivery}
+                </Text>
+              ) : null}
+
+              <View style={styles.actions}>
+                <Pressable style={styles.posterBuy} onPress={buy} accessibilityRole="button" testID="targeted-ad-buy">
+                  <Text style={styles.posterBuyText}>{offerTexts.cta(deal, lang)}</Text>
+                </Pressable>
+              </View>
+              <Pressable style={styles.ask} onPress={() => useAssistantStore.getState().adviseProduct(p.slug)} accessibilityRole="button" testID="targeted-ad-ask">
+                <Text style={styles.askText}>{`💬 ${text.ask}`}</Text>
+              </Pressable>
+
+              <Text style={[styles.why, align]} testID="targeted-ad-why">
+                {`ⓘ ${adWhy(ad.reason, lang)}`}
+              </Text>
+            </View>
+          </View>
+        </View>
+      );
+    }
+  }
 
   return (
     <View style={styles.wrap} testID="targeted-ad">
@@ -174,4 +250,22 @@ const styles = StyleSheet.create({
   ask: { flex: 1, borderWidth: 1, borderColor: colors.gold, borderRadius: radius.pill, paddingVertical: 11, alignItems: 'center' },
   askText: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.goldLight },
   why: { fontFamily: fonts.body, fontSize: 11.5, lineHeight: 16, color: colors.creamFaint },
+  // la grande affiche (offre élèves et étudiants)
+  poster: { borderWidth: 2, borderColor: colors.gold, borderRadius: radius.lg, backgroundColor: colors.panel, overflow: 'hidden' },
+  posterBand: { backgroundColor: colors.gold, paddingVertical: 9, paddingHorizontal: spacing.md, alignItems: 'center' },
+  posterBandText: { fontFamily: fonts.bodyBold, fontSize: 13, letterSpacing: 0.6, color: colors.background, textAlign: 'center' },
+  posterBody: { padding: spacing.md - 4, gap: 10 },
+  posterHeadline: { fontFamily: fonts.displayBold, fontSize: 19, lineHeight: 25, color: colors.goldLight },
+  posterImage: { width: '100%', aspectRatio: 1.1, borderRadius: radius.md, backgroundColor: '#fff' },
+  pctBadge: { position: 'absolute', top: 10, right: 10, backgroundColor: colors.red, borderRadius: radius.pill, paddingVertical: 6, paddingHorizontal: 12 },
+  pctText: { fontFamily: fonts.bodyBold, fontSize: 15, color: '#fff' },
+  posterName: { fontFamily: fonts.displayBold, fontSize: 22, color: colors.cream },
+  posterPriceRow: { flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', gap: 10 },
+  posterPrice: { fontFamily: fonts.displayBold, fontSize: 34, color: colors.goldLight },
+  posterOld: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.creamFaint },
+  codeBox: { alignSelf: 'flex-start', borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.gold, borderRadius: radius.md, paddingVertical: 7, paddingHorizontal: 12 },
+  codeText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.goldLight },
+  posterOnly: { fontFamily: fonts.bodySemiBold, fontSize: 13.5, color: colors.cream },
+  posterBuy: { flex: 1, backgroundColor: colors.gold, borderRadius: radius.pill, paddingVertical: 14, alignItems: 'center' },
+  posterBuyText: { fontFamily: fonts.bodyBold, fontSize: 15.5, color: colors.background },
 });

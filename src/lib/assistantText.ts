@@ -94,6 +94,7 @@ export interface Texts {
     budget: string;
     withCategory(name: string): string;
     affiliate: string;
+    studentOffer: string;
     shopAddress: string;
     payCash: string;
     payAirtel: string;
@@ -518,6 +519,7 @@ const FR: Texts = {
     budget: '💰 Mon budget',
     withCategory: (name) => `➕ Avec : ${name}`,
     affiliate: '🤝 Programme d’affiliation',
+    studentOffer: '🎓 Offre élèves et étudiants',
     shopAddress: '✉️ Nous contacter',
     payCash: '💵 À la livraison',
     payAirtel: '📱 Airtel Money',
@@ -1150,6 +1152,7 @@ const AR: Texts = {
     budget: '💰 ميزانيتي',
     withCategory: (name) => `➕ مع: ${name}`,
     affiliate: '🤝 برنامج الشراكة',
+    studentOffer: '🎓 عرض التلاميذ والطلاب',
     shopAddress: '✉️ تواصل معنا',
     payCash: '💵 عند الاستلام',
     payAirtel: '📱 Airtel Money',

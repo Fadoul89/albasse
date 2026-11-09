@@ -44,6 +44,8 @@ export async function createOrder(input: CreateOrderInput): Promise<{ order: Ord
     quantity: i.quantity,
     color: i.color,
     size: i.size,
+    // offre élèves/étudiants : la commande garde le prix normal et le code (l'équipe et la facture voient l'offre)
+    ...(i.product.student_offer ? { list_price: i.product.student_offer.list_price, promo_code: i.product.student_offer.code } : {}),
   }));
 
   const scheduled = input.deliveryType === 'scheduled' && !!input.scheduledFor;

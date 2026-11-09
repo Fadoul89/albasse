@@ -1,3 +1,5 @@
+import { studentDeal } from './studentOffer';
+import { useAuthStore } from '../store/authStore';
 import { supabase } from './supabase';
 import { buildProduct, type CatalogProduct, type City } from './assistantBrain';
 import { currentDevice, type DeviceLabel } from './assistantAttribution';
@@ -55,7 +57,9 @@ export interface StoreInfo {
 }
 
 export function toCard(p: CatalogProduct): AssistantProduct {
-  return { slug: p.slug, name: p.name, price: p.price, compare_at_price: p.compareAt, image: p.image, in_stock: p.stock > 0, stock: p.stock };
+  // offre élèves/étudiants (lib/studentOffer) : la carte montre le prix de l'offre (et le vrai prix normal barré) seulement à un client qui y a droit
+  const deal = studentDeal({ slug: p.slug, price: p.price }, useAuthStore.getState().profile);
+  return { slug: p.slug, name: p.name, price: deal ? deal.price : p.price, compare_at_price: deal ? deal.listPrice : p.compareAt, image: p.image, in_stock: p.stock > 0, stock: p.stock };
 }
 
 function cached<T>(load: () => Promise<T>) {

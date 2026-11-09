@@ -3,6 +3,8 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { CartItem, Product } from '../types';
 import { trackCartEvent } from '../lib/browsingTracker';
+import { settleStudentPrice } from '../lib/studentOffer';
+import { useAuthStore } from './authStore';
 
 // Plus de panier : le client commande un article à la fois (avec sa quantité). Ce magasin garde seulement l'article de la
 // commande en cours (fiche produit ou Zara → page de commande), pour la reprendre s'il part avant de confirmer.
@@ -12,6 +14,8 @@ interface CartState {
   setOrderItem: (product: Product, quantity: number, color: string | null, size: string | null) => void;
   removeItem: (itemId: string) => void;
   updateQuantity: (itemId: string, quantity: number) => void;
+  // remet le prix de l'offre élèves/étudiants (ou le prix normal) sur l'article de la commande, selon le compte connecté maintenant
+  settleOffers: () => void;
   clear: () => void;
   total: () => number;
   count: () => number;
@@ -32,7 +36,19 @@ export const useCartStore = create<CartState>()(
       // l'article choisi remplace le précédent : une commande = un article
       setOrderItem: (product, quantity, color, size) => {
         trackCartEvent(metaOf(product), 'add');
-        set({ items: [{ id: makeItemId(product.id, color, size), product, quantity, color, size }], updatedAt: Date.now() });
+        // offre élèves/étudiants : le prix de l'offre seulement si CE client y a droit (son métier, dans son compte), sinon le prix normal
+        const priced = settleStudentPrice(product, useAuthStore.getState().profile);
+        set({ items: [{ id: makeItemId(product.id, color, size), product: priced, quantity, color, size }], updatedAt: Date.now() });
+      },
+
+      settleOffers: () => {
+        const profile = useAuthStore.getState().profile;
+        const items = get().items;
+        const next = items.map((i) => {
+          const product = settleStudentPrice(i.product, profile);
+          return product === i.product ? i : { ...i, product };
+        });
+        if (next.some((i, n) => i !== items[n])) set({ items: next });
       },
 
       removeItem: (itemId) => {
