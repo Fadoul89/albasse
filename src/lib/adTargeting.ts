@@ -126,6 +126,8 @@ export interface AdInput {
   customer?: { gender?: unknown; profession?: string | null; birth_date?: unknown; marital_status?: unknown } | null; // birth_date + marital_status : seulement pour les articles « Vitalité & Énergie » (lib/adSensitive)
   browsing?: BrowsingProfile | null; // le suivi de navigation de ce téléphone (null : suivi coupé ou rien encore)
   favorites?: readonly string[]; // les articles mis en favori (❤️) par le client connecté (ils suivent son compte, sur tous ses téléphones)
+  interest?: readonly InterestRecordInput[]; // l'intérêt déjà enregistré dans la base pour ce client (fiche « Zara a étudié ce client », docs/zara-etude-client.md), en plus du suivi de ce téléphone
+  orderedProductIds?: readonly string[]; // les articles que ce client a déjà commandés (jamais reproposés)
   now?: number;
   seed?: number; // fait tourner les choix (par défaut : la tranche de 6 heures en cours)
   exclude?: readonly string[]; // les articles à ne PAS proposer (ceux que le visiteur vient de fermer avec « ✕ »)
@@ -144,6 +146,26 @@ const eligible = (p: AdProduct): boolean => p.is_active !== false && Number(p.st
 // Zara analyse ce que le client a fait (consultations, signaux forts, commande commencée) et ce qu'il a aimé (favoris ❤️), et montre sur l'affiche les articles
 // d'intérêt le plus élevé, jusqu'à 3. Un article déjà commandé n'est jamais proposé. Rien n'est deviné : un favori ou des regards VRAIS, chaque fois.
 export const INTEREST_MAX = 3; // au plus 3 articles sur l'affiche
+// Un article regardé par le client, tel que le suivi (ce téléphone ou la base) l'a noté
+export interface InterestRecordInput {
+  id: string;
+  level: 'eleve' | 'moyen' | 'leger';
+  views: number;
+  lastViewedAt: number;
+  purchased: boolean;
+}
+const LEVEL_RANK = { leger: 0, moyen: 1, eleve: 2 } as const;
+// Deux notes du même article (ce téléphone et la base) : on garde la plus forte, jamais de doublon
+export function mergeInterestRecords(...lists: readonly (readonly InterestRecordInput[])[]): InterestRecordInput[] {
+  const out = new Map<string, InterestRecordInput>();
+  for (const list of lists) {
+    for (const r of list) {
+      const prev = out.get(r.id);
+      out.set(r.id, prev ? { id: r.id, level: LEVEL_RANK[r.level] > LEVEL_RANK[prev.level] ? r.level : prev.level, views: Math.max(prev.views, r.views), lastViewedAt: Math.max(prev.lastViewedAt, r.lastViewedAt), purchased: prev.purchased || r.purchased } : r);
+    }
+  }
+  return [...out.values()];
+}
 export interface InterestCandidate {
   id: string;
   score: number;
@@ -216,13 +238,19 @@ export function pickTargetedAd(input: AdInput): TargetedAd | null {
   // 1. « Intérêt élevé » : les articles que le client regarde de près (pas commandés) ou qu'il a aimés (❤️). Un seul : on le rappelle ; deux ou trois : l'affiche « Vos articles préférés ».
   {
     const since = now - VIEWED_WITHIN_DAYS * DAY_MS;
-    const records = profile
+    const fromPhone: InterestRecordInput[] = profile
       ? Object.values(profile.products)
           .filter((r: ProductRecord) => r.lastViewedAt >= since && r.views > 0)
           .map((r) => ({ id: r.id, level: estimateInterest(r).level, views: r.views, lastViewedAt: r.lastViewedAt, purchased: r.cartStatus === 'purchased' || !!r.orderedAt }))
       : [];
+    const fromBase = (input.interest ?? []).filter((r) => r.lastViewedAt >= since && r.views > 0);
+    const records = mergeInterestRecords(fromPhone, fromBase);
     // un article aimé et déjà commandé n'est plus proposé non plus
-    const orderedIds = new Set(profile ? Object.values(profile.products).filter((r: ProductRecord) => r.cartStatus === 'purchased' || !!r.orderedAt).map((r) => r.id) : []);
+    const orderedIds = new Set([
+      ...(profile ? Object.values(profile.products).filter((r: ProductRecord) => r.cartStatus === 'purchased' || !!r.orderedAt).map((r) => r.id) : []),
+      ...(input.orderedProductIds ?? []),
+      ...records.filter((r) => r.purchased).map((r) => r.id),
+    ]);
     const ranked = rankInterest(records, input.favorites ?? [], (id) => byId.has(id) && !orderedIds.has(id)).slice(0, INTEREST_MAX);
     if (ranked.length >= 2) {
       const list = ranked.map((c) => byId.get(c.id)!);

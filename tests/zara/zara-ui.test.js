@@ -10716,7 +10716,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const custId = 'aaaaaaaa-0000-4000-8000-000000000001';
     const custProfile = (extra = {}) => ({ id: custId, email: 'aicha@gmail.com', full_name: 'Aïcha Moussa', phone: '66111111', whatsapp_number: null, profession: null, region: "N'Djamena", country: 'Tchad', address: null, loyalty_points: 0, banned: false, role: 'customer', is_admin: false, is_affiliate: false, created_at: '2026-10-20T10:00:00Z', last_login_at: '2026-10-30T10:00:00Z', login_count: 2, fake_order_count: 0, ...extra });
     // rpc = (corps recu) → { body, status } ; sans rpc : la base accepte et renvoie l'identifiant de connexion d'un compte créé avec le numéro
-    const openDetail = async ({ rpc = null, customer = custProfile(), admin = true } = {}) => {
+    // study : les données de la fiche « Zara a étudié ce client » { interest, favorites, products, categories, orders, interestStatus }
+    const openDetail = async ({ rpc = null, customer = custProfile(), admin = true, study = null } = {}) => {
       const fu = admin ? adminUser() : clientUser();
       const seen = { rpcs: [] };
       const v = await newVisitor(phone, { lang: 'fr', storage: { [SKT]: fu.session }, fakeUser: fu, fakeStore: { waOrder: true, accountRequired: false, patches: [] } });
@@ -10726,6 +10727,13 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         if (req.method() === 'OPTIONS') return route.fallback();
         const t = u.pathname.replace('/rest/v1/', '');
         if (t === 'profiles' && !u.searchParams.get('id') && u.searchParams.get('is_admin') === 'eq.false') return jsonT(route, [customer]);
+        if (study) {
+          if (t === 'visitor_product_interest') return jsonT(route, study.interestStatus && study.interestStatus !== 200 ? { message: 'permission denied' } : study.interest, study.interestStatus || 200);
+          if (t === 'favorites') return jsonT(route, study.favorites);
+          if (t === 'orders') return jsonT(route, study.orders || []);
+          if (t === 'products') return jsonT(route, (u.searchParams.get('id') || '').startsWith('in.') ? [] : study.products);
+          if (t === 'categories') return jsonT(route, study.categories);
+        }
         if (['orders', 'visitor_sessions', 'product_views', 'cart_events', 'customer_sanctions', 'favorites'].includes(t)) return jsonT(route, []);
         if (t === 'rpc/admin_set_client_password') {
           const body = JSON.parse(req.postData() || '{}');
@@ -10754,6 +10762,66 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await popup.close();
       return { url, text: decodeURIComponent(url.split('text=')[1] || '') };
     };
+
+    // s. « Zara a étudié ce client » (docs/zara-etude-client.md) : la fiche de l'administrateur, sur la page de chaque client
+    {
+      const mkP = (id, name, price, extra = {}) => ({ id, slug: id, name, price, compare_at_price: null, stock: 6, images: [`https://img.test/${id}.jpg`], category_id: 'cat1', is_active: true, is_flash_sale: false, flash_sale_ends_at: null, promo_ends_at: null, created_at: '2026-01-01T00:00:00Z', description: '', ...extra });
+      const SP = [mkP('rm', 'Survêtement Real Madrid ', 12500), mkP('ar', 'Survêtement Arsenal', 12500), mkP('tg', 'TAGIA ROYALE – velour', 22500), mkP('bc', 'Survêtement Barcelona  enfant ', 12500), mkP('p5', '511  original', 5000)];
+      const SC = [{ id: 'cat1', slug: 'survetements', name: 'Survêtements', parent_id: null }];
+      const at = (h) => new Date(Date.now() - h * 3600_000).toISOString();
+      // le client AS-000883 : Real Madrid et Arsenal aimés ; Real Madrid et TAGIA ROYALE regardés 2 fois ; Barcelona et le 511 regardés une fois
+      const study883 = { products: SP, categories: SC, favorites: [{ product_id: 'rm' }, { product_id: 'ar' }], interest: [
+        { product_id: 'bc', interest: 'leger', views: 1, cart_status: 'none', last_viewed_at: at(11.3) },
+        { product_id: 'tg', interest: 'moyen', views: 2, cart_status: 'none', last_viewed_at: at(11.4) },
+        { product_id: 'rm', interest: 'moyen', views: 2, cart_status: 'none', last_viewed_at: at(11.5) },
+        { product_id: 'ar', interest: 'leger', views: 1, cart_status: 'none', last_viewed_at: at(11.5) },
+        { product_id: 'p5', interest: 'leger', views: 1, cart_status: 'none', last_viewed_at: at(11.6) },
+      ] };
+      {
+        const { v } = await openDetail({ study: study883 });
+        await v.page.getByTestId('zara-study-level').waitFor({ timeout: 25000 });
+        await sleep(800);
+        const t = async (id) => ((await v.page.getByTestId(id).innerText()) || '').replace(/\s+/g, ' ').trim();
+        check('fiche « 🧠 Zara a étudié ce client » : « 💙 Intérêt élevé », « Zara a repéré 3 articles »', (await t('zara-study-level')) === '💙 Intérêt élevé' && /Zara a repéré 3 articles/.test(await t('zara-study-summary')), await t('zara-study-summary'));
+        check('ses articles préférés : Real Madrid (aimé · intérêt moyen · regardé 2×), Arsenal (aimé · regardé 1×), TAGIA ROYALE (intérêt moyen · regardé 2×)', /Survêtement Real Madrid ❤️ aimé · intérêt moyen · regardé 2×/.test(await t('zara-study-loved-1')) && /Survêtement Arsenal ❤️ aimé · regardé 1×/.test(await t('zara-study-loved-2')) && /TAGIA ROYALE – velour intérêt moyen · regardé 2×/.test(await t('zara-study-loved-3')), [await t('zara-study-loved-1'), await t('zara-study-loved-2'), await t('zara-study-loved-3')]);
+        check('regardés sans plus : Barcelona enfant et le 511 (un seul regard)', /regardé 1×/.test(await t('zara-study-weak-1')) && /regardé 1×/.test(await t('zara-study-weak-2')) && (await v.page.getByTestId('zara-study-weak-3').count()) === 0, [await t('zara-study-weak-1'), await t('zara-study-weak-2')]);
+        check('ce que Zara lui propose : « Vos articles préférés vous attendent. » avec Real Madrid en premier, puis Arsenal et TAGIA ROYALE', (await t('zara-study-ad-headline')) === 'Vos articles préférés vous attendent.' && /Real Madrid/.test(await t('zara-study-ad-name-1')) && /Arsenal/.test(await t('zara-study-ad-name-2')) && /TAGIA ROYALE/.test(await t('zara-study-ad-name-3')), await t('zara-study-ad'));
+        check('« Pourquoi cette annonce ? » dit les vrais noms', /Pourquoi cette annonce \? Vous avez regardé de près ou aimé ces articles : « Survêtement Real Madrid », « Survêtement Arsenal » et « TAGIA ROYALE – velour »/.test(await t('zara-study-ad-why')), await t('zara-study-ad-why'));
+        check('la fiche dit honnêtement ce qu\'elle ne sait pas : aucun métier, aucun genre ; public « Aucun public reconnu »', (await t('zara-study-audience')) === 'Aucun public reconnu' && /Aucun métier écrit/.test(await t('zara-study-notes')) && /Aucun genre/.test(await t('zara-study-notes')), await t('zara-study-notes'));
+        check('la fiche est LECTURE SEULE : aucun bouton ni champ dans le bloc', (await v.page.getByTestId('zara-study').locator('input, button, textarea').count()) === 0);
+        await v.page.setViewportSize({ width: 390, height: 1500 });
+        await v.page.getByTestId('zara-study').evaluate((el) => el.scrollIntoView({ block: 'start' }));
+        await sleep(700);
+        await v.page.screenshot({ path: path.join(OUT, '~s1-fiche-etude-client.png') });
+        check('aucune erreur (fiche d\'étude)', v.errs.length === 0, v.errs);
+        await v.ctx.close();
+      }
+      // le client a déjà commandé Real Madrid : il passe dans « déjà commandés », n'est plus proposé
+      {
+        const orders = [{ id: 'oo000001-0000-4000-8000-000000000001', user_id: custId, items: [{ product_id: 'rm', product_name: 'Survêtement Real Madrid', product_image: null, unit_price: 12500, quantity: 1, color: null, size: null }], total: 12500, status: 'delivered', payment_method: 'cash_on_delivery', is_flagged_fake: false, created_at: at(30), shipping_name: 'A', shipping_phone: '1', shipping_address: 'x', shipping_city: 'N\'Djamena' }];
+        const { v } = await openDetail({ study: { ...study883, orders } });
+        await v.page.getByTestId('zara-study-level').waitFor({ timeout: 25000 });
+        await sleep(800);
+        const t = async (id) => ((await v.page.getByTestId(id).innerText()) || '').replace(/\s+/g, ' ').trim();
+        check('article déjà commandé : « Déjà commandés (jamais reproposés) » avec Real Madrid, et il n\'est plus sur l\'affiche', /Real Madrid/.test(await t('zara-study-ordered-1')) && !/Real Madrid/.test(await t('zara-study-ad')) && /Arsenal/.test(await t('zara-study-ad-name-1')), await t('zara-study-ad'));
+        await v.ctx.close();
+      }
+      // un client sans rien d'enregistré : « Rien d'enregistré », aucune annonce inventée
+      {
+        const { v } = await openDetail({ study: { products: SP, categories: SC, favorites: [], interest: [] } });
+        await v.page.getByTestId('zara-study-level').waitFor({ timeout: 25000 });
+        const t = async (id) => ((await v.page.getByTestId(id).innerText()) || '').replace(/\s+/g, ' ').trim();
+        check('client sans regard ni favori : « ⚪ Rien d\'enregistré », « Rien pour le moment : Zara n\'invente jamais une annonce. »', (await t('zara-study-level')) === '⚪ Rien d’enregistré' && /n'invente jamais une annonce/.test(await t('zara-study-ad-none')) && /Aucun regard enregistré/.test(await t('zara-study-notes')) && /Aucun article aimé/.test(await t('zara-study-notes')), await t('zara-study-notes'));
+        await v.ctx.close();
+      }
+      // lecture du suivi refusée : jamais une fausse étude « rien d'enregistré »
+      {
+        const { v } = await openDetail({ study: { products: SP, categories: SC, favorites: [], interest: [], interestStatus: 401 } });
+        await v.page.getByTestId('zara-study-error').waitFor({ timeout: 25000 });
+        check('lecture refusée : « Étude impossible pour le moment », pas de fausse étude', (await v.page.getByTestId('zara-study-level').count()) === 0 && /Étude impossible/.test(await v.page.getByTestId('zara-study-error').innerText()));
+        await v.ctx.close();
+      }
+    }
 
     // a. tout marche : confirmation, code a 6 chiffres, WhatsApp avec le message et le code
     {
