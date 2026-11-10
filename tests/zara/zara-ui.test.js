@@ -1591,15 +1591,18 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       if (afterClose !== 0) await v3.page.screenshot({ path: path.join(OUT, '€-debug-close.png') });
       check('« ✕ » : l’annonce disparaît tout de suite', afterClose === 0, { afterClose, stored: await v3.page.evaluate((k) => localStorage.getItem(k), closedKey), url: v3.page.url() });
       const stored1 = JSON.parse((await v3.page.evaluate((k) => localStorage.getItem(k), closedKey)) || '[]');
-      check('le « ✕ » est noté sur le téléphone : l’article fermé et l’heure', stored1.length === 1 && stored1[0].id === viewedP.id && Math.abs(stored1[0].at - tClose) < 5000, stored1);
+      // deux articles regardés de près = l'affiche « Vos articles préférés » (P en grand, Q en dessous) : le « ✕ » ferme les deux, à la même heure (un seul « ✕ » compté)
+      check('le « ✕ » est noté sur le téléphone : les DEUX articles de l’affiche (P et Q) fermés à la même heure', stored1.length === 2 && stored1.map((x) => x.id).sort().join() === [viewedP.id, viewedQ.id].sort().join() && stored1[0].at === stored1[1].at && Math.abs(stored1[0].at - tClose) < 5000, stored1);
       await sleep(7000);
       check('7 secondes après le « ✕ » : rien (Zara attend 15 secondes)', (await v3.page.getByTestId('targeted-ad').count()) === 0);
-      await v3.page.getByTestId('targeted-ad').waitFor({ timeout: 20000 });
+      // 15 secondes plus tard : une AUTRE annonce (jamais P ni Q) avec une vraie raison, s'il y en a une (ici une vraie promotion en cours)
+      const arrived = await v3.page.getByTestId('targeted-ad').waitFor({ timeout: 20000 }).then(() => true).catch(() => false);
       const waited = Date.now() - tClose;
-      check('l’annonce suivante arrive après environ 15 secondes (entre 14 et 22 s)', waited >= 14000 && waited <= 22000, waited);
-      await sleep(600);
-      check('c’est un AUTRE article : le 2ᵉ article regardé, pas celui qui a été fermé', (await txt(v3.page, 'targeted-ad-name')) === viewedQ.name.trim() && (await txt(v3.page, 'targeted-ad-name')) !== viewedP.name.trim(), await txt(v3.page, 'targeted-ad-name'));
-      check('avec sa vraie raison : « Vous avez regardé « nom » récemment. »', (await txt(v3.page, 'targeted-ad-why')).includes(`Vous avez regardé « ${viewedQ.name.trim()} » récemment.`), await txt(v3.page, 'targeted-ad-why'));
+      if (livePromos.some((p) => p.id !== viewedP.id && p.id !== viewedQ.id)) {
+        check('l’annonce suivante arrive après environ 15 secondes (entre 14 et 22 s)', arrived && waited >= 14000 && waited <= 22000, { arrived, waited });
+        await sleep(600);
+        check('c’est une AUTRE annonce : ni P ni Q (les articles de l’affiche fermée), avec sa vraie raison (« Pourquoi cette annonce ? »)', (await txt(v3.page, 'targeted-ad-name')) !== viewedP.name.trim() && (await txt(v3.page, 'targeted-ad-name')) !== viewedQ.name.trim() && /Pourquoi cette annonce \?/.test(await txt(v3.page, 'targeted-ad-why')), await txt(v3.page, 'targeted-ad-name'));
+      } else console.log('SAUTE  annonce suivante après « ✕ » : aucune vraie promotion en cours pour la proposer');
       check('l’annonce suivante a ses boutons (Acheter maintenant, Demander à Zara, ✕)', (await txt(v3.page, 'targeted-ad-buy')) === 'Acheter maintenant' && (await v3.page.getByTestId('targeted-ad-ask').count()) === 1 && (await v3.page.getByTestId('targeted-ad-close').count()) === 1);
       await v3.page.getByTestId('targeted-ad').scrollIntoViewIfNeeded();
       await v3.page.screenshot({ path: path.join(OUT, '€15-annonce-suivante.png') });
@@ -1610,7 +1613,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await sleep(4000);
       check('rechargement 5 secondes après le 2ᵉ « ✕ » : toujours rien (l’attente de 15 secondes continue)', (await v3.page.getByTestId('targeted-ad').count()) === 0);
       const stored2 = JSON.parse((await v3.page.evaluate((k) => localStorage.getItem(k), closedKey)) || '[]');
-      check('2 « ✕ » notés : les deux articles fermés', stored2.length === 2 && stored2.map((x) => x.id).sort().join() === [viewedP.id, viewedQ.id].sort().join(), stored2);
+      check('2 « ✕ » notés : l’affiche (P et Q) puis l’annonce suivante', stored2.length === 3 && [viewedP.id, viewedQ.id].every((id) => stored2.some((x) => x.id === id)) && new Set(stored2.map((x) => x.at)).size === 2, stored2);
       await sleep(12000);
       const afterWait = (await v3.page.getByTestId('targeted-ad').count()) ? await txt(v3.page, 'targeted-ad-name') : null;
       check('15 secondes passées : ni l’un ni l’autre article fermé ne revient (autre article ou rien)', afterWait === null || (afterWait !== viewedP.name.trim() && afterWait !== viewedQ.name.trim()), afterWait);
@@ -1818,6 +1821,81 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         await v.ctx.close();
       }
     } else console.log("SAUTE  offre élèves/étudiants : URBANSOLE n'est pas en vente à plus de 12 500 FCFA en ce moment");
+
+    // g4. l'affiche « Vos articles préférés » (demande du patron, 10 novembre 2026) : les articles d'« Intérêt élevé » de CE client (regardés de près ou aimés ❤️), jusqu'à 3
+    {
+      const nonVit = pool.filter((p) => !/vitalit/i.test((catsE.find((c) => c.id === p.category_id) || {}).name || '') && p.slug !== 'urbansole');
+      const [A, B, C] = [nonVit[0], nonVit[1], nonVit[2]];
+      if (A && B && C) {
+        const CORSF = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+        const homeFav = async ({ favIds, profile = null, lang = 'fr' }) => {
+          const user = memberE();
+          const storage = { albasse_zara_name: 'Ahmed', [SKE]: user.session, ...(profile ? { albasse_browsing_profile_v1: profile } : {}) };
+          const v = await newVisitor(phone, { lang, storage, fakeUser: user, fakeStore: { zaraAds: true, zaraDelay: 60 } });
+          // les favoris du compte (cœurs) : la base les donne sur tous les téléphones du client
+          await v.page.route(/\/rest\/v1\/favorites/, (route) => (route.request().method() === 'OPTIONS' ? route.fulfill({ status: 204, headers: CORSF, body: '' }) : route.fulfill({ status: 200, headers: { ...CORSF, 'content-type': 'application/json' }, body: JSON.stringify(favIds.map((id) => ({ product_id: id }))) })));
+          await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
+          return v;
+        };
+        // A et C regardés 2 fois (de près), A et B aimés : l'affiche montre A (aimé + regardé), B (aimé), C (regardé)
+        const profAC = profileJson([rec(A, { views: 2, sessions: 1 }), rec(C, { views: 2, sessions: 1 })]);
+        {
+          const v = await homeFav({ favIds: [A.id, B.id], profile: profAC });
+          await waitAdE(v.page);
+          const names = [A.name.trim(), B.name.trim(), C.name.trim()];
+          check('« Intérêt élevé » : l\'affiche « 💙 VOS ARTICLES PRÉFÉRÉS » avec le meilleur article en grand (aimé + regardé)', (await v.page.getByTestId('interest-poster').count()) === 1 && (await txt(v.page, 'interest-badge')) === '💙 VOS ARTICLES PRÉFÉRÉS' && (await txt(v.page, 'targeted-ad-name')) === names[0], await txt(v.page, 'targeted-ad-name'));
+          const tileNames = [await txt(v.page, 'interest-tile-1-name'), await txt(v.page, 'interest-tile-2-name')];
+          const tilePrices = [await txt(v.page, 'interest-tile-1-price'), await txt(v.page, 'interest-tile-2-price')].map((t) => t.replace(/\D/g, ''));
+          const priceOfName = (nm) => String(Math.round(Number([A, B, C].find((x) => x.name.trim() === nm)?.price)));
+          check('l\'affiche : « Vos articles préférés vous attendent. » et les 2 autres articles (B aimé, C regardé de près) en dessous, avec leur vrai prix', (await txt(v.page, 'targeted-ad-headline')) === 'Vos articles préférés vous attendent.' && [...tileNames].sort().join('|') === [names[1], names[2]].sort().join('|') && tileNames.every((nm, i) => tilePrices[i] === priceOfName(nm)), { tileNames, tilePrices });
+          const why = await txt(v.page, 'targeted-ad-why');
+          check('« Pourquoi cette annonce ? Vous avez regardé de près ou aimé ces articles : … »', why.startsWith('ⓘ Pourquoi cette annonce ? Vous avez regardé de près ou aimé ces articles :') && names.every((n) => why.includes(n)), why);
+          const box = await v.page.getByTestId('targeted-ad').boundingBox();
+          check('l\'affiche tient dans la largeur du téléphone', !!box && box.x >= 0 && box.x + box.width <= 391, box);
+          await v.page.setViewportSize({ width: 390, height: 1180 });
+          await v.page.getByTestId('targeted-ad').evaluate((el) => el.scrollIntoView({ block: 'center' }));
+          await sleep(900);
+          await v.page.screenshot({ path: path.join(OUT, '€20-affiche-articles-preferes.png') });
+          await v.page.setViewportSize({ width: 390, height: 844 });
+          // le bouton « Acheter maintenant » ouvre le meilleur article ; un article en dessous ouvre le sien
+          await v.page.getByTestId('interest-tile-1').click();
+          const firstTile = [B, C].find((x) => x.name.trim() === tileNames[0]) || B;
+          await v.page.waitForURL(new RegExp(`/produit/${firstTile.slug}`), { timeout: 20000 });
+          check('toucher un article de l\'affiche ouvre sa fiche', v.page.url().includes(`/produit/${firstTile.slug}`), v.page.url());
+          await v.ctx.close();
+        }
+        // « ✕ » : l'affiche disparaît (ses 3 articles sont fermés pour 24 h)
+        {
+          const v = await homeFav({ favIds: [A.id, B.id], profile: profAC });
+          await waitAdE(v.page);
+          await v.page.getByTestId('targeted-ad-close').click();
+          await sleep(1200);
+          check('« ✕ » : l\'affiche « Vos articles préférés » disparaît', (await v.page.getByTestId('interest-poster').count()) === 0);
+          await v.ctx.close();
+        }
+        // un seul favori, aucun autre signal : « Vous avez aimé cet article ❤️ »
+        {
+          const v = await homeFav({ favIds: [B.id] });
+          await waitAdE(v.page);
+          check('un seul favori : « Vous avez aimé cet article ❤️ Il vous attend. » avec son vrai nom, et « Vous avez ajouté « … » à vos favoris »', (await txt(v.page, 'targeted-ad-headline')) === 'Vous avez aimé cet article ❤️ Il vous attend.' && (await txt(v.page, 'targeted-ad-name')) === B.name.trim() && (await txt(v.page, 'targeted-ad-why')).includes(`Vous avez ajouté « ${B.name.trim()} » à vos favoris.`), await txt(v.page, 'targeted-ad-headline'));
+          await v.ctx.close();
+        }
+        // en arabe
+        {
+          const v = await homeFav({ favIds: [A.id, B.id], profile: profAC, lang: 'ar' });
+          await waitAdE(v.page);
+          check('en arabe : l\'affiche « منتجاتك المفضلة » et « منتجاتك المفضلة تنتظرك. »', (await v.page.getByTestId('interest-poster').count()) === 1 && /منتجاتك المفضلة/.test(await txt(v.page, 'interest-badge')) && /تنتظرك/.test(await txt(v.page, 'targeted-ad-headline')), await txt(v.page, 'targeted-ad-headline'));
+          await v.ctx.close();
+        }
+        // aucun favori : pas d'affiche « préférés » (Zara n'invente rien)
+        {
+          const v = await homeFav({ favIds: [] });
+          await sleep(6000);
+          check('aucun favori ni regard fort : aucune affiche « Vos articles préférés »', (await v.page.getByTestId('interest-poster').count()) === 0);
+          await v.ctx.close();
+        }
+      } else console.log("SAUTE  affiche « Vos articles préférés » : moins de 3 articles disponibles");
+    }
 
     // g2. les publics : élève, étudiant, administrateur, homme (d'après le compte du client)
     {

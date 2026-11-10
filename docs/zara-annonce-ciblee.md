@@ -104,3 +104,6 @@ Demande du patron (8 novembre 2026) : *« Proposez les articles de Maison & Mobi
 
 ## Offre élèves et étudiants (9 novembre 2026)
 Pour les publics **élèves** et **étudiants**, l'annonce est maintenant la **grande affiche** de l'offre du patron (URBANSOLE à 12 500 FCFA, code EE26), avant tous les autres choix, tant que l'article est en vente à plus de 12 500 FCFA. Voir `docs/offre-eleves-etudiants.md`.
+
+## « Vos articles préférés » (10 novembre 2026)
+Les articles d'**Intérêt élevé** du client (regardés de près ou aimés ❤️) passent maintenant sur l'affiche, jusqu'à 3 à la fois, avant la catégorie, le métier et le genre. Voir `docs/zara-articles-preferes.md`.

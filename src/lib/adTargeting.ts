@@ -49,6 +49,8 @@ export type AdReason =
   | { kind: 'category'; categoryName: string }
   | { kind: 'promo'; pct: number; endsAt: number | null }
   | { kind: 'gender'; gender: Gender; categoryName: string }
+  | { kind: 'liked'; productName: string } // un article mis en favori (❤️), sans autre signal fort
+  | { kind: 'interest'; names: string[]; liked: number } // l'affiche « Vos articles préférés » : 2 ou 3 articles « Intérêt élevé » (regardés de près ou aimés)
   | { kind: 'student'; level: 'eleve' | 'etudiant' }
   | { kind: 'studentOffer'; level: 'eleve' | 'etudiant'; code: string; price: number; listPrice: number; pct: number } // la grande affiche : URBANSOLE à 12 500 FCFA, réservé aux élèves et étudiants (lib/studentOffer)
   | { kind: 'executive' }
@@ -58,6 +60,7 @@ export type AdReason =
 export interface TargetedAd {
   product: AdProduct;
   reason: AdReason;
+  more?: AdProduct[]; // les autres articles « Intérêt élevé » de la même affiche (au plus 2), seulement pour la raison « interest »
 }
 
 const DAY_MS = 24 * 3600 * 1000;
@@ -122,6 +125,7 @@ export interface AdInput {
   categories: AdCategory[];
   customer?: { gender?: unknown; profession?: string | null; birth_date?: unknown; marital_status?: unknown } | null; // birth_date + marital_status : seulement pour les articles « Vitalité & Énergie » (lib/adSensitive)
   browsing?: BrowsingProfile | null; // le suivi de navigation de ce téléphone (null : suivi coupé ou rien encore)
+  favorites?: readonly string[]; // les articles mis en favori (❤️) par le client connecté (ils suivent son compte, sur tous ses téléphones)
   now?: number;
   seed?: number; // fait tourner les choix (par défaut : la tranche de 6 heures en cours)
   exclude?: readonly string[]; // les articles à ne PAS proposer (ceux que le visiteur vient de fermer avec « ✕ »)
@@ -135,6 +139,42 @@ export function isAdultItem(p: Pick<AdProduct, 'name' | 'slug' | 'description'>)
 }
 
 const eligible = (p: AdProduct): boolean => p.is_active !== false && Number(p.stock ?? 0) > 0 && Number(p.price) > 0 && !!p.images?.[0] && !isAdultItem(p);
+
+// --- « Intérêt élevé » : les articles que CE client regarde de près ou aime (demande du patron, 10 novembre 2026) ---------------------------------------------------
+// Zara analyse ce que le client a fait (consultations, signaux forts, commande commencée) et ce qu'il a aimé (favoris ❤️), et montre sur l'affiche les articles
+// d'intérêt le plus élevé, jusqu'à 3. Un article déjà commandé n'est jamais proposé. Rien n'est deviné : un favori ou des regards VRAIS, chaque fois.
+export const INTEREST_MAX = 3; // au plus 3 articles sur l'affiche
+export interface InterestCandidate {
+  id: string;
+  score: number;
+  liked: boolean;
+  viewed: boolean; // regardé de près (« Intérêt élevé », ou « moyen » avec au moins 2 consultations)
+  lastViewedAt: number;
+}
+// Le classement : un favori compte 3, un article « Intérêt élevé » compte 3, un article regardé au moins 2 fois (« moyen ») compte 1, chaque consultation en plus compte un peu ;
+// à égalité : le plus récemment regardé, puis le nom.
+export function rankInterest(
+  records: readonly { id: string; level: 'eleve' | 'moyen' | 'leger'; views: number; lastViewedAt: number; purchased: boolean }[],
+  likedIds: readonly string[],
+  allowed: (id: string) => boolean
+): InterestCandidate[] {
+  const liked = new Set(likedIds);
+  const byId = new Map<string, InterestCandidate>();
+  for (const r of records) {
+    if (r.purchased || !allowed(r.id)) continue;
+    const strong = r.level === 'eleve' || (r.level === 'moyen' && r.views >= 2);
+    const isLiked = liked.has(r.id);
+    if (!strong && !isLiked) continue;
+    byId.set(r.id, { id: r.id, liked: isLiked, viewed: strong, lastViewedAt: r.lastViewedAt, score: (isLiked ? 3 : 0) + (r.level === 'eleve' ? 3 : strong ? 1 : 0) + Math.min(r.views, 10) * 0.1 });
+  }
+  for (const id of liked) {
+    if (byId.has(id) || !allowed(id)) continue;
+    const rec = records.find((r) => r.id === id);
+    if (rec?.purchased) continue;
+    byId.set(id, { id, liked: true, viewed: false, lastViewedAt: rec?.lastViewedAt ?? 0, score: 3 });
+  }
+  return [...byId.values()].sort((a, b) => b.score - a.score || b.lastViewedAt - a.lastViewedAt || a.id.localeCompare(b.id));
+}
 
 // Le choix de Zara pour ce client, ou null (aucune raison vraie : aucune annonce).
 export function pickTargetedAd(input: AdInput): TargetedAd | null {
@@ -173,18 +213,27 @@ export function pickTargetedAd(input: AdInput): TargetedAd | null {
     if (offerProduct && deal) return { product: offerProduct, reason: { kind: 'studentOffer', level, code: deal.code, price: deal.price, listPrice: deal.listPrice, pct: deal.pct } };
   }
 
-  if (profile) {
-    // 1. un article regardé de près, pas commandé : on le rappelle (le plus fort intérêt d'abord, puis le plus récent)
+  // 1. « Intérêt élevé » : les articles que le client regarde de près (pas commandés) ou qu'il a aimés (❤️). Un seul : on le rappelle ; deux ou trois : l'affiche « Vos articles préférés ».
+  {
     const since = now - VIEWED_WITHIN_DAYS * DAY_MS;
-    const seen = Object.values(profile.products)
-      .filter((r: ProductRecord) => r.lastViewedAt >= since && r.views > 0 && r.cartStatus !== 'purchased' && !r.orderedAt && byId.has(r.id))
-      .map((r) => ({ r, level: estimateInterest(r).level }))
-      .filter((x) => x.level === 'eleve' || (x.level === 'moyen' && x.r.views >= 2))
-      .sort((a, b) => Number(b.level === 'eleve') - Number(a.level === 'eleve') || b.r.lastViewedAt - a.r.lastViewedAt);
-    if (seen.length > 0) {
-      const p = byId.get(seen[0].r.id)!;
-      return { product: p, reason: { kind: 'viewed', productName: p.name.trim() } };
+    const records = profile
+      ? Object.values(profile.products)
+          .filter((r: ProductRecord) => r.lastViewedAt >= since && r.views > 0)
+          .map((r) => ({ id: r.id, level: estimateInterest(r).level, views: r.views, lastViewedAt: r.lastViewedAt, purchased: r.cartStatus === 'purchased' || !!r.orderedAt }))
+      : [];
+    // un article aimé et déjà commandé n'est plus proposé non plus
+    const orderedIds = new Set(profile ? Object.values(profile.products).filter((r: ProductRecord) => r.cartStatus === 'purchased' || !!r.orderedAt).map((r) => r.id) : []);
+    const ranked = rankInterest(records, input.favorites ?? [], (id) => byId.has(id) && !orderedIds.has(id)).slice(0, INTEREST_MAX);
+    if (ranked.length >= 2) {
+      const list = ranked.map((c) => byId.get(c.id)!);
+      return { product: list[0], more: list.slice(1), reason: { kind: 'interest', names: list.map((p) => p.name.trim()), liked: ranked.filter((c) => c.liked).length } };
     }
+    if (ranked.length === 1) {
+      const p = byId.get(ranked[0].id)!;
+      return { product: p, reason: ranked[0].viewed ? { kind: 'viewed', productName: p.name.trim() } : { kind: 'liked', productName: p.name.trim() } };
+    }
+  }
+  if (profile) {
     // 2. une catégorie que le client explore (au moins 2 articles regardés) : un article de cette catégorie qu'il n'a pas encore vu, une vraie promotion d'abord
     for (const top of topCategories(profile, 3)) {
       const cat = catBySlug.get(top.key) ?? input.categories.find((c) => c.id === top.key);
@@ -270,6 +319,8 @@ const dateLabel = (at: number, lang: AdLang) => new Date(at).toLocaleDateString(
 // La phrase d'accroche (vraie) de l'annonce
 export function adHeadline(reason: AdReason, lang: AdLang = 'fr'): string {
   if (reason.kind === 'viewed') return lang === 'ar' ? 'شاهدتَ هذا المنتج. ما زال ينتظرك.' : 'Vous avez regardé cet article. Il vous attend toujours.';
+  if (reason.kind === 'liked') return lang === 'ar' ? 'أعجبك هذا المنتج ❤️ وما زال ينتظرك.' : 'Vous avez aimé cet article ❤️ Il vous attend.';
+  if (reason.kind === 'interest') return lang === 'ar' ? 'منتجاتك المفضلة تنتظرك.' : 'Vos articles préférés vous attendent.';
   if (reason.kind === 'category') return lang === 'ar' ? `تحب «${reason.categoryName}»؟ إليك منتجاً لتكتشفه.` : `Vous aimez « ${reason.categoryName} » ? Voici un article à découvrir.`;
   if (reason.kind === 'gender') return lang === 'ar' ? `اخترنا ${reason.gender === 'femme' ? 'لكِ' : 'لك'}: «${reason.categoryName}».` : `Choisi pour vous : « ${reason.categoryName} ».`;
   if (reason.kind === 'student') return lang === 'ar' ? `${reason.level === 'eleve' ? 'للتلاميذ' : 'للطلاب'}: منتج بسعر صغير.` : `Pour les ${reason.level === 'eleve' ? 'élèves' : 'étudiants'} : un article à petit prix.`;
@@ -285,6 +336,8 @@ export function adHeadline(reason: AdReason, lang: AdLang = 'fr'): string {
 export function adWhy(reason: AdReason, lang: AdLang = 'fr'): string {
   if (lang === 'ar') {
     if (reason.kind === 'viewed') return `لماذا هذا الإعلان؟ لأنك شاهدت «${reason.productName}» مؤخراً.`;
+    if (reason.kind === 'liked') return `لماذا هذا الإعلان؟ لأنك أضفت «${reason.productName}» إلى مفضلتك.`;
+    if (reason.kind === 'interest') return `لماذا هذا الإعلان؟ لأنك شاهدت هذه المنتجات عن قرب أو أعجبتك: ${namesList(reason.names, 'ar')}.`;
     if (reason.kind === 'category') return `لماذا هذا الإعلان؟ لأنك شاهدت عدة منتجات من «${reason.categoryName}».`;
     if (reason.kind === 'gender') return `لماذا هذا الإعلان؟ لأنك اخترت «${reason.gender === 'femme' ? 'أنثى' : 'ذكر'}» في حسابك: هذا منتج من «${reason.categoryName}».`;
     if (reason.kind === 'student') return `لماذا هذا الإعلان؟ لأنك كتبت «${reason.level === 'eleve' ? 'تلميذ' : 'طالب'}» في حسابك، وهذا المنتج من الأقل سعراً في المتجر.`;
@@ -295,6 +348,8 @@ export function adWhy(reason: AdReason, lang: AdLang = 'fr'): string {
     return 'لماذا هذا الإعلان؟ إنه تخفيض حقيقي جارٍ الآن (السعر القديم مشطوب).';
   }
   if (reason.kind === 'viewed') return `Pourquoi cette annonce ? Vous avez regardé « ${reason.productName} » récemment.`;
+  if (reason.kind === 'liked') return `Pourquoi cette annonce ? Vous avez ajouté « ${reason.productName} » à vos favoris.`;
+  if (reason.kind === 'interest') return `Pourquoi cette annonce ? Vous avez regardé de près ou aimé ces articles : ${namesList(reason.names, 'fr')}.`;
   if (reason.kind === 'category') return `Pourquoi cette annonce ? Vous avez regardé plusieurs articles de « ${reason.categoryName} ».`;
   if (reason.kind === 'gender') return `Pourquoi cette annonce ? Vous avez choisi « ${reason.gender === 'femme' ? 'Femme' : 'Homme'} » dans votre compte : voici un article de « ${reason.categoryName} ».`;
   if (reason.kind === 'student') return `Pourquoi cette annonce ? Vous avez indiqué « ${reason.level === 'eleve' ? 'élève' : 'étudiant'} » dans votre compte, et cet article fait partie des moins chers de la boutique.`;
@@ -304,6 +359,14 @@ export function adWhy(reason: AdReason, lang: AdLang = 'fr'): string {
   if (reason.kind === 'new') return `Pourquoi cette annonce ? Cet article a été ajouté à la boutique ${reason.days === 0 ? 'aujourd’hui' : reason.days === 1 ? 'hier' : `il y a ${reason.days} jours`}.`;
   return 'Pourquoi cette annonce ? C’est une vraie promotion en cours (l’ancien prix est barré).';
 }
+
+// « A », « B » et « C »
+const namesList = (names: readonly string[], lang: AdLang): string => {
+  const q = names.map((n) => `« ${n} »`);
+  if (q.length <= 1) return q.join('');
+  const and = lang === 'ar' ? ' و' : ' et ';
+  return `${q.slice(0, -1).join(lang === 'ar' ? '، ' : ', ')}${and}${q[q.length - 1]}`;
+};
 
 const fcfa = (n: number) => `${Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} FCFA`;
 
@@ -361,7 +424,8 @@ export interface ClosedState {
 export function closedState(closed: readonly ClosedAd[], now: number = Date.now()): ClosedState {
   const recent = closed.filter((c) => Number.isFinite(c.at) && now - c.at >= 0 && now - c.at < AD_CLOSED_HOURS * 3600 * 1000);
   const excluded = [...new Set(recent.map((c) => c.id))];
-  if (recent.length >= AD_MAX_CLOSES) return { stopped: true, waitMs: 0, excluded };
+  // l'affiche « Vos articles préférés » fermée note TOUS ses articles à la même heure : c'est UN seul « ✕ » (on compte les heures différentes)
+  if (new Set(recent.map((c) => c.at)).size >= AD_MAX_CLOSES) return { stopped: true, waitMs: 0, excluded };
   const last = recent.reduce((m, c) => Math.max(m, c.at), 0);
   const waitMs = last > 0 ? Math.max(0, last + AD_NEXT_SECONDS * 1000 - now) : 0;
   return { stopped: false, waitMs, excluded };
@@ -370,6 +434,10 @@ export function closedState(closed: readonly ClosedAd[], now: number = Date.now(
 // Le « ✕ » qui vient d'être touché : ajouté à la liste (les plus anciens hors des 24 h partent)
 export const addClosedAd = (closed: readonly ClosedAd[], id: string, now: number = Date.now()): ClosedAd[] =>
   [...closed.filter((c) => now - c.at >= 0 && now - c.at < AD_CLOSED_HOURS * 3600 * 1000), { id, at: now }].slice(-AD_MAX_CLOSES * 4);
+
+// Le « ✕ » d'une affiche qui montre plusieurs articles : tous sont fermés pour 24 h, à la même heure (un seul « ✕ » compté)
+export const addClosedAds = (closed: readonly ClosedAd[], ids: readonly string[], now: number = Date.now()): ClosedAd[] =>
+  [...closed.filter((c) => now - c.at >= 0 && now - c.at < AD_CLOSED_HOURS * 3600 * 1000), ...ids.map((id) => ({ id, at: now }))].slice(-AD_MAX_CLOSES * 4);
 
 // L'annonce que Zara montre en ce moment à chaque public (écran de l'administrateur) : un client « type » par public, sans historique de navigation.
 // Un public sans annonce vraie vaut null (Zara n'invente rien).

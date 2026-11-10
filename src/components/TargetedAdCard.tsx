@@ -8,17 +8,20 @@ import type { RootStackParamList } from '../navigation/types';
 import type { Category, Product } from '../types';
 import { useStoreSettings } from '../hooks/useStoreSettings';
 import { useAuthStore } from '../store/authStore';
+import { useFavoritesStore } from '../store/favoritesStore';
 import { useAssistantStore } from '../store/assistantStore';
 import { getCities } from '../lib/assistantData';
 import type { City } from '../lib/assistantBrain';
 import { getBrowsingProfile } from '../lib/browsingTracker';
-import { AD_ADVERTISER, AD_CTA, AD_LABEL, addClosedAd, adHeadline, adWhy, closedState, deliveryLine, parseClosedAds, pickTargetedAd, type ClosedAd } from '../lib/adTargeting';
+import { AD_ADVERTISER, AD_CTA, AD_LABEL, addClosedAd, addClosedAds, adHeadline, adWhy, closedState, deliveryLine, parseClosedAds, pickTargetedAd, type ClosedAd } from '../lib/adTargeting';
 import { shownOldPrice } from '../lib/promotions';
 import { dealFromPrice, offerTexts } from '../lib/studentOffer';
 import { colors, fonts, radius, spacing } from '../theme';
 
 const LOGO = require('../../assets/logo.jpg');
 const CLOSED_KEY = 'albasse_targeted_ad_closed_v2'; // les « ✕ » des dernières 24 h : [{ id de l'article, heure }]
+
+const INTEREST_BADGE = { fr: '💙 VOS ARTICLES PRÉFÉRÉS', ar: '💙 منتجاتك المفضلة' } as const;
 
 const formatXAF = (n: number) => `${Math.round(n).toLocaleString('fr-FR')} FCFA`;
 
@@ -31,6 +34,7 @@ export function TargetedAdCard({ products, categories }: { products: Product[]; 
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { settings, isLoading } = useStoreSettings();
   const profile = useAuthStore((s) => s.profile);
+  const favoriteIds = useFavoritesStore((s) => s.ids); // les articles aimés (❤️) : ils comptent dans « Intérêt élevé »
   const lang = useAssistantStore((s) => s.lang) === 'ar' ? 'ar' : 'fr';
   const enabled = settings.zara_ads_enabled === true;
   const [clock, setClock] = useState(() => Date.now()); // « maintenant » : change quand les 15 secondes d'attente sont finies
@@ -63,8 +67,8 @@ export function TargetedAdCard({ products, categories }: { products: Product[]; 
 
   const ad = useMemo(() => {
     if (!enabled || isLoading || !state || state.stopped || state.waitMs > 0 || products.length === 0) return null;
-    return pickTargetedAd({ products, categories, customer: profile, browsing: getBrowsingProfile(), now: clock, exclude: state.excluded });
-  }, [enabled, isLoading, state, products, categories, profile, clock]);
+    return pickTargetedAd({ products, categories, customer: profile, browsing: getBrowsingProfile(), favorites: [...favoriteIds], now: clock, exclude: state.excluded });
+  }, [enabled, isLoading, state, products, categories, profile, favoriteIds, clock]);
 
   if (!ad) return null;
   const p = ad.product as Product;
@@ -74,11 +78,86 @@ export function TargetedAdCard({ products, categories }: { products: Product[]; 
   const align = lang === 'ar' ? ({ textAlign: 'right', writingDirection: 'rtl' } as const) : undefined;
   const close = () => {
     const at = Date.now();
-    const next = addClosedAd(closed ?? [], p.id, at);
+    // l'affiche « Vos articles préférés » montre plusieurs articles : le « ✕ » les ferme tous pour 24 h (un seul « ✕ » compté)
+    const next = ad.more && ad.more.length > 0 ? addClosedAds(closed ?? [], [p.id, ...ad.more.map((m) => m.id)], at) : addClosedAd(closed ?? [], p.id, at);
     setClosed(next);
     setClock(at);
     AsyncStorage.setItem(CLOSED_KEY, JSON.stringify(next)).catch(() => {});
   };
+
+  // l'AFFICHE « Vos articles préférés » : les 2 ou 3 articles « Intérêt élevé » de CE client (regardés de près ou aimés), le meilleur en grand
+  if (ad.reason.kind === 'interest' && ad.more && ad.more.length > 0) {
+    const tiles = ad.more as Product[];
+    const open = (slug: string) => navigation.navigate('Product', { slug });
+    return (
+      <View style={styles.wrap} testID="targeted-ad">
+        <View style={styles.poster} testID="interest-poster">
+          <View style={styles.posterBand}>
+            <Text style={styles.posterBandText} testID="interest-badge">{INTEREST_BADGE[lang]}</Text>
+          </View>
+          <View style={styles.posterBody}>
+            <View style={styles.header}>
+              <Image source={LOGO} style={styles.logo} contentFit="cover" />
+              <View style={styles.headerText}>
+                <View style={styles.nameRow}>
+                  <Text style={styles.advertiser} numberOfLines={1}>{AD_ADVERTISER}</Text>
+                  <View style={styles.verified}>
+                    <Text style={styles.verifiedText}>✓</Text>
+                  </View>
+                </View>
+                <Text style={styles.sub} testID="targeted-ad-label">{`${AD_LABEL[lang]} · Zara`}</Text>
+              </View>
+              <Pressable style={styles.closeBtn} onPress={close} hitSlop={10} accessibilityRole="button" accessibilityLabel={text.close} testID="targeted-ad-close">
+                <Text style={styles.closeText}>✕</Text>
+              </Pressable>
+            </View>
+
+            <Text style={[styles.posterHeadline, align]} testID="targeted-ad-headline">
+              {adHeadline(ad.reason, lang)}
+            </Text>
+
+            <Pressable onPress={() => open(p.slug)} accessibilityRole="button" accessibilityLabel={`${p.name.trim()} : ${text.buy}`} testID="targeted-ad-image">
+              <Image source={{ uri: p.images[0] }} style={styles.interestImage} contentFit="contain" />
+            </Pressable>
+            <Text style={[styles.interestName, align]} numberOfLines={2} testID="targeted-ad-name">{p.name.trim()}</Text>
+            <View style={styles.priceRow}>
+              <Text style={styles.price} testID="targeted-ad-price">{formatXAF(p.price)}</Text>
+              {oldPrice !== null && <Text style={styles.oldPrice} testID="targeted-ad-old-price">{formatXAF(oldPrice)}</Text>}
+            </View>
+
+            <View style={styles.tilesRow}>
+              {tiles.map((t, i) => (
+                <Pressable key={t.id} style={styles.tile} onPress={() => open(t.slug)} accessibilityRole="button" accessibilityLabel={`${t.name.trim()} : ${text.buy}`} testID={`interest-tile-${i + 1}`}>
+                  <Image source={{ uri: t.images[0] }} style={styles.tileImage} contentFit="contain" />
+                  <Text style={[styles.tileName, align]} numberOfLines={2} testID={`interest-tile-${i + 1}-name`}>{t.name.trim()}</Text>
+                  <Text style={styles.tilePrice} testID={`interest-tile-${i + 1}-price`}>{formatXAF(t.price)}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {delivery ? (
+              <Text style={[styles.delivery, align]} testID="targeted-ad-delivery">
+                {delivery}
+              </Text>
+            ) : null}
+
+            <View style={styles.actions}>
+              <Pressable style={styles.buy} onPress={() => open(p.slug)} accessibilityRole="button" testID="targeted-ad-buy">
+                <Text style={styles.buyText}>{text.buy}</Text>
+              </Pressable>
+              <Pressable style={styles.ask} onPress={() => useAssistantStore.getState().adviseProduct(p.slug)} accessibilityRole="button" testID="targeted-ad-ask">
+                <Text style={styles.askText}>{`💬 ${text.ask}`}</Text>
+              </Pressable>
+            </View>
+
+            <Text style={[styles.why, align]} testID="targeted-ad-why">
+              {`ⓘ ${adWhy(ad.reason, lang)}`}
+            </Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
 
   // la GRANDE AFFICHE de l'offre élèves/étudiants (lib/studentOffer) : URBANSOLE à 12 500 FCFA, code EE26, réservée aux élèves et étudiants
   if (ad.reason.kind === 'studentOffer') {
@@ -266,6 +345,13 @@ const styles = StyleSheet.create({
   codeBox: { alignSelf: 'flex-start', borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.gold, borderRadius: radius.md, paddingVertical: 7, paddingHorizontal: 12 },
   codeText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.goldLight },
   posterOnly: { fontFamily: fonts.bodySemiBold, fontSize: 13.5, color: colors.cream },
+  interestImage: { width: '100%', aspectRatio: 1.3, borderRadius: radius.md, backgroundColor: '#fff' },
+  interestName: { fontFamily: fonts.displayBold, fontSize: 19, color: colors.cream },
+  tilesRow: { flexDirection: 'row', gap: 10 },
+  tile: { flex: 1, minWidth: 0, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: 8, gap: 4, backgroundColor: colors.background },
+  tileImage: { width: '100%', aspectRatio: 1.1, borderRadius: radius.sm, backgroundColor: '#fff' },
+  tileName: { fontFamily: fonts.bodySemiBold, fontSize: 12.5, lineHeight: 17, color: colors.cream },
+  tilePrice: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.goldLight },
   posterBuy: { flex: 1, backgroundColor: colors.gold, borderRadius: radius.pill, paddingVertical: 14, alignItems: 'center' },
   posterBuyText: { fontFamily: fonts.bodyBold, fontSize: 15.5, color: colors.background },
 });
