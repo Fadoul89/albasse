@@ -42,6 +42,8 @@ export interface Product {
   review_count: number;
   // nombre de « j'aime » (cœurs) de l'article ; absent tant que add-product-likes.sql n'est pas lancé
   likes_count?: number;
+  // offre élèves/étudiants appliquée à cet article dans la commande en cours (lib/studentOffer) : le code et le vrai prix normal
+  student_offer?: { code: string; list_price: number };
   created_at: string;
 }
 
@@ -148,6 +150,9 @@ export interface OrderItem {
   quantity: number;
   color: string | null;
   size: string | null;
+  // offre élèves/étudiants (code EE26) : le prix normal et le code, pour l'équipe et la facture ; absents sinon
+  list_price?: number;
+  promo_code?: string;
 }
 
 export interface Order {

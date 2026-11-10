@@ -287,6 +287,11 @@ export function AdminOrdersScreen() {
                         <Text style={styles.itemMeta}>
                           {[oi.color, oi.size].filter(Boolean).join(' · ') || 'Standard'} · x{oi.quantity}
                         </Text>
+                        {oi.promo_code ? (
+                          <Text style={styles.itemPromo} testID="admin-order-promo">
+                            {`🎓 Code ${oi.promo_code} (élève/étudiant)${oi.list_price ? ` · prix normal ${formatXAF(oi.list_price)}` : ''}`}
+                          </Text>
+                        ) : null}
                       </View>
                       <Text style={styles.itemPrice}>{formatXAF(oi.unit_price * oi.quantity)}</Text>
                     </View>
@@ -452,6 +457,7 @@ const styles = StyleSheet.create({
   partnerBtnWa: { backgroundColor: 'rgba(37,211,102,0.18)', borderColor: 'rgba(37,211,102,0.5)' },
   partnerBtnText: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 13 },
   itemPrice: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 12 },
+  itemPromo: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 11, marginTop: 2 },
   paymentMethod: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 12, marginBottom: 4 },
   total: { color: colors.goldLight, fontFamily: fonts.bodyBold, fontSize: 15 },
   actionsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 14 },

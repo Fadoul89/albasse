@@ -84,7 +84,7 @@ export function ZaraAdsAudiences({ products, categories }: { products: Product[]
                   <Text style={styles.adName} numberOfLines={2} testID={`zara-audience-${a}-name`}>
                     {ad.product.name.trim()}
                   </Text>
-                  <Text style={styles.adPrice}>{formatXAF(ad.product.price)}</Text>
+                  <Text style={styles.adPrice}>{formatXAF(ad.reason.kind === 'studentOffer' ? ad.reason.price : ad.product.price)}</Text>
                   <Text style={styles.adHeadline} testID={`zara-audience-${a}-headline`}>
                     {adHeadline(ad.reason)}
                   </Text>

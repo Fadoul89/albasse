@@ -1,3 +1,6 @@
+-- ATTENTION (9 novembre 2026) : l'offre élèves/étudiants (docs/offre-eleves-etudiants.md, URBANSOLE à 12 500 FCFA, code EE26) fixe le prix côté site.
+--   Avant d'appliquer ce script, lui apprendre cette règle : sinon il refuserait ces commandes (« Le prix a changé »).
+--
 -- BROUILLON : contrôle des commandes côté serveur. PAS ENCORE APPLIQUÉ à la vraie base.
 --
 -- Problème : aujourd'hui la base enregistre le prix de chaque article et le total envoyés par le téléphone du client,

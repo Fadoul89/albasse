@@ -18,6 +18,7 @@ import { estimateInterest, topCategories, type BrowsingProfile, type ProductReco
 import { genderOf, type Gender } from './clientGender';
 import { professionAudience, AUDIENCES, FORCES_PRODUCT_SLUGS, type Audience } from './adAudiences';
 import { isHomeCity } from './deliveryRules';
+import { studentDeal } from './studentOffer';
 import { MOBILE_MONEY_ENABLED } from '../constants/shopRules';
 import { isVitalityCategory, vitalityAllowed } from './adSensitive';
 import { inFamily, rootOf } from './subCategories';
@@ -49,6 +50,7 @@ export type AdReason =
   | { kind: 'promo'; pct: number; endsAt: number | null }
   | { kind: 'gender'; gender: Gender; categoryName: string }
   | { kind: 'student'; level: 'eleve' | 'etudiant' }
+  | { kind: 'studentOffer'; level: 'eleve' | 'etudiant'; code: string; price: number; listPrice: number; pct: number } // la grande affiche : URBANSOLE à 12 500 FCFA, réservé aux élèves et étudiants (lib/studentOffer)
   | { kind: 'executive' }
   | { kind: 'forces' }
   | { kind: 'new'; days: number }; // seulement pour l'annonce qui suit un « ✕ » : un article vraiment ajouté à la boutique il y a `days` jours
@@ -160,6 +162,17 @@ export function pickTargetedAd(input: AdInput): TargetedAd | null {
   };
   const profile = input.browsing ?? null;
 
+  // 0. élève ou étudiant : la grande affiche de l'offre du patron (lib/studentOffer) passe en premier, tant que l'article est en vente et que le client ne l'a pas déjà commandé.
+  //    Jamais aux autres clients. Un client qui ferme l'annonce (« ✕ ») n'a plus cet article pendant 24 h : `pool` l'exclut, les autres annonces reprennent.
+  const level = professionAudience(input.customer?.profession);
+  if (level === 'eleve' || level === 'etudiant') {
+    const offerProduct = pool.find((p) => studentDeal({ slug: p.slug, price: p.price }, input.customer) !== null);
+    const rec = offerProduct ? profile?.products?.[offerProduct.id] : undefined;
+    const bought = !!rec && (rec.cartStatus === 'purchased' || !!rec.orderedAt);
+    const deal = offerProduct && !bought ? studentDeal({ slug: offerProduct.slug, price: offerProduct.price }, input.customer) : null;
+    if (offerProduct && deal) return { product: offerProduct, reason: { kind: 'studentOffer', level, code: deal.code, price: deal.price, listPrice: deal.listPrice, pct: deal.pct } };
+  }
+
   if (profile) {
     // 1. un article regardé de près, pas commandé : on le rappelle (le plus fort intérêt d'abord, puis le plus récent)
     const since = now - VIEWED_WITHIN_DAYS * DAY_MS;
@@ -260,6 +273,7 @@ export function adHeadline(reason: AdReason, lang: AdLang = 'fr'): string {
   if (reason.kind === 'category') return lang === 'ar' ? `تحب «${reason.categoryName}»؟ إليك منتجاً لتكتشفه.` : `Vous aimez « ${reason.categoryName} » ? Voici un article à découvrir.`;
   if (reason.kind === 'gender') return lang === 'ar' ? `اخترنا ${reason.gender === 'femme' ? 'لكِ' : 'لك'}: «${reason.categoryName}».` : `Choisi pour vous : « ${reason.categoryName} ».`;
   if (reason.kind === 'student') return lang === 'ar' ? `${reason.level === 'eleve' ? 'للتلاميذ' : 'للطلاب'}: منتج بسعر صغير.` : `Pour les ${reason.level === 'eleve' ? 'élèves' : 'étudiants'} : un article à petit prix.`;
+  if (reason.kind === 'studentOffer') return lang === 'ar' ? `عرض حصري لل${reason.level === 'eleve' ? 'تلاميذ' : 'طلاب'}: ${fcfa(reason.price)} فقط` : `Offre uniquement pour les élèves et étudiants : ${fcfa(reason.price)}`;
   if (reason.kind === 'executive') return lang === 'ar' ? 'مجموعة راقية مختارة لك.' : 'Une sélection haut de gamme pour vous.';
   if (reason.kind === 'forces') return lang === 'ar' ? 'مصمم للعسكريين وقوات الأمن.' : 'Pensé pour les militaires et les forces de l’ordre.';
   if (reason.kind === 'new') return lang === 'ar' ? 'جديد يستحق الاكتشاف.' : 'Une nouveauté à découvrir.';
@@ -274,6 +288,7 @@ export function adWhy(reason: AdReason, lang: AdLang = 'fr'): string {
     if (reason.kind === 'category') return `لماذا هذا الإعلان؟ لأنك شاهدت عدة منتجات من «${reason.categoryName}».`;
     if (reason.kind === 'gender') return `لماذا هذا الإعلان؟ لأنك اخترت «${reason.gender === 'femme' ? 'أنثى' : 'ذكر'}» في حسابك: هذا منتج من «${reason.categoryName}».`;
     if (reason.kind === 'student') return `لماذا هذا الإعلان؟ لأنك كتبت «${reason.level === 'eleve' ? 'تلميذ' : 'طالب'}» في حسابك، وهذا المنتج من الأقل سعراً في المتجر.`;
+    if (reason.kind === 'studentOffer') return `لماذا هذا الإعلان؟ لأنك كتبت «${reason.level === 'eleve' ? 'تلميذ' : 'طالب'}» في حسابك، وهذا العرض (الكود ${reason.code}) خاص بالتلاميذ والطلاب فقط. السعر العادي ${fcfa(reason.listPrice)}.`;
     if (reason.kind === 'executive') return 'لماذا هذا الإعلان؟ لأنك كتبت مهنة إدارية أو قيادية في حسابك، وهذا المنتج من الأرقى في المتجر.';
     if (reason.kind === 'forces') return 'لماذا هذا الإعلان؟ لأنك كتبت مهنة عسكرية أو أمنية في حسابك، وهذا المنتج مصمم للعسكريين وقوات الأمن.';
     if (reason.kind === 'new') return `لماذا هذا الإعلان؟ أُضيف هذا المنتج إلى المتجر ${reason.days === 0 ? 'اليوم' : reason.days === 1 ? 'أمس' : `منذ ${reason.days} ${reason.days <= 10 ? 'أيام' : 'يوماً'}`}.`;
@@ -283,6 +298,7 @@ export function adWhy(reason: AdReason, lang: AdLang = 'fr'): string {
   if (reason.kind === 'category') return `Pourquoi cette annonce ? Vous avez regardé plusieurs articles de « ${reason.categoryName} ».`;
   if (reason.kind === 'gender') return `Pourquoi cette annonce ? Vous avez choisi « ${reason.gender === 'femme' ? 'Femme' : 'Homme'} » dans votre compte : voici un article de « ${reason.categoryName} ».`;
   if (reason.kind === 'student') return `Pourquoi cette annonce ? Vous avez indiqué « ${reason.level === 'eleve' ? 'élève' : 'étudiant'} » dans votre compte, et cet article fait partie des moins chers de la boutique.`;
+  if (reason.kind === 'studentOffer') return `Pourquoi cette annonce ? Vous avez indiqué « ${reason.level === 'eleve' ? 'élève' : 'étudiant'} » dans votre compte : cette offre (code ${reason.code}) est réservée aux élèves et étudiants. Le prix normal est ${fcfa(reason.listPrice)}.`;
   if (reason.kind === 'executive') return 'Pourquoi cette annonce ? Vous avez indiqué un métier d’administration ou de direction dans votre compte, et cet article fait partie des plus haut de gamme de la boutique.';
   if (reason.kind === 'forces') return 'Pourquoi cette annonce ? Vous avez indiqué un métier militaire ou de sécurité (armée, police, gendarmerie…) dans votre compte, et cet article est conçu pour les militaires et les forces de l’ordre.';
   if (reason.kind === 'new') return `Pourquoi cette annonce ? Cet article a été ajouté à la boutique ${reason.days === 0 ? 'aujourd’hui' : reason.days === 1 ? 'hier' : `il y a ${reason.days} jours`}.`;

@@ -1,3 +1,5 @@
+import { studentDeal } from './studentOffer';
+import { useAuthStore } from '../store/authStore';
 import { supabase } from './supabase';
 import { buildProduct, type CatalogProduct, type City } from './assistantBrain';
 import { currentDevice, type DeviceLabel } from './assistantAttribution';
@@ -49,16 +51,15 @@ export interface CategoryInfo {
   slug: string;
 }
 
+// Ce que Zara donne quand un client demande les contacts : seulement l'e-mail (demande du patron, 9 novembre 2026 : plus d'adresse de boutique, plus de téléphone).
 export interface StoreInfo {
-  hours: string | null;
-  address: string | null;
-  city: string | null;
-  phone: string | null;
-  mapsUrl: string | null;
+  email: string | null;
 }
 
 export function toCard(p: CatalogProduct): AssistantProduct {
-  return { slug: p.slug, name: p.name, price: p.price, compare_at_price: p.compareAt, image: p.image, in_stock: p.stock > 0, stock: p.stock };
+  // offre élèves/étudiants (lib/studentOffer) : la carte montre le prix de l'offre (et le vrai prix normal barré) seulement à un client qui y a droit
+  const deal = studentDeal({ slug: p.slug, price: p.price }, useAuthStore.getState().profile);
+  return { slug: p.slug, name: p.name, price: deal ? deal.price : p.price, compare_at_price: deal ? deal.listPrice : p.compareAt, image: p.image, in_stock: p.stock > 0, stock: p.stock };
 }
 
 function cached<T>(load: () => Promise<T>) {
@@ -161,14 +162,8 @@ export const getCities = cached<City[]>(async () => {
 });
 
 export const getStoreInfo = cached<StoreInfo>(async () => {
-  const { data } = await supabase.from('store_settings').select('hours,address,city,phone,google_maps_url').limit(1).maybeSingle();
-  return {
-    hours: data?.hours ?? null,
-    address: data?.address ?? null,
-    city: data?.city ?? null,
-    phone: data?.phone ?? null,
-    mapsUrl: data?.google_maps_url ?? null,
-  };
+  const { data } = await supabase.from('store_settings').select('email').limit(1).maybeSingle();
+  return { email: typeof data?.email === 'string' && data.email.trim() ? data.email.trim() : null };
 });
 
 // ---------------------------------------------------------------------------------------------

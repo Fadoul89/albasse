@@ -19,6 +19,7 @@ import type { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing } from '../theme';
 import { useProductBySlug, useProducts } from '../hooks/useProducts';
 import { shownOldPrice } from '../lib/promotions';
+import { offerTexts, studentDeal } from '../lib/studentOffer';
 import { useReviews } from '../hooks/useReviews';
 import { useCategories } from '../hooks/useCategories';
 import { rootOf } from '../lib/subCategories';
@@ -297,10 +298,25 @@ export function ProductScreen({ route }: Props) {
               <Text style={styles.name}>{product.name}</Text>
               <StarRating rating={product.rating} showValue reviewCount={product.review_count} />
 
-              <View style={styles.priceRow}>
-                <Text style={styles.price}>{formatXAF(product.price)}</Text>
-                {shownOldPrice(product) && <Text style={styles.comparePrice} testID="product-old-price">{formatXAF(shownOldPrice(product) as number)}</Text>}
-              </View>
+              {/* offre élèves/étudiants (lib/studentOffer) : le prix de l'offre seulement pour un client qui a écrit « élève » ou « étudiant » dans son compte */}
+              {(() => {
+                const deal = studentDeal(product, profile);
+                return (
+                  <>
+                    <View style={styles.priceRow}>
+                      <Text style={styles.price} testID="product-price">{formatXAF(deal ? deal.price : product.price)}</Text>
+                      {deal ? (
+                        <Text style={styles.comparePrice} testID="product-student-list-price">{formatXAF(deal.listPrice)}</Text>
+                      ) : (
+                        shownOldPrice(product) && <Text style={styles.comparePrice} testID="product-old-price">{formatXAF(shownOldPrice(product) as number)}</Text>
+                      )}
+                    </View>
+                    {deal ? (
+                      <Text style={styles.studentOffer} testID="student-offer-line">{offerTexts.line(deal, 'fr')}</Text>
+                    ) : null}
+                  </>
+                );
+              })()}
             </View>
 
             {/* badges de confiance de la boutique, petits, à droite du nom et du prix */}
@@ -466,6 +482,7 @@ const styles = StyleSheet.create({
     color: colors.red,
     textDecorationLine: 'line-through',
   },
+  studentOffer: { fontFamily: fonts.bodySemiBold, fontSize: 13, lineHeight: 19, color: colors.goldLight, marginTop: 6 },
   waOrderBtn: {
     backgroundColor: '#25D366',
     borderRadius: radius.md,

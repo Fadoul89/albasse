@@ -27,6 +27,7 @@ import { CHAD_PHONE_REGEX, generateTempPassword, guestFullName, guestInfoProblem
 import { fetchLoyaltyStatus, loyaltyDiscount, ordersBeforeDiscount, type LoyaltyStatus } from '../lib/loyaltyDiscount';
 import { DELIVERY_HOURS, GIFT_WRAP_FEE, HOME_CITY, MOBILE_MONEY_ENABLED, ORDER_VALIDITY_HOURS } from '../constants/shopRules';
 import { OUTSIDE_TEXT, outsideOrderUrl } from '../lib/outsideCityOrder';
+import { dealFromPrice, offerTexts } from '../lib/studentOffer';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
 
@@ -51,6 +52,11 @@ export function CheckoutScreen() {
   const item = items[0] ?? null;
   const profile = useAuthStore((s) => s.profile);
   const signUp = useAuthStore((s) => s.signUp);
+  const settleOffers = useCartStore((s) => s.settleOffers);
+  // offre élèves/étudiants : le bon prix pour le compte connecté MAINTENANT (le prix de l'offre seulement pour un élève ou un étudiant)
+  useEffect(() => {
+    settleOffers();
+  }, [profile?.id, profile?.profession]);
   // commander sans compte : seulement si « Compte obligatoire » est désactivé (sinon, comme avant : connexion ou création de compte d'abord)
   const { settings: storeSettings, isLoading: settingsLoading } = useStoreSettings();
   const guestAllowed = guestOrderAllowed(storeSettings.account_required);
@@ -289,6 +295,9 @@ export function CheckoutScreen() {
             </Text>
             {variant ? <Text style={styles.itemVariant}>{variant}</Text> : null}
             <Text style={styles.itemPrice}>{formatXAF(item.product.price)}</Text>
+            {item.product.student_offer && dealFromPrice(item.product.student_offer.list_price) ? (
+              <Text style={styles.itemVariant} testID="checkout-student-offer">{offerTexts.line(dealFromPrice(item.product.student_offer.list_price)!, 'fr')}</Text>
+            ) : null}
           </View>
           <View style={styles.qtyCol}>
             <Pressable

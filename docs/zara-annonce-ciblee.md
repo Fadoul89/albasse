@@ -101,3 +101,6 @@ Demande du patron (8 novembre 2026) : *« Proposez les articles de Maison & Mobi
 - Règles (fonctions pures) : `src/lib/adTargeting.ts`, `src/lib/adAudiences.ts` (les publics) ; écran de l'administrateur : `src/components/ZaraAdsAudiences.tsx` ; carte : `src/components/TargetedAdCard.tsx` ; place dans l'accueil : `src/screens/HomeScreen.tsx`.
 - `node --import ./tests/zara/register.mjs tests/email/ad-targeting.test.ts` (154 contrôles : publics, métiers, militaires et forces de l'ordre, genre, rotation de 6 h, écran de l'administrateur, ✕ et annonce suivante après 15 secondes, nouveautés, « Vitalité & Énergie » réservé aux mariés de 32 ans et plus).
 - Navigateur : `PARTS='€' node tests/zara/zara-ui.test.js <dist> <port>`.
+
+## Offre élèves et étudiants (9 novembre 2026)
+Pour les publics **élèves** et **étudiants**, l'annonce est maintenant la **grande affiche** de l'offre du patron (URBANSOLE à 12 500 FCFA, code EE26), avant tous les autres choix, tant que l'article est en vente à plus de 12 500 FCFA. Voir `docs/offre-eleves-etudiants.md`.
