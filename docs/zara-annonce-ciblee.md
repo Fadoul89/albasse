@@ -107,3 +107,9 @@ Pour les publics **élèves** et **étudiants**, l'annonce est maintenant la **g
 
 ## « Vos articles préférés » (10 novembre 2026)
 Les articles d'**Intérêt élevé** du client (regardés de près ou aimés ❤️) passent maintenant sur l'affiche, jusqu'à 3 à la fois, avant la catégorie, le métier et le genre. Voir `docs/zara-articles-preferes.md`.
+
+## « Maison & Mobilier » renommée « Maison & Bureau » (15 novembre 2026)
+Le patron a renommé la catégorie : adresse `maison-bureau`, nom « Maison & Bureau ». Le site la cherchait encore par l'ancienne adresse `maison-mobilier` : la règle « Maison proposé beaucoup plus aux femmes » (4 tranches de 6 h sur 6 pour une femme, 1 sur 6 pour un homme) ne marchait plus.
+- `src/lib/adTargeting.ts` : `HOME_CATEGORY_SLUGS` (les DEUX adresses) et `findHomeCategory` (la catégorie principale, sans parent, passe avant). L'annonce dit le vrai nom du rayon (« Choisi pour vous : « Maison & Bureau » »).
+- `src/lib/assistantLang.ts` / `assistantMarketing.ts` : Zara comprend « meuble », « maison », « bureau »… pour la catégorie `maison-bureau` ; nom arabe (المنزل والمكتب), émoji et article complémentaire (électrique) aussi.
+- Tests : `tests/email/ad-targeting.test.ts` (7 nouveaux contrôles) et la partie `€` du navigateur (suit le vrai nom de la catégorie).

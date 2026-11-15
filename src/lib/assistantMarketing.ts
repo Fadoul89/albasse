@@ -303,7 +303,8 @@ const CROSS_SELL: Record<string, string[]> = {
   'bebe-et-maternite': ['velos-pour-enfants-jouets-et-jeux'],
   'velos-pour-enfants-jouets-et-jeux': ['bebe-et-maternite'],
   'maison-mobilier': ['electrique'],
-  electrique: ['maison-mobilier'],
+  'maison-bureau': ['electrique'], // la même catégorie, renommée « Maison & Bureau »
+  electrique: ['maison-mobilier', 'maison-bureau'],
 };
 
 // Catégorie la plus présente parmi des produits.
