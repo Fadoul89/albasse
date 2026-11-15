@@ -134,7 +134,12 @@ export function websiteJsonLd(): Record<string, unknown> {
 }
 
 // Retours : seulement ce que dit la page « Conditions de retour » : un article incorrect ou défectueux se signale dans les 72 heures (3 jours) après la
-// réception. Les échanges de taille n'ont pas de délai écrit : on n'en dit rien. Pas de « retour gratuit » (les frais dépendent du cas).
+// réception. Les échanges de taille n'ont pas de délai écrit : on n'en dit rien.
+// Réponse au message Search Console du 1er novembre 2026 (Fiches de marchand : « returnMethod » et « returnFees » manquants, non critiques) :
+// - returnMethod : le patron a répondu (15 novembre 2026) que le client renvoie l'article PAR COLIS OU LIVREUR et/ou en le DÉPOSANT À LA BOUTIQUE (« Les deux ») ;
+// - returnFees : par défaut les frais de retour sont à la charge du client (échange de taille : « Les frais de retour sont à la charge du client ») ;
+// - itemDefectReturnFees : article incorrect ou défectueux : « Les frais de retour sont à notre charge » = retour gratuit, SEULEMENT pour ce cas (jamais « retour gratuit » en général).
+// Le montant des frais de retour n'est pas connu : on ne l'invente pas (pas de returnShippingFeesAmount).
 export const RETURN_WINDOW_DAYS = 3;
 export function returnPolicyJsonLd(): Record<string, unknown> {
   return {
@@ -142,6 +147,9 @@ export function returnPolicyJsonLd(): Record<string, unknown> {
     applicableCountry: 'TD',
     returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow',
     merchantReturnDays: RETURN_WINDOW_DAYS,
+    returnMethod: ['https://schema.org/ReturnByMail', 'https://schema.org/ReturnInStore'],
+    returnFees: 'https://schema.org/ReturnShippingFees',
+    itemDefectReturnFees: 'https://schema.org/FreeReturn',
     merchantReturnLink: `${SITE_URL}/conditions-de-retour`,
   };
 }
