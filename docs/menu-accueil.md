@@ -31,3 +31,9 @@ Demande du patron (15 novembre 2026) : « Un menu comme Jumia : le profil du cli
 - Sous le numéro, une ligne **« Nom : … »** n'apparaît que si un nom est enregistré. Sans nom : aucune ligne, jamais de nom inventé.
 - Le patron écrit lui-même les noms dans **Admin › Moyens de paiement** (champ « Nom du titulaire » sous Airtel et sous Moov). Ces champs n'apparaissent qu'**après** le script `add-payment-holder-names.sql` (2 colonnes ajoutées à `payment_settings`, aucune nouvelle table, aucun `grant` à ajouter) : tant que le script n'est pas lancé, rien ne change et l'enregistrement ne peut pas échouer.
 - Tests : `tests/email/payment-cards.test.ts` (23) et la partie `C` du navigateur (cartes avec nom, champs de l'administration avec et sans les colonnes).
+
+## Boutons qui vibrent (fiche article) — 15 novembre 2026
+- Les deux boutons de la fiche article, **« Commander sur WhatsApp »** et **« Commander »**, tremblent environ **une demi-seconde toutes les 3 secondes** (3 pixels au plus, le second bouton avec 0,3 s de retard), puis se reposent.
+- Seulement un mouvement à l'écran : le téléphone ne vibre pas. La taille et la place des boutons ne changent pas, et ils marchent comme avant.
+- Pas de mouvement pour les clients qui ont demandé « moins d'animations » (réglage du téléphone ou du navigateur).
+- Code : `src/components/VibrateView.tsx`, branché dans `src/screens/ProductScreen.tsx`. Tests : partie `C` de `tests/zara/zara-ui.test.js` (les deux boutons vibrent, taille inchangée, « Commander » ouvre toujours la commande, « moins d'animations » = aucun mouvement).
