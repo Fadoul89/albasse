@@ -47,5 +47,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  badgeText: { color: colors.cream, fontFamily: fonts.bodyBold, fontSize: 9 },
+  badgeText: { color: '#ffffff', fontFamily: fonts.bodyBold, fontSize: 9 },
 });

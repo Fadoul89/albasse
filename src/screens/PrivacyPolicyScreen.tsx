@@ -1,6 +1,8 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, Platform } from 'react-native';
 import { useStoreSettings } from '../hooks/useStoreSettings';
+import { COOKIE_TEXT, onChoiceChange, readChoice, type CookieChoice } from '../lib/cookieConsent';
+import { applyChoice } from '../components/CookieBanner';
 import { colors, fonts, radius, spacing } from '../theme';
 import { ScreenHeader } from '../components/ScreenHeader';
 
@@ -12,7 +14,7 @@ export function PrivacyPolicyScreen() {
       <ScreenHeader title="Politique de confidentialité" showBack />
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.shopName}>🏪 {settings.shop_name}</Text>
-        <Text style={styles.updated}>Dernière mise à jour : Octobre 2026</Text>
+        <Text style={styles.updated}>Dernière mise à jour : Novembre 2026</Text>
 
         <Section title="1. Données que nous collectons">
           <Text style={styles.p}>
@@ -76,25 +78,65 @@ export function PrivacyPolicyScreen() {
           </Text>
         </Section>
 
-        <Section title="5. Sécurité">
+        <CookiesSection />
+
+        <Section title="6. Sécurité">
           <Text style={styles.p}>
             Vos données sont hébergées de façon sécurisée (base de données chiffrée, accès protégé par mot de
             passe). Seule l'administration d'ALBASSE SHOPPING y a accès.
           </Text>
         </Section>
 
-        <Section title="6. Vos droits">
+        <Section title="7. Vos droits">
           <Text style={styles.p}>
             Vous pouvez demander la consultation, la correction ou la suppression de vos données à tout moment en
             nous contactant à l'adresse ci-dessous.
           </Text>
         </Section>
 
-        <Section title="7. Contact">
+        <Section title="8. Contact">
           <Text style={styles.p}>{settings.email ?? 'contact@albasseshopping.com'}</Text>
         </Section>
       </ScrollView>
     </View>
+  );
+}
+
+// 5. Cookies : ce qui est mesuré, et le bouton pour changer d'avis (le choix du bandeau)
+function CookiesSection() {
+  const [choice, setChoice] = useState<CookieChoice | null>(() => readChoice());
+  useEffect(() => {
+    setChoice(readChoice());
+    return onChoiceChange(setChoice);
+  }, []);
+  const isWeb = Platform.OS === 'web';
+  const status = choice === 'accepted' ? COOKIE_TEXT.settingsAccepted : choice === 'refused' ? COOKIE_TEXT.settingsRefused : COOKIE_TEXT.settingsNone;
+  return (
+    <Section title="5. Cookies et mesure publicitaire">
+      <Text style={styles.p}>
+        Le site garde dans votre appareil ce qui est nécessaire pour fonctionner : votre connexion, vos favoris, votre langue et vos choix. Cela ne demande pas d'accord.
+      </Text>
+      <Text style={styles.p}>
+        Pour mesurer l'effet de nos publicités, nous utilisons le pixel de TikTok, seulement si vous l'acceptez. Il informe TikTok des pages et des articles consultés et
+        des commandes passées, et dépose des cookies. Si vous refusez, ou tant que vous n'avez pas choisi, rien n'est envoyé à TikTok.
+      </Text>
+      {isWeb && (
+        <View testID="privacy-cookie-choice">
+          <Text style={styles.status}>{status}</Text>
+          <Pressable
+            onPress={() => applyChoice(choice === 'accepted' ? 'refused' : 'accepted')}
+            style={styles.cookieBtn}
+            accessibilityRole="button"
+            testID="privacy-cookie-change"
+          >
+            <Text style={styles.cookieBtnText}>
+              {choice === 'accepted' ? COOKIE_TEXT.refuse : COOKIE_TEXT.accept}
+              {choice === null ? '' : ` · ${COOKIE_TEXT.settingsChange}`}
+            </Text>
+          </Pressable>
+        </View>
+      )}
+    </Section>
   );
 }
 
@@ -120,4 +162,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: { color: colors.gold, fontFamily: fonts.bodySemiBold, fontSize: 14, marginBottom: 8 },
   p: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 13, lineHeight: 19, marginBottom: 6 },
+  status: { color: colors.cream, fontFamily: fonts.bodySemiBold, fontSize: 13, marginTop: 4, marginBottom: 8 },
+  cookieBtn: { minHeight: 44, borderRadius: radius.md, borderWidth: 1, borderColor: colors.goldLight, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
+  cookieBtnText: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 13 },
 });

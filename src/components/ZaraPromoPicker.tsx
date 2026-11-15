@@ -176,7 +176,7 @@ function PickList({ title, picks, testID }: { title: string; picks: PromoPick[];
       {picks.length === 0 ? <Text style={styles.small}>Aucun article.</Text> : null}
       {picks.map((p) => (
         <View key={p.id} style={styles.row} testID={`${testID}-item`}>
-          {p.image ? <Image source={{ uri: p.image }} style={styles.thumb} contentFit="cover" /> : <View style={[styles.thumb, { backgroundColor: colors.panelAlt }]} />}
+          {p.image ? <Image accessibilityLabel="" source={{ uri: p.image }} style={styles.thumb} contentFit="cover" /> : <View style={[styles.thumb, { backgroundColor: colors.panelAlt }]} />}
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={styles.name} numberOfLines={2}>{p.name.trim()}</Text>
             <Text style={styles.price}>

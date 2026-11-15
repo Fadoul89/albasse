@@ -10,12 +10,19 @@ export const colors = {
   red: '#d8232a',
 
   cream: '#f4efe4',
-  creamMuted: 'rgba(244, 239, 228, 0.6)',
-  creamFaint: 'rgba(244, 239, 228, 0.35)',
+  // Contraste (WCAG AA, 4.5:1 minimum pour un texte) mesuré sur les 3 fonds : background, panel, panelAlt.
+  creamMuted: 'rgba(244, 239, 228, 0.75)',
+  creamFaint: 'rgba(244, 239, 228, 0.66)',
+  // seulement pour un décor sans texte (étoile vide) : jamais pour du texte
+  decorFaint: 'rgba(244, 239, 228, 0.35)',
 
   border: 'rgba(199, 154, 62, 0.25)',
   overlay: 'rgba(7, 36, 105, 0.7)',
 
   success: '#2e8b57',
   error: '#d8232a',
+
+  // Rouge et vert pour du TEXTE sur fond bleu (le rouge #d8232a ne fait que 2.0 à 2.9 sur ces fonds, le vert #2e8b57 de 2.3 à 3.4)
+  errorText: '#ff9b9b',
+  successText: '#5fd38d',
 };

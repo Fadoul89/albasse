@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
   },
   reasonChipActive: { borderColor: colors.red, backgroundColor: colors.panel },
   reasonText: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 12 },
-  reasonTextActive: { color: colors.red },
+  reasonTextActive: { color: colors.errorText },
   input: {
     backgroundColor: colors.panel,
     borderRadius: radius.md,
@@ -135,5 +135,5 @@ const styles = StyleSheet.create({
     backgroundColor: colors.red,
   },
   confirmBtnDisabled: { opacity: 0.4 },
-  confirmText: { color: colors.cream, fontFamily: fonts.bodyBold, fontSize: 13 },
+  confirmText: { color: '#ffffff', fontFamily: fonts.bodyBold, fontSize: 13 },
 });

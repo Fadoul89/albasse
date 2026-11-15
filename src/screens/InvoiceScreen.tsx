@@ -108,7 +108,7 @@ export function InvoiceScreen() {
                 <View style={{ flex: 1, minWidth: 220 }}>
                   <View style={styles.brandRow}>
                     <View testID="invoice-logo" style={styles.logoWrap}>
-                      <Image source={LOGO} style={styles.logo} contentFit="cover" />
+                      <Image accessibilityLabel="Logo Albasse Shopping" source={LOGO} style={styles.logo} contentFit="cover" />
                     </View>
                     <Text style={styles.shopName}>{settings.shop_name || 'Albasse Shopping'}</Text>
                   </View>

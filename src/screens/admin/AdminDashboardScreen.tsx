@@ -313,7 +313,7 @@ const styles = StyleSheet.create({
   },
   stockName: { flex: 1, color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 13 },
   stockValue: { color: colors.gold, fontFamily: fonts.bodySemiBold, fontSize: 12 },
-  stockZero: { color: colors.red },
+  stockZero: { color: colors.errorText },
   sourceHeaderRow: { flexDirection: 'row', paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: colors.border },
   sourceHeaderCell: {
     flex: 1,

@@ -14,7 +14,7 @@ export function StarRating({ rating, size = 13, showValue, reviewCount }: Props)
   return (
     <View style={styles.row}>
       {stars.map((s) => (
-        <Text key={s} style={{ fontSize: size, color: s <= Math.round(rating) ? colors.gold : colors.creamFaint }}>
+        <Text key={s} style={{ fontSize: size, color: s <= Math.round(rating) ? colors.gold : colors.decorFaint }}>
           ★
         </Text>
       ))}

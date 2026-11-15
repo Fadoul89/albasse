@@ -271,7 +271,7 @@ const styles = StyleSheet.create({
   waBtn: { backgroundColor: 'rgba(37,211,102,0.18)', borderColor: 'rgba(37,211,102,0.5)' },
   actionText: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 12 },
   editLink: { color: colors.gold, fontFamily: fonts.bodyMedium, fontSize: 12 },
-  deleteLink: { color: '#ff8a80', fontFamily: fonts.bodyMedium, fontSize: 12 },
+  deleteLink: { color: '#ff9b9b', fontFamily: fonts.bodyMedium, fontSize: 12 },
   articles: { marginTop: spacing.sm, backgroundColor: colors.panelAlt, borderRadius: radius.sm, padding: spacing.sm, gap: 6 },
   articleLine: { color: colors.cream, fontFamily: fonts.body, fontSize: 12, lineHeight: 17 },
   editBox: { marginTop: 8, gap: 6 },

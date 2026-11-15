@@ -115,7 +115,7 @@ export function CafeScreen() {
         <Text style={styles.pageName} testID="cafe-page-name">{CAFE_PAGE.name}</Text>
 
         <View style={styles.imageWrap} testID="cafe-image">
-          {image ? <Image source={{ uri: image }} style={styles.image} contentFit="cover" transition={150} /> : <Text style={styles.imageFallback}>☕</Text>}
+          {image ? <Image accessibilityLabel={CAFE_PAGE.name} source={{ uri: image }} style={styles.image} contentFit="cover" transition={150} /> : <Text style={styles.imageFallback}>☕</Text>}
         </View>
 
         <Text style={styles.title} testID="cafe-title">{name}</Text>
@@ -163,6 +163,7 @@ export function CafeScreen() {
         </Pressable>
 
         <View style={styles.footerLinks}>
+          <Pressable onPress={() => navigation.navigate('Terms')} hitSlop={8}><Text style={styles.link}>Conditions générales</Text></Pressable>
           <Pressable onPress={() => navigation.navigate('ReturnPolicy')} hitSlop={8}><Text style={styles.link}>Conditions de retour</Text></Pressable>
           <Pressable onPress={() => navigation.navigate('PrivacyPolicy')} hitSlop={8}><Text style={styles.link}>Confidentialité</Text></Pressable>
           <Pressable onPress={() => navigation.navigate('Contact')} hitSlop={8}><Text style={styles.link}>Contact</Text></Pressable>
@@ -199,7 +200,7 @@ const styles = StyleSheet.create({
   subtitle: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 15, marginTop: 2 },
   priceRow: { flexDirection: 'row', alignItems: 'baseline', gap: 10, marginTop: spacing.sm },
   price: { color: colors.goldLight, fontFamily: fonts.bodyBold, fontSize: 28 },
-  oldPrice: { color: colors.red, fontFamily: fonts.bodyMedium, fontSize: 16, textDecorationLine: 'line-through' },
+  oldPrice: { color: colors.errorText, fontFamily: fonts.bodyMedium, fontSize: 16, textDecorationLine: 'line-through' },
   lowStock: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 13, marginTop: 4 },
   soldOut: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 14, marginTop: spacing.sm, lineHeight: 20 },
   cta: { marginTop: spacing.md },

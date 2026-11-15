@@ -277,7 +277,7 @@ const ldBlocks = (html: string): any[] => [...html.matchAll(/<script type="appli
     const { res } = await ask(sitemap, '/sitemap.xml', CHROME);
     const xml = await res.text();
     check('plan du site : type XML', /application\/xml/.test(res.headers.get('content-type') ?? ''));
-    check('plan du site : pages fixes + catégories + produits', (xml.match(/<loc>/g) ?? []).length === 4 + 2 + 2, (xml.match(/<loc>/g) ?? []).length);
+    check('plan du site : pages fixes + catégories + produits', (xml.match(/<loc>/g) ?? []).length === 5 + 2 + 2, (xml.match(/<loc>/g) ?? []).length);
     check('plan du site : photos des produits', xml.includes('<image:loc>https://img.example/a.jpg</image:loc>') && xml.includes('xmlns:image='));
     check('plan du site : balises retirées, « & » et guillemets échappés dans le XML', !xml.includes('<b>') && xml.includes('<image:title>Eau &quot;fraîche&quot; &amp; boisée</image:title>'), xml.match(/<image:title>[^<]*<\/image:title>/g));
     check('plan du site : jamais d\'adresse d\'administration', !/\/admin/.test(xml));
@@ -332,6 +332,7 @@ const ldBlocks = (html: string): any[] => [...html.matchAll(/<script type="appli
       ['/contact', 'Contact | Albasse Shopping', /contact@albasseshopping\.com/],
       ['/conditions-de-retour', 'Conditions de retour | Albasse Shopping', /72 heures.*frais de retour sont à notre charge/s],
       ['/confidentialite', 'Politique de confidentialité | Albasse Shopping', /Dernière mise à jour/],
+      ['/conditions-generales', 'Conditions générales | Albasse Shopping', /48 heures.*8h30 à 16h/s],
     ] as [string, string, RegExp][]) {
       const { res, state } = await ask(ogPreview, path);
       const html = await res.text();
@@ -344,7 +345,7 @@ const ldBlocks = (html: string): any[] => [...html.matchAll(/<script type="appli
     check('/contact/ (avec la barre finale) : la même page, la même adresse canonique sans barre', (await slash.res.text()).includes('rel="canonical" href="https://www.albasseshopping.com/contact"'));
     const visitor = await ask(ogPreview, '/contact', CHROME);
     check('visiteur normal sur /contact : l\'application normale, rien de modifié', visitor.state.next === 1 && (await visitor.res.text()) === '<html>application</html>');
-    check('les 3 pages d\'information sont dans le plan du site', seo.STATIC_PAGES.includes('/contact') && seo.STATIC_PAGES.includes('/conditions-de-retour') && seo.STATIC_PAGES.includes('/confidentialite'));
+    check('les 4 pages d\'information sont dans le plan du site', seo.STATIC_PAGES.includes('/contact') && seo.STATIC_PAGES.includes('/conditions-generales') && seo.STATIC_PAGES.includes('/conditions-de-retour') && seo.STATIC_PAGES.includes('/confidentialite'));
     check('la page conditions de retour ne promet pas « retour gratuit » (les frais dépendent du cas)', !/retour gratuit/i.test(seo.infoPage(seo.infoPageDef('/conditions-de-retour')!)));
   }
 
@@ -373,6 +374,15 @@ const ldBlocks = (html: string): any[] => [...html.matchAll(/<script type="appli
     products.push({ name: 'Rado', slug: 'rado', description: '', price: 30000, images: ['https://img.example/r.jpg'], stock: 0, category_id: 'c1', categories: { name: 'Montres', slug: 'montres' }, created_at: '2026-09-01T10:00:00Z' } as any);
     products.push({ name: 'Rado', slug: 'rado-2', description: '', price: 30000, images: ['https://img.example/r2.jpg'], stock: 2, category_id: 'c1', categories: { name: 'Montres', slug: 'montres' }, created_at: '2026-09-20T10:00:00Z' } as any);
     products.push({ name: 'Rado', slug: 'rado-5', description: 'Rado noire, bracelet cuir : un autre modèle.', price: 30000, images: ['https://img.example/r5.jpg'], stock: 7, category_id: 'c1', categories: { name: 'Montres', slug: 'montres' }, created_at: '2026-08-01T10:00:00Z' } as any);
+    // le nom d'une copie peut avoir une espace en trop ou une autre casse (« AL MADJAZ » / « AL MADJAZ ») : la recherche se fait par prix, la comparaison est faite ensuite
+    products.push({ name: 'Al Madjaz ', slug: 'am-3', description: 'Sandale Al Madjaz.', price: 50000, images: ['https://img.example/a3.jpg'], stock: 60, category_id: 'c1', categories: { name: 'Montres', slug: 'montres' }, created_at: '2026-10-30T10:00:00Z' } as any);
+    products.push({ name: 'AL MADJAZ', slug: 'am-4', description: 'Sandale Al Madjaz.', price: 50000, images: ['https://img.example/a4.jpg'], stock: 60, category_id: 'c1', categories: { name: 'Montres', slug: 'montres' }, created_at: '2026-10-30T10:00:05Z' } as any);
+    calls.length = 0;
+    const am4 = await ask(ogPreview, '/produit/am-4');
+    check('nom avec espace ou casse différente : la copie am-4 désigne bien la page principale am-3', (await am4.res.text()).includes('<link rel="canonical" href="https://www.albasseshopping.com/produit/am-3" />'));
+    check('la recherche des copies se fait par prix (products?...price=eq.50000), pas par nom exact', calls.some((c) => /products\?is_active=eq\.true&price=eq\.50000/.test(c)) && !calls.some((c) => /name=eq\./.test(c)), calls);
+    products.splice(products.findIndex((p) => p.slug === 'am-3'), 1);
+    products.splice(products.findIndex((p) => p.slug === 'am-4'), 1);
     const other = await ask(ogPreview, '/produit/rado-5');
     check('même nom et même prix mais AUTRE description (autre modèle) : la page garde sa propre adresse canonique', (await other.res.text()).includes('<link rel="canonical" href="https://www.albasseshopping.com/produit/rado-5" />'));
     products.splice(products.findIndex((p) => p.slug === 'rado-5'), 1);
@@ -423,7 +433,7 @@ const ldBlocks = (html: string): any[] => [...html.matchAll(/<script type="appli
   {
     const toml = readFileSync(new URL('../../netlify.toml', import.meta.url), 'utf8');
     const paths = [...toml.matchAll(/path = "([^"]+)"\s+function = "([^"]+)"/g)].map((m) => `${m[1]}=>${m[2]}`);
-    check('netlify.toml : accueil, produits, catégories, pages d\'information, plan du site, robots.txt', ['/=>og-preview', '/produit/*=>og-preview', '/categorie/*=>og-preview', '/contact=>og-preview', '/conditions-de-retour=>og-preview', '/confidentialite=>og-preview', '/sitemap.xml=>sitemap', '/robots.txt=>sitemap'].every((x) => paths.includes(x)), paths);
+    check('netlify.toml : accueil, produits, catégories, pages d\'information, plan du site, robots.txt', ['/=>og-preview', '/produit/*=>og-preview', '/categorie/*=>og-preview', '/contact=>og-preview', '/conditions-de-retour=>og-preview', '/conditions-generales=>og-preview', '/confidentialite=>og-preview', '/sitemap.xml=>sitemap', '/robots.txt=>sitemap'].every((x) => paths.includes(x)), paths);
   }
 
   console.log(`\n${ok} vérifications réussies${process.exitCode ? ' — AVEC DES ÉCHECS' : ''}`);

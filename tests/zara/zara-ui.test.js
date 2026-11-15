@@ -78,6 +78,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         localStorage.setItem('albasse_app_banner_dismissed', '1');
         localStorage.setItem('albasse_app_popup_seen_' + new Date().toISOString().slice(0, 10), '1');
         for (const [k, v] of Object.entries(entries)) localStorage.setItem(k, v);
+        // bandeau cookies : par defaut deja refuse (il couvre le bas de l'ecran, dont le bouton de Zara) ; une partie qui le teste le met a null
+        if (!localStorage.getItem('albasse_cookie_consent') && !window.__keepCookieBanner) localStorage.setItem('albasse_cookie_consent', 'refused');
         if (installDefault && !localStorage.getItem('albasse_zara_install')) localStorage.setItem('albasse_zara_install', JSON.stringify({ at: Date.now(), outcome: installDefault }));
         // page d'installation montree juste apres l'inscription : par defaut deja vue (installAfterSignUp: null = vrai nouveau telephone)
         if (afterSignUp && !localStorage.getItem('albasse_install_after_signup')) localStorage.setItem('albasse_install_after_signup', afterSignUp);
@@ -7774,7 +7776,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const online = (await v.page.getByTestId('home-online-text').innerText()).trim();
       check('compteur : le vrai nombre de la base, « 3 en ligne »', online === '3 en ligne' && fo.calls >= 1, { online, calls: fo.calls });
       const tag = v.page.getByTestId('home-live-tag');
-      check('pastille rouge « LIVE » devant le compteur (a la place du point vert)', (await tag.innerText()).trim() === 'LIVE' && (await tag.evaluate((el) => getComputedStyle(el).backgroundColor)) === 'rgb(255, 45, 45)' && (await v.page.getByTestId('home-online').innerText()).replace(/\s+/g, ' ').trim() === 'LIVE 3 en ligne');
+      check('pastille rouge « LIVE » devant le compteur (a la place du point vert)', (await tag.innerText()).trim() === 'LIVE' && (await tag.evaluate((el) => getComputedStyle(el).backgroundColor)) === 'rgb(216, 35, 42)' && (await v.page.getByTestId('home-online').innerText()).replace(/\s+/g, ' ').trim() === 'LIVE 3 en ligne');
       await v.page.screenshot({ path: path.join(OUT, '4a-accueil-live.png'), clip: { x: 0, y: 0, width: 390, height: 190 } });
       const ar = await v.page.getByTestId('lang-ar').boundingBox();
       const on = await v.page.getByTestId('home-online').boundingBox();

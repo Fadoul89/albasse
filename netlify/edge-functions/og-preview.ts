@@ -61,8 +61,8 @@ async function serve(request: Request, context: Context): Promise<Response> {
       const product = found[0];
       // un article caché (désactivé) n'existe plus pour Google : 404, comme une adresse inconnue (avant : la page complète restait lisible, « en stock » compris)
       if (!product) return notFound();
-      // copies identiques (même nom, même prix, même description) : on dit à Google laquelle est la page principale (voir lib/seo.ts)
-      const sameName = await rows<CopyRow>(supabaseUrl, supabaseKey, `products?is_active=eq.true&name=eq.${encodeURIComponent(product.name)}&select=slug,name,price,description,stock,created_at&limit=50`);
+      // copies identiques (même nom, même prix, même description) : on cherche par PRIX (le nom peut avoir une espace en fin ou une majuscule de plus : « AL MADJAZ » / « AL MADJAZ »), puis copiesOf compare nom et description : on dit à Google laquelle est la page principale (voir lib/seo.ts)
+      const sameName = await rows<CopyRow>(supabaseUrl, supabaseKey, `products?is_active=eq.true&price=eq.${encodeURIComponent(String(product.price))}&select=slug,name,price,description,stock,created_at&limit=500`);
       const mine: CopyRow = { slug: product.slug, name: product.name, price: product.price, description: product.description };
       const canonicalSlug = pickCanonicalSlug(copiesOf(mine, sameName), product.slug);
       return new Response(productPage(product, product.categories ?? null, canonicalSlug), { headers: HTML_HEADERS });

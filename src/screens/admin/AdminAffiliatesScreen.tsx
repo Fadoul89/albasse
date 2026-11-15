@@ -186,7 +186,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
   },
   statusApproved: { color: '#3ddc6f', backgroundColor: 'rgba(61,220,111,0.12)' },
-  statusBlocked: { color: colors.red, backgroundColor: 'rgba(216,35,42,0.12)' },
+  statusBlocked: { color: colors.errorText, backgroundColor: 'rgba(216,35,42,0.12)' },
   rowMeta: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11, marginTop: 3 },
   metricsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
   metric: { backgroundColor: colors.panelAlt, borderRadius: radius.sm, paddingHorizontal: 8, paddingVertical: 6, minWidth: 66, alignItems: 'center' },
@@ -196,5 +196,5 @@ const styles = StyleSheet.create({
   approveBtn: { backgroundColor: colors.gold, borderRadius: radius.sm, paddingHorizontal: 14, paddingVertical: 8 },
   approveBtnText: { color: colors.background, fontFamily: fonts.bodyBold, fontSize: 12 },
   blockBtn: { borderWidth: 1, borderColor: colors.red, borderRadius: radius.sm, paddingHorizontal: 14, paddingVertical: 8 },
-  blockBtnText: { color: colors.red, fontFamily: fonts.bodyMedium, fontSize: 12 },
+  blockBtnText: { color: colors.errorText, fontFamily: fonts.bodyMedium, fontSize: 12 },
 });

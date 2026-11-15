@@ -276,7 +276,7 @@ export function AdminOrdersScreen() {
                   <View key={`${oi.product_id}-${idx}`}>
                     <View style={styles.itemRow}>
                       {oi.product_image ? (
-                        <Image source={{ uri: oi.product_image }} style={styles.itemImage} contentFit="cover" />
+                        <Image accessibilityLabel={oi.product_name} source={{ uri: oi.product_image }} style={styles.itemImage} contentFit="cover" />
                       ) : (
                         <View style={styles.itemImagePlaceholder} />
                       )}
@@ -464,7 +464,7 @@ const styles = StyleSheet.create({
   advanceBtn: { marginTop: 10 },
   advanceText: { color: colors.gold, fontFamily: fonts.bodyMedium, fontSize: 12 },
   deleteBtn: { marginLeft: 'auto' },
-  deleteText: { color: colors.red, fontFamily: fonts.bodyMedium, fontSize: 12 },
+  deleteText: { color: colors.errorText, fontFamily: fonts.bodyMedium, fontSize: 12 },
   flagBtn: {},
   invoiceBtn: { marginLeft: 12, marginRight: 4 },
   invoiceText: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 12 },
@@ -510,7 +510,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   flaggedBadge: {
-    color: colors.red,
+    color: colors.errorText,
     fontFamily: fonts.bodyBold,
     fontSize: 10,
     backgroundColor: 'rgba(216,35,42,0.15)',

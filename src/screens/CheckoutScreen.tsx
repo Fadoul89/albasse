@@ -286,7 +286,7 @@ export function CheckoutScreen() {
         <Text style={styles.sectionTitle}>Votre article</Text>
         <View style={styles.itemCard} testID="checkout-item">
           {item.product.images[0] ? (
-            <Image source={{ uri: item.product.images[0] }} style={styles.itemImage} contentFit="cover" />
+            <Image accessibilityLabel={item.product.name} source={{ uri: item.product.images[0] }} style={styles.itemImage} contentFit="cover" />
           ) : (
             <View style={styles.itemImage} />
           )}
@@ -656,8 +656,8 @@ const styles = StyleSheet.create({
   summaryLabel: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 13 },
   summaryValue: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 13 },
   totalLabel: { color: colors.cream, fontFamily: fonts.bodySemiBold, fontSize: 15 },
-  discountLabel: { color: colors.success, fontFamily: fonts.bodySemiBold, fontSize: 13 },
-  discountValue: { color: colors.success, fontFamily: fonts.bodyBold, fontSize: 13 },
+  discountLabel: { color: colors.successText, fontFamily: fonts.bodySemiBold, fontSize: 13 },
+  discountValue: { color: colors.successText, fontFamily: fonts.bodyBold, fontSize: 13 },
   discountHint: { color: colors.goldLight, fontFamily: fonts.bodyMedium, fontSize: 12, marginTop: 8 },
   totalValue: { color: colors.goldLight, fontFamily: fonts.displayBold, fontSize: 18 },
 });

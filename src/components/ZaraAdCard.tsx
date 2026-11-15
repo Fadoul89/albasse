@@ -85,7 +85,7 @@ export function ZaraAdCard({ products, categories = [] }: { products: Product[];
       >
         <Animated.View style={{ opacity: fade }}>
           <View style={styles.header}>
-            <Image source={AVATAR} style={styles.avatar} contentFit="cover" />
+            <Image accessibilityLabel="Zara, assistante de vente" source={AVATAR} style={styles.avatar} contentFit="cover" />
             <View style={styles.headerText}>
               <Text style={styles.who}>ZARA VOUS CONSEILLE</Text>
               <Text style={styles.line} testID="zara-ad-line">
@@ -94,7 +94,7 @@ export function ZaraAdCard({ products, categories = [] }: { products: Product[];
             </View>
           </View>
           <View style={styles.product}>
-            <Image source={{ uri: p.images[0] }} style={styles.thumb} contentFit="cover" />
+            <Image accessibilityLabel={p.name} source={{ uri: p.images[0] }} style={styles.thumb} contentFit="cover" />
             <View style={styles.productText}>
               <Text style={styles.name} numberOfLines={2} testID="zara-ad-name">
                 {p.name.trim()}

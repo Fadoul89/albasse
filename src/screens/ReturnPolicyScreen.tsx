@@ -75,7 +75,7 @@ const styles = StyleSheet.create({
   sectionTitle: { color: colors.gold, fontFamily: fonts.bodySemiBold, fontSize: 14, marginBottom: 8 },
   p: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 13, lineHeight: 19, marginBottom: 6 },
   chargeNous: { color: colors.gold, fontFamily: fonts.bodyBold },
-  chargeClient: { color: colors.red, fontFamily: fonts.bodyBold },
+  chargeClient: { color: colors.errorText, fontFamily: fonts.bodyBold },
   avis: {
     backgroundColor: colors.panelAlt,
     borderRadius: radius.md,

@@ -16,7 +16,7 @@ const LOGO = require('../../assets/logo.jpg');
 
 export function AccountWall() {
   const [mode, setMode] = useState<'register' | 'login'>('register');
-  const go = (route: 'ForgotPassword' | 'PrivacyPolicy') => {
+  const go = (route: 'ForgotPassword' | 'PrivacyPolicy' | 'Terms') => {
     if (navigationRef.isReady()) navigationRef.navigate(route);
   };
   // rien à faire après l'inscription ou la connexion : le mur disparaît et la page demandée est rouverte (RootNavigator)
@@ -25,7 +25,7 @@ export function AccountWall() {
   return (
     <View style={styles.cover} testID="account-wall">
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Image source={LOGO} style={styles.logo} contentFit="cover" />
+        <Image accessibilityLabel="Logo Albasse Shopping" source={LOGO} style={styles.logo} contentFit="cover" />
         <Text style={styles.brand}>ALBASSE SHOPPING</Text>
         <Text style={styles.title}>Bienvenue 👋</Text>
         <Text style={styles.text}>
@@ -36,7 +36,7 @@ export function AccountWall() {
         {register && <EntryPreview />}
         <View style={styles.block} testID={register ? 'wall-register' : 'wall-login'}>
           {register ? (
-            <RegisterForm onSuccess={done} onPrivacy={() => go('PrivacyPolicy')} />
+            <RegisterForm onSuccess={done} onPrivacy={() => go('PrivacyPolicy')} onTerms={() => go('Terms')} />
           ) : (
             <LoginForm onSuccess={done} onForgot={() => go('ForgotPassword')} />
           )}

@@ -111,5 +111,5 @@ const styles = StyleSheet.create({
   inputError: { borderColor: colors.red },
   showRow: { marginBottom: spacing.xs },
   link: { color: colors.gold, fontFamily: fonts.bodyMedium, fontSize: 12 },
-  error: { color: colors.red, fontFamily: fonts.bodyMedium, fontSize: 12, marginTop: 4 },
+  error: { color: colors.errorText, fontFamily: fonts.bodyMedium, fontSize: 12, marginTop: 4 },
 });

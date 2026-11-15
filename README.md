@@ -43,16 +43,10 @@ soit testable immédiatement.
 
 ## Paiement Mobile Money
 
-Les intégrations Airtel Money et Moov Money sont structurées dans
-`src/lib/payments/` mais nécessitent vos identifiants marchands (Tchad) pour
-être activées. Une fois vos comptes ouverts, ajoutez dans `.env` :
-
-```
-EXPO_PUBLIC_AIRTEL_MONEY_MERCHANT_ID=...
-EXPO_PUBLIC_AIRTEL_MONEY_API_KEY=...
-EXPO_PUBLIC_MOOV_MONEY_MERCHANT_ID=...
-EXPO_PUBLIC_MOOV_MONEY_API_KEY=...
-```
+Aujourd'hui le paiement Airtel Money / Moov Money se fait à la main (numéros affichés en bas de la page de commande).
+Le jour où les comptes marchands seront ouverts, l'appel à leur API passera par une **fonction serveur Supabase** qui garde
+les clés dans ses Secrets. **Ne jamais** mettre une clé marchande dans `.env` sous un nom `EXPO_PUBLIC_…` : ces variables sont
+copiées dans le site et lisibles par tout le monde.
 
 Stripe pourra être ajouté plus tard en implémentant un nouveau provider dans
 `src/lib/payments/` (interface `PaymentProvider` déjà prête).

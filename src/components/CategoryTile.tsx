@@ -24,7 +24,7 @@ export function CategoryTile({ category }: { category: Category }) {
       onPress={() => navigation.navigate('Category', { slug: category.slug })}
     >
       {category.image_url ? (
-        <Image source={{ uri: category.image_url }} style={styles.image} contentFit="cover" />
+        <Image accessibilityLabel={category.name} source={{ uri: category.image_url }} style={styles.image} contentFit="cover" />
       ) : (
         <Text style={styles.icon}>{ICONS[category.slug] ?? '✨'}</Text>
       )}

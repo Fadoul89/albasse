@@ -94,7 +94,7 @@ export function EntryPreview() {
           <Animated.View style={[styles.cards, { opacity: fade }]} testID="entry-set">
             {products.map((p, i) => (
               <View key={p.id} style={styles.card} testID={`entry-product-${i}`}>
-                <Image source={{ uri: (p.images ?? []).find((u) => !!u) ?? undefined }} style={styles.photo} contentFit="cover" />
+                <Image accessibilityLabel={p.name} source={{ uri: (p.images ?? []).find((u) => !!u) ?? undefined }} style={styles.photo} contentFit="cover" />
                 <Text style={styles.price} numberOfLines={1}>
                   {entryPrice(p.price)}
                 </Text>

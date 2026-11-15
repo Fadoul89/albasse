@@ -77,5 +77,5 @@ const styles = StyleSheet.create({
   },
   connectorActive: { backgroundColor: colors.gold },
   cancelledBox: { paddingVertical: 8 },
-  cancelledText: { color: colors.red, fontFamily: fonts.bodySemiBold, fontSize: 13 },
+  cancelledText: { color: colors.errorText, fontFamily: fonts.bodySemiBold, fontSize: 13 },
 });

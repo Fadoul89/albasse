@@ -21,7 +21,7 @@ import { RootNavigator } from './src/navigation/RootNavigator';
 import { useAuthStore } from './src/store/authStore';
 import { Toast } from './src/components/Toast';
 import { initAnalyticsSession } from './src/lib/analytics';
-import { initTikTokPixel } from './src/lib/tiktokPixel';
+import { CookieBanner, startPixelIfAccepted } from './src/components/CookieBanner';
 import { initGoogleTranslate } from './src/lib/googleTranslate';
 import { initVoiceoverAutoplay } from './src/lib/voiceoverPlayer';
 
@@ -56,7 +56,7 @@ export default function App() {
   useEffect(() => {
     if (Platform.OS === 'web') {
       document.title = 'Albasse Shopping';
-      initTikTokPixel();
+      startPixelIfAccepted(); // le pixel TikTok seulement si le visiteur a déjà accepté les cookies (bandeau)
       initGoogleTranslate();
       initVoiceoverAutoplay();
     }
@@ -87,6 +87,7 @@ export default function App() {
         <View style={styles.app}>
           <RootNavigator />
           <Toast />
+          <CookieBanner />
           <StatusBar style="light" />
         </View>
       </SafeAreaProvider>

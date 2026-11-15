@@ -258,7 +258,7 @@ export function AdminProductFormScreen({ route }: Props) {
         <View style={styles.imagesRow}>
           {images.map((uri) => (
             <View key={uri} style={styles.imageThumbWrap}>
-              <Image source={{ uri }} style={styles.imageThumb} contentFit="cover" />
+              <Image accessibilityLabel="Photo de l'article" source={{ uri }} style={styles.imageThumb} contentFit="cover" />
               <Pressable style={styles.imageRemoveBtn} onPress={() => handleRemoveImage(uri)}>
                 <Text style={styles.imageRemoveText}>✕</Text>
               </Pressable>
@@ -472,7 +472,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  reviewDeleteText: { color: colors.cream, fontSize: 11, fontFamily: fonts.bodyBold },
+  reviewDeleteText: { color: '#ffffff', fontSize: 11, fontFamily: fonts.bodyBold },
   addReviewForm: {
     backgroundColor: colors.panelAlt,
     borderRadius: radius.md,

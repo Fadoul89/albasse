@@ -158,7 +158,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   inputError: { borderColor: colors.red },
-  error: { color: colors.red, fontFamily: fonts.bodyMedium, fontSize: 12, marginTop: 4 },
+  error: { color: colors.errorText, fontFamily: fonts.bodyMedium, fontSize: 12, marginTop: 4 },
   sameNumber: { marginBottom: spacing.sm, marginTop: -2 },
   link: { color: colors.gold, fontFamily: fonts.bodyMedium, fontSize: 12 },
 });

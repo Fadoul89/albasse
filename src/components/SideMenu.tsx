@@ -82,7 +82,7 @@ export function SideMenu({ visible, onClose, categories }: { visible: boolean; o
               >
                 <View style={styles.profileTop}>
                   <View style={styles.avatar}>
-                    {me.avatarUrl ? <Image source={{ uri: me.avatarUrl }} style={styles.avatarImage} contentFit="cover" /> : <Text style={styles.avatarText}>{me.initial}</Text>}
+                    {me.avatarUrl ? <Image accessibilityLabel="Ma photo de profil" source={{ uri: me.avatarUrl }} style={styles.avatarImage} contentFit="cover" /> : <Text style={styles.avatarText}>{me.initial}</Text>}
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.name} numberOfLines={1} testID="menu-profile-name">{me.name}</Text>
@@ -123,7 +123,7 @@ export function SideMenu({ visible, onClose, categories }: { visible: boolean; o
                 testID={`menu-cat-${c.slug}`}
               >
                 <View style={styles.catIcon}>
-                  {c.image_url ? <Image source={{ uri: c.image_url }} style={styles.catImage} contentFit="cover" /> : <Text style={styles.catEmoji}>{ICONS[c.slug] ?? '✨'}</Text>}
+                  {c.image_url ? <Image accessibilityLabel={c.name} source={{ uri: c.image_url }} style={styles.catImage} contentFit="cover" /> : <Text style={styles.catEmoji}>{ICONS[c.slug] ?? '✨'}</Text>}
                 </View>
                 <Text style={styles.catName} numberOfLines={2}>{c.name}</Text>
                 <Text style={styles.chevron}>›</Text>

@@ -97,7 +97,7 @@ export function AppDownloadPopup() {
             <Text style={styles.closeIcon}>✕</Text>
           </Pressable>
 
-          <Image source={require('../../assets/logo.jpg')} style={styles.icon} contentFit="cover" />
+          <Image accessibilityLabel="Logo Albasse Shopping" source={require('../../assets/logo.jpg')} style={styles.icon} contentFit="cover" />
 
           <Text style={styles.title}>📲 Télécharge l'app Albasse Shopping</Text>
           <Text style={styles.message}>

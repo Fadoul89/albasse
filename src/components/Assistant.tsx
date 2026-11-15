@@ -351,7 +351,7 @@ function FabButton({
             <View ref={ring1Ref} pointerEvents="none" style={[styles.ring, styles.ringHidden]} />
             <View ref={ring2Ref} pointerEvents="none" style={[styles.ring, styles.ringHidden]} />
             <View ref={shakeRef} style={styles.fab}>
-              <Image source={AVATAR} style={styles.avatar} contentFit="cover" />
+              <Image accessibilityLabel="Zara, assistante de vente" source={AVATAR} style={styles.avatar} contentFit="cover" />
               <View style={styles.dot} />
             </View>
           </>
@@ -360,7 +360,7 @@ function FabButton({
             <Animated.View pointerEvents="none" style={[styles.ring, nativeRing(ring1)]} />
             <Animated.View pointerEvents="none" style={[styles.ring, nativeRing(ring2)]} />
             <Animated.View style={[styles.fab, nativeShake]}>
-              <Image source={AVATAR} style={styles.avatar} contentFit="cover" />
+              <Image accessibilityLabel="Zara, assistante de vente" source={AVATAR} style={styles.avatar} contentFit="cover" />
               <View style={styles.dot} />
             </Animated.View>
           </>

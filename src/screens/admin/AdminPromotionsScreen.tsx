@@ -344,7 +344,7 @@ export function AdminPromotionsScreen() {
                     <Text style={styles.voiceoverAction}>▶ Écouter</Text>
                   </Pressable>
                   <Pressable onPress={handleRemoveVoiceover}>
-                    <Text style={[styles.voiceoverAction, { color: colors.red }]}>Supprimer</Text>
+                    <Text style={[styles.voiceoverAction, { color: colors.errorText }]}>Supprimer</Text>
                   </Pressable>
                 </View>
               ) : (
@@ -509,7 +509,7 @@ export function AdminPromotionsScreen() {
               {uploadingImage ? (
                 <ActivityIndicator color={colors.gold} />
               ) : imageUrl ? (
-                <Image source={{ uri: imageUrl }} style={styles.imagePreview} contentFit="cover" />
+                <Image accessibilityLabel="Image de la promotion" source={{ uri: imageUrl }} style={styles.imagePreview} contentFit="cover" />
               ) : (
                 <Text style={styles.imagePickerText}>＋ Photo</Text>
               )}
@@ -607,10 +607,10 @@ function AdItemsEditor({
       {items.map((item, index) => (
         <View key={`${item.image_url}-${index}`} style={styles.adItemCard}>
           <View style={styles.adItemHeader}>
-            <Image source={{ uri: item.image_url }} style={styles.adItemThumb} contentFit="cover" />
+            <Image accessibilityLabel="Image de la publicité" source={{ uri: item.image_url }} style={styles.adItemThumb} contentFit="cover" />
             <Text style={styles.adItemNumber}>Photo {index + 1}</Text>
             <Pressable onPress={() => onRemove(index)} hitSlop={8} style={{ marginLeft: 'auto' }}>
-              <Text style={[styles.voiceoverAction, { color: colors.red }]}>✕ Retirer</Text>
+              <Text style={[styles.voiceoverAction, { color: colors.errorText }]}>✕ Retirer</Text>
             </Pressable>
           </View>
           <Text style={styles.adItemLinkLabel}>🔗 URL du lien (optionnel — où aller quand on clique sur cette photo)</Text>
@@ -717,6 +717,6 @@ const styles = StyleSheet.create({
   rowName: { color: colors.cream, fontFamily: fonts.bodySemiBold, fontSize: 14 },
   rowMeta: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11, marginTop: 2 },
   editLink: { color: colors.gold, fontFamily: fonts.bodyMedium, fontSize: 12, marginRight: 4 },
-  deleteLink: { color: colors.red, fontFamily: fonts.bodyMedium, fontSize: 12 },
+  deleteLink: { color: colors.errorText, fontFamily: fonts.bodyMedium, fontSize: 12 },
   emptyText: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 12, textAlign: 'center', marginTop: 20 },
 });

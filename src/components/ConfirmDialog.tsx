@@ -87,5 +87,5 @@ const styles = StyleSheet.create({
   },
   destructiveBtn: { backgroundColor: colors.red },
   confirmText: { color: colors.background, fontFamily: fonts.bodyBold, fontSize: 13 },
-  destructiveText: { color: colors.cream },
+  destructiveText: { color: '#ffffff' },
 });

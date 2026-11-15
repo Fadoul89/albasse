@@ -100,6 +100,6 @@ const styles = StyleSheet.create({
   chipOff: { opacity: 0.3 },
   chipText: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 13 },
   chipTextActive: { color: colors.background, fontFamily: fonts.bodyBold },
-  summary: { color: colors.success, fontFamily: fonts.bodySemiBold, fontSize: 14, marginTop: spacing.md },
+  summary: { color: colors.successText, fontFamily: fonts.bodySemiBold, fontSize: 14, marginTop: spacing.md },
   hint: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 12, lineHeight: 18, marginTop: spacing.sm },
 });

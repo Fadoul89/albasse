@@ -32,7 +32,7 @@ export function ProductCard({ product, columns = 2 }: { product: Product; column
       onPress={() => navigation.navigate('Product', { slug: product.slug })}
     >
       <View style={styles.imageWrap}>
-        <Image source={{ uri: product.images[0] }} style={styles.image} contentFit="cover" transition={150} />
+        <Image accessibilityLabel={product.name} source={{ uri: product.images[0] }} style={styles.image} contentFit="cover" transition={150} />
         {discount && (
           <View style={styles.badge} testID="product-discount-badge">
             <Text style={styles.badgeText}>-{discount}%</Text>
@@ -71,13 +71,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 3,
   },
-  badgeText: { color: colors.cream, fontFamily: fonts.bodyBold, fontSize: 11 },
+  badgeText: { color: '#ffffff', fontFamily: fonts.bodyBold, fontSize: 11 },
   favoriteBtn: { position: 'absolute', top: 8, right: 8 },
   name: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 13, marginBottom: 4 },
   priceRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
-  price: { color: colors.success, fontFamily: fonts.bodyBold, fontSize: 14 },
+  price: { color: colors.successText, fontFamily: fonts.bodyBold, fontSize: 14 },
   comparePrice: {
-    color: colors.red,
+    color: colors.errorText,
     fontFamily: fonts.body,
     fontSize: 12,
     textDecorationLine: 'line-through',

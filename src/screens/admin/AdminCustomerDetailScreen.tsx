@@ -435,7 +435,7 @@ const styles = StyleSheet.create({
   codeValue: { color: colors.goldLight, fontFamily: fonts.displayBold, fontSize: 34, letterSpacing: 6, marginVertical: 6 },
   codeWarn: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 11, lineHeight: 16, textAlign: 'center' },
   codeWa: { backgroundColor: '#25D366', borderRadius: radius.pill, paddingVertical: 10, paddingHorizontal: 18, marginTop: spacing.sm },
-  codeWaText: { color: '#fff', fontFamily: fonts.bodyBold, fontSize: 13 },
+  codeWaText: { color: '#06240f', fontFamily: fonts.bodyBold, fontSize: 13 },
   banBtn: {
     backgroundColor: colors.red,
     borderRadius: radius.md,
@@ -443,7 +443,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.lg,
   },
-  banBtnText: { color: colors.cream, fontFamily: fonts.bodyBold, fontSize: 14, letterSpacing: 0.5 },
+  banBtnText: { color: '#ffffff', fontFamily: fonts.bodyBold, fontSize: 14, letterSpacing: 0.5 },
   reactivateBtn: {
     backgroundColor: '#2e8b57',
     borderRadius: radius.md,
