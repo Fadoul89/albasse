@@ -9800,7 +9800,11 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
           await sleep(5000); // le message « Numéro copié » disparait
           await page.getByTestId('payment-info').evaluate((el) => el.scrollIntoView({ block: 'center' }));
           await sleep(500);
+          await page.evaluate(() => { for (const el of document.querySelectorAll('div')) if (el.children.length === 0 && /Zara Kings\s+est à votre service/.test(el.textContent)) { let n = el; while (n.parentElement && n.parentElement !== document.body && !/fixed|absolute/.test(getComputedStyle(n).position)) n = n.parentElement; if (/fixed|absolute/.test(getComputedStyle(n).position)) n.style.visibility = 'hidden'; } });
+          await sleep(300);
           await page.screenshot({ path: path.join(OUT, 'C2b-informations-de-paiement.png') });
+          await page.evaluate(() => window.scrollTo(0, 0));
+          await page.screenshot({ path: path.join(OUT, 'C2c-page-commande-complete.png'), fullPage: true });
         }
       } else {
         // Airtel / Moov retirés : une ville hors N'Djamena commande sur WhatsApp (message déjà écrit), pas de bouton « Confirmer la commande »
