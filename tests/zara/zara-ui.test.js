@@ -9817,6 +9817,40 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await c.ctx.close();
     }
 
+    // --- le meme menu ☰ sur la page Recherche et sur les pages de categorie
+    {
+      const fuS = mk(false);
+      fuS.profile.loyalty_points = 27;
+      fuS.profile.client_number = 883;
+      const c = await newVisitor(phone, { storage: { 'sb-xtitsmmccpkelxfjyqyh-auth-token': sessionFor(fuS) }, fakeUser: fuS });
+      const { page } = c;
+      await page.goto(`${BASE}/recherche`, { waitUntil: 'load' });
+      await sleep(4000);
+      check('menu ☰ : le bouton est aussi sur la page Recherche (a gauche du titre), menu ferme', (await page.getByTestId('menu-button').count()) === 1 && (await page.getByTestId('side-menu').count()) === 0);
+      await page.screenshot({ path: path.join(OUT, 'M3-recherche-bouton-menu.png'), clip: { x: 0, y: 0, width: 390, height: 360 } });
+      await page.getByTestId('menu-button').click();
+      await page.getByTestId('side-menu').waitFor({ timeout: 8000 });
+      await sleep(1500);
+      check('menu ☰ (Recherche) : profil + 27 pts, puis les categories une a une', (await page.getByTestId('menu-profile-points').innerText()) === '27 pts' && (await page.locator('[data-testid^="menu-cat-"]').count()) > 5);
+      await page.screenshot({ path: path.join(OUT, 'M4-recherche-menu-ouvert.png') });
+      await page.locator('[data-testid^="menu-cat-"]').first().click();
+      await sleep(1500);
+      check('menu ☰ (Recherche) : une categorie ouvre sa page et ferme le menu', /\/categorie\//.test(new URL(page.url()).pathname) && (await page.getByTestId('side-menu').count()) === 0, page.url());
+      // la page Recherche reste ouverte en dessous : on ne compte que le bouton VISIBLE
+      const burgerNow = page.locator('[data-testid="menu-button"]:visible');
+      check('menu ☰ : le bouton est aussi dans l\'en-tete d\'une page de categorie (un seul bouton visible)', (await burgerNow.count()) === 1);
+      await page.screenshot({ path: path.join(OUT, 'M5-categorie-bouton-menu.png'), clip: { x: 0, y: 0, width: 390, height: 360 } });
+      await burgerNow.click();
+      await page.getByTestId('side-menu').waitFor({ timeout: 8000 });
+      await sleep(1500);
+      check('menu ☰ (categorie) : le menu s\'ouvre avec les categories', (await page.locator('[data-testid^="menu-cat-"]').count()) > 5);
+      await page.getByTestId('menu-close').click();
+      await sleep(400);
+      check('menu ☰ (categorie) : « ✕ » ferme le menu', (await page.getByTestId('side-menu').count()) === 0);
+      check('aucune erreur (menu Recherche et categorie)', c.errs.length === 0, c.errs);
+      await c.ctx.close();
+    }
+
     // --- page de commande : paiement a la livraison seulement a N'Djamena + emballage cadeau
     {
       const c = await newVisitor(phone, { storage, fakeUser: fu });
@@ -9842,6 +9876,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         await page.getByRole('radio', { name: /Moov Money/ }).click();
         check('Moundou : Moov Money choisi, son numero est affiche', (await page.getByText('Numéro : 99 22 10 17').count()) === 1);
         // bas de la page de commande : « Informations de paiement » (Moov Money puis Airtel Money, numero + « Copier le numero »)
+        // nom du titulaire : sans nom enregistre, aucune ligne « Nom » ; avec un nom enregistre (reponse simulee), la ligne « Nom : … » apparait
+        check('bas de page : sans nom enregistre, aucune ligne « Nom »', (await page.getByTestId('payment-card-moov-holder').count()) === 0 && (await page.getByTestId('payment-card-airtel-holder').count()) === 0);
         {
           const info = page.getByTestId('payment-info');
           check('bas de page : le bloc « Informations de paiement » est la, avec l\'explication', (await info.count()) === 1 && /Informations de paiement/.test(await info.innerText()) && /à l'avance/.test(await info.innerText()));
@@ -9915,6 +9951,32 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check('commande : horaires de livraison et 48 h', (await page.getByText(/Nos services de livraison sont ouverts de 8h30 à 16h/).count()) === 1 && (await page.getByText(/chaque commande est valable 48 h/).count()) >= 1);
       check('aucune ecriture reelle depuis la page de commande', c.writes.every((w) => !/\/orders/.test(w)), c.writes);
       check('aucune erreur (page de commande)', c.errs.length === 0, c.errs);
+      await c.ctx.close();
+    }
+
+    // --- cartes de paiement avec le nom du titulaire : seulement quand un nom est enregistre (reponse simulee de payment_settings : le vrai nom n'existe pas encore)
+    if (MM) {
+      const c = await newVisitor(phone, { storage, fakeUser: fu });
+      const { page } = c;
+      const HDRN = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+      await page.route(/\/rest\/v1\/payment_settings/, (route) => (route.request().method() === 'OPTIONS'
+        ? route.fulfill({ status: 204, headers: HDRN })
+        : route.fulfill({ status: 200, headers: { ...HDRN, 'content-type': 'application/json' }, body: JSON.stringify({ id: 1, airtel_number: '60 60 51 51', airtel_payment_url: null, moov_number: '99 22 10 17', moov_payment_url: null, moov_holder_name: 'NOM Prénom (exemple)', airtel_holder_name: 'NOM Prénom (exemple)', instructions: null, updated_at: '2026-11-15T00:00:00Z' }) })));
+      await page.goto(`${BASE}/commande`, { waitUntil: 'load' });
+      await sleep(3500);
+      const cityInput = page.getByPlaceholder('📍 Rechercher une ville...');
+      await cityInput.click();
+      await cityInput.fill('Moundou');
+      await sleep(300);
+      await page.getByText('Moundou', { exact: true }).first().click();
+      await sleep(500);
+      await page.getByTestId('payment-info').waitFor({ timeout: 8000 });
+      check('cartes de paiement : avec un nom enregistre, la ligne « Nom : … » apparait sous le numero (Moov et Airtel)', (await page.getByTestId('payment-card-moov-holder').innerText()) === 'Nom : NOM Prénom (exemple)' && (await page.getByTestId('payment-card-airtel-holder').innerText()) === 'Nom : NOM Prénom (exemple)');
+      await page.evaluate(() => { for (const el of document.querySelectorAll('div')) if (el.children.length === 0 && /Zara Kings\s+est à votre service/.test(el.textContent)) { let n = el; while (n.parentElement && n.parentElement !== document.body && !/fixed|absolute/.test(getComputedStyle(n).position)) n = n.parentElement; if (/fixed|absolute/.test(getComputedStyle(n).position)) n.style.visibility = 'hidden'; } });
+      await page.getByTestId('payment-info').evaluate((el) => el.scrollIntoView({ block: 'center' }));
+      await sleep(600);
+      await page.screenshot({ path: path.join(OUT, 'M6-cartes-paiement-avec-nom.png') });
+      check('aucune erreur (cartes avec nom)', c.errs.length === 0, c.errs);
       await c.ctx.close();
     }
 

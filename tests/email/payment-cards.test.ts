@@ -36,6 +36,11 @@ check('vide → numéro de la boutique', empty[0].number === PAYMENT.moov && emp
 
 check('digitsOnly', digitsOnly('+235 99-22.10 17') === '235992210' + '17');
 
+// nom du titulaire : seulement s'il est enregistré
+check('sans nom enregistré : aucun nom (jamais inventé)', base[0].holder === null && base[1].holder === null);
+const named = paymentCards({ moov_holder_name: '  NOM Prénom ', airtel_holder_name: '' });
+check('nom enregistré : repris (espaces retirés) ; nom vide : aucun nom', named[0].holder === 'NOM Prénom' && named[1].holder === null);
+
 // textes
 check('titre', PAYMENT_CARDS_TEXT.title.includes('Informations de paiement'));
 check('bouton « Copier le numéro »', PAYMENT_CARDS_TEXT.copy === 'Copier le numéro');

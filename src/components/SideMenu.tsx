@@ -11,6 +11,7 @@ import type { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing } from '../theme';
 import { useAuthStore } from '../store/authStore';
 import type { Category } from '../types';
+import { useCategories } from '../hooks/useCategories';
 import { MENU_TEXT, menuCategories, menuProfile, pointsLabel } from '../lib/sideMenu';
 
 const ICONS: Record<string, string> = {
@@ -26,6 +27,23 @@ export function MenuButton({ onPress }: { onPress: () => void }) {
       <View style={styles.burgerLine} />
       <View style={styles.burgerLine} />
     </Pressable>
+  );
+}
+
+// Le bouton ☰ + son panneau pour les pages qui n'ont pas déjà les catégories sous la main (Recherche, pages de catégorie) :
+// les catégories ne sont lues qu'à l'OUVERTURE du menu (aucune lecture de plus tant que le client ne touche pas ☰).
+function SideMenuLoaded({ onClose }: { onClose: () => void }) {
+  const { categories } = useCategories();
+  return <SideMenu visible onClose={onClose} categories={categories} />;
+}
+
+export function MenuLauncher() {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <>
+      <MenuButton onPress={() => setOpen(true)} />
+      {open ? <SideMenuLoaded onClose={() => setOpen(false)} /> : null}
+    </>
   );
 }
 

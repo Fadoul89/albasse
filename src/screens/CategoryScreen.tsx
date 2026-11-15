@@ -8,6 +8,7 @@ import { useProducts } from '../hooks/useProducts';
 import { useCategories } from '../hooks/useCategories';
 import { ProductCard } from '../components/ProductCard';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { MenuLauncher } from '../components/SideMenu';
 import { trackCategoryView, trackSearchQuery } from '../lib/browsingTracker';
 import { inFamily, parentOf, subCategoriesOf } from '../lib/subCategories';
 
@@ -65,7 +66,7 @@ export function CategoryScreen({ route }: Props) {
 
   return (
     <View style={styles.screen}>
-      <ScreenHeader title={name} showBack />
+      <ScreenHeader title={name} showBack right={<MenuLauncher />} />
       <View style={styles.searchWrap}>
         <TextInput
           value={query}

@@ -399,6 +399,9 @@ export interface PaymentSettings {
   airtel_payment_url: string | null;
   moov_number: string | null;
   moov_payment_url: string | null;
+  // nom du titulaire du compte Mobile Money (colonnes pas encore dans la base : le nom ne s'affiche que s'il est enregistré)
+  airtel_holder_name?: string | null;
+  moov_holder_name?: string | null;
   instructions: string | null;
   updated_at: string;
 }

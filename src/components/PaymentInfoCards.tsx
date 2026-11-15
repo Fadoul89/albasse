@@ -35,6 +35,9 @@ export function PaymentInfoCards({ settings }: { settings: PaymentCardSettings |
           </View>
           <Text style={styles.label}>{PAYMENT_CARDS_TEXT.numberLabel}</Text>
           <Text style={styles.number} selectable testID={`payment-card-${card.key}-number`}>{card.number}</Text>
+          {card.holder ? (
+            <Text style={styles.holder} testID={`payment-card-${card.key}-holder`}>{`${PAYMENT_CARDS_TEXT.holderLabel} : ${card.holder}`}</Text>
+          ) : null}
           <Pressable
             style={styles.copyBtn}
             onPress={() => copy(card)}
@@ -75,6 +78,7 @@ const styles = StyleSheet.create({
   badgeText: { color: '#FFFFFF', fontFamily: fonts.bodySemiBold, fontSize: 13 },
   label: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 12, marginTop: 4 },
   number: { color: colors.goldLight, fontFamily: fonts.displayBold, fontSize: 24, letterSpacing: 1 },
+  holder: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 14 },
   copyBtn: {
     alignSelf: 'flex-start',
     backgroundColor: colors.panelAlt,
