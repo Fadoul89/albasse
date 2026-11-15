@@ -26,3 +26,12 @@ Raisons données par Google : « Page en double sans URL canonique sélectionné
 - **Google n'a pas choisi la même canonique** : le catalogue contient des **copies identiques** (même nom ET même prix, adresses `…-2`, `…-3`) : 618 articles actifs, 38 groupes identiques, 78 pages, 40 copies en trop au 15 novembre 2026. Maintenant la page d'une copie annonce comme **adresse canonique la plus ancienne copie en stock** (sinon la plus ancienne ; `pickCanonicalSlug`, `copiesOf`), et le plan du site ne garde qu'**une adresse par groupe** (`withoutCopies`). Rien n'est supprimé : toutes les pages restent ouvertes aux clients. Deux articles de même nom mais de **prix différents** ne sont pas des copies. La vraie solution reste de supprimer ou fusionner les copies dans l'administration.
 - **Données structurées (« Fiches de marchand », « Extraits de produits »)** : les messages ne disent pas le détail ; à lire dans Search Console (ouvrir le message, puis le rapport). Nos données respectent les champs obligatoires de Google (nom, image, prix, devise XAF, disponibilité, livraison, retours) ; jamais de fausse note ni de faux avis. Les « problèmes » sont en général des champs facultatifs absents (marque, code-barres, note).
 - Tests : `tests/seo/seo.test.ts` (115 vérifications, dont 29 nouvelles).
+
+## Fiches de marchand : « returnMethod » et « returnFees » manquants (message Search Console du 1er novembre 2026)
+Google signalait 2 problèmes **non critiques** (« des suggestions d'amélioration, qui n'empêchent pas la page de s'afficher ») : le champ `returnMethod` et le champ `returnFees` manquants dans `offers.hasMerchantReturnPolicy`.
+Ajouté (`returnPolicyJsonLd` dans `netlify/edge-functions/lib/seo.ts`), **seulement ce que disent le patron et la page « Conditions de retour »** :
+- `returnMethod` : **ReturnByMail et ReturnInStore** (réponse du patron, 15 novembre 2026 : le client renvoie l'article par colis ou livreur, ou le dépose à la boutique : « Les deux »).
+- `returnFees` : **ReturnShippingFees** par défaut (échange de taille : « Les frais de retour sont à la charge du client »).
+- `itemDefectReturnFees` : **FreeReturn**, seulement pour un article incorrect ou défectueux (« Les frais de retour sont à notre charge »). Jamais de « retour gratuit » en général.
+- **Pas inventé** : aucun montant de frais de retour (`returnShippingFeesAmount`), aucun type de remboursement, aucun frais de restockage, aucune note ni marque ni code-barres.
+- Tests : `tests/seo/seo.test.ts` (121 vérifications).
