@@ -25,6 +25,19 @@
   path = "/categorie/*"
   function = "og-preview"
 
+# Pages d'information : leur propre titre et leur propre adresse canonique pour Google (avant : la même coquille que toutes les autres pages)
+[[edge_functions]]
+  path = "/contact"
+  function = "og-preview"
+
+[[edge_functions]]
+  path = "/conditions-de-retour"
+  function = "og-preview"
+
+[[edge_functions]]
+  path = "/confidentialite"
+  function = "og-preview"
+
 # Plan du site et robots.txt toujours à jour (netlify/edge-functions/sitemap.ts)
 [[edge_functions]]
   path = "/sitemap.xml"

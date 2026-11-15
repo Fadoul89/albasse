@@ -4,7 +4,7 @@
 // Une adresse produit ou catégorie qui n'existe pas (ou plus) répond 404 aux robots : elle sort de l'index de Google.
 // Les textes et les données viennent de ./lib/seo.ts (testé : tests/seo/seo.test.ts).
 import type { Context } from 'https://edge.netlify.com';
-import { categoryPage, homePage, notFoundPage, productPage, type SeoCategory, type SeoProduct } from './lib/seo.ts';
+import { categoryPage, copiesOf, homePage, infoPage, infoPageDef, notFoundPage, pickCanonicalSlug, productPage, type CopyRow, type SeoCategory, type SeoProduct } from './lib/seo.ts';
 
 const BOT_REGEX =
   /facebookexternalhit|Facebot|Twitterbot|TikTok|WhatsApp|LinkedInBot|Slackbot|Discordbot|Pinterest|TelegramBot|Googlebot|Google-InspectionTool|bingbot|BingPreview|DuckDuckBot|YandexBot|Applebot|Baiduspider|SkypeUriPreview/i;
@@ -43,6 +43,10 @@ async function serve(request: Request, context: Context): Promise<Response> {
       return new Response(homePage(categories, products), { headers: HTML_HEADERS });
     }
 
+    // pages d'information (contact, conditions de retour, confidentialité) : leur propre titre et leur propre adresse canonique
+    const info = infoPageDef(url.pathname);
+    if (info) return new Response(infoPage(info), { headers: HTML_HEADERS });
+
     // fiche produit
     if (url.pathname.startsWith('/produit/')) {
       const slug = decodeURIComponent(url.pathname.replace('/produit/', '').replace(/\/$/, ''));
@@ -53,7 +57,11 @@ async function serve(request: Request, context: Context): Promise<Response> {
       );
       const product = found[0];
       if (!product) return notFound();
-      return new Response(productPage(product, product.categories ?? null), { headers: HTML_HEADERS });
+      // copies identiques (même nom, même prix) : on dit à Google laquelle est la page principale (voir lib/seo.ts)
+      const sameName = await rows<CopyRow>(supabaseUrl, supabaseKey, `products?is_active=eq.true&name=eq.${encodeURIComponent(product.name)}&select=slug,name,price,stock,created_at&limit=50`);
+      const mine: CopyRow = { slug: product.slug, name: product.name, price: product.price };
+      const canonicalSlug = pickCanonicalSlug(copiesOf(mine, sameName), product.slug);
+      return new Response(productPage(product, product.categories ?? null, canonicalSlug), { headers: HTML_HEADERS });
     }
 
     // catégorie

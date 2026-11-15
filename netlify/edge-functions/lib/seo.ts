@@ -22,6 +22,7 @@ export interface SeoProduct {
   price: number | string;
   images?: string[] | null;
   stock?: number | null;
+  created_at?: string | null;
 }
 
 // --- petits outils de texte ---------------------------------------------------------------------------------------------------------
@@ -308,16 +309,18 @@ ${list ? `<ul>\n${list}\n</ul>` : ''}
   });
 }
 
-export function productPage(p: SeoProduct, category?: SeoCategory | null): string {
+export function productPage(p: SeoProduct, category?: SeoCategory | null, canonicalSlug?: string | null): string {
   const inStock = Number(p.stock ?? 0) > 0;
   const images = (p.images ?? []).filter((i) => typeof i === 'string' && i.startsWith('https://')).slice(0, 5);
   const crumbs = [{ name: 'Accueil', url: `${SITE_URL}/` }];
   if (category?.slug) crumbs.push({ name: category.name, url: categoryUrl(category.slug) });
-  crumbs.push({ name: p.name, url: productUrl(p.slug) });
+  // une copie identique (même nom, même prix) annonce la page « principale » comme adresse canonique : Google garde une seule page au lieu de les mélanger
+  const canonicalUrl = productUrl(canonicalSlug || p.slug);
+  crumbs.push({ name: p.name, url: canonicalUrl });
   return renderPage({
     title: productTitle(p.name, p.price),
     description: productDescription(p, category?.name),
-    canonical: productUrl(p.slug),
+    canonical: canonicalUrl,
     image: images[0] ?? SITE_LOGO,
     type: 'product',
     extraMeta: `<meta property="product:price:amount" content="${escapeHtml(String(Math.round(Number(p.price) || 0)))}" />
@@ -331,6 +334,107 @@ ${cleanText(p.description) ? `<p>${escapeHtml(cleanText(p.description))}</p>` : 
 <p>Prix : ${escapeHtml(fcfa(p.price))} – ${inStock ? 'En stock' : 'Épuisé'}</p>
 ${images.map((src) => `<img src="${escapeHtml(src)}" alt="${escapeHtml(cleanText(p.name))}" />`).join('\n')}
 <p>${category?.slug ? `<a href="${categoryUrl(category.slug)}">${escapeHtml(cleanText(category.name))}</a> · ` : ''}<a href="${SITE_URL}/">Accueil ${SITE_NAME}</a></p>
+</main>`,
+  });
+}
+
+// --- copies identiques ------------------------------------------------------------------------------------------------------------------
+// Le patron a parfois ajouté deux fois le même article (même nom, même prix, adresses « …-2 », « …-3 »). Google les prend pour des doublons et choisit seul laquelle garder,
+// souvent pas celle qu'on lui dit. On lui dit donc nous-mêmes laquelle : la plus ancienne qui est EN STOCK (sinon la plus ancienne). Rien n'est supprimé : toutes les pages restent
+// ouvertes pour les clients, seule l'adresse « canonique » est commune. Deux articles de même nom mais de prix différents ne sont PAS des copies (modèles différents).
+export interface CopyRow {
+  slug: string;
+  name?: string | null;
+  price?: number | string | null;
+  stock?: number | null;
+  created_at?: string | null;
+}
+
+export const copyKey = (name: unknown, price: unknown): string => `${cleanText(name).toLowerCase()}|${Math.round(Number(price) || 0)}`;
+
+const createdMs = (row: CopyRow): number => {
+  const t = row.created_at ? Date.parse(row.created_at) : NaN;
+  return Number.isFinite(t) ? t : Number.MAX_SAFE_INTEGER;
+};
+
+// L'adresse canonique d'un groupe de copies (toutes de même nom et de même prix) : la plus ancienne en stock, sinon la plus ancienne ; en cas d'égalité, l'adresse la plus courte.
+export function pickCanonicalSlug(copies: readonly CopyRow[], fallback: string): string {
+  const rows = copies.filter((c) => c.slug);
+  if (rows.length === 0) return fallback;
+  const inStock = rows.filter((c) => Number(c.stock ?? 0) > 0);
+  const pool = inStock.length > 0 ? inStock : rows;
+  return [...pool].sort((a, b) => createdMs(a) - createdMs(b) || a.slug.length - b.slug.length || a.slug.localeCompare(b.slug))[0].slug;
+}
+
+// Les copies d'un article parmi une liste (même nom et même prix, sans tenir compte des majuscules ni des espaces en double)
+export function copiesOf(product: CopyRow, all: readonly CopyRow[]): CopyRow[] {
+  const key = copyKey(product.name, product.price);
+  return all.filter((c) => copyKey(c.name, c.price) === key);
+}
+
+// --- pages d'information (contact, conditions de retour, confidentialité) -----------------------------------------------------------------
+// Avant : Google recevait pour ces adresses la même coquille vide que pour toutes les autres pages (même titre, aucune adresse canonique) et les prenait pour des doublons.
+// Textes : seulement ce que disent les vraies pages du site (voir ReturnPolicyScreen, PrivacyPolicyScreen, ContactScreen).
+export const CONTACT_EMAIL = 'contact@albasseshopping.com';
+
+export interface InfoPageDef {
+  path: string;
+  title: string;
+  description: string;
+  h1: string;
+  paragraphs: string[];
+}
+
+export const INFO_PAGE_DEFS: InfoPageDef[] = [
+  {
+    path: '/contact',
+    title: `Contact | ${SITE_NAME}`,
+    description: `Contactez ${SITE_NAME} : e-mail ${CONTACT_EMAIL}. Nos services de livraison sont ouverts de 8h30 à 16h.`,
+    h1: `Contacter ${SITE_NAME}`,
+    paragraphs: [`E-mail : ${CONTACT_EMAIL}`, 'Nos services de livraison sont ouverts de 8h30 à 16h.', `Livraison à ${HOME_CITY} et dans les autres villes du Tchad.`],
+  },
+  {
+    path: '/conditions-de-retour',
+    title: `Conditions de retour | ${SITE_NAME}`,
+    description: `Article incorrect ou défectueux : contactez-nous dans les 72 heures, les frais de retour sont à notre charge. Erreur de taille : échange possible. ${SITE_NAME}.`,
+    h1: 'Conditions de retour',
+    paragraphs: [
+      'Article incorrect ou défectueux : contactez notre service client dans les 72 heures suivant la réception, en joignant une photo ou une vidéo de l’article reçu. Après vérification et confirmation de l’erreur, nous vous communiquons la procédure de retour. Les frais de retour sont à notre charge.',
+      'Erreur de taille : si l’article correspond à votre commande mais que la taille ne convient pas, nous procédons à un échange. Les frais de retour sont à la charge du client. L’article doit être non porté, non lavé, avec les étiquettes d’origine.',
+      'Dans tous les cas, conservez l’article et son emballage d’origine jusqu’à la confirmation du retour.',
+    ],
+  },
+  {
+    path: '/confidentialite',
+    title: `Politique de confidentialité | ${SITE_NAME}`,
+    description: `Les données que ${SITE_NAME} collecte, comment elles sont utilisées et partagées, la sécurité, les notifications et vos droits.`,
+    h1: 'Politique de confidentialité',
+    paragraphs: [
+      'Dernière mise à jour : octobre 2026.',
+      'Cette politique explique : 1. les données que nous collectons, 2. l’utilisation des données, 3. le partage des données, 4. les notifications, 5. la sécurité, 6. vos droits, 7. comment nous contacter.',
+      `Contact : ${CONTACT_EMAIL}`,
+    ],
+  },
+];
+
+/** Les pages d'information servies à Google (« /contact », « /contact/ » : la même page). */
+export function infoPageDef(pathname: string): InfoPageDef | null {
+  const path = pathname.replace(/\/+$/, '') || '/';
+  return INFO_PAGE_DEFS.find((d) => d.path === path) ?? null;
+}
+
+export function infoPage(def: InfoPageDef): string {
+  return renderPage({
+    title: def.title,
+    description: def.description,
+    canonical: `${SITE_URL}${def.path}`,
+    image: SITE_LOGO,
+    type: 'website',
+    jsonLd: [breadcrumbJsonLd([{ name: 'Accueil', url: `${SITE_URL}/` }, { name: def.h1, url: `${SITE_URL}${def.path}` }])],
+    body: `<main>
+<h1>${escapeHtml(def.h1)}</h1>
+${def.paragraphs.map((t) => `<p>${escapeHtml(t)}</p>`).join('\n')}
+<p><a href="${SITE_URL}/">Accueil ${SITE_NAME}</a></p>
 </main>`,
   });
 }
@@ -352,12 +456,24 @@ export function notFoundPage(url: string): string {
 
 export const STATIC_PAGES = ['/', '/contact', '/conditions-de-retour', '/confidentialite'];
 
+// Les copies identiques (même nom, même prix) : seule l'adresse canonique reste dans le plan du site
+export function withoutCopies<T extends SeoProduct>(products: readonly T[]): T[] {
+  const groups = new Map<string, T[]>();
+  for (const p of products) {
+    const k = copyKey(p.name, p.price);
+    groups.set(k, [...(groups.get(k) ?? []), p]);
+  }
+  const keep = new Set<string>();
+  for (const list of groups.values()) keep.add(pickCanonicalSlug(list, list[0].slug));
+  return products.filter((p) => keep.has(p.slug));
+}
+
 export function buildSitemapXml(categories: SeoCategory[], products: SeoProduct[]): string {
   const url = (loc: string, extra = '') => `  <url>\n    <loc>${escapeXml(loc)}</loc>${extra}\n  </url>`;
   const lines = [
     ...STATIC_PAGES.map((p) => url(`${SITE_URL}${p === '/' ? '/' : p}`)),
     ...categories.filter((c) => c.slug).map((c) => url(categoryUrl(c.slug))),
-    ...products
+    ...withoutCopies(products)
       .filter((p) => p.slug)
       .map((p) => {
         const img = firstImage(p.images);

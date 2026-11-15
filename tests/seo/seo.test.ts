@@ -313,11 +313,72 @@ const ldBlocks = (html: string): any[] => [...html.matchAll(/<script type="appli
     }
   }
 
+  // --- pages d'information : leur propre titre et leur propre adresse canonique (avant : la même coquille que toutes les pages) ---
+  {
+    for (const [path, titre, mots] of [
+      ['/contact', 'Contact | Albasse Shopping', /contact@albasseshopping\.com/],
+      ['/conditions-de-retour', 'Conditions de retour | Albasse Shopping', /72 heures.*frais de retour sont à notre charge/s],
+      ['/confidentialite', 'Politique de confidentialité | Albasse Shopping', /Dernière mise à jour/],
+    ] as [string, string, RegExp][]) {
+      const { res, state } = await ask(ogPreview, path);
+      const html = await res.text();
+      check(`${path} (Google) : page fabriquée avec son propre titre « ${titre} »`, state.next === 0 && res.status === 200 && html.includes(`<title>${titre}</title>`), html.slice(0, 120));
+      check(`${path} : adresse canonique ${path} (pas la page d'accueil)`, html.includes(`<link rel="canonical" href="https://www.albasseshopping.com${path}" />`));
+      check(`${path} : un vrai texte (h1 + paragraphes) tiré de la vraie page`, /<h1>/.test(html) && mots.test(html));
+      check(`${path} : une description à elle, différente de celle de l'accueil`, !/Boutique en ligne au Tchad/.test((html.match(/<meta name="description" content="([^"]*)"/) ?? [])[1] ?? ''));
+    }
+    const slash = await ask(ogPreview, '/contact/');
+    check('/contact/ (avec la barre finale) : la même page, la même adresse canonique sans barre', (await slash.res.text()).includes('rel="canonical" href="https://www.albasseshopping.com/contact"'));
+    const visitor = await ask(ogPreview, '/contact', CHROME);
+    check('visiteur normal sur /contact : l\'application normale, rien de modifié', visitor.state.next === 1 && (await visitor.res.text()) === '<html>application</html>');
+    check('les 3 pages d\'information sont dans le plan du site', seo.STATIC_PAGES.includes('/contact') && seo.STATIC_PAGES.includes('/conditions-de-retour') && seo.STATIC_PAGES.includes('/confidentialite'));
+    check('la page conditions de retour ne promet pas « retour gratuit » (les frais dépendent du cas)', !/retour gratuit/i.test(seo.infoPage(seo.infoPageDef('/conditions-de-retour')!)));
+  }
+
+  // --- copies identiques (même nom, même prix) : Google reçoit UNE adresse canonique commune ---
+  {
+    const rows = [
+      { slug: 'rado-3', name: 'Rado', price: 30000, stock: 4, created_at: '2026-10-05T10:00:00Z' },
+      { slug: 'rado', name: 'Rado', price: 30000, stock: 0, created_at: '2026-09-01T10:00:00Z' },
+      { slug: 'rado-2', name: ' RADO ', price: 30000, stock: 2, created_at: '2026-09-20T10:00:00Z' },
+      { slug: 'rado-4', name: 'Rado', price: 50000, stock: 9, created_at: '2026-10-09T10:00:00Z' },
+    ];
+    const same = seo.copiesOf(rows[0], rows);
+    check('copies : même nom (majuscules et espaces ignorés) ET même prix ; un autre prix n\'est pas une copie', same.map((r) => r.slug).sort().join() === 'rado,rado-2,rado-3', same.map((r) => r.slug));
+    check('page principale : la plus ancienne EN STOCK (rado est épuisé : rado-2)', seo.pickCanonicalSlug(same, 'rado-3') === 'rado-2');
+    check('toutes épuisées : la plus ancienne', seo.pickCanonicalSlug(same.map((r) => ({ ...r, stock: 0 })), 'rado-3') === 'rado');
+    check('aucune copie connue : l\'adresse de la page elle-même', seo.pickCanonicalSlug([], 'rado-3') === 'rado-3');
+    check('sans date : adresse la plus courte puis ordre alphabétique (jamais au hasard)', seo.pickCanonicalSlug([{ slug: 'b-2', stock: 1 }, { slug: 'b', stock: 1 }], 'x') === 'b');
+    const kept = seo.withoutCopies(rows);
+    check('plan du site : une seule adresse par groupe de copies (rado-2) ; le modèle à 50 000 reste', kept.map((r) => r.slug).sort().join() === 'rado-2,rado-4', kept.map((r) => r.slug));
+    check('plan du site : un article sans copie n\'est jamais retiré', seo.withoutCopies([{ slug: 'solo', name: 'Solo', price: 1, stock: 0 }]).length === 1);
+    const xml = seo.buildSitemapXml(categories as any, rows as any);
+    check('plan du site XML : rado-2 et rado-4 présents, rado et rado-3 absents', xml.includes('/produit/rado-2<') && xml.includes('/produit/rado-4<') && !xml.includes('/produit/rado<') && !xml.includes('/produit/rado-3<'));
+
+    // la vraie fonction : la page d'une copie annonce la page principale
+    products.push({ name: 'Rado', slug: 'rado', description: '', price: 30000, images: ['https://img.example/r.jpg'], stock: 0, category_id: 'c1', categories: { name: 'Montres', slug: 'montres' }, created_at: '2026-09-01T10:00:00Z' } as any);
+    products.push({ name: 'Rado', slug: 'rado-2', description: '', price: 30000, images: ['https://img.example/r2.jpg'], stock: 2, category_id: 'c1', categories: { name: 'Montres', slug: 'montres' }, created_at: '2026-09-20T10:00:00Z' } as any);
+    const dup = await ask(ogPreview, '/produit/rado');
+    const dupHtml = await dup.res.text();
+    check('page d\'une copie épuisée : canonique = la page principale en stock (rado-2)', dupHtml.includes('<link rel="canonical" href="https://www.albasseshopping.com/produit/rado-2" />'), (dupHtml.match(/rel="canonical"[^>]*>/) ?? [])[0]);
+    const main = await ask(ogPreview, '/produit/rado-2');
+    check('la page principale se désigne elle-même', (await main.res.text()).includes('<link rel="canonical" href="https://www.albasseshopping.com/produit/rado-2" />'));
+    const solo = await ask(ogPreview, '/produit/montre-keep-moving');
+    check('un article sans copie : canonique = lui-même (rien ne change)', (await solo.res.text()).includes('rel="canonical" href="https://www.albasseshopping.com/produit/montre-keep-moving"'));
+    check('la page d\'une copie reste lisible par Google (200, jamais 404)', dup.res.status === 200);
+    products.splice(products.findIndex((p) => p.slug === 'rado-2'), 1);
+    products.splice(products.findIndex((p) => p.slug === 'rado'), 1);
+    dbDown = true;
+    const down = await ask(ogPreview, '/produit/montre-keep-moving');
+    check('base injoignable : toujours l\'application normale, jamais une erreur', down.state.next === 1 && down.res.status === 200);
+    dbDown = false;
+  }
+
   // la configuration Netlify branche bien les fonctions
   {
     const toml = readFileSync(new URL('../../netlify.toml', import.meta.url), 'utf8');
     const paths = [...toml.matchAll(/path = "([^"]+)"\s+function = "([^"]+)"/g)].map((m) => `${m[1]}=>${m[2]}`);
-    check('netlify.toml : accueil, produits, catégories, plan du site, robots.txt', ['/=>og-preview', '/produit/*=>og-preview', '/categorie/*=>og-preview', '/sitemap.xml=>sitemap', '/robots.txt=>sitemap'].every((x) => paths.includes(x)), paths);
+    check('netlify.toml : accueil, produits, catégories, pages d\'information, plan du site, robots.txt', ['/=>og-preview', '/produit/*=>og-preview', '/categorie/*=>og-preview', '/contact=>og-preview', '/conditions-de-retour=>og-preview', '/confidentialite=>og-preview', '/sitemap.xml=>sitemap', '/robots.txt=>sitemap'].every((x) => paths.includes(x)), paths);
   }
 
   console.log(`\n${ok} vérifications réussies${process.exitCode ? ' — AVEC DES ÉCHECS' : ''}`);
