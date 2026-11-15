@@ -7,6 +7,17 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { run, type Deps } from "./logic.ts";
 import { parseRequest } from "./rules.ts";
 
+// Double vérification des admins (add-admin-mfa.sql) : c'est la base qui décide si ce jeton a les droits d'admin
+// (admin ET, s'il a activé la double vérification, code de Google Authenticator tapé). Même règle que tout le site.
+async function adminAllowed(jwt: string): Promise<boolean> {
+  const asUser = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    global: { headers: { Authorization: `Bearer ${jwt}` } },
+    auth: { persistSession: false },
+  });
+  const { data, error } = await asUser.rpc("is_admin");
+  return !error && data === true;
+}
+
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -26,7 +37,7 @@ Deno.serve(async (req: Request) => {
     const { data: userData, error: userError } = await db.auth.getUser(jwt);
     if (userError || !userData.user) return json({ ok: false, reason: "unauthenticated" }, 401);
     const { data: me } = await db.from("profiles").select("is_admin").eq("id", userData.user.id).maybeSingle();
-    if (!me?.is_admin) return json({ ok: false, reason: "forbidden" }, 403);
+    if (!me?.is_admin || !(await adminAllowed(jwt))) return json({ ok: false, reason: "forbidden" }, 403);
 
     // 2. la demande
     const parsed = parseRequest(await req.json().catch(() => null));

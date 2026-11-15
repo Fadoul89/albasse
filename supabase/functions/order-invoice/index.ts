@@ -14,6 +14,17 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import * as pdfLib from "npm:pdf-lib@1.17.1";
 import { buildInvoicePdf, formatXAF, invoiceFileName, invoiceNumber, orderNumberLabel, pdfText, type InvoiceOrder } from "./invoice.ts";
 
+// Double vérification des admins (add-admin-mfa.sql) : c'est la base qui décide si ce jeton a les droits d'admin
+// (admin ET, s'il a activé la double vérification, code de Google Authenticator tapé). Même règle que tout le site.
+async function adminAllowed(jwt: string): Promise<boolean> {
+  const asUser = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    global: { headers: { Authorization: `Bearer ${jwt}` } },
+    auth: { persistSession: false },
+  });
+  const { data, error } = await asUser.rpc("is_admin");
+  return !error && data === true;
+}
+
 const service = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
 const CORS = {
@@ -155,7 +166,7 @@ Deno.serve(async (req: Request) => {
     if (!made) return json({ error: "commande introuvable" }, 404);
     if (made.order.user_id !== user.id) {
       const { data: profile } = await service.from("profiles").select("is_admin").eq("id", user.id).maybeSingle();
-      if (!profile?.is_admin) return json({ error: "commande introuvable" }, 404); // même réponse : on ne dit pas qu'elle existe
+      if (!profile?.is_admin || !(await adminAllowed(jwt))) return json({ error: "commande introuvable" }, 404); // même réponse : on ne dit pas qu'elle existe
     }
     return new Response(made.bytes, {
       status: 200,

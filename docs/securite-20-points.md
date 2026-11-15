@@ -6,7 +6,7 @@
 | 2 | Variables d'environnement | Bon : `.env` n'est pas dans git ; `.env.example` ne propose plus de clé secrète `EXPO_PUBLIC_` ; test `tests/email/no-secret-in-site.test.ts`. |
 | 3 | Secrets dans l'historique git | Bon : aucun trouvé (clés Supabase service_role, Anthropic, OpenAI, Brevo, Telegram, Google, GitHub, clés privées). |
 | 4 | Authentification | Bon : Supabase Auth. |
-| 5 | Double vérification (2FA) des admins | **À faire par le patron** sur ses comptes Supabase, Netlify, GitHub, Gmail. |
+| 5 | Double vérification (2FA) des admins | Comptes Supabase, Netlify, GitHub, Gmail : **à faire par le patron**. Sur le site : double vérification des comptes admin (`docs/double-verification-admin.md`). |
 | 6 | Accès des utilisateurs | Bon : règles RLS ; aucune donnée client lisible par le public. |
 | 7 | Pages admin protégées | Bon : les fonctions admin vérifient `is_admin()` dans la base. |
 | 8 | Points d'accès (API) | Bon : fonctions serveur protégées par connexion ou secret partagé. Les 2 fonctions de notification lisent désormais leur secret dans le coffre-fort. |
