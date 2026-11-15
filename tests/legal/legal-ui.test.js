@@ -11,7 +11,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const dist = process.argv[2] || '../../dist';
 const port = process.argv[3] || '4455';
 const AXE = process.argv[4] || '';
-const BASE = `http://localhost:${port}`;
+const BASE = (process.env.BASE_URL || `http://localhost:${port}`).replace(/\/$/, ""); // BASE_URL=https://www.albasseshopping.com : le vrai site
 const KEY = process.env.SUPABASE_ANON_KEY;
 const REST = (process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://xtitsmmccpkelxfjyqyh.supabase.co') + '/rest/v1';
 
