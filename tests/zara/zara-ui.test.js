@@ -9756,6 +9756,67 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await c.ctx.close();
     }
 
+    // --- menu ☰ de l'accueil (comme Jumia) : le profil du client avec ses points, puis les categories une a une
+    {
+      const fuM = mk(false);
+      fuM.profile.loyalty_points = 27;
+      fuM.profile.client_number = 883;
+      const catRows = await get('categories?select=slug,name,parent_id,sort_order&order=sort_order');
+      const mains = catRows.filter((r) => !r.parent_id && String(r.name || '').trim());
+      const c = await newVisitor(phone, { storage: { 'sb-xtitsmmccpkelxfjyqyh-auth-token': sessionFor(fuM) }, fakeUser: fuM });
+      const { page } = c;
+      await page.goto(`${BASE}/`, { waitUntil: 'load' });
+      await sleep(4000);
+      check('menu ☰ : le bouton est dans l\'en-tete de l\'accueil, le menu est ferme', (await page.getByTestId('menu-button').count()) === 1 && (await page.getByTestId('side-menu').count()) === 0);
+      await page.screenshot({ path: path.join(OUT, 'M0-bouton-menu-accueil.png'), clip: { x: 0, y: 0, width: 390, height: 420 } });
+      await page.getByTestId('menu-button').click();
+      await page.getByTestId('side-menu').waitFor({ timeout: 8000 });
+      await sleep(800);
+      check('menu ☰ : « Profil client » avec le nom du compte et son numero client AS-000883', /Profil client/.test(await page.getByTestId('side-menu').innerText()) && (await page.getByTestId('menu-profile-name').innerText()) === 'Aminata Hassan' && (await page.getByTestId('menu-profile-number').innerText()) === 'AS-000883');
+      check('menu ☰ : les points sont DANS le profil : palier Argent, 27 pts, « 23 pts avant le palier Or »', /Argent/.test(await page.getByTestId('menu-profile-tier').innerText()) && (await page.getByTestId('menu-profile-points').innerText()) === '27 pts' && /23 pts avant le palier .*Or/.test(await page.getByTestId('menu-profile-hint').innerText()), await page.getByTestId('menu-profile').innerText());
+      const rows = await page.locator('[data-testid^="menu-cat-"]').evaluateAll((els) => els.map((e) => e.innerText.replace(/\s+/g, ' ').trim()));
+      check('menu ☰ : les categories une a une, une ligne par categorie principale de la boutique (' + mains.length + ')', rows.length === mains.length && mains.every((r) => rows.some((t) => t.includes(String(r.name).trim()))) && new Set(rows).size === rows.length, { rows: rows.length, mains: mains.length });
+      check('menu ☰ : le profil est AVANT les categories', await page.evaluate(() => { const a = document.querySelector('[data-testid="menu-profile"]')?.getBoundingClientRect().top ?? -1; const b = document.querySelector('[data-testid^="menu-cat-"]')?.getBoundingClientRect().top ?? -1; return a > 0 && b > a; }));
+      await page.screenshot({ path: path.join(OUT, 'M1-menu-connecte.png') });
+      // ✕ ferme
+      await page.getByTestId('menu-close').click();
+      await sleep(500);
+      check('menu ☰ : « ✕ » ferme le menu', (await page.getByTestId('side-menu').count()) === 0);
+      // toucher a cote du panneau ferme aussi
+      await page.getByTestId('menu-button').click();
+      await page.getByTestId('side-menu').waitFor({ timeout: 8000 });
+      await page.getByTestId('menu-backdrop').click({ position: { x: 20, y: 300 }, force: true });
+      await sleep(500);
+      check('menu ☰ : toucher a cote du panneau ferme le menu', (await page.getByTestId('side-menu').count()) === 0);
+      // une categorie : la page de la categorie s'ouvre et le menu se ferme
+      await page.getByTestId('menu-button').click();
+      await page.getByTestId('side-menu').waitFor({ timeout: 8000 });
+      const firstSlug = await page.locator('[data-testid^="menu-cat-"]').first().getAttribute('data-testid');
+      await page.locator('[data-testid^="menu-cat-"]').first().click();
+      await sleep(1500);
+      check('menu ☰ : toucher une categorie ouvre sa page et ferme le menu', /\/categorie\//.test(new URL(page.url()).pathname) && (await page.getByTestId('side-menu').count()) === 0, [firstSlug, page.url()]);
+      check('aucune erreur (menu connecte)', c.errs.length === 0, c.errs);
+      await c.ctx.close();
+    }
+    // le visiteur sans compte : « Se connecter » et « Creer un compte », pas de faux profil ; les categories sont les memes
+    {
+      const c = await newVisitor(phone, {});
+      const { page } = c;
+      await page.goto(`${BASE}/`, { waitUntil: 'load' });
+      await sleep(4000);
+      await page.getByTestId('menu-button').click();
+      await page.getByTestId('side-menu').waitFor({ timeout: 8000 });
+      await sleep(600);
+      check('menu ☰ visiteur : « Se connecter » et « Creer un compte », aucun profil ni point', (await page.getByTestId('menu-guest').count()) === 1 && (await page.getByTestId('menu-login').count()) === 1 && (await page.getByTestId('menu-register').count()) === 1 && (await page.getByTestId('menu-profile').count()) === 0 && !/pts?\b/.test(await page.getByTestId('side-menu').innerText().then((t) => t.replace(/Se connecter|Créer un compte|Connectez-vous pour voir votre profil et vos points\./g, ''))));
+      check('menu ☰ visiteur : les categories sont la aussi', (await page.locator('[data-testid^="menu-cat-"]').count()) > 0);
+      await page.screenshot({ path: path.join(OUT, 'M2-menu-visiteur.png') });
+      await page.getByTestId('menu-login').click();
+      await sleep(1200);
+      check('menu ☰ visiteur : « Se connecter » ouvre la page de connexion et ferme le menu', /connexion|login/i.test(new URL(page.url()).pathname) && (await page.getByTestId('side-menu').count()) === 0, page.url());
+      check('aucune erreur (menu visiteur)', c.errs.length === 0, c.errs);
+      await c.ctx.close();
+    }
+
     // --- page de commande : paiement a la livraison seulement a N'Djamena + emballage cadeau
     {
       const c = await newVisitor(phone, { storage, fakeUser: fu });
