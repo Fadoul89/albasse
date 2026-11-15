@@ -1,5 +1,5 @@
 // Bas de la page de commande : cartes Moov Money / Airtel Money (src/lib/paymentCards.ts).
-import { digitsOnly, paymentCards, PAYMENT_CARDS_TEXT } from '../../src/lib/paymentCards.ts';
+import { digitsOnly, hasHolderColumns, paymentCards, PAYMENT_CARDS_TEXT } from '../../src/lib/paymentCards.ts';
 import { PAYMENT } from '../../src/constants/shopRules.ts';
 
 let ok = 0;
@@ -40,6 +40,11 @@ check('digitsOnly', digitsOnly('+235 99-22.10 17') === '235992210' + '17');
 check('sans nom enregistré : aucun nom (jamais inventé)', base[0].holder === null && base[1].holder === null);
 const named = paymentCards({ moov_holder_name: '  NOM Prénom ', airtel_holder_name: '' });
 check('nom enregistré : repris (espaces retirés) ; nom vide : aucun nom', named[0].holder === 'NOM Prénom' && named[1].holder === null);
+
+// l'administration ne montre les champs « Nom » que si les colonnes existent (script add-payment-holder-names.sql lancé)
+check('colonnes « nom » absentes : pas de champs Nom dans l\'administration', !hasHolderColumns({ airtel_number: 'x', moov_number: 'y' }) && !hasHolderColumns(null) && !hasHolderColumns(undefined));
+check('colonnes « nom » présentes (même vides) : les champs Nom apparaissent', hasHolderColumns({ airtel_holder_name: null, moov_holder_name: null }) && hasHolderColumns({ airtel_holder_name: 'A', moov_holder_name: 'B' }));
+check('une seule des deux colonnes : pas de champs (le script les ajoute ensemble)', !hasHolderColumns({ airtel_holder_name: null }));
 
 // textes
 check('titre', PAYMENT_CARDS_TEXT.title.includes('Informations de paiement'));

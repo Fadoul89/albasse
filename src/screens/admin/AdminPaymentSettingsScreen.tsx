@@ -8,6 +8,7 @@ import { colors, fonts, radius, spacing } from '../../theme';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { GoldButton } from '../../components/GoldButton';
 import { MOBILE_MONEY_ENABLED } from '../../constants/shopRules';
+import { hasHolderColumns } from '../../lib/paymentCards';
 
 export function AdminPaymentSettingsScreen() {
   const profile = useAuthStore((s) => s.profile);
@@ -18,6 +19,8 @@ export function AdminPaymentSettingsScreen() {
   const [airtelUrl, setAirtelUrl] = useState('');
   const [moovNumber, setMoovNumber] = useState('');
   const [moovUrl, setMoovUrl] = useState('');
+  const [airtelHolder, setAirtelHolder] = useState('');
+  const [moovHolder, setMoovHolder] = useState('');
   const [instructions, setInstructions] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -27,6 +30,8 @@ export function AdminPaymentSettingsScreen() {
       setAirtelUrl(settings.airtel_payment_url ?? '');
       setMoovNumber(settings.moov_number ?? '');
       setMoovUrl(settings.moov_payment_url ?? '');
+      setAirtelHolder(settings.airtel_holder_name ?? '');
+      setMoovHolder(settings.moov_holder_name ?? '');
       setInstructions(settings.instructions ?? '');
     }
   }, [settings]);
@@ -39,6 +44,9 @@ export function AdminPaymentSettingsScreen() {
       </View>
     );
   }
+
+  // les champs « Nom du titulaire » n'apparaissent qu'après le script add-payment-holder-names.sql (sinon la colonne n'existe pas)
+  const holderFields = hasHolderColumns(settings);
 
   const handleSave = async () => {
     if (!isSupabaseConfigured) {
@@ -53,6 +61,7 @@ export function AdminPaymentSettingsScreen() {
         airtel_payment_url: airtelUrl.trim() || null,
         moov_number: moovNumber.trim() || null,
         moov_payment_url: moovUrl.trim() || null,
+        ...(holderFields ? { airtel_holder_name: airtelHolder.trim() || null, moov_holder_name: moovHolder.trim() || null } : {}),
         instructions: instructions.trim() || null,
         updated_at: new Date().toISOString(),
       })
@@ -88,10 +97,12 @@ export function AdminPaymentSettingsScreen() {
 
         <Text style={styles.sectionTitle}>📱 Airtel Money</Text>
         <Field label="Numéro Airtel Money" value={airtelNumber} onChangeText={setAirtelNumber} placeholder="60 60 51 51" keyboardType="phone-pad" />
+        {holderFields ? <Field label="Nom du titulaire (affiché au client)" value={airtelHolder} onChangeText={setAirtelHolder} placeholder="Nom écrit sur le compte" testID="admin-airtel-holder" /> : null}
         <Field label="Lien de paiement en ligne (optionnel)" value={airtelUrl} onChangeText={setAirtelUrl} placeholder="https://..." autoCapitalize="none" />
 
         <Text style={styles.sectionTitle}>📲 Moov Money</Text>
         <Field label="Numéro Moov Money" value={moovNumber} onChangeText={setMoovNumber} placeholder="66 60 51 51" keyboardType="phone-pad" />
+        {holderFields ? <Field label="Nom du titulaire (affiché au client)" value={moovHolder} onChangeText={setMoovHolder} placeholder="Nom écrit sur le compte" testID="admin-moov-holder" /> : null}
         <Field label="Lien de paiement en ligne (optionnel)" value={moovUrl} onChangeText={setMoovUrl} placeholder="https://..." autoCapitalize="none" />
 
         <Text style={styles.sectionTitle}>Instructions supplémentaires (optionnel)</Text>

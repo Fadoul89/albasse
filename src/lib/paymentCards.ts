@@ -40,6 +40,11 @@ export function paymentCards(settings: PaymentCardSettings | null | undefined): 
   ];
 }
 
+// Les colonnes « nom du titulaire » n'existent dans la base qu'après add-payment-holder-names.sql : sans elles, l'administration ne montre pas les champs « Nom »
+// (et n'envoie rien), sinon l'enregistrement échouerait.
+export const hasHolderColumns = (settings: object | null | undefined): boolean =>
+  !!settings && 'airtel_holder_name' in settings && 'moov_holder_name' in settings;
+
 export const PAYMENT_CARDS_TEXT = {
   title: '💳 Informations de paiement',
   intro: "Hors N'Djamena, le paiement se fait à l'avance : envoyez le montant de votre commande à l'un de ces numéros, puis confirmez votre commande. À N'Djamena, vous payez à la livraison.",

@@ -9980,6 +9980,36 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await c.ctx.close();
     }
 
+    // --- Admin › Moyens de paiement : les champs « Nom du titulaire » n'apparaissent que si les colonnes existent (add-payment-holder-names.sql)
+    if (MM) {
+      const fa = mk(true);
+      const HDRP = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+      const openAdmin = async (holders) => {
+        const c = await newVisitor(phone, { storage: { 'sb-xtitsmmccpkelxfjyqyh-auth-token': sessionFor(fa) }, fakeUser: fa });
+        if (holders) {
+          await c.page.route(/\/rest\/v1\/payment_settings/, (route) => (route.request().method() === 'OPTIONS'
+            ? route.fulfill({ status: 204, headers: HDRP })
+            : route.fulfill({ status: 200, headers: { ...HDRP, 'content-type': 'application/json' }, body: JSON.stringify({ id: 1, airtel_number: '60 60 51 51', airtel_payment_url: null, moov_number: '99 22 10 17', moov_payment_url: null, airtel_holder_name: 'NOM Prénom (exemple)', moov_holder_name: null, instructions: null, updated_at: '2026-11-15T00:00:00Z' }) })));
+        }
+        await c.page.goto(`${BASE}/admin/paiement`, { waitUntil: 'load' });
+        await sleep(4000);
+        return c;
+      };
+      {
+        const c = await openAdmin(false);
+        check('admin Moyens de paiement : sans les colonnes « nom » (script pas lance), les numeros sont la et aucun champ « Nom du titulaire »', (await c.page.getByPlaceholder('60 60 51 51').count()) === 1 && (await c.page.getByTestId('admin-airtel-holder').count()) === 0 && (await c.page.getByTestId('admin-moov-holder').count()) === 0);
+        check('aucune erreur (admin paiement sans colonnes)', c.errs.length === 0, c.errs);
+        await c.ctx.close();
+      }
+      {
+        const c = await openAdmin(true);
+        check('admin Moyens de paiement : avec les colonnes « nom », un champ « Nom du titulaire » sous Airtel (rempli) et sous Moov (vide)', (await c.page.getByTestId('admin-airtel-holder').inputValue()) === 'NOM Prénom (exemple)' && (await c.page.getByTestId('admin-moov-holder').inputValue()) === '');
+        await c.page.screenshot({ path: path.join(OUT, 'M7-admin-paiement-noms.png') });
+        check('aucune erreur (admin paiement avec colonnes)', c.errs.length === 0, c.errs);
+        await c.ctx.close();
+      }
+    }
+
     // --- livraison programmee (clients de N'Djamena) : choix du jour et de l'heure, enregistrement, affichage
     {
       const cityPick = async (page, name) => {
