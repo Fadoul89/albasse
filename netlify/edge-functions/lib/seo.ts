@@ -347,18 +347,23 @@ ${images.map((src) => `<img src="${escapeHtml(src)}" alt="${escapeHtml(cleanText
 }
 
 // --- copies identiques ------------------------------------------------------------------------------------------------------------------
-// Le patron a parfois ajouté deux fois le même article (même nom, même prix, adresses « …-2 », « …-3 »). Google les prend pour des doublons et choisit seul laquelle garder,
+// Le patron a parfois ajouté deux fois la même annonce (même nom, même prix, MÊME DESCRIPTION, adresses « …-2 », « …-3 »). Google les prend pour des doublons et choisit seul laquelle garder,
 // souvent pas celle qu'on lui dit. On lui dit donc nous-mêmes laquelle : la plus ancienne qui est EN STOCK (sinon la plus ancienne). Rien n'est supprimé : toutes les pages restent
-// ouvertes pour les clients, seule l'adresse « canonique » est commune. Deux articles de même nom mais de prix différents ne sont PAS des copies (modèles différents).
+// ouvertes pour les clients, seule l'adresse « canonique » est commune.
+// Deux articles de même nom et de même prix mais de DESCRIPTION différente (autres photos, autre texte : autre modèle) ne sont PAS des copies : chacun garde sa page et son adresse.
+// (15 novembre 2026 : vérifié sur la vraie boutique : sur 38 groupes « même nom et même prix », aucune paire n'avait les mêmes photos et 8 seulement avaient la même description ;
+// ce sont ces 8 que Google signalait comme doublons. La première version, trop large, regroupait aussi des modèles différents.)
 export interface CopyRow {
   slug: string;
   name?: string | null;
   price?: number | string | null;
+  description?: string | null;
   stock?: number | null;
   created_at?: string | null;
 }
 
-export const copyKey = (name: unknown, price: unknown): string => `${cleanText(name).toLowerCase()}|${Math.round(Number(price) || 0)}`;
+export const copyKey = (name: unknown, price: unknown, description?: unknown): string =>
+  `${cleanText(name).toLowerCase()}|${Math.round(Number(price) || 0)}|${cleanText(description).toLowerCase()}`;
 
 const createdMs = (row: CopyRow): number => {
   const t = row.created_at ? Date.parse(row.created_at) : NaN;
@@ -376,8 +381,8 @@ export function pickCanonicalSlug(copies: readonly CopyRow[], fallback: string):
 
 // Les copies d'un article parmi une liste (même nom et même prix, sans tenir compte des majuscules ni des espaces en double)
 export function copiesOf(product: CopyRow, all: readonly CopyRow[]): CopyRow[] {
-  const key = copyKey(product.name, product.price);
-  return all.filter((c) => copyKey(c.name, c.price) === key);
+  const key = copyKey(product.name, product.price, product.description);
+  return all.filter((c) => copyKey(c.name, c.price, c.description) === key);
 }
 
 // --- pages d'information (contact, conditions de retour, confidentialité) -----------------------------------------------------------------
@@ -464,11 +469,11 @@ export function notFoundPage(url: string): string {
 
 export const STATIC_PAGES = ['/', '/contact', '/conditions-de-retour', '/confidentialite'];
 
-// Les copies identiques (même nom, même prix) : seule l'adresse canonique reste dans le plan du site
+// Les copies identiques (même nom, même prix, même description) : seule l'adresse canonique reste dans le plan du site
 export function withoutCopies<T extends SeoProduct>(products: readonly T[]): T[] {
   const groups = new Map<string, T[]>();
   for (const p of products) {
-    const k = copyKey(p.name, p.price);
+    const k = copyKey(p.name, p.price, p.description);
     groups.set(k, [...(groups.get(k) ?? []), p]);
   }
   const keep = new Set<string>();

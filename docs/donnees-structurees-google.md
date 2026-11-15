@@ -42,3 +42,9 @@ Ajouté (`returnPolicyJsonLd` dans `netlify/edge-functions/lib/seo.ts`), **seule
 - **Articles cachés (désactivés)** : leur page restait complète pour Google (200, « en stock »). Maintenant : **404**, comme une adresse inconnue (`og-preview.ts` : `is_active=eq.true`). C'est pourquoi il faut **supprimer** les copies en trop plutôt que seulement les cacher (ils sortent de Google dans les deux cas, mais seulement après cette publication).
 - Liste des 38 groupes d'articles en double (40 copies en trop, aucune commande) : donnée au patron le 15 novembre 2026 ; décision de supprimer = au patron (vérifier les photos avant).
 - Tests : `tests/seo/seo.test.ts` (124 vérifications).
+
+## Correction du 15 novembre 2026 (soir) : les copies = même nom, même prix ET même description
+La première règle (même nom et même prix) était **trop large** : en comparant les descriptions, les couleurs, les tailles et le poids des photos des 40 « copies », **aucune** n'avait les mêmes photos et **9 seulement** avaient le même texte (ce sont celles que Google signalait comme doublons : `ebaya-prestige-2`, `al-madjaz-4`…). Les autres (par exemple « Rado », « Hermes », « Rideaux ») sont des modèles ou des couleurs différents : ils gardent chacun leur page, leur adresse canonique et leur place dans le plan du site.
+- `copyKey(nom, prix, description)` (`netlify/edge-functions/lib/seo.ts`) ; `og-preview.ts` et `sitemap.ts` lisent aussi la description.
+- Liste donnée au patron : 9 paires seulement, à comparer à l'œil ; **rien à supprimer en masse**.
+- Tests : `tests/seo/seo.test.ts` (125 vérifications ; « même nom et même prix mais autre description » garde sa propre canonique).

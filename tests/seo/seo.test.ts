@@ -351,26 +351,31 @@ const ldBlocks = (html: string): any[] => [...html.matchAll(/<script type="appli
   // --- copies identiques (même nom, même prix) : Google reçoit UNE adresse canonique commune ---
   {
     const rows = [
-      { slug: 'rado-3', name: 'Rado', price: 30000, stock: 4, created_at: '2026-10-05T10:00:00Z' },
-      { slug: 'rado', name: 'Rado', price: 30000, stock: 0, created_at: '2026-09-01T10:00:00Z' },
-      { slug: 'rado-2', name: ' RADO ', price: 30000, stock: 2, created_at: '2026-09-20T10:00:00Z' },
-      { slug: 'rado-4', name: 'Rado', price: 50000, stock: 9, created_at: '2026-10-09T10:00:00Z' },
+      { slug: 'rado-3', name: 'Rado', price: 30000, description: 'Montre Rado dorée.', stock: 4, created_at: '2026-10-05T10:00:00Z' },
+      { slug: 'rado', name: 'Rado', price: 30000, description: 'Montre   Rado dorée.', stock: 0, created_at: '2026-09-01T10:00:00Z' },
+      { slug: 'rado-2', name: ' RADO ', price: 30000, description: 'montre rado dorée.', stock: 2, created_at: '2026-09-20T10:00:00Z' },
+      { slug: 'rado-4', name: 'Rado', price: 50000, description: 'Montre Rado dorée.', stock: 9, created_at: '2026-10-09T10:00:00Z' },
+      { slug: 'rado-5', name: 'Rado', price: 30000, description: 'Rado noire, bracelet cuir : un autre modèle.', stock: 7, created_at: '2026-08-01T10:00:00Z' },
     ];
     const same = seo.copiesOf(rows[0], rows);
-    check('copies : même nom (majuscules et espaces ignorés) ET même prix ; un autre prix n\'est pas une copie', same.map((r) => r.slug).sort().join() === 'rado,rado-2,rado-3', same.map((r) => r.slug));
+    check('copies : même nom, même prix ET même description (majuscules et espaces ignorés) ; un autre prix ou une autre description n\'est PAS une copie (autre modèle)', same.map((r) => r.slug).sort().join() === 'rado,rado-2,rado-3', same.map((r) => r.slug));
     check('page principale : la plus ancienne EN STOCK (rado est épuisé : rado-2)', seo.pickCanonicalSlug(same, 'rado-3') === 'rado-2');
     check('toutes épuisées : la plus ancienne', seo.pickCanonicalSlug(same.map((r) => ({ ...r, stock: 0 })), 'rado-3') === 'rado');
     check('aucune copie connue : l\'adresse de la page elle-même', seo.pickCanonicalSlug([], 'rado-3') === 'rado-3');
     check('sans date : adresse la plus courte puis ordre alphabétique (jamais au hasard)', seo.pickCanonicalSlug([{ slug: 'b-2', stock: 1 }, { slug: 'b', stock: 1 }], 'x') === 'b');
     const kept = seo.withoutCopies(rows);
-    check('plan du site : une seule adresse par groupe de copies (rado-2) ; le modèle à 50 000 reste', kept.map((r) => r.slug).sort().join() === 'rado-2,rado-4', kept.map((r) => r.slug));
+    check('plan du site : une seule adresse par groupe de copies (rado-2) ; le modèle à 50 000 et le modèle noir (autre description) restent', kept.map((r) => r.slug).sort().join() === 'rado-2,rado-4,rado-5', kept.map((r) => r.slug));
     check('plan du site : un article sans copie n\'est jamais retiré', seo.withoutCopies([{ slug: 'solo', name: 'Solo', price: 1, stock: 0 }]).length === 1);
     const xml = seo.buildSitemapXml(categories as any, rows as any);
-    check('plan du site XML : rado-2 et rado-4 présents, rado et rado-3 absents', xml.includes('/produit/rado-2<') && xml.includes('/produit/rado-4<') && !xml.includes('/produit/rado<') && !xml.includes('/produit/rado-3<'));
+    check('plan du site XML : rado-2, rado-4 et rado-5 présents, rado et rado-3 absents', xml.includes('/produit/rado-2<') && xml.includes('/produit/rado-4<') && xml.includes('/produit/rado-5<') && !xml.includes('/produit/rado<') && !xml.includes('/produit/rado-3<'));
 
     // la vraie fonction : la page d'une copie annonce la page principale
     products.push({ name: 'Rado', slug: 'rado', description: '', price: 30000, images: ['https://img.example/r.jpg'], stock: 0, category_id: 'c1', categories: { name: 'Montres', slug: 'montres' }, created_at: '2026-09-01T10:00:00Z' } as any);
     products.push({ name: 'Rado', slug: 'rado-2', description: '', price: 30000, images: ['https://img.example/r2.jpg'], stock: 2, category_id: 'c1', categories: { name: 'Montres', slug: 'montres' }, created_at: '2026-09-20T10:00:00Z' } as any);
+    products.push({ name: 'Rado', slug: 'rado-5', description: 'Rado noire, bracelet cuir : un autre modèle.', price: 30000, images: ['https://img.example/r5.jpg'], stock: 7, category_id: 'c1', categories: { name: 'Montres', slug: 'montres' }, created_at: '2026-08-01T10:00:00Z' } as any);
+    const other = await ask(ogPreview, '/produit/rado-5');
+    check('même nom et même prix mais AUTRE description (autre modèle) : la page garde sa propre adresse canonique', (await other.res.text()).includes('<link rel="canonical" href="https://www.albasseshopping.com/produit/rado-5" />'));
+    products.splice(products.findIndex((p) => p.slug === 'rado-5'), 1);
     const dup = await ask(ogPreview, '/produit/rado');
     const dupHtml = await dup.res.text();
     check('page d\'une copie épuisée : canonique = la page principale en stock (rado-2)', dupHtml.includes('<link rel="canonical" href="https://www.albasseshopping.com/produit/rado-2" />'), (dupHtml.match(/rel="canonical"[^>]*>/) ?? [])[0]);
