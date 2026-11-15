@@ -48,3 +48,6 @@ La première règle (même nom et même prix) était **trop large** : en compara
 - `copyKey(nom, prix, description)` (`netlify/edge-functions/lib/seo.ts`) ; `og-preview.ts` et `sitemap.ts` lisent aussi la description.
 - Liste donnée au patron : 9 paires seulement, à comparer à l'œil ; **rien à supprimer en masse**.
 - Tests : `tests/seo/seo.test.ts` (125 vérifications ; « même nom et même prix mais autre description » garde sa propre canonique).
+
+## « Détectée, actuellement non indexée » : 443 pages (capture du 15 novembre 2026)
+Google connaît ces adresses (grâce au plan du site) mais **ne les a pas encore explorées** (« Dernière exploration : Sans objet »). Ce n'est **pas une erreur** : c'est normal pour un site récent de plus de 600 pages (les pages connues de Google montent chaque semaine). Il n'y a qu'à laisser Google avancer ; on peut aider en demandant l'indexation des pages importantes (Search Console › Inspecter l'URL › Demander l'indexation, une dizaine par jour). Deux exemples étaient d'**anciennes adresses** de catégories renommées : voir docs/zara-categories-renommees.md (redirigées en 301).

@@ -241,9 +241,12 @@ async function main() {
   ok('infos importantes (fr + ar) : horaires, paiement par ville, 48 h', [b.importantInfo('fr'), b.importantInfo('ar')].every((s) => /8.30/.test(s) && /48/.test(s) && (MM ? /Airtel Money/.test(s) : !/Airtel|Moov/.test(s))) && (MM ? /seulement à N'Djamena/.test(b.importantInfo('fr')) && /فقط في إنجامينا/.test(b.importantInfo('ar')) : /à N'Djamena/.test(b.importantInfo('fr')) && /WhatsApp/.test(b.importantInfo('fr')) && /واتساب/.test(b.importantInfo('ar'))));
 
   console.log('\n== catalogue (vrais produits)');
-  const cats = await get('categories?select=id,name,slug');
-  const catName = new Map<string, string>(cats.map((c: any) => [c.id, c.name]));
-  const catSlug = new Map<string, string>(cats.map((c: any) => [c.id, c.slug]));
+  const cats = await get('categories?select=id,name,slug,parent_id');
+  // comme dans l'application (assistantData.getCatalog) : un article d'une sous-catégorie est rangé dans sa catégorie PRINCIPALE, et Zara garde ses clés d'origine pour les catégories renommées (zaraKey)
+  const catById = new Map<string, any>(cats.map((c: any) => [c.id, c]));
+  const rootCat = (id: string) => { const own = catById.get(id); const parent = own?.parent_id ? catById.get(own.parent_id) : null; return parent && !parent.parent_id ? parent : own; };
+  const catName = new Map<string, string>(cats.map((c: any) => [c.id, rootCat(c.id)?.name ?? '']));
+  const catSlug = new Map<string, string>(cats.map((c: any) => [c.id, l.zaraKey(rootCat(c.id)?.slug ?? '')]));
   const prods = await get('products?select=id,name,slug,price,compare_at_price,stock,category_id,colors,sizes,description,images,created_at&is_active=eq.true&limit=1000');
   const catalog: P[] = prods.map((p: any) =>
     b.buildProduct({ id: p.id, name: p.name, slug: p.slug, price: p.price, compare_at_price: p.compare_at_price, stock: p.stock, category: catName.get(p.category_id) ?? '', category_slug: catSlug.get(p.category_id) ?? '', colors: p.colors, sizes: p.sizes, description: p.description, image: (p.images ?? [])[0] ?? null, created_at: p.created_at })
@@ -253,7 +256,7 @@ async function main() {
   const shoes = top('chaussures homme');
   ok('« chaussures homme » : que des chaussures, en stock', shoes.length === 4 && shoes.every((p) => p.category === 'Chaussures' && p.stock > 0), shoes.map((p) => p.name));
   ok('« robe » : des robes', top('robe').slice(0, 3).every((p) => /robe/i.test(p.name)));
-  ok('« montre » : des montres', top('montre').every((p) => p.category === 'Montre'));
+  ok('« montre » : des montres', top('montre').every((p) => p.category === 'MONTRE & ACCESSOIRES'));
   ok('mot inconnu -> aucun resultat', top('helicoptere').length === 0 && top('riz').length === 0);
   ok('jamais un produit en rupture', catalog.filter((p) => p.stock <= 0).every((p) => !top(p.name, 6).some((r) => r.id === p.id)));
   const pr = m.parseNeed('عطر رجالي');
@@ -348,7 +351,7 @@ async function main() {
   ok('sans personne : 6 categories, les plus demandees d\'abord', choose(undefined, false).length === 6 && slugsOf(choose(undefined, false)).startsWith('parfum|chaussures|montre|vetements'), slugsOf(choose(undefined, false)));
   ok('boutons en arabe : noms arabes', choose('lui', true, 'ar').map((c) => c.name).join('|') === 'ساعات|عطور|أحذية|نظارات', choose('lui', true, 'ar').map((c) => c.name));
   ok('chaque bouton est une vraie categorie avec des produits en stock', ['lui', 'elle', 'enfant'].every((w) => [true, false].every((g) => choose(w as l.Who, g).every((c) => catalog.some((p) => p.categorySlug === c.slug && p.stock > 0 && p.price > 0)))));
-  ok('toutes les categories de la boutique ont un nom arabe', cats.every((c: any) => !!l.CATEGORY_AR[c.slug]), cats.filter((c: any) => !l.CATEGORY_AR[c.slug]).map((c: any) => c.slug));
+  ok('toutes les categories PRINCIPALES de la boutique ont un nom arabe', cats.filter((c: any) => !c.parent_id).every((c: any) => !!l.CATEGORY_AR[l.zaraKey(c.slug)]), cats.filter((c: any) => !c.parent_id && !l.CATEGORY_AR[l.zaraKey(c.slug)]).map((c: any) => c.slug));
 
   console.log('\n== marketing : budget');
   const rng = (t: string) => { const r = m.parseBudget(t); return r ? `${r.min}-${Number.isFinite(r.max) ? r.max : '∞'}` : null; };
@@ -389,11 +392,11 @@ async function main() {
   const elle = gifts('elle');
   ok('cadeau pour elle : 4 produits varies (2 categories ou plus), en stock, avec photo', elle.length === 4 && new Set(elle.map((p) => p.category)).size >= 2 && elle.every((p) => sell(p) && p.image), elle.map((p) => [p.category, p.name]));
   const lui = gifts('lui');
-  ok('cadeau pour lui : 4 produits varies', lui.length === 4 && new Set(lui.map((p) => p.category)).size >= 2 && lui.every((p) => ['Montre', 'Parfum', 'Chaussures', 'Lunettes'].includes(p.category)), lui.map((p) => [p.category, p.name]));
+  ok('cadeau pour lui : 4 produits varies', lui.length === 4 && new Set(lui.map((p) => p.category)).size >= 2 && lui.every((p) => ['MONTRE & ACCESSOIRES', 'Parfum', 'Chaussures', 'Lunettes'].includes(p.category)), lui.map((p) => [p.category, p.name]));
   const kid = gifts('enfant');
-  ok('cadeau pour un enfant : bebe ou jouets', kid.length >= 1 && kid.every((p) => ['Bébé et Maternité', 'Vélos pour enfants & Jouets et Jeux'].includes(p.category)), kid.map((p) => [p.category, p.name]));
+  ok('cadeau pour un enfant : bebe ou jouets', kid.length >= 1 && kid.every((p) => ['Produits pour bébés', 'Vélos pour enfants & Jouets et Jeux'].includes(p.category)), kid.map((p) => [p.category, p.name]));
   const luiMontre = gifts('lui', 'montre');
-  ok('cadeau pour lui, une montre : 4 montres', luiMontre.length === 4 && luiMontre.every((p) => p.category === 'Montre' && sell(p)), luiMontre.map((p) => p.name));
+  ok('cadeau pour lui, une montre : 4 montres', luiMontre.length === 4 && luiMontre.every((p) => p.category === 'MONTRE & ACCESSOIRES' && sell(p)), luiMontre.map((p) => p.name));
   const luiParfum = gifts('lui', 'parfum');
   ok('cadeau pour lui, un parfum : des parfums (pour homme d\'abord)', luiParfum.length === 4 && luiParfum.every((p) => p.category === 'Parfum'), luiParfum.map((p) => p.name));
   const elleSac = gifts('elle', 'sacs-et-bagages');
@@ -406,7 +409,7 @@ async function main() {
   const whoCtx = m.candidatesFor(catalog, { kind: 'who', who: 'lui' }).slice(0, 4);
   ok('« pour lui » sans article : un peu de tout (2 categories ou plus)', whoCtx.length === 4 && new Set(whoCtx.map((p) => p.category)).size >= 2, whoCtx.map((p) => [p.category, p.name]));
   const giftDay = m.pickInBudget(catalog, { kind: 'gift', who: 'lui', slug: 'montre' }, { min: 0, max: 30000 }, 4);
-  ok('cadeau pour lui, montre, moins de 30 000 : dans le budget', giftDay.items.length > 0 && giftDay.items.every((p) => p.price <= 30000 && p.category === 'Montre'), giftDay.items.map((p) => [p.name, p.price]));
+  ok('cadeau pour lui, montre, moins de 30 000 : dans le budget', giftDay.items.length > 0 && giftDay.items.every((p) => p.price <= 30000 && p.category === 'MONTRE & ACCESSOIRES'), giftDay.items.map((p) => [p.name, p.price]));
 
   console.log('\n== alternatives moins cheres (« c\'est cher »)');
   const shown = m.pickInBudget(catalog, { kind: 'category', slug: 'parfum' }, { min: 30000, max: 100000 }, 4).items;

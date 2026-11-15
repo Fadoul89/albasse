@@ -405,6 +405,20 @@ const ldBlocks = (html: string): any[] => [...html.matchAll(/<script type="appli
     products.splice(products.findIndex((p) => p.slug === 'chemise-cachee'), 1);
   }
 
+  // --- anciennes adresses des catégories renommées : 301 vers la nouvelle (Google les connaissait : « Détectée, actuellement non indexée ») ---
+  {
+    for (const [from, to] of [['maison-mobilier', 'maison-bureau'], ['bebe-et-maternite', 'produits-pour-bebes']]) {
+      const bot = await ask(ogPreview, `/categorie/${from}`);
+      check(`/categorie/${from} (Google) : redirection définitive 301 vers /categorie/${to}`, bot.res.status === 301 && bot.res.headers.get('location') === `https://www.albasseshopping.com/categorie/${to}`, [bot.res.status, bot.res.headers.get('location')]);
+      const human = await ask(ogPreview, `/categorie/${from}`, CHROME);
+      check(`/categorie/${from} (visiteur) : la même redirection 301`, human.res.status === 301 && human.res.headers.get('location') === `https://www.albasseshopping.com/categorie/${to}`);
+    }
+    check('/categorie/maison-mobilier/ (barre finale) : redirigée aussi', seo.oldCategoryRedirect('/categorie/maison-mobilier/') === 'https://www.albasseshopping.com/categorie/maison-bureau');
+    check('une catégorie normale ou inconnue n\'est pas redirigée', seo.oldCategoryRedirect('/categorie/montres') === null && seo.oldCategoryRedirect('/categorie/nimporte-quoi') === null && seo.oldCategoryRedirect('/produit/maison-mobilier') === null && seo.oldCategoryRedirect('/') === null);
+    const normal = await ask(ogPreview, '/categorie/montres', CHROME);
+    check('un visiteur sur une catégorie normale : l\'application (aucune redirection)', normal.state.next === 1 && normal.res.status === 200);
+  }
+
   // la configuration Netlify branche bien les fonctions
   {
     const toml = readFileSync(new URL('../../netlify.toml', import.meta.url), 'utf8');

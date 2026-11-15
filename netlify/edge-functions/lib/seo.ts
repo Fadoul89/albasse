@@ -385,6 +385,16 @@ export function copiesOf(product: CopyRow, all: readonly CopyRow[]): CopyRow[] {
   return all.filter((c) => copyKey(c.name, c.price, c.description) === key);
 }
 
+// --- anciennes adresses de catégories renommées ----------------------------------------------------------------------------------------
+// Le patron a renommé deux catégories : « Maison & Mobilier » → « Maison & Bureau » et « Bébé et Maternité » → « Produits pour bébés ». Google (et les anciens liens, publicités, QR codes)
+// connaissent encore les anciennes adresses : elles renvoient maintenant vers la nouvelle (301, « déplacée définitivement ») au lieu d'une page introuvable.
+export const OLD_CATEGORY_SLUGS: Record<string, string> = { 'maison-mobilier': 'maison-bureau', 'bebe-et-maternite': 'produits-pour-bebes' };
+export function oldCategoryRedirect(pathname: string): string | null {
+  const m = /^\/categorie\/([^/]+)\/?$/.exec(pathname);
+  const target = m ? OLD_CATEGORY_SLUGS[decodeURIComponent(m[1])] : undefined;
+  return target ? `${SITE_URL}/categorie/${target}` : null;
+}
+
 // --- pages d'information (contact, conditions de retour, confidentialité) -----------------------------------------------------------------
 // Avant : Google recevait pour ces adresses la même coquille vide que pour toutes les autres pages (même titre, aucune adresse canonique) et les prenait pour des doublons.
 // Textes : seulement ce que disent les vraies pages du site (voir ReturnPolicyScreen, PrivacyPolicyScreen, ContactScreen).

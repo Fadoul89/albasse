@@ -7,6 +7,7 @@ import { buildZaraStats, classifyStatsError, periodBounds, type StatsPeriod, typ
 import { buildBrowsingOverview, type BrowsingOverview } from './browsingOverview';
 import { buildSalesMap, SALES_WINDOW_DAYS, type SalesMap } from './assistantSales';
 import { parseAffinity, type Affinity } from './assistantWords';
+import { zaraKey } from './assistantLang';
 import { sortCategories } from './categoryOrder';
 import { mainCategories, rootOf, type CatNode } from './subCategories';
 import type { Product } from '../types';
@@ -100,7 +101,8 @@ export const getCategories = cached<CategoryInfo[]>(async () => {
   if (error) throw error;
   // sous-catégories : Zara propose les catégories PRINCIPALES (les articles d'une sous-catégorie y comptent : voir getCatalog)
   const all = sortCategories((data ?? []) as (CatNode & CategoryInfo)[]);
-  return mainCategories(all).map(({ name, slug }) => ({ name, slug }));
+  // la clé de Zara (« montre » pour « montre-accessoires ») : voir assistantLang.SHOP_SLUG_TO_KEY
+  return mainCategories(all).map(({ name, slug }) => ({ name, slug: zaraKey(slug) }));
 });
 
 export const getCatalog = cached<CatalogProduct[]>(async () => {
@@ -135,7 +137,7 @@ export const getCatalog = cached<CatalogProduct[]>(async () => {
       compare_at_price: shownOldPrice({ price: Number(p.price), compare_at_price: p.compare_at_price == null ? null : Number(p.compare_at_price), is_flash_sale: p.is_flash_sale, flash_sale_ends_at: p.flash_sale_ends_at, promo_ends_at: p.promo_ends_at }),
       stock: p.stock,
       category: catOf(p.category_id).name,
-      category_slug: catOf(p.category_id).slug,
+      category_slug: zaraKey(catOf(p.category_id).slug),
       sub_category: catOf(p.category_id).sub,
       colors: p.colors,
       sizes: p.sizes,
