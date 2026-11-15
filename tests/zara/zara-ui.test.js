@@ -9851,10 +9851,59 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await c.ctx.close();
     }
 
+    // --- les deux boutons de la fiche article (« Commander sur WhatsApp » et « Commander ») vibrent : une secousse d'une demi-seconde, puis un repos
+    {
+      const c = await newVisitor(phone, {});
+      const { page } = c;
+      await page.goto(`${BASE}/produit/${realProduct.slug}`, { waitUntil: 'load' });
+      await sleep(5000);
+      const probe = () => page.evaluate(() => ['product-wa-vibrate', 'product-order-vibrate'].map((id) => {
+        const e = document.querySelector(`[data-testid="${id}"]`);
+        if (!e) return null;
+        const a = e.getAnimations()[0];
+        const kf = a ? a.effect.getKeyframes() : [];
+        const xs = kf.map((k) => parseFloat(String(k.transform || '0').replace('translateX(', '')) || 0);
+        return { running: e.getAnimations().length, steps: kf.length, maxShift: Math.max(...xs.map(Math.abs), 0), cycle: a ? a.effect.getTiming().duration : 0 };
+      }));
+      const [wa, ord] = await probe();
+      check('fiche article : le bouton « Commander » vibre (secousse de 3 px au plus, un cycle de 3 s)', !!ord && ord.running >= 1 && ord.steps >= 8 && ord.maxShift > 0 && ord.maxShift <= 4 && ord.cycle === 3000, ord);
+      if (wa) check('fiche article : le bouton « Commander sur WhatsApp » vibre aussi', wa.running >= 1 && wa.steps >= 8 && wa.maxShift <= 4, wa);
+      else console.log('SAUTE  bouton « Commander sur WhatsApp » cache dans la boutique');
+      // la mise en page ne bouge pas : la hauteur et la largeur du bouton restent les memes pendant la secousse
+      const sizeOf = async () => { const b = await page.getByTestId('product-order-vibrate').boundingBox(); return b ? [Math.round(b.width), Math.round(b.height)] : null; };
+      const size0 = await sizeOf();
+      await sleep(700);
+      check('la secousse ne change pas la taille du bouton', JSON.stringify(size0) === JSON.stringify(await sizeOf()) && !!size0, size0);
+      await page.screenshot({ path: path.join(OUT, 'V1-fiche-boutons-vibrants.png') });
+      // le bouton marche toujours : « Commander » ouvre la page de commande
+      await page.getByText('Commander', { exact: true }).last().click();
+      await sleep(1500);
+      check('« Commander » ouvre toujours la page de commande (ou la connexion) malgre la vibration', /\/(commande|connexion|inscription)/.test(new URL(page.url()).pathname), page.url());
+      await c.ctx.close();
+    }
+    // les clients qui ont demande « moins d'animations » ne voient aucun mouvement
+    {
+      const c = await newVisitor(phone, {});
+      const { page } = c;
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.goto(`${BASE}/produit/${realProduct.slug}`, { waitUntil: 'load' });
+      await sleep(5000);
+      const n = await page.evaluate(() => ['product-wa-vibrate', 'product-order-vibrate'].map((id) => { const e = document.querySelector(`[data-testid="${id}"]`); return e ? e.getAnimations().length : 0; }));
+      check('« moins d\'animations » demande : aucun des deux boutons ne vibre', n.every((k) => k === 0), n);
+      await c.ctx.close();
+    }
+
     // --- page de commande : paiement a la livraison seulement a N'Djamena + emballage cadeau
     {
       const c = await newVisitor(phone, { storage, fakeUser: fu });
       const { page } = c;
+      // les reglages de paiement sont simules (numeros de la boutique, aucun nom) : le test ne depend ni des numeros ni des noms que le patron enregistre
+      if (MM) {
+        const HDRQ = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+        await page.route(/\/rest\/v1\/payment_settings/, (route) => (route.request().method() === 'OPTIONS'
+          ? route.fulfill({ status: 204, headers: HDRQ })
+          : route.fulfill({ status: 200, headers: { ...HDRQ, 'content-type': 'application/json' }, body: JSON.stringify({ id: 1, airtel_number: '60 60 51 51', airtel_payment_url: null, moov_number: '99 22 10 17', moov_payment_url: null, airtel_holder_name: null, moov_holder_name: null, instructions: null, updated_at: '2026-11-15T00:00:00Z' }) })));
+      }
       await page.goto(`${BASE}/commande`, { waitUntil: 'load' });
       await sleep(3500);
       const cod = page.getByRole('radio', { name: /Paiement à la livraison/ });
@@ -9984,28 +10033,38 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     if (MM) {
       const fa = mk(true);
       const HDRP = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+      // holders : 'none' = reponse simulee SANS les colonnes « nom » ; 'some' = AVEC (un nom rempli, un vide) ; 'real' = la vraie base
       const openAdmin = async (holders) => {
         const c = await newVisitor(phone, { storage: { 'sb-xtitsmmccpkelxfjyqyh-auth-token': sessionFor(fa) }, fakeUser: fa });
-        if (holders) {
+        if (holders !== 'real') {
+          const base = { id: 1, airtel_number: '60 60 51 51', airtel_payment_url: null, moov_number: '99 22 10 17', moov_payment_url: null, instructions: null, updated_at: '2026-11-15T00:00:00Z' };
+          const row = holders === 'some' ? { ...base, airtel_holder_name: 'NOM Prénom (exemple)', moov_holder_name: null } : base;
           await c.page.route(/\/rest\/v1\/payment_settings/, (route) => (route.request().method() === 'OPTIONS'
             ? route.fulfill({ status: 204, headers: HDRP })
-            : route.fulfill({ status: 200, headers: { ...HDRP, 'content-type': 'application/json' }, body: JSON.stringify({ id: 1, airtel_number: '60 60 51 51', airtel_payment_url: null, moov_number: '99 22 10 17', moov_payment_url: null, airtel_holder_name: 'NOM Prénom (exemple)', moov_holder_name: null, instructions: null, updated_at: '2026-11-15T00:00:00Z' }) })));
+            : route.fulfill({ status: 200, headers: { ...HDRP, 'content-type': 'application/json' }, body: JSON.stringify(row) })));
         }
         await c.page.goto(`${BASE}/admin/paiement`, { waitUntil: 'load' });
         await sleep(4000);
         return c;
       };
       {
-        const c = await openAdmin(false);
+        const c = await openAdmin('none');
         check('admin Moyens de paiement : sans les colonnes « nom » (script pas lance), les numeros sont la et aucun champ « Nom du titulaire »', (await c.page.getByPlaceholder('60 60 51 51').count()) === 1 && (await c.page.getByTestId('admin-airtel-holder').count()) === 0 && (await c.page.getByTestId('admin-moov-holder').count()) === 0);
         check('aucune erreur (admin paiement sans colonnes)', c.errs.length === 0, c.errs);
         await c.ctx.close();
       }
       {
-        const c = await openAdmin(true);
+        const c = await openAdmin('some');
         check('admin Moyens de paiement : avec les colonnes « nom », un champ « Nom du titulaire » sous Airtel (rempli) et sous Moov (vide)', (await c.page.getByTestId('admin-airtel-holder').inputValue()) === 'NOM Prénom (exemple)' && (await c.page.getByTestId('admin-moov-holder').inputValue()) === '');
         await c.page.screenshot({ path: path.join(OUT, 'M7-admin-paiement-noms.png') });
         check('aucune erreur (admin paiement avec colonnes)', c.errs.length === 0, c.errs);
+        await c.ctx.close();
+      }
+      {
+        // la vraie base : le script add-payment-holder-names.sql a ete lance le 15 novembre 2026, les deux champs « Nom du titulaire » sont donc la
+        const c = await openAdmin('real');
+        check('admin Moyens de paiement (vraie base) : les colonnes « nom » existent, les champs « Nom du titulaire » sont la sous Airtel et sous Moov', (await c.page.getByTestId('admin-airtel-holder').count()) === 1 && (await c.page.getByTestId('admin-moov-holder').count()) === 1);
+        check('aucune erreur (admin paiement, vraie base)', c.errs.length === 0, c.errs);
         await c.ctx.close();
       }
     }

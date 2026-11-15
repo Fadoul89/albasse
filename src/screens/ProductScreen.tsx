@@ -33,6 +33,7 @@ import { linkedinShareUrl, shareOnLinkedIn } from '../lib/linkedinShare';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { StarRating } from '../components/StarRating';
 import { GoldButton } from '../components/GoldButton';
+import { VibrateView } from '../components/VibrateView';
 import { ProductCard } from '../components/ProductCard';
 import { FavoriteButton } from '../components/FavoriteButton';
 import { useStoreSettings } from '../hooks/useStoreSettings';
@@ -390,9 +391,11 @@ export function ProductScreen({ route }: Props) {
 
           {showWhatsAppOrder && (
             <>
-              <Pressable style={styles.waOrderBtn} onPress={orderOnWhatsApp} testID="product-wa-order">
-                <Text style={styles.waOrderText}>💬 Commander sur WhatsApp</Text>
-              </Pressable>
+              <VibrateView testID="product-wa-vibrate">
+                <Pressable style={styles.waOrderBtn} onPress={orderOnWhatsApp} testID="product-wa-order">
+                  <Text style={styles.waOrderText}>💬 Commander sur WhatsApp</Text>
+                </Pressable>
+              </VibrateView>
               <Text style={styles.waOrderHint}>
                 {storeSettings.account_required ? '' : 'Sans créer de compte · '}💵 Paiement à la livraison possible
               </Text>
@@ -444,7 +447,9 @@ export function ProductScreen({ route }: Props) {
       </ScrollView>
 
       <View style={styles.footer}>
-        <GoldButton label="Commander" variant="gold" onPress={handleOrder} style={{ flex: 1 }} />
+        <VibrateView style={{ flex: 1 }} delayMs={300} testID="product-order-vibrate">
+          <GoldButton label="Commander" variant="gold" onPress={handleOrder} />
+        </VibrateView>
       </View>
     </View>
   );
