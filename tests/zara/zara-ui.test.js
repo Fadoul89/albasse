@@ -9778,9 +9778,33 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         check('la regle de paiement est ecrite sur la page', (await page.getByText(/Paiement à la livraison : seulement à N'Djamena\. Dans les autres villes, le paiement se fait à l'avance/).count()) === 1);
         await page.getByRole('radio', { name: /Moov Money/ }).click();
         check('Moundou : Moov Money choisi, son numero est affiche', (await page.getByText('Numéro : 99 22 10 17').count()) === 1);
+        // bas de la page de commande : « Informations de paiement » (Moov Money puis Airtel Money, numero + « Copier le numero »)
+        {
+          const info = page.getByTestId('payment-info');
+          check('bas de page : le bloc « Informations de paiement » est la, avec l\'explication', (await info.count()) === 1 && /Informations de paiement/.test(await info.innerText()) && /à l'avance/.test(await info.innerText()));
+          check('bas de page : carte Moov Money avec 99 22 10 17 et carte Airtel Money avec 60 60 51 51', (await page.getByTestId('payment-card-moov-number').innerText()) === '99 22 10 17' && (await page.getByTestId('payment-card-airtel-number').innerText()) === '60 60 51 51' && /Moov Money/.test(await page.getByTestId('payment-card-moov').innerText()) && /Airtel Money/.test(await page.getByTestId('payment-card-airtel').innerText()));
+          const order = await page.evaluate(() => {
+            const pos = (id) => document.querySelector(`[data-testid="${id}"]`)?.getBoundingClientRect().top ?? -1;
+            const confirm = [...document.querySelectorAll('div')].find((el) => el.textContent.trim() === 'Confirmer la commande' && el.children.length === 0);
+            return { moov: pos('payment-card-moov'), airtel: pos('payment-card-airtel'), info: pos('payment-info'), confirm: confirm ? confirm.getBoundingClientRect().top : -1, note: [...document.querySelectorAll('div')].find((el) => /Nos services de livraison/.test(el.textContent) && el.children.length === 0)?.getBoundingClientRect().top ?? -1 };
+          });
+          check('bas de page : Moov avant Airtel, et le bloc est APRES le bouton « Confirmer la commande » (tout en bas)', order.moov > 0 && order.airtel > order.moov && order.confirm > 0 && order.info > order.confirm && order.info > order.note, order);
+          await page.evaluate(() => { window.__copied = []; Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (t) => { window.__copied.push(t); } }, configurable: true }); });
+          await page.getByTestId('payment-card-moov-copy').click();
+          await sleep(300);
+          await page.getByTestId('payment-card-airtel-copy').click();
+          await sleep(300);
+          const copied = await page.evaluate(() => window.__copied);
+          check('« Copier le numero » : copie les chiffres de Moov (99221017) puis d\'Airtel (60605151) et le dit', JSON.stringify(copied) === JSON.stringify(['99221017', '60605151']) && (await page.getByText(/Numéro copié/).count()) >= 1, copied);
+          check('bas de page : aucun nom de titulaire invente, aucun lien de paiement (aucun n\'est enregistre)', (await info.getByText(/Nom\s*:/).count()) === 0 && (await page.getByTestId('payment-card-moov-link').count()) === 0 && (await page.getByTestId('payment-card-airtel-link').count()) === 0);
+          await sleep(5000); // le message « Numéro copié » disparait
+          await page.getByTestId('payment-info').evaluate((el) => el.scrollIntoView({ block: 'center' }));
+          await sleep(500);
+          await page.screenshot({ path: path.join(OUT, 'C2b-informations-de-paiement.png') });
+        }
       } else {
         // Airtel / Moov retirés : une ville hors N'Djamena commande sur WhatsApp (message déjà écrit), pas de bouton « Confirmer la commande »
-        check('Moundou : aucun numero Airtel ni Moov, aucun lien de paiement', (await page.getByText(/^Numéro : /).count()) === 0 && (await page.getByText(/Airtel|Moov/).count()) === 0);
+        check('Moundou : aucun numero Airtel ni Moov, aucun lien de paiement', (await page.getByText(/^Numéro : /).count()) === 0 && (await page.getByText(/Airtel|Moov/).count()) === 0 && (await page.getByTestId('payment-info').count()) === 0);
         check('la regle de paiement est ecrite sur la page (a la livraison a N\'Djamena, WhatsApp ailleurs)', (await page.getByText(/Paiement à la livraison : à N'Djamena\. Dans les autres villes, la commande se prend sur WhatsApp pour le moment/).count()) === 1);
         check('Moundou : la carte « Commande sur WhatsApp » est la, avec Moundou et le bouton', (await page.getByTestId('checkout-wa-outside').count()) === 1 && /Moundou/.test(await page.getByTestId('checkout-wa-outside').innerText()) && (await page.getByTestId('checkout-wa-outside-btn').count()) === 1);
         check('Moundou : le bouton « Confirmer la commande » n\'existe pas (aucun paiement possible ici)', (await page.getByText('Confirmer la commande', { exact: true }).count()) === 0);

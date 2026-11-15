@@ -9,6 +9,9 @@
   # depuis son ajout.
   SECRETS_SCAN_OMIT_PATHS = "albasse-app/google-services.json"
 
+  # Airtel Money et Moov Money sont OUVERTS (demande du patron, 15 novembre 2026). Pour les retirer de nouveau : supprimer cette ligne (docs/airtel-moov-retires.md).
+  EXPO_PUBLIC_MOBILE_MONEY = "on"
+
 # Pages vues par Google et les réseaux sociaux : accueil, produits, catégories (netlify/edge-functions/og-preview.ts)
 [[edge_functions]]
   path = "/"
