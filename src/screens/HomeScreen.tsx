@@ -18,6 +18,7 @@ import { SideAdBanner } from '../components/SideAdBanner';
 import { ChadFlag } from '../components/ChadFlag';
 import { CityClock } from '../components/CityClock';
 import { ZaraAdCard } from '../components/ZaraAdCard';
+import { MenuButton, SideMenu } from '../components/SideMenu';
 import { TargetedAdCard } from '../components/TargetedAdCard';
 import { WebPushBanner } from '../components/WebPushBanner';
 import { SurveyCard } from '../components/SurveyCard';
@@ -42,6 +43,7 @@ export function HomeScreen() {
   // sous-catégories : l'accueil montre les catégories PRINCIPALES ; les articles d'une sous-catégorie comptent dans la section de leur catégorie principale
   const { categories, mainCategories, rootIdOf } = useCategories();
   const { settings } = useStoreSettings();
+  const [menuOpen, setMenuOpen] = useState(false); // menu ☰ : profil + points, puis les catégories une à une (components/SideMenu)
   const { width } = useWindowDimensions();
   const hasAdItems = settings.left_ad_items.length > 0 || settings.right_ad_items.length > 0;
   const showMobileAds = hasAdItems;
@@ -115,7 +117,10 @@ export function HomeScreen() {
       {/* langue à gauche, nombre en ligne au milieu, cloche à droite */}
       <View style={styles.topBar}>
         <View style={styles.topBarSide}>
-          <LanguageSwitcher />
+          <MenuButton onPress={() => setMenuOpen(true)} />
+          <View style={{ marginLeft: 8 }}>
+            <LanguageSwitcher />
+          </View>
         </View>
         {onlineCount !== null && (
           <View style={styles.visitorsPill} testID="home-online">
@@ -129,6 +134,8 @@ export function HomeScreen() {
           <CustomerNotificationBell />
         </View>
       </View>
+
+      <SideMenu visible={menuOpen} onClose={() => setMenuOpen(false)} categories={categories} />
 
       <View style={styles.independenceBanner}>
         <ChadFlag width={26} height={18} />
