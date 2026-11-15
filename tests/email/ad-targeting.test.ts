@@ -1,7 +1,7 @@
 // « Annonce » ciblée de Zara : choix de l'article, raison vraie, genre, ville, fermeture. Aucun réseau.
 // Lancer : node --import ./tests/zara/register.mjs tests/email/ad-targeting.test.ts
 import { isVitalityCategory, vitalityAllowed, adAllowedProducts, VITALITY_MIN_AGE } from '../../src/lib/adSensitive.ts';
-import { AD_MAX_CLOSES, AD_NEXT_SECONDS, AD_ROTATE_HOURS, addClosedAd, closedState, parseClosedAds, isAdultItem, adHeadline, adSeed, adWhy, audienceAllows, audienceOf, deliveryLine, nextAdChange, pickTargetedAd, previewAudiences, promoEndsAt, realPromoPct, type AdCategory, type AdProduct } from '../../src/lib/adTargeting.ts';
+import { HOME_CATEGORY_SLUGS, findHomeCategory, AD_MAX_CLOSES, AD_NEXT_SECONDS, AD_ROTATE_HOURS, addClosedAd, closedState, parseClosedAds, isAdultItem, adHeadline, adSeed, adWhy, audienceAllows, audienceOf, deliveryLine, nextAdChange, pickTargetedAd, previewAudiences, promoEndsAt, realPromoPct, type AdCategory, type AdProduct } from '../../src/lib/adTargeting.ts';
 import { AUDIENCES, audiencesOf, professionAudience } from '../../src/lib/adAudiences.ts';
 import { applyCategoryView, applyProductView, applyCartEvent, emptyProfile, type BrowsingProfile, type ProductMeta } from '../../src/lib/browsingInsights.ts';
 
@@ -313,6 +313,17 @@ const hv = viewMany(emptyProfile('v8', NOW - 3 * DAY), watchA, 3, NOW - 2 * DAY)
 check('les raisons vraies passent avant : une femme qui a regardé un article de près reçoit cet article (« Vous avez regardé »), pas « Maison & Mobilier »', pickTargetedAd({ products: [...homeShop, watchA], categories: homeCats, customer: { gender: 'femme' }, browsing: hv, now: NOW, seed: 0 })?.reason.kind === 'viewed');
 check('le métier passe avant : une étudiante reçoit l\'annonce des étudiants, pas « Maison & Mobilier »', homeAt({ gender: 'femme', profession: 'étudiante' }, 0)?.reason.kind === 'student');
 check('une vraie promotion dans « Maison & Mobilier » passe en premier pour la femme', (() => { const promo = mk('hp', 'c-home', { price: 20000, compare_at_price: 30000, promo_ends_at: iso(NOW + DAY), created_at: '2026-09-01T00:00:00Z' }); return Array.from({ length: 4 }, (_, s) => pickTargetedAd({ products: [...homeShop, promo], categories: homeCats, customer: { gender: 'femme' }, browsing: null, now: NOW, seed: s })?.product.id).every((id) => id === 'hp' || ['h1', 'h2', 'h3'].includes(id ?? '')); })());
+
+// --- la catégorie a été RENOMMÉE « Maison & Bureau » (adresse « maison-bureau ») : la règle des femmes doit la suivre (15 novembre 2026) ------------------
+const bureauCats: AdCategory[] = [...cats, { id: 'c-home', slug: 'maison-bureau', name: 'Maison & Bureau' }, { id: 'c-sofa', slug: 'canapes', name: 'Canapés', parent_id: 'c-home' }];
+const shareB = (gender: string) => Array.from({ length: 600 }, (_, s) => (isHomeAd(homeAt({ gender }, s, homeShop, bureauCats)) ? 1 : 0) as number).reduce((a, b) => a + b, 0) / 600;
+check('« Maison & Bureau » (nouveau nom) : femme 4 tranches de 6 h sur 6 (environ 67 %)', Math.abs(shareB('femme') - 4 / 6) < 0.01, shareB('femme'));
+check('« Maison & Bureau » : homme 1 tranche sur 6 (environ 17 %), les femmes environ 4 fois plus', Math.abs(shareB('homme') - 1 / 6) < 0.01 && shareB('femme') / shareB('homme') >= 3.5, [shareB('femme'), shareB('homme')]);
+check('« Maison & Bureau » : le nom du rayon dit dans l\'annonce est le vrai nom (« Choisi pour vous : « Maison & Bureau » »)', (() => { const ads = Array.from({ length: 12 }, (_, s) => homeAt({ gender: 'femme' }, s, homeShop, bureauCats)).filter((a) => a?.product.category_id === 'c-home'); return ads.length > 0 && ads.every((a) => !!a && /Maison & Bureau/.test(adHeadline(a.reason))); })());
+check('« Maison & Bureau » : une femme sans article de sa catégorie en reçoit toujours un (jamais rien)', Array.from({ length: 12 }, (_, s) => isHomeAd(homeAt({ gender: 'femme' }, s, noWomenCat, bureauCats))).every(Boolean));
+check('les sous-catégories de « Maison & Bureau » comptent aussi', new Set(Array.from({ length: 12 }, (_, s) => homeAt({ gender: 'femme' }, s, homeShop, bureauCats)?.product.id).filter((id) => ['h1', 'h2', 'h3'].includes(id ?? ''))).size >= 2);
+check('les DEUX noms sont reconnus ; la catégorie principale passe avant une sous-catégorie', HOME_CATEGORY_SLUGS.includes('maison-mobilier') && HOME_CATEGORY_SLUGS.includes('maison-bureau') && findHomeCategory(bureauCats)?.id === 'c-home' && findHomeCategory(homeCats)?.id === 'c-home' && findHomeCategory(cats) === undefined);
+check('si les deux noms existaient, la catégorie sans parent est choisie', findHomeCategory([{ id: 'x', slug: 'maison-bureau', name: 'B', parent_id: 'p' }, { id: 'y', slug: 'maison-mobilier', name: 'M' }])?.id === 'y');
 
 // --- 24 h sur 24 : les annonces changent toutes les 6 heures, jour et nuit --------------------------------------------------------------------------
 const slotStart = adSeed(NOW) * 6 * 3600_000 - 3600_000; // les tranches suivent l'heure du Tchad (UTC+1)

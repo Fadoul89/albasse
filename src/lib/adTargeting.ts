@@ -72,11 +72,18 @@ export const AD_MAX_CLOSES = 3; // …mais au plus 3 fois sur 24 h : au 3ᵉ « 
 export const AD_ROTATE_HOURS = 6; // Zara change les annonces 4 fois par jour, jour et nuit (24 h sur 24)
 export const POOL_SIZE = 5; // parmi les 5 meilleurs choix, un par jour (les choix tournent sans jamais sortir de la liste vraie)
 
-// « Maison & Mobilier » proposé BEAUCOUP plus aux femmes qu'aux hommes (demande du patron, 8 novembre 2026). Seulement d'après le genre que le client a CHOISI dans son compte
+// « Maison & Mobilier » (renommée « Maison & Bureau » par le patron : on reconnaît les DEUX noms, voir HOME_CATEGORY_SLUGS) proposé BEAUCOUP plus aux femmes qu'aux hommes (demande du patron, 8 novembre 2026). Seulement d'après le genre que le client a CHOISI dans son compte
 // (jamais d'après le prénom). Sur 6 tranches de 6 heures qui se suivent : une femme reçoit « Maison & Mobilier » 4 fois (les 2 autres : sa catégorie, « Vêtements pour femmes »),
 // un homme 1 fois (les 5 autres : sa catégorie), soit environ 4 fois plus pour les femmes. Un client sans genre choisi n'est pas concerné. Les raisons vraies (article regardé,
 // catégorie explorée, métier) passent toujours avant.
 export const HOME_CATEGORY_SLUG = 'maison-mobilier';
+// La catégorie a été renommée « Maison & Bureau » (adresse « maison-bureau ») : le choix de Zara suit la catégorie, quel que soit son nom.
+// Si les deux existaient, la catégorie principale (sans parent) est préférée.
+export const HOME_CATEGORY_SLUGS: readonly string[] = [HOME_CATEGORY_SLUG, 'maison-bureau'];
+export function findHomeCategory<C extends { slug: string; parent_id?: string | null }>(categories: readonly C[]): C | undefined {
+  const homes = categories.filter((c) => HOME_CATEGORY_SLUGS.includes(c.slug));
+  return homes.find((c) => !c.parent_id) ?? homes[0];
+}
 export const HOME_SLOTS_OF_6: Record<Gender, number> = { femme: 4, homme: 1 };
 export const homeLeanSlot = (gender: Gender, seed: number): boolean => ((Math.floor(seed) % 6) + 6) % 6 < HOME_SLOTS_OF_6[gender];
 
@@ -302,9 +309,9 @@ export function pickTargetedAd(input: AdInput): TargetedAd | null {
     // la catégorie de son genre (« Vêtements pour femmes », « Vitalité & Énergie Homme »), une vraie promotion d'abord, puis le plus récent
     const byRecent = (a: AdProduct, b: AdProduct) => byPromo(a, b) || ms(b.created_at) - ms(a.created_at) || a.name.localeCompare(b.name);
     const mine = pool.filter((p) => audienceOfProduct(p) === g).sort(byRecent);
-    // « Maison & Mobilier » (et ses sous-catégories) : beaucoup plus souvent aux femmes (HOME_SLOTS_OF_6). Une femme qui n'a pas d'article de sa catégorie en reçoit toujours un de la maison ;
+    // « Maison & Mobilier » / « Maison & Bureau » (et ses sous-catégories) : beaucoup plus souvent aux femmes (HOME_SLOTS_OF_6). Une femme qui n'a pas d'article de sa catégorie en reçoit toujours un de la maison ;
     // un homme n'en reçoit que pendant sa tranche (jamais en remplacement).
-    const homeCat = input.categories.find((c) => c.slug === HOME_CATEGORY_SLUG);
+    const homeCat = findHomeCategory(input.categories);
     const home = homeCat ? pool.filter((p) => inFamily(input.categories, p.category_id, homeCat.id)).sort(byRecent) : [];
     const homeNow = homeLeanSlot(g, seed);
     const order = g === 'femme' ? (homeNow ? [home, mine] : [mine, home]) : homeNow ? [home, mine] : [mine];
