@@ -373,6 +373,15 @@ const ldBlocks = (html: string): any[] => [...html.matchAll(/<script type="appli
     products.push({ name: 'Rado', slug: 'rado', description: '', price: 30000, images: ['https://img.example/r.jpg'], stock: 0, category_id: 'c1', categories: { name: 'Montres', slug: 'montres' }, created_at: '2026-09-01T10:00:00Z' } as any);
     products.push({ name: 'Rado', slug: 'rado-2', description: '', price: 30000, images: ['https://img.example/r2.jpg'], stock: 2, category_id: 'c1', categories: { name: 'Montres', slug: 'montres' }, created_at: '2026-09-20T10:00:00Z' } as any);
     products.push({ name: 'Rado', slug: 'rado-5', description: 'Rado noire, bracelet cuir : un autre modèle.', price: 30000, images: ['https://img.example/r5.jpg'], stock: 7, category_id: 'c1', categories: { name: 'Montres', slug: 'montres' }, created_at: '2026-08-01T10:00:00Z' } as any);
+    // le nom d'une copie peut avoir une espace en trop ou une autre casse (« AL MADJAZ » / « AL MADJAZ ») : la recherche se fait par prix, la comparaison est faite ensuite
+    products.push({ name: 'Al Madjaz ', slug: 'am-3', description: 'Sandale Al Madjaz.', price: 50000, images: ['https://img.example/a3.jpg'], stock: 60, category_id: 'c1', categories: { name: 'Montres', slug: 'montres' }, created_at: '2026-10-30T10:00:00Z' } as any);
+    products.push({ name: 'AL MADJAZ', slug: 'am-4', description: 'Sandale Al Madjaz.', price: 50000, images: ['https://img.example/a4.jpg'], stock: 60, category_id: 'c1', categories: { name: 'Montres', slug: 'montres' }, created_at: '2026-10-30T10:00:05Z' } as any);
+    calls.length = 0;
+    const am4 = await ask(ogPreview, '/produit/am-4');
+    check('nom avec espace ou casse différente : la copie am-4 désigne bien la page principale am-3', (await am4.res.text()).includes('<link rel="canonical" href="https://www.albasseshopping.com/produit/am-3" />'));
+    check('la recherche des copies se fait par prix (products?...price=eq.50000), pas par nom exact', calls.some((c) => /products\?is_active=eq\.true&price=eq\.50000/.test(c)) && !calls.some((c) => /name=eq\./.test(c)), calls);
+    products.splice(products.findIndex((p) => p.slug === 'am-3'), 1);
+    products.splice(products.findIndex((p) => p.slug === 'am-4'), 1);
     const other = await ask(ogPreview, '/produit/rado-5');
     check('même nom et même prix mais AUTRE description (autre modèle) : la page garde sa propre adresse canonique', (await other.res.text()).includes('<link rel="canonical" href="https://www.albasseshopping.com/produit/rado-5" />'));
     products.splice(products.findIndex((p) => p.slug === 'rado-5'), 1);

@@ -17,3 +17,6 @@ Le patron a renommé des catégories dans l'administration. Le site (adresses, t
 ## Google
 - Les anciennes adresses `/categorie/maison-mobilier` et `/categorie/bebe-et-maternite` étaient dans la liste « Détectée, actuellement non indexée » de Search Console et répondaient « introuvable ». Elles renvoient maintenant vers la nouvelle (**301**, redirection définitive), pour les robots comme pour les visiteurs avec un ancien lien (`oldCategoryRedirect` dans `netlify/edge-functions/lib/seo.ts`, branché dans `og-preview.ts`).
 - Tests : `tests/seo/seo.test.ts` (132 vérifications).
+
+## Suite (vérification sur le vrai site, 15 novembre 2026, soir)
+Redirections 301, pages Maison/Bébé/Montre, Zara (partie `A` du navigateur : 36 sur 36) : vérifiés en ligne. Un défaut trouvé dans ma propre publication : la page d'une copie cherchait ses jumelles par **nom exact**, donc ratait les noms avec une espace en fin ou une autre casse (par exemple `al-madjaz-4` / `al-madjaz-3`, `abaya-en-velours-2`) : leur page se désignait elle-même alors que le plan du site les retirait. Corrigé dans `og-preview.ts` : recherche par **prix**, puis comparaison du nom et de la description (`copiesOf`). Test : `tests/seo/seo.test.ts` (134 vérifications). Petit effet sur Google, à publier avec la prochaine publication.
