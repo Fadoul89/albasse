@@ -11,6 +11,7 @@ export interface PaymentCard {
   number: string; // comme affiché : « 99 22 10 17 »
   copyValue: string; // les chiffres seuls : « 99221017 » (pratique à coller dans le téléphone)
   url: string | null;
+  holder: string | null; // nom du titulaire, seulement s'il est enregistré
 }
 
 export interface PaymentCardSettings {
@@ -18,6 +19,8 @@ export interface PaymentCardSettings {
   moov_number?: string | null;
   airtel_payment_url?: string | null;
   moov_payment_url?: string | null;
+  airtel_holder_name?: string | null;
+  moov_holder_name?: string | null;
 }
 
 const clean = (v: string | null | undefined): string => (v ?? '').trim();
@@ -32,15 +35,21 @@ export function paymentCards(settings: PaymentCardSettings | null | undefined): 
   const moov = clean(settings?.moov_number) || PAYMENT.moov;
   const airtel = clean(settings?.airtel_number) || PAYMENT.airtel;
   return [
-    { key: 'moov', name: 'Moov Money', number: moov, copyValue: digitsOnly(moov), url: clean(settings?.moov_payment_url) || null },
-    { key: 'airtel', name: 'Airtel Money', number: airtel, copyValue: digitsOnly(airtel), url: clean(settings?.airtel_payment_url) || null },
+    { key: 'moov', name: 'Moov Money', number: moov, copyValue: digitsOnly(moov), url: clean(settings?.moov_payment_url) || null, holder: clean(settings?.moov_holder_name) || null },
+    { key: 'airtel', name: 'Airtel Money', number: airtel, copyValue: digitsOnly(airtel), url: clean(settings?.airtel_payment_url) || null, holder: clean(settings?.airtel_holder_name) || null },
   ];
 }
+
+// Les colonnes « nom du titulaire » n'existent dans la base qu'après add-payment-holder-names.sql : sans elles, l'administration ne montre pas les champs « Nom »
+// (et n'envoie rien), sinon l'enregistrement échouerait.
+export const hasHolderColumns = (settings: object | null | undefined): boolean =>
+  !!settings && 'airtel_holder_name' in settings && 'moov_holder_name' in settings;
 
 export const PAYMENT_CARDS_TEXT = {
   title: '💳 Informations de paiement',
   intro: "Hors N'Djamena, le paiement se fait à l'avance : envoyez le montant de votre commande à l'un de ces numéros, puis confirmez votre commande. À N'Djamena, vous payez à la livraison.",
   numberLabel: 'Numéro pour payer',
+  holderLabel: 'Nom',
   copy: 'Copier le numéro',
   copied: (number: string) => `${number} est copié.`,
   copyFailed: (number: string) => `Numéro à utiliser : ${number}`,

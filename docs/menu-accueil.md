@@ -22,3 +22,12 @@ Demande du patron (15 novembre 2026) : « Un menu comme Jumia : le profil du cli
 ## Tests
 - `tests/email/side-menu.test.ts` (16 contrôles : paliers, barre, « 0 pt », points invalides, catégories dans l'ordre, sous-catégories écartées).
 - Navigateur : partie `C` de `tests/zara/zara-ui.test.js` (bouton, profil + points, 19 catégories une à une, ✕, toucher à côté, ouvrir une catégorie, visiteur).
+
+## Menu ☰ aussi sur Recherche et sur les pages de catégorie (15 novembre 2026, « Oui »)
+- **Recherche** : le bouton ☰ est à gauche du titre. **Pages de catégorie** : à droite de l'en-tête (à côté de ← et 🏠). Même panneau : profil + points, puis les catégories une à une.
+- `MenuLauncher` (`src/components/SideMenu.tsx`) : les catégories ne sont lues qu'à l'**ouverture** du menu (aucune lecture de plus tant que le client ne touche pas ☰).
+
+## Nom du titulaire sur les cartes de paiement
+- Sous le numéro, une ligne **« Nom : … »** n'apparaît que si un nom est enregistré. Sans nom : aucune ligne, jamais de nom inventé.
+- Le patron écrit lui-même les noms dans **Admin › Moyens de paiement** (champ « Nom du titulaire » sous Airtel et sous Moov). Ces champs n'apparaissent qu'**après** le script `add-payment-holder-names.sql` (2 colonnes ajoutées à `payment_settings`, aucune nouvelle table, aucun `grant` à ajouter) : tant que le script n'est pas lancé, rien ne change et l'enregistrement ne peut pas échouer.
+- Tests : `tests/email/payment-cards.test.ts` (23) et la partie `C` du navigateur (cartes avec nom, champs de l'administration avec et sans les colonnes).

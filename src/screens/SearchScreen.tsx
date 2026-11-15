@@ -3,6 +3,7 @@ import { View, Text, TextInput, StyleSheet, FlatList, Pressable } from 'react-na
 import { colors, fonts, spacing } from '../theme';
 import { useProducts } from '../hooks/useProducts';
 import { ProductCard } from '../components/ProductCard';
+import { MenuLauncher } from '../components/SideMenu';
 import { trackSearchQuery } from '../lib/browsingTracker';
 import { normalize, tokenize } from '../lib/assistantBrain';
 import { buildVocabulary, suggestWords } from '../lib/spellSuggest';
@@ -45,7 +46,13 @@ export function SearchScreen() {
 
   return (
     <View style={styles.screen}>
-      <Text style={styles.headerTitle}>Recherche</Text>
+      <View style={styles.titleRow}>
+        <View style={styles.titleSide}>
+          <MenuLauncher />
+        </View>
+        <Text style={styles.headerTitle}>Recherche</Text>
+        <View style={styles.titleSide} />
+      </View>
       <View style={styles.searchWrap}>
         <TextInput
           value={query}
@@ -83,12 +90,14 @@ export function SearchScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background, paddingTop: 50 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, marginBottom: spacing.md },
+  titleSide: { width: 44 },
   headerTitle: {
+    flex: 1,
     fontFamily: fonts.display,
     fontSize: 22,
     color: colors.cream,
     textAlign: 'center',
-    marginBottom: spacing.md,
   },
   searchWrap: { paddingHorizontal: spacing.md, marginBottom: spacing.md },
   search: {
