@@ -107,7 +107,8 @@ globalThis.fetch = (async (input: any) => {
   if (u.includes('/rest/v1/categories')) return json(categories);
   if (u.includes('/rest/v1/products?slug=eq.')) {
     const slug = decodeURIComponent(u.match(/slug=eq\.([^&]+)/)![1]);
-    return json(products.filter((p) => p.slug === slug));
+    const onlyActive = u.includes('is_active=eq.true');
+    return json(products.filter((p) => p.slug === slug && (!onlyActive || (p as any).is_active !== false)));
   }
   if (u.includes('/rest/v1/products?category_id=in.(')) {
     const ids = decodeURIComponent(u.match(/category_id=in\.\(([^)]+)\)/)![1]).split(',');
@@ -384,6 +385,19 @@ const ldBlocks = (html: string): any[] => [...html.matchAll(/<script type="appli
     const down = await ask(ogPreview, '/produit/montre-keep-moving');
     check('base injoignable : toujours l\'application normale, jamais une erreur', down.state.next === 1 && down.res.status === 200);
     dbDown = false;
+  }
+
+  // --- article caché (désactivé dans l'administration) : Google reçoit 404, jamais la page complète « en stock » ---
+  {
+    products.push({ name: 'Chemise cachée', slug: 'chemise-cachee', description: '', price: 35000, images: ['https://img.example/h.jpg'], stock: 5, category_id: 'c1', categories: { name: 'Montres', slug: 'montres' }, is_active: false } as any);
+    calls.length = 0;
+    const hidden = await ask(ogPreview, '/produit/chemise-cachee');
+    const hiddenHtml = await hidden.res.text();
+    check('article caché : 404 pour Google (comme une adresse inconnue), pas la page complète', hidden.res.status === 404 && /Page introuvable/.test(hiddenHtml) && !/35 000|InStock|in stock/.test(hiddenHtml), hidden.res.status);
+    check('article caché : la demande à la base contient is_active=eq.true', calls.some((c) => c.includes('products?slug=eq.chemise-cachee') && c.includes('is_active=eq.true')), calls);
+    const shown = await ask(ogPreview, '/produit/montre-keep-moving');
+    check('article visible : toujours la page complète (200)', shown.res.status === 200 && (await shown.res.text()).includes('<title>Montre KEEP MOVING'));
+    products.splice(products.findIndex((p) => p.slug === 'chemise-cachee'), 1);
   }
 
   // la configuration Netlify branche bien les fonctions

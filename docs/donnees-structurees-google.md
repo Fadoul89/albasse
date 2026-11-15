@@ -35,3 +35,10 @@ Ajouté (`returnPolicyJsonLd` dans `netlify/edge-functions/lib/seo.ts`), **seule
 - `itemDefectReturnFees` : **FreeReturn**, seulement pour un article incorrect ou défectueux (« Les frais de retour sont à notre charge »). Jamais de « retour gratuit » en général.
 - **Pas inventé** : aucun montant de frais de retour (`returnShippingFeesAmount`), aucun type de remboursement, aucun frais de restockage, aucune note ni marque ni code-barres.
 - Tests : `tests/seo/seo.test.ts` (121 vérifications).
+
+## Messages Search Console suivants (15 novembre 2026)
+- **29 octobre, Fiches de marchand (3 problèmes non critiques)** : « hasMerchantReturnPolicy manquant », « shippingDetails manquant », « aucun identifiant global (GTIN ou marque) ». Les deux premiers étaient déjà corrigés (le message du 1er novembre ne les cite plus). Reste « identifiant global » : il faudrait la **marque** ou un **code-barres** de chaque article ; la base n'a pas de colonne « marque » et on n'invente rien (la boutique n'est pas la marque des articles). Facultatif ; possible plus tard : champ « Marque » dans l'administration (script SQL) rempli par le patron.
+- **« Page en double : Google n'a pas choisi la même URL canonique »** : 2 exemples, `ebaya-prestige-2` et `al-madjaz-3`, tous deux des copies (même nom, même prix). Couvert par la correction des copies identiques. Le patron a lancé « Valider la correction » le 15 novembre 2026.
+- **Articles cachés (désactivés)** : leur page restait complète pour Google (200, « en stock »). Maintenant : **404**, comme une adresse inconnue (`og-preview.ts` : `is_active=eq.true`). C'est pourquoi il faut **supprimer** les copies en trop plutôt que seulement les cacher (ils sortent de Google dans les deux cas, mais seulement après cette publication).
+- Liste des 38 groupes d'articles en double (40 copies en trop, aucune commande) : donnée au patron le 15 novembre 2026 ; décision de supprimer = au patron (vérifier les photos avant).
+- Tests : `tests/seo/seo.test.ts` (124 vérifications).
