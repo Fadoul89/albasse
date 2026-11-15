@@ -1,23 +1,15 @@
 import type { PaymentProvider, PaymentRequest, PaymentResult } from './types';
 
-const MERCHANT_ID = process.env.EXPO_PUBLIC_AIRTEL_MONEY_MERCHANT_ID ?? '';
-const API_KEY = process.env.EXPO_PUBLIC_AIRTEL_MONEY_API_KEY ?? '';
-
-// TODO: brancher l'API officielle Airtel Money (Open API) une fois le compte
-// marchand ouvert et les identifiants recus. Documentation :
-// https://developers.airtel.africa/
+// SÉCURITÉ : la clé marchande Airtel Money ne doit JAMAIS être dans le site (une variable EXPO_PUBLIC_… est copiée dans le site,
+// donc lisible par tout le monde). Le jour où le compte marchand sera ouvert, l'appel à l'API passera par une fonction serveur
+// Supabase qui garde la clé dans ses Secrets ; le site appellera seulement cette fonction.
+// Aujourd'hui le paiement Airtel Money se fait à la main (numéros affichés en bas de la page de commande).
 export const airtelMoneyProvider: PaymentProvider = {
-  async initiate(request: PaymentRequest): Promise<PaymentResult> {
-    if (!MERCHANT_ID || !API_KEY) {
-      return {
-        success: false,
-        reference: null,
-        message:
-          'Airtel Money non configuré. Ajoutez EXPO_PUBLIC_AIRTEL_MONEY_MERCHANT_ID et EXPO_PUBLIC_AIRTEL_MONEY_API_KEY dans .env.',
-      };
-    }
-
-    // Appel API reel a implementer ici (push USSD vers request.phone).
-    throw new Error('Integration Airtel Money non implementee — en attente des identifiants marchand.');
+  async initiate(_request: PaymentRequest): Promise<PaymentResult> {
+    return {
+      success: false,
+      reference: null,
+      message: 'Paiement Airtel Money automatique pas encore disponible : envoyez le montant au numéro affiché en bas de la page de commande.',
+    };
   },
 };
