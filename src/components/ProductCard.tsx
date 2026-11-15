@@ -9,7 +9,6 @@ import { realDiscountPct, shownOldPrice } from '../lib/promotions';
 import { colors, fonts, radius, spacing } from '../theme';
 import { StarRating } from './StarRating';
 import { FavoriteButton } from './FavoriteButton';
-import { thumbUrl } from '../lib/imageThumb';
 
 const { width } = Dimensions.get('window');
 
@@ -33,7 +32,7 @@ export function ProductCard({ product, columns = 2 }: { product: Product; column
       onPress={() => navigation.navigate('Product', { slug: product.slug })}
     >
       <View style={styles.imageWrap}>
-        <Image accessibilityLabel={product.name} source={{ uri: thumbUrl(product.images[0], 480) }} style={styles.image} contentFit="cover" transition={150} />
+        <Image accessibilityLabel={product.name} source={{ uri: product.images[0] }} style={styles.image} contentFit="cover" transition={150} />
         {discount && (
           <View style={styles.badge} testID="product-discount-badge">
             <Text style={styles.badgeText}>-{discount}%</Text>

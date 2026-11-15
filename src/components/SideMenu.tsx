@@ -13,7 +13,6 @@ import { useAuthStore } from '../store/authStore';
 import type { Category } from '../types';
 import { useCategories } from '../hooks/useCategories';
 import { MENU_TEXT, menuCategories, menuProfile, pointsLabel } from '../lib/sideMenu';
-import { thumbUrl } from '../lib/imageThumb';
 
 const ICONS: Record<string, string> = {
   costumes: '🕴️', chemises: '👔', cravates: '🎀', chaussures: '👟', montres: '⌚', montre: '⌚', accessoires: '💍', parfum: '🧴', vetements: '👔',
@@ -124,7 +123,7 @@ export function SideMenu({ visible, onClose, categories }: { visible: boolean; o
                 testID={`menu-cat-${c.slug}`}
               >
                 <View style={styles.catIcon}>
-                  {c.image_url ? <Image accessibilityLabel={c.name} source={{ uri: thumbUrl(c.image_url, 120) }} style={styles.catImage} contentFit="cover" /> : <Text style={styles.catEmoji}>{ICONS[c.slug] ?? '✨'}</Text>}
+                  {c.image_url ? <Image accessibilityLabel={c.name} source={{ uri: c.image_url }} style={styles.catImage} contentFit="cover" /> : <Text style={styles.catEmoji}>{ICONS[c.slug] ?? '✨'}</Text>}
                 </View>
                 <Text style={styles.catName} numberOfLines={2}>{c.name}</Text>
                 <Text style={styles.chevron}>›</Text>

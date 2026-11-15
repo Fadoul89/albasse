@@ -40,7 +40,6 @@ import { useStoreSettings } from '../hooks/useStoreSettings';
 import { guestOrderAllowed } from '../lib/accountWall';
 import { WebPushBanner } from '../components/WebPushBanner';
 import { ORDER_WHATSAPP } from '../constants/shopRules'; // numéro WhatsApp qui reçoit les commandes (chiffres uniquement)
-import { thumbUrl } from '../lib/imageThumb';
 
 // badges de confiance (fond transparent, réduits pour le téléphone)
 const BADGE_VERIFIED = require('../../assets/badge-vendeur-verifie.png');
@@ -286,7 +285,7 @@ export function ProductScreen({ route }: Props) {
                 }}
               >
                 <Image
-                  source={{ uri: thumbUrl(uri, 160) }}
+                  source={{ uri }}
                   accessibilityLabel={`${product.name} - miniature ${i + 1}`}
                   style={[styles.thumb, i === activeImage && styles.thumbActive]}
                   contentFit="cover"

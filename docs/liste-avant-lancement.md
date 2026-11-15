@@ -14,7 +14,7 @@ Chaque point a été contrôlé sur le vrai site avant d'être corrigé. Ce qui 
 | 8 | Favicon | déjà bon | `favicon.ico`, `public/` |
 | 9 | Plan du site et robots.txt | déjà bon, `/conditions-generales` ajoutée au plan | `netlify/edge-functions/sitemap.ts` |
 | 10 | Texte alternatif des images | **ajouté** sur toutes les images du site (avant : 0 sur 55) | tous les `<Image` (propriété `accessibilityLabel`, voir ci-dessous) |
-| 11 | Images compressées | **préparé, éteint** (coût possible chez Supabase, décision du patron) | `src/lib/imageThumb.ts` |
+| 11 | Images compressées | **non fait, décision du patron** (la réduction des photos par Supabase peut être payante) : les photos restent telles quelles | — |
 | 12 | Vitesse de chargement | fichiers au nom unique gardés 1 an par le navigateur ; en-têtes de sécurité | `netlify.toml` |
 | 13 | Contraste des couleurs | **corrigé** (texte à 4.5:1 au moins, vérifié par l'outil axe sur 8 pages) | `src/theme/colors.ts` et écrans |
 | 14 | Adapté au mobile | déjà bon (aucun défilement horizontal, testé sur téléphone) | — |
@@ -55,16 +55,10 @@ Nouvelles couleurs dans `src/theme/colors.ts` :
 - Pour toutes les pages : `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: SAMEORIGIN`.
 - Pas de `Content-Security-Policy` ni de `Strict-Transport-Security` ajoutés à la main (risque de bloquer le site / déjà fait par Netlify).
 
-## Photos plus légères (éteint)
-`src/lib/imageThumb.ts` : pour les cartes d'articles, les catégories, le menu ☰ et les miniatures de la fiche article, demande à Supabase une version réduite de la photo. Mesure sur 12 vraies photos : 1 776 Ko → 782 Ko (56 % de moins).
-Pour l'allumer : ajouter `EXPO_PUBLIC_IMAGE_THUMBS = "on"` dans `[build.environment]` de `netlify.toml`, puis publier. Pour l'éteindre : retirer la ligne.
-Attention : la transformation d'images de Supabase peut compter dans l'abonnement (nombre de photos d'origine transformées par mois). À allumer seulement après accord du patron. Le test `tests/email/image-thumb.test.ts` refuse que la ligne soit allumée sans décision.
-
 ## Vérifier avant de publier
 ```
 node --import ./tests/zara/register.mjs tests/email/terms.test.ts
 node --import ./tests/zara/register.mjs tests/email/cookie-consent.test.ts
-node --import ./tests/zara/register.mjs tests/email/image-thumb.test.ts
 node --import ./tests/zara/register.mjs tests/seo/not-found.test.ts
 node --import ./tests/zara/register.mjs tests/seo/seo.test.ts
 # dans le navigateur (après expo export) : cookies, conditions générales, 404, alt, contraste (outil axe-core)
