@@ -28,6 +28,7 @@ import { fetchLoyaltyStatus, loyaltyDiscount, ordersBeforeDiscount, type Loyalty
 import { DELIVERY_HOURS, GIFT_WRAP_FEE, HOME_CITY, MOBILE_MONEY_ENABLED, ORDER_VALIDITY_HOURS } from '../constants/shopRules';
 import { OUTSIDE_TEXT, outsideOrderUrl } from '../lib/outsideCityOrder';
 import { dealFromPrice, offerTexts } from '../lib/studentOffer';
+import { PaymentInfoCards } from '../components/PaymentInfoCards';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
 
@@ -537,6 +538,9 @@ export function CheckoutScreen() {
             style={{ marginTop: spacing.md }}
           />
         )}
+
+        {/* En bas de la page : les numéros Moov Money et Airtel Money (« Copier le numéro »), quand ces paiements sont ouverts. */}
+        {MOBILE_MONEY_ENABLED ? <PaymentInfoCards settings={paymentSettings} /> : null}
       </ScrollView>
     </View>
   );

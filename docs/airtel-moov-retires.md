@@ -1,5 +1,14 @@
 # Airtel Money et Moov Money : retirés « pour le moment »
 
+> ## ✅ REMIS le 15 novembre 2026
+> Demande du patron : « Activé le système de paiement / Mettez les informations en bas de page de commande ».
+> - **Interrupteur** : `netlify.toml` › `[build.environment]` › `EXPO_PUBLIC_MOBILE_MONEY = "on"` (le site publié est construit avec). **Pour les retirer de nouveau : supprimer cette ligne**, remettre les textes fixes ci-dessous, publier, redéployer `zara-ai`.
+> - **Textes fixes remis** : description Google (`public/index.html`, `netlify/edge-functions/lib/seo.ts`) « …paiement à la livraison à N'Djamena, Airtel Money et Moov Money. » et consigne de `supabase/functions/zara-ai/index.ts` (« paiement à l'avance par Airtel Money ou Moov Money »). **`zara-ai` doit être redéployée.**
+> - **Page de commande, tout en bas** (sous « Confirmer la commande ») : bloc **« 💳 Informations de paiement »** avec une carte **Moov Money** (99 22 10 17) puis une carte **Airtel Money** (60 60 51 51), chacune avec le bouton **« 📋 Copier le numéro »** (copie les chiffres seuls). Les numéros viennent d'Admin › Moyens de paiement (sinon ceux de `shopRules.PAYMENT`) ; un lien de paiement n'apparaît que s'il est enregistré. Aucun nom de titulaire n'est affiché : il n'est enregistré nulle part. Le bloc n'existe que si Airtel / Moov sont ouverts. Code : `src/lib/paymentCards.ts`, `src/components/PaymentInfoCards.tsx`.
+> - Tests : `tests/email/payment-cards.test.ts` (18) ; navigateur, construction avec la variable : `MOBILE_MONEY=on PARTS='C§O' node tests/zara/zara-ui.test.js` (la partie `C` contrôle le bloc, l'ordre, la copie).
+>
+> Le reste de cette page décrit le retrait du 3 novembre (historique).
+
 Demande du patron (3 novembre 2026) : « Supprimez le mode de paiement Airtel et Moov pour le moment. »
 Choix du patron : **les autres villes commandent sur WhatsApp**, et le retrait est **simple, dans le code** (pas d'interrupteur dans l'admin, aucun SQL).
 

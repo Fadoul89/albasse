@@ -29,6 +29,7 @@ import { formatClientNumber } from '../../lib/clientNumber';
 import { whatsappLink } from '../../lib/relanceMessage';
 import { GenderPicker } from '../../components/GenderPicker';
 import { AdminAccountManager } from '../../components/AdminAccountManager';
+import { ZaraStudyCard } from '../../components/ZaraStudyCard';
 import { genderLabel, genderOf, hasGenderColumn, type Gender } from '../../lib/clientGender';
 import { birthLabel, hasBirthColumn, hasMaritalColumn, maritalLabel } from '../../lib/clientBirthMarital';
 
@@ -46,6 +47,11 @@ export function AdminCustomerDetailScreen({ route }: Props) {
   const { customers, refresh: refreshCustomers } = useCustomers();
   const { orders, viewedProducts, cartAddCount, isLoading } = useCustomerActivity(userId);
   const { sanctions, refresh: refreshSanctions } = useCustomerSanctions(userId);
+  // les articles déjà commandés par ce client (commandes non annulées, vraies) : Zara ne les repropose jamais
+  const orderedProductIds = React.useMemo(
+    () => [...new Set(orders.filter((o) => o.status !== 'cancelled' && !o.is_flagged_fake).flatMap((o) => (o.items ?? []).map((i) => i.product_id)))].filter((id) => typeof id === 'string' && id),
+    [orders]
+  );
 
   const [showBanDialog, setShowBanDialog] = useState(false);
   const [showReactivateDialog, setShowReactivateDialog] = useState(false);
@@ -281,6 +287,9 @@ export function AdminCustomerDetailScreen({ route }: Props) {
           <Row label="Nombre de connexions" value={String(profile.login_count)} />
           <Row label="Statut" value={ACCOUNT_STATUS_LABEL[status]} />
         </Section>
+
+        {/* Zara a étudié ce client : ce qu'elle a compris et ce qu'elle lui propose (lib/clientStudy, docs/zara-etude-client.md) */}
+        <ZaraStudyCard userId={userId} customer={profile} orderedProductIds={orderedProductIds} />
 
         <Section title="🛒 Activité commerciale">
           <Row label="Nombre de commandes" value={String(customer.orderCount)} />

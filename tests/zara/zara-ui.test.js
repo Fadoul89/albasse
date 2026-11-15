@@ -1591,15 +1591,18 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       if (afterClose !== 0) await v3.page.screenshot({ path: path.join(OUT, '€-debug-close.png') });
       check('« ✕ » : l’annonce disparaît tout de suite', afterClose === 0, { afterClose, stored: await v3.page.evaluate((k) => localStorage.getItem(k), closedKey), url: v3.page.url() });
       const stored1 = JSON.parse((await v3.page.evaluate((k) => localStorage.getItem(k), closedKey)) || '[]');
-      check('le « ✕ » est noté sur le téléphone : l’article fermé et l’heure', stored1.length === 1 && stored1[0].id === viewedP.id && Math.abs(stored1[0].at - tClose) < 5000, stored1);
+      // deux articles regardés de près = l'affiche « Vos articles préférés » (P en grand, Q en dessous) : le « ✕ » ferme les deux, à la même heure (un seul « ✕ » compté)
+      check('le « ✕ » est noté sur le téléphone : les DEUX articles de l’affiche (P et Q) fermés à la même heure', stored1.length === 2 && stored1.map((x) => x.id).sort().join() === [viewedP.id, viewedQ.id].sort().join() && stored1[0].at === stored1[1].at && Math.abs(stored1[0].at - tClose) < 5000, stored1);
       await sleep(7000);
       check('7 secondes après le « ✕ » : rien (Zara attend 15 secondes)', (await v3.page.getByTestId('targeted-ad').count()) === 0);
-      await v3.page.getByTestId('targeted-ad').waitFor({ timeout: 20000 });
+      // 15 secondes plus tard : une AUTRE annonce (jamais P ni Q) avec une vraie raison, s'il y en a une (ici une vraie promotion en cours)
+      const arrived = await v3.page.getByTestId('targeted-ad').waitFor({ timeout: 20000 }).then(() => true).catch(() => false);
       const waited = Date.now() - tClose;
-      check('l’annonce suivante arrive après environ 15 secondes (entre 14 et 22 s)', waited >= 14000 && waited <= 22000, waited);
-      await sleep(600);
-      check('c’est un AUTRE article : le 2ᵉ article regardé, pas celui qui a été fermé', (await txt(v3.page, 'targeted-ad-name')) === viewedQ.name.trim() && (await txt(v3.page, 'targeted-ad-name')) !== viewedP.name.trim(), await txt(v3.page, 'targeted-ad-name'));
-      check('avec sa vraie raison : « Vous avez regardé « nom » récemment. »', (await txt(v3.page, 'targeted-ad-why')).includes(`Vous avez regardé « ${viewedQ.name.trim()} » récemment.`), await txt(v3.page, 'targeted-ad-why'));
+      if (livePromos.some((p) => p.id !== viewedP.id && p.id !== viewedQ.id)) {
+        check('l’annonce suivante arrive après environ 15 secondes (entre 14 et 22 s)', arrived && waited >= 14000 && waited <= 22000, { arrived, waited });
+        await sleep(600);
+        check('c’est une AUTRE annonce : ni P ni Q (les articles de l’affiche fermée), avec sa vraie raison (« Pourquoi cette annonce ? »)', (await txt(v3.page, 'targeted-ad-name')) !== viewedP.name.trim() && (await txt(v3.page, 'targeted-ad-name')) !== viewedQ.name.trim() && /Pourquoi cette annonce \?/.test(await txt(v3.page, 'targeted-ad-why')), await txt(v3.page, 'targeted-ad-name'));
+      } else console.log('SAUTE  annonce suivante après « ✕ » : aucune vraie promotion en cours pour la proposer');
       check('l’annonce suivante a ses boutons (Acheter maintenant, Demander à Zara, ✕)', (await txt(v3.page, 'targeted-ad-buy')) === 'Acheter maintenant' && (await v3.page.getByTestId('targeted-ad-ask').count()) === 1 && (await v3.page.getByTestId('targeted-ad-close').count()) === 1);
       await v3.page.getByTestId('targeted-ad').scrollIntoViewIfNeeded();
       await v3.page.screenshot({ path: path.join(OUT, '€15-annonce-suivante.png') });
@@ -1610,7 +1613,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await sleep(4000);
       check('rechargement 5 secondes après le 2ᵉ « ✕ » : toujours rien (l’attente de 15 secondes continue)', (await v3.page.getByTestId('targeted-ad').count()) === 0);
       const stored2 = JSON.parse((await v3.page.evaluate((k) => localStorage.getItem(k), closedKey)) || '[]');
-      check('2 « ✕ » notés : les deux articles fermés', stored2.length === 2 && stored2.map((x) => x.id).sort().join() === [viewedP.id, viewedQ.id].sort().join(), stored2);
+      check('2 « ✕ » notés : l’affiche (P et Q) puis l’annonce suivante', stored2.length === 3 && [viewedP.id, viewedQ.id].every((id) => stored2.some((x) => x.id === id)) && new Set(stored2.map((x) => x.at)).size === 2, stored2);
       await sleep(12000);
       const afterWait = (await v3.page.getByTestId('targeted-ad').count()) ? await txt(v3.page, 'targeted-ad-name') : null;
       check('15 secondes passées : ni l’un ni l’autre article fermé ne revient (autre article ou rien)', afterWait === null || (afterWait !== viewedP.name.trim() && afterWait !== viewedQ.name.trim()), afterWait);
@@ -1818,6 +1821,81 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         await v.ctx.close();
       }
     } else console.log("SAUTE  offre élèves/étudiants : URBANSOLE n'est pas en vente à plus de 12 500 FCFA en ce moment");
+
+    // g4. l'affiche « Vos articles préférés » (demande du patron, 10 novembre 2026) : les articles d'« Intérêt élevé » de CE client (regardés de près ou aimés ❤️), jusqu'à 3
+    {
+      const nonVit = pool.filter((p) => !/vitalit/i.test((catsE.find((c) => c.id === p.category_id) || {}).name || '') && p.slug !== 'urbansole');
+      const [A, B, C] = [nonVit[0], nonVit[1], nonVit[2]];
+      if (A && B && C) {
+        const CORSF = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+        const homeFav = async ({ favIds, profile = null, lang = 'fr' }) => {
+          const user = memberE();
+          const storage = { albasse_zara_name: 'Ahmed', [SKE]: user.session, ...(profile ? { albasse_browsing_profile_v1: profile } : {}) };
+          const v = await newVisitor(phone, { lang, storage, fakeUser: user, fakeStore: { zaraAds: true, zaraDelay: 60 } });
+          // les favoris du compte (cœurs) : la base les donne sur tous les téléphones du client
+          await v.page.route(/\/rest\/v1\/favorites/, (route) => (route.request().method() === 'OPTIONS' ? route.fulfill({ status: 204, headers: CORSF, body: '' }) : route.fulfill({ status: 200, headers: { ...CORSF, 'content-type': 'application/json' }, body: JSON.stringify(favIds.map((id) => ({ product_id: id }))) })));
+          await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
+          return v;
+        };
+        // A et C regardés 2 fois (de près), A et B aimés : l'affiche montre A (aimé + regardé), B (aimé), C (regardé)
+        const profAC = profileJson([rec(A, { views: 2, sessions: 1 }), rec(C, { views: 2, sessions: 1 })]);
+        {
+          const v = await homeFav({ favIds: [A.id, B.id], profile: profAC });
+          await waitAdE(v.page);
+          const names = [A.name.trim(), B.name.trim(), C.name.trim()];
+          check('« Intérêt élevé » : l\'affiche « 💙 VOS ARTICLES PRÉFÉRÉS » avec le meilleur article en grand (aimé + regardé)', (await v.page.getByTestId('interest-poster').count()) === 1 && (await txt(v.page, 'interest-badge')) === '💙 VOS ARTICLES PRÉFÉRÉS' && (await txt(v.page, 'targeted-ad-name')) === names[0], await txt(v.page, 'targeted-ad-name'));
+          const tileNames = [await txt(v.page, 'interest-tile-1-name'), await txt(v.page, 'interest-tile-2-name')];
+          const tilePrices = [await txt(v.page, 'interest-tile-1-price'), await txt(v.page, 'interest-tile-2-price')].map((t) => t.replace(/\D/g, ''));
+          const priceOfName = (nm) => String(Math.round(Number([A, B, C].find((x) => x.name.trim() === nm)?.price)));
+          check('l\'affiche : « Vos articles préférés vous attendent. » et les 2 autres articles (B aimé, C regardé de près) en dessous, avec leur vrai prix', (await txt(v.page, 'targeted-ad-headline')) === 'Vos articles préférés vous attendent.' && [...tileNames].sort().join('|') === [names[1], names[2]].sort().join('|') && tileNames.every((nm, i) => tilePrices[i] === priceOfName(nm)), { tileNames, tilePrices });
+          const why = await txt(v.page, 'targeted-ad-why');
+          check('« Pourquoi cette annonce ? Vous avez regardé de près ou aimé ces articles : … »', why.startsWith('ⓘ Pourquoi cette annonce ? Vous avez regardé de près ou aimé ces articles :') && names.every((n) => why.includes(n)), why);
+          const box = await v.page.getByTestId('targeted-ad').boundingBox();
+          check('l\'affiche tient dans la largeur du téléphone', !!box && box.x >= 0 && box.x + box.width <= 391, box);
+          await v.page.setViewportSize({ width: 390, height: 1180 });
+          await v.page.getByTestId('targeted-ad').evaluate((el) => el.scrollIntoView({ block: 'center' }));
+          await sleep(900);
+          await v.page.screenshot({ path: path.join(OUT, '€20-affiche-articles-preferes.png') });
+          await v.page.setViewportSize({ width: 390, height: 844 });
+          // le bouton « Acheter maintenant » ouvre le meilleur article ; un article en dessous ouvre le sien
+          await v.page.getByTestId('interest-tile-1').click();
+          const firstTile = [B, C].find((x) => x.name.trim() === tileNames[0]) || B;
+          await v.page.waitForURL(new RegExp(`/produit/${firstTile.slug}`), { timeout: 20000 });
+          check('toucher un article de l\'affiche ouvre sa fiche', v.page.url().includes(`/produit/${firstTile.slug}`), v.page.url());
+          await v.ctx.close();
+        }
+        // « ✕ » : l'affiche disparaît (ses 3 articles sont fermés pour 24 h)
+        {
+          const v = await homeFav({ favIds: [A.id, B.id], profile: profAC });
+          await waitAdE(v.page);
+          await v.page.getByTestId('targeted-ad-close').click();
+          await sleep(1200);
+          check('« ✕ » : l\'affiche « Vos articles préférés » disparaît', (await v.page.getByTestId('interest-poster').count()) === 0);
+          await v.ctx.close();
+        }
+        // un seul favori, aucun autre signal : « Vous avez aimé cet article ❤️ »
+        {
+          const v = await homeFav({ favIds: [B.id] });
+          await waitAdE(v.page);
+          check('un seul favori : « Vous avez aimé cet article ❤️ Il vous attend. » avec son vrai nom, et « Vous avez ajouté « … » à vos favoris »', (await txt(v.page, 'targeted-ad-headline')) === 'Vous avez aimé cet article ❤️ Il vous attend.' && (await txt(v.page, 'targeted-ad-name')) === B.name.trim() && (await txt(v.page, 'targeted-ad-why')).includes(`Vous avez ajouté « ${B.name.trim()} » à vos favoris.`), await txt(v.page, 'targeted-ad-headline'));
+          await v.ctx.close();
+        }
+        // en arabe
+        {
+          const v = await homeFav({ favIds: [A.id, B.id], profile: profAC, lang: 'ar' });
+          await waitAdE(v.page);
+          check('en arabe : l\'affiche « منتجاتك المفضلة » et « منتجاتك المفضلة تنتظرك. »', (await v.page.getByTestId('interest-poster').count()) === 1 && /منتجاتك المفضلة/.test(await txt(v.page, 'interest-badge')) && /تنتظرك/.test(await txt(v.page, 'targeted-ad-headline')), await txt(v.page, 'targeted-ad-headline'));
+          await v.ctx.close();
+        }
+        // aucun favori : pas d'affiche « préférés » (Zara n'invente rien)
+        {
+          const v = await homeFav({ favIds: [] });
+          await sleep(6000);
+          check('aucun favori ni regard fort : aucune affiche « Vos articles préférés »', (await v.page.getByTestId('interest-poster').count()) === 0);
+          await v.ctx.close();
+        }
+      } else console.log("SAUTE  affiche « Vos articles préférés » : moins de 3 articles disponibles");
+    }
 
     // g2. les publics : élève, étudiant, administrateur, homme (d'après le compte du client)
     {
@@ -9700,9 +9778,37 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         check('la regle de paiement est ecrite sur la page', (await page.getByText(/Paiement à la livraison : seulement à N'Djamena\. Dans les autres villes, le paiement se fait à l'avance/).count()) === 1);
         await page.getByRole('radio', { name: /Moov Money/ }).click();
         check('Moundou : Moov Money choisi, son numero est affiche', (await page.getByText('Numéro : 99 22 10 17').count()) === 1);
+        // bas de la page de commande : « Informations de paiement » (Moov Money puis Airtel Money, numero + « Copier le numero »)
+        {
+          const info = page.getByTestId('payment-info');
+          check('bas de page : le bloc « Informations de paiement » est la, avec l\'explication', (await info.count()) === 1 && /Informations de paiement/.test(await info.innerText()) && /à l'avance/.test(await info.innerText()));
+          check('bas de page : carte Moov Money avec 99 22 10 17 et carte Airtel Money avec 60 60 51 51', (await page.getByTestId('payment-card-moov-number').innerText()) === '99 22 10 17' && (await page.getByTestId('payment-card-airtel-number').innerText()) === '60 60 51 51' && /Moov Money/.test(await page.getByTestId('payment-card-moov').innerText()) && /Airtel Money/.test(await page.getByTestId('payment-card-airtel').innerText()));
+          const order = await page.evaluate(() => {
+            const pos = (id) => document.querySelector(`[data-testid="${id}"]`)?.getBoundingClientRect().top ?? -1;
+            const confirm = [...document.querySelectorAll('div')].find((el) => el.textContent.trim() === 'Confirmer la commande' && el.children.length === 0);
+            return { moov: pos('payment-card-moov'), airtel: pos('payment-card-airtel'), info: pos('payment-info'), confirm: confirm ? confirm.getBoundingClientRect().top : -1, note: [...document.querySelectorAll('div')].find((el) => /Nos services de livraison/.test(el.textContent) && el.children.length === 0)?.getBoundingClientRect().top ?? -1 };
+          });
+          check('bas de page : Moov avant Airtel, et le bloc est APRES le bouton « Confirmer la commande » (tout en bas)', order.moov > 0 && order.airtel > order.moov && order.confirm > 0 && order.info > order.confirm && order.info > order.note, order);
+          await page.evaluate(() => { window.__copied = []; Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (t) => { window.__copied.push(t); } }, configurable: true }); });
+          await page.getByTestId('payment-card-moov-copy').click();
+          await sleep(300);
+          await page.getByTestId('payment-card-airtel-copy').click();
+          await sleep(300);
+          const copied = await page.evaluate(() => window.__copied);
+          check('« Copier le numero » : copie les chiffres de Moov (99221017) puis d\'Airtel (60605151) et le dit', JSON.stringify(copied) === JSON.stringify(['99221017', '60605151']) && (await page.getByText(/Numéro copié/).count()) >= 1, copied);
+          check('bas de page : aucun nom de titulaire invente, aucun lien de paiement (aucun n\'est enregistre)', (await info.getByText(/Nom\s*:/).count()) === 0 && (await page.getByTestId('payment-card-moov-link').count()) === 0 && (await page.getByTestId('payment-card-airtel-link').count()) === 0);
+          await sleep(5000); // le message « Numéro copié » disparait
+          await page.getByTestId('payment-info').evaluate((el) => el.scrollIntoView({ block: 'center' }));
+          await sleep(500);
+          await page.evaluate(() => { for (const el of document.querySelectorAll('div')) if (el.children.length === 0 && /Zara Kings\s+est à votre service/.test(el.textContent)) { let n = el; while (n.parentElement && n.parentElement !== document.body && !/fixed|absolute/.test(getComputedStyle(n).position)) n = n.parentElement; if (/fixed|absolute/.test(getComputedStyle(n).position)) n.style.visibility = 'hidden'; } });
+          await sleep(300);
+          await page.screenshot({ path: path.join(OUT, 'C2b-informations-de-paiement.png') });
+          await page.evaluate(() => window.scrollTo(0, 0));
+          await page.screenshot({ path: path.join(OUT, 'C2c-page-commande-complete.png'), fullPage: true });
+        }
       } else {
         // Airtel / Moov retirés : une ville hors N'Djamena commande sur WhatsApp (message déjà écrit), pas de bouton « Confirmer la commande »
-        check('Moundou : aucun numero Airtel ni Moov, aucun lien de paiement', (await page.getByText(/^Numéro : /).count()) === 0 && (await page.getByText(/Airtel|Moov/).count()) === 0);
+        check('Moundou : aucun numero Airtel ni Moov, aucun lien de paiement', (await page.getByText(/^Numéro : /).count()) === 0 && (await page.getByText(/Airtel|Moov/).count()) === 0 && (await page.getByTestId('payment-info').count()) === 0);
         check('la regle de paiement est ecrite sur la page (a la livraison a N\'Djamena, WhatsApp ailleurs)', (await page.getByText(/Paiement à la livraison : à N'Djamena\. Dans les autres villes, la commande se prend sur WhatsApp pour le moment/).count()) === 1);
         check('Moundou : la carte « Commande sur WhatsApp » est la, avec Moundou et le bouton', (await page.getByTestId('checkout-wa-outside').count()) === 1 && /Moundou/.test(await page.getByTestId('checkout-wa-outside').innerText()) && (await page.getByTestId('checkout-wa-outside-btn').count()) === 1);
         check('Moundou : le bouton « Confirmer la commande » n\'existe pas (aucun paiement possible ici)', (await page.getByText('Confirmer la commande', { exact: true }).count()) === 0);
@@ -10638,7 +10744,8 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const custId = 'aaaaaaaa-0000-4000-8000-000000000001';
     const custProfile = (extra = {}) => ({ id: custId, email: 'aicha@gmail.com', full_name: 'Aïcha Moussa', phone: '66111111', whatsapp_number: null, profession: null, region: "N'Djamena", country: 'Tchad', address: null, loyalty_points: 0, banned: false, role: 'customer', is_admin: false, is_affiliate: false, created_at: '2026-10-20T10:00:00Z', last_login_at: '2026-10-30T10:00:00Z', login_count: 2, fake_order_count: 0, ...extra });
     // rpc = (corps recu) → { body, status } ; sans rpc : la base accepte et renvoie l'identifiant de connexion d'un compte créé avec le numéro
-    const openDetail = async ({ rpc = null, customer = custProfile(), admin = true } = {}) => {
+    // study : les données de la fiche « Zara a étudié ce client » { interest, favorites, products, categories, orders, interestStatus }
+    const openDetail = async ({ rpc = null, customer = custProfile(), admin = true, study = null } = {}) => {
       const fu = admin ? adminUser() : clientUser();
       const seen = { rpcs: [] };
       const v = await newVisitor(phone, { lang: 'fr', storage: { [SKT]: fu.session }, fakeUser: fu, fakeStore: { waOrder: true, accountRequired: false, patches: [] } });
@@ -10648,6 +10755,13 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         if (req.method() === 'OPTIONS') return route.fallback();
         const t = u.pathname.replace('/rest/v1/', '');
         if (t === 'profiles' && !u.searchParams.get('id') && u.searchParams.get('is_admin') === 'eq.false') return jsonT(route, [customer]);
+        if (study) {
+          if (t === 'visitor_product_interest') return jsonT(route, study.interestStatus && study.interestStatus !== 200 ? { message: 'permission denied' } : study.interest, study.interestStatus || 200);
+          if (t === 'favorites') return jsonT(route, study.favorites);
+          if (t === 'orders') return jsonT(route, study.orders || []);
+          if (t === 'products') return jsonT(route, (u.searchParams.get('id') || '').startsWith('in.') ? [] : study.products);
+          if (t === 'categories') return jsonT(route, study.categories);
+        }
         if (['orders', 'visitor_sessions', 'product_views', 'cart_events', 'customer_sanctions', 'favorites'].includes(t)) return jsonT(route, []);
         if (t === 'rpc/admin_set_client_password') {
           const body = JSON.parse(req.postData() || '{}');
@@ -10676,6 +10790,66 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       await popup.close();
       return { url, text: decodeURIComponent(url.split('text=')[1] || '') };
     };
+
+    // s. « Zara a étudié ce client » (docs/zara-etude-client.md) : la fiche de l'administrateur, sur la page de chaque client
+    {
+      const mkP = (id, name, price, extra = {}) => ({ id, slug: id, name, price, compare_at_price: null, stock: 6, images: [`https://img.test/${id}.jpg`], category_id: 'cat1', is_active: true, is_flash_sale: false, flash_sale_ends_at: null, promo_ends_at: null, created_at: '2026-01-01T00:00:00Z', description: '', ...extra });
+      const SP = [mkP('rm', 'Survêtement Real Madrid ', 12500), mkP('ar', 'Survêtement Arsenal', 12500), mkP('tg', 'TAGIA ROYALE – velour', 22500), mkP('bc', 'Survêtement Barcelona  enfant ', 12500), mkP('p5', '511  original', 5000)];
+      const SC = [{ id: 'cat1', slug: 'survetements', name: 'Survêtements', parent_id: null }];
+      const at = (h) => new Date(Date.now() - h * 3600_000).toISOString();
+      // le client AS-000883 : Real Madrid et Arsenal aimés ; Real Madrid et TAGIA ROYALE regardés 2 fois ; Barcelona et le 511 regardés une fois
+      const study883 = { products: SP, categories: SC, favorites: [{ product_id: 'rm' }, { product_id: 'ar' }], interest: [
+        { product_id: 'bc', interest: 'leger', views: 1, cart_status: 'none', last_viewed_at: at(11.3) },
+        { product_id: 'tg', interest: 'moyen', views: 2, cart_status: 'none', last_viewed_at: at(11.4) },
+        { product_id: 'rm', interest: 'moyen', views: 2, cart_status: 'none', last_viewed_at: at(11.5) },
+        { product_id: 'ar', interest: 'leger', views: 1, cart_status: 'none', last_viewed_at: at(11.5) },
+        { product_id: 'p5', interest: 'leger', views: 1, cart_status: 'none', last_viewed_at: at(11.6) },
+      ] };
+      {
+        const { v } = await openDetail({ study: study883 });
+        await v.page.getByTestId('zara-study-level').waitFor({ timeout: 25000 });
+        await sleep(800);
+        const t = async (id) => ((await v.page.getByTestId(id).innerText()) || '').replace(/\s+/g, ' ').trim();
+        check('fiche « 🧠 Zara a étudié ce client » : « 💙 Intérêt élevé », « Zara a repéré 3 articles »', (await t('zara-study-level')) === '💙 Intérêt élevé' && /Zara a repéré 3 articles/.test(await t('zara-study-summary')), await t('zara-study-summary'));
+        check('ses articles préférés : Real Madrid (aimé · intérêt moyen · regardé 2×), Arsenal (aimé · regardé 1×), TAGIA ROYALE (intérêt moyen · regardé 2×)', /Survêtement Real Madrid ❤️ aimé · intérêt moyen · regardé 2×/.test(await t('zara-study-loved-1')) && /Survêtement Arsenal ❤️ aimé · regardé 1×/.test(await t('zara-study-loved-2')) && /TAGIA ROYALE – velour intérêt moyen · regardé 2×/.test(await t('zara-study-loved-3')), [await t('zara-study-loved-1'), await t('zara-study-loved-2'), await t('zara-study-loved-3')]);
+        check('regardés sans plus : Barcelona enfant et le 511 (un seul regard)', /regardé 1×/.test(await t('zara-study-weak-1')) && /regardé 1×/.test(await t('zara-study-weak-2')) && (await v.page.getByTestId('zara-study-weak-3').count()) === 0, [await t('zara-study-weak-1'), await t('zara-study-weak-2')]);
+        check('ce que Zara lui propose : « Vos articles préférés vous attendent. » avec Real Madrid en premier, puis Arsenal et TAGIA ROYALE', (await t('zara-study-ad-headline')) === 'Vos articles préférés vous attendent.' && /Real Madrid/.test(await t('zara-study-ad-name-1')) && /Arsenal/.test(await t('zara-study-ad-name-2')) && /TAGIA ROYALE/.test(await t('zara-study-ad-name-3')), await t('zara-study-ad'));
+        check('« Pourquoi cette annonce ? » dit les vrais noms', /Pourquoi cette annonce \? Vous avez regardé de près ou aimé ces articles : « Survêtement Real Madrid », « Survêtement Arsenal » et « TAGIA ROYALE – velour »/.test(await t('zara-study-ad-why')), await t('zara-study-ad-why'));
+        check('la fiche dit honnêtement ce qu\'elle ne sait pas : aucun métier, aucun genre ; public « Aucun public reconnu »', (await t('zara-study-audience')) === 'Aucun public reconnu' && /Aucun métier écrit/.test(await t('zara-study-notes')) && /Aucun genre/.test(await t('zara-study-notes')), await t('zara-study-notes'));
+        check('la fiche est LECTURE SEULE : aucun bouton ni champ dans le bloc', (await v.page.getByTestId('zara-study').locator('input, button, textarea').count()) === 0);
+        await v.page.setViewportSize({ width: 390, height: 1500 });
+        await v.page.getByTestId('zara-study').evaluate((el) => el.scrollIntoView({ block: 'start' }));
+        await sleep(700);
+        await v.page.screenshot({ path: path.join(OUT, '~s1-fiche-etude-client.png') });
+        check('aucune erreur (fiche d\'étude)', v.errs.length === 0, v.errs);
+        await v.ctx.close();
+      }
+      // le client a déjà commandé Real Madrid : il passe dans « déjà commandés », n'est plus proposé
+      {
+        const orders = [{ id: 'oo000001-0000-4000-8000-000000000001', user_id: custId, items: [{ product_id: 'rm', product_name: 'Survêtement Real Madrid', product_image: null, unit_price: 12500, quantity: 1, color: null, size: null }], total: 12500, status: 'delivered', payment_method: 'cash_on_delivery', is_flagged_fake: false, created_at: at(30), shipping_name: 'A', shipping_phone: '1', shipping_address: 'x', shipping_city: 'N\'Djamena' }];
+        const { v } = await openDetail({ study: { ...study883, orders } });
+        await v.page.getByTestId('zara-study-level').waitFor({ timeout: 25000 });
+        await sleep(800);
+        const t = async (id) => ((await v.page.getByTestId(id).innerText()) || '').replace(/\s+/g, ' ').trim();
+        check('article déjà commandé : « Déjà commandés (jamais reproposés) » avec Real Madrid, et il n\'est plus sur l\'affiche', /Real Madrid/.test(await t('zara-study-ordered-1')) && !/Real Madrid/.test(await t('zara-study-ad')) && /Arsenal/.test(await t('zara-study-ad-name-1')), await t('zara-study-ad'));
+        await v.ctx.close();
+      }
+      // un client sans rien d'enregistré : « Rien d'enregistré », aucune annonce inventée
+      {
+        const { v } = await openDetail({ study: { products: SP, categories: SC, favorites: [], interest: [] } });
+        await v.page.getByTestId('zara-study-level').waitFor({ timeout: 25000 });
+        const t = async (id) => ((await v.page.getByTestId(id).innerText()) || '').replace(/\s+/g, ' ').trim();
+        check('client sans regard ni favori : « ⚪ Rien d\'enregistré », « Rien pour le moment : Zara n\'invente jamais une annonce. »', (await t('zara-study-level')) === '⚪ Rien d’enregistré' && /n'invente jamais une annonce/.test(await t('zara-study-ad-none')) && /Aucun regard enregistré/.test(await t('zara-study-notes')) && /Aucun article aimé/.test(await t('zara-study-notes')), await t('zara-study-notes'));
+        await v.ctx.close();
+      }
+      // lecture du suivi refusée : jamais une fausse étude « rien d'enregistré »
+      {
+        const { v } = await openDetail({ study: { products: SP, categories: SC, favorites: [], interest: [], interestStatus: 401 } });
+        await v.page.getByTestId('zara-study-error').waitFor({ timeout: 25000 });
+        check('lecture refusée : « Étude impossible pour le moment », pas de fausse étude', (await v.page.getByTestId('zara-study-level').count()) === 0 && /Étude impossible/.test(await v.page.getByTestId('zara-study-error').innerText()));
+        await v.ctx.close();
+      }
+    }
 
     // a. tout marche : confirmation, code a 6 chiffres, WhatsApp avec le message et le code
     {
