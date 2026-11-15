@@ -129,7 +129,7 @@ export function SmartPromotionPopup() {
           </Pressable>
 
           {promotion.image_url && (
-            <Image source={{ uri: promotion.image_url }} style={styles.image} contentFit="cover" />
+            <Image accessibilityLabel="Promotion Albasse Shopping" source={{ uri: promotion.image_url }} style={styles.image} contentFit="cover" />
           )}
 
           <Text style={styles.greeting}>{greeting}</Text>

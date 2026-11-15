@@ -126,7 +126,7 @@ export function AffiliateProductsScreen() {
           filtered.map((r) => (
             <View key={r.product.id} style={styles.row}>
               {r.product.images[0] ? (
-                <Image source={{ uri: r.product.images[0] }} style={styles.thumb} contentFit="cover" />
+                <Image accessibilityLabel={r.product.name} source={{ uri: r.product.images[0] }} style={styles.thumb} contentFit="cover" />
               ) : (
                 <View style={styles.thumbPlaceholder} />
               )}

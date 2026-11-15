@@ -46,7 +46,7 @@ export function SideAdBanner({ items, height = 120 }: { items: AdItem[]; height?
   const renderSlot = (item: AdItem) => {
     const image = (
       <Animated.View style={{ flex: 1, opacity: fade, transform: [{ translateY: slide }] }}>
-        <Image source={{ uri: item.image_url }} style={styles.image} contentFit="cover" />
+        <Image accessibilityLabel="Publicité Albasse Shopping" source={{ uri: item.image_url }} style={styles.image} contentFit="cover" />
       </Animated.View>
     );
     return item.link ? (

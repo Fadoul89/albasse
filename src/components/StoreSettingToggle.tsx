@@ -188,5 +188,5 @@ const styles = StyleSheet.create({
   title: { color: colors.cream, fontFamily: fonts.bodyBold, fontSize: 14 },
   status: { fontFamily: fonts.bodyMedium, fontSize: 12, marginTop: 4 },
   on: { color: '#25D366' },
-  off: { color: '#f87171' },
+  off: { color: '#ff9b9b' },
 });

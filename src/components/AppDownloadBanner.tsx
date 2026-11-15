@@ -69,7 +69,7 @@ export function AppDownloadBanner() {
 
   return (
     <View style={styles.banner}>
-      <Image source={require('../../assets/logo.jpg')} style={styles.icon} />
+      <Image alt="Logo Albasse Shopping" accessibilityLabel="Logo Albasse Shopping" source={require('../../assets/logo.jpg')} style={styles.icon} />
       <View style={{ flex: 1 }}>
         <Text style={styles.title}>Albasse Shopping, l'app</Text>
         <Text style={styles.subtitle}>Commandez plus vite depuis votre appareil</Text>

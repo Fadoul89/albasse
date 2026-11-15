@@ -21,7 +21,7 @@ export function RegisterScreen() {
     <View style={styles.screen}>
       <ScreenHeader title="Créer un compte" showBack />
       <ScrollView contentContainerStyle={styles.content}>
-        <RegisterForm onSuccess={afterSignUp} onPrivacy={() => navigation.navigate('PrivacyPolicy')} />
+        <RegisterForm onSuccess={afterSignUp} onPrivacy={() => navigation.navigate('PrivacyPolicy')} onTerms={() => navigation.navigate('Terms')} />
       </ScrollView>
     </View>
   );

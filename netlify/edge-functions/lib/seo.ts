@@ -428,13 +428,24 @@ export const INFO_PAGE_DEFS: InfoPageDef[] = [
     ],
   },
   {
+    path: '/conditions-generales',
+    title: `Conditions générales | ${SITE_NAME}`,
+    description: `Conditions générales de ${SITE_NAME} : commande valable 48 heures, livraison à N'Djamena et dans les autres villes du Tchad, paiement, retours et points de fidélité.`,
+    h1: 'Conditions générales',
+    paragraphs: [
+      'Dernière mise à jour : novembre 2026.',
+      'Ces conditions expliquent : 1. qui nous sommes, 2. votre compte, 3. commander (une commande non confirmée reste valable 48 heures), 4. la livraison (services de livraison ouverts de 8h30 à 16h), 5. le paiement (à la livraison à N’Djamena, à l’avance par Moov Money ou Airtel Money dans les autres villes), 6. les retours et échanges (72 heures pour un article incorrect ou défectueux), 7. la fidélité et les offres, 8. vos données, 9. le bon usage du site.',
+      `Contact : ${CONTACT_EMAIL}`,
+    ],
+  },
+  {
     path: '/confidentialite',
     title: `Politique de confidentialité | ${SITE_NAME}`,
     description: `Les données que ${SITE_NAME} collecte, comment elles sont utilisées et partagées, la sécurité, les notifications et vos droits.`,
     h1: 'Politique de confidentialité',
     paragraphs: [
-      'Dernière mise à jour : octobre 2026.',
-      'Cette politique explique : 1. les données que nous collectons, 2. l’utilisation des données, 3. le partage des données, 4. les notifications, 5. la sécurité, 6. vos droits, 7. comment nous contacter.',
+      'Dernière mise à jour : novembre 2026.',
+      'Cette politique explique : 1. les données que nous collectons, 2. l’utilisation des données, 3. le partage des données, 4. les notifications, 5. les cookies et la mesure publicitaire (le pixel TikTok n’est utilisé qu’avec votre accord), 6. la sécurité, 7. vos droits, 8. comment nous contacter.',
       `Contact : ${CONTACT_EMAIL}`,
     ],
   },
@@ -477,7 +488,7 @@ export function notFoundPage(url: string): string {
 
 // --- plan du site et robots.txt -----------------------------------------------------------------------------------------------------
 
-export const STATIC_PAGES = ['/', '/contact', '/conditions-de-retour', '/confidentialite'];
+export const STATIC_PAGES = ['/', '/contact', '/conditions-generales', '/conditions-de-retour', '/confidentialite'];
 
 // Les copies identiques (même nom, même prix, même description) : seule l'adresse canonique reste dans le plan du site
 export function withoutCopies<T extends SeoProduct>(products: readonly T[]): T[] {

@@ -219,7 +219,7 @@ export function AdminCategoriesScreen() {
               {uploadingImage ? (
                 <ActivityIndicator color={colors.gold} />
               ) : imageUrl ? (
-                <Image source={{ uri: imageUrl }} style={styles.imagePreview} contentFit="cover" />
+                <Image accessibilityLabel="Image de la catégorie" source={{ uri: imageUrl }} style={styles.imagePreview} contentFit="cover" />
               ) : (
                 <Text style={styles.imagePickerText}>＋ Photo</Text>
               )}
@@ -321,7 +321,7 @@ export function AdminCategoriesScreen() {
                 </Pressable>
               </View>
               {item.image_url ? (
-                <Image source={{ uri: item.image_url }} style={styles.rowImage} contentFit="cover" />
+                <Image accessibilityLabel={item.name} source={{ uri: item.image_url }} style={styles.rowImage} contentFit="cover" />
               ) : (
                 <View style={styles.rowImagePlaceholder} />
               )}
@@ -438,5 +438,5 @@ const styles = StyleSheet.create({
   rowName: { color: colors.cream, fontFamily: fonts.bodySemiBold, fontSize: 14 },
   rowActions: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 16, rowGap: 4, marginTop: 4 },
   editLink: { color: colors.gold, fontFamily: fonts.bodyMedium, fontSize: 12 },
-  deleteLink: { color: colors.red, fontFamily: fonts.bodyMedium, fontSize: 12 },
+  deleteLink: { color: colors.errorText, fontFamily: fonts.bodyMedium, fontSize: 12 },
 });

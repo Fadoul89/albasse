@@ -230,7 +230,7 @@ export function AdminProductsScreen() {
         renderItem={({ item }) => (
           <View style={styles.row}>
             <View style={styles.rowTop}>
-              <Image source={{ uri: item.images[0] }} style={styles.thumb} contentFit="cover" />
+              <Image accessibilityLabel={item.name} source={{ uri: item.images[0] }} style={styles.thumb} contentFit="cover" />
               <View style={{ flex: 1 }}>
                 <Text style={styles.name} numberOfLines={1}>
                   {item.name}
@@ -393,7 +393,7 @@ const styles = StyleSheet.create({
   partnerTag: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 11, marginTop: 3 },
   actions: { alignItems: 'flex-end', gap: 6 },
   editLink: { color: colors.gold, fontFamily: fonts.bodyMedium, fontSize: 12 },
-  deleteLink: { color: colors.red, fontFamily: fonts.bodyMedium, fontSize: 12 },
+  deleteLink: { color: colors.errorText, fontFamily: fonts.bodyMedium, fontSize: 12 },
   quickEditRow: {
     flexDirection: 'row',
     gap: 10,

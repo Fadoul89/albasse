@@ -16,7 +16,7 @@ import { inviterFirstName, readStoredInviteCode } from '../lib/friendInvitesApi'
 import { checkStepOne } from '../lib/entryScreen';
 import { inviterGreeting } from '../lib/friendInvites';
 
-export function RegisterForm({ onSuccess, onPrivacy }: { onSuccess: () => void; onPrivacy: () => void }) {
+export function RegisterForm({ onSuccess, onPrivacy, onTerms }: { onSuccess: () => void; onPrivacy: () => void; onTerms: () => void }) {
   const signUp = useAuthStore((s) => s.signUp);
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
@@ -151,6 +151,9 @@ export function RegisterForm({ onSuccess, onPrivacy }: { onSuccess: () => void; 
           <Text style={styles.termsItem}>6. J'accepte de recevoir les notifications commerciales uniquement si je donne mon accord.</Text>
           <Pressable onPress={onPrivacy}>
             <Text style={styles.privacyLink}>📜 Lire notre politique de confidentialité</Text>
+          </Pressable>
+          <Pressable onPress={onTerms} testID="register-terms-link">
+            <Text style={styles.privacyLink}>📜 Lire nos conditions générales</Text>
           </Pressable>
         </View>
       )}

@@ -65,6 +65,8 @@ import { FavoritesSync } from '../components/FavoritesSync';
 import { AdminCitiesScreen } from '../screens/admin/AdminCitiesScreen';
 import { PrivacyPolicyScreen } from '../screens/PrivacyPolicyScreen';
 import { ReturnPolicyScreen } from '../screens/ReturnPolicyScreen';
+import { TermsScreen } from '../screens/TermsScreen';
+import { NotFoundScreen } from '../screens/NotFoundScreen';
 import { InstallScreen } from '../screens/InstallScreen';
 import { UnsubscribeScreen } from '../screens/UnsubscribeScreen';
 import { InvoiceScreen } from '../screens/InvoiceScreen';
@@ -145,6 +147,7 @@ const linking: LinkingOptions<RootStackParamList> = {
       AdminCities: 'admin/livraison-villes',
       PrivacyPolicy: 'confidentialite',
       ReturnPolicy: 'conditions-de-retour',
+      Terms: 'conditions-generales',
       Messages: 'mes-messages',
       AdminMessages: 'admin/messages',
       AffiliateApply: 'devenir-affilie',
@@ -161,6 +164,8 @@ const linking: LinkingOptions<RootStackParamList> = {
       AdminAffiliates: 'admin/affilies',
       AdminAffiliateSettings: 'admin/affilies/reglages',
       AdminAffiliateCommissions: 'admin/affilies/commissions',
+      // toute autre adresse : la page « Introuvable » (le serveur répond aussi 404, voir netlify/edge-functions/not-found.ts)
+      NotFound: '*',
     },
   },
 };
@@ -306,6 +311,8 @@ export function RootNavigator() {
             <Stack.Screen name="AdminCities" component={AdminCitiesScreen} />
             <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} options={{ presentation: 'modal' }} />
             <Stack.Screen name="ReturnPolicy" component={ReturnPolicyScreen} options={{ presentation: 'modal' }} />
+            <Stack.Screen name="Terms" component={TermsScreen} options={{ presentation: 'modal' }} />
+            <Stack.Screen name="NotFound" component={NotFoundScreen} />
             <Stack.Screen name="Messages" component={MessagesScreen} />
             <Stack.Screen name="AdminMessages" component={AdminMessagesScreen} />
             <Stack.Screen name="AffiliateApply" component={AffiliateApplyScreen} options={{ presentation: 'modal' }} />

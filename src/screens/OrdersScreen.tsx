@@ -221,7 +221,7 @@ function OrderCard({
         {order.items.map((oi, idx) => (
           <View key={`${oi.product_id}-${idx}`} style={styles.itemRow}>
             {oi.product_image ? (
-              <Image source={{ uri: oi.product_image }} style={styles.itemImage} contentFit="cover" />
+              <Image accessibilityLabel={oi.product_name} source={{ uri: oi.product_image }} style={styles.itemImage} contentFit="cover" />
             ) : (
               <View style={styles.itemImagePlaceholder} />
             )}
@@ -258,7 +258,7 @@ function OrderCard({
 
       {order.gift_wrap ? (
         <View style={[styles.giftRow, styles.giftRowOn]} testID="order-gift-on">
-          <Image source={GIFT_IMAGE} style={styles.giftImage} contentFit="contain" />
+          <Image accessibilityLabel="Emballage cadeau" source={GIFT_IMAGE} style={styles.giftImage} contentFit="contain" />
           <View style={{ flex: 1 }}>
             <Text style={styles.giftTitle}>🎁 Emballage cadeau ajouté</Text>
             <Text style={styles.giftSub}>{`${formatXAF(GIFT_WRAP_FEE)} inclus dans le total`}</Text>
@@ -277,7 +277,7 @@ function OrderCard({
           accessibilityLabel={`Ajouter l'emballage cadeau, ${formatXAF(GIFT_WRAP_FEE)}`}
           testID="order-gift-add"
         >
-          <Image source={GIFT_IMAGE} style={styles.giftImage} contentFit="contain" />
+          <Image accessibilityLabel="Emballage cadeau" source={GIFT_IMAGE} style={styles.giftImage} contentFit="contain" />
           <View style={{ flex: 1 }}>
             <Text style={styles.giftTitle}>Ajouter l'emballage cadeau</Text>
             <Text style={styles.giftSub}>{`Touchez l'image cadeau · + ${formatXAF(GIFT_WRAP_FEE)}`}</Text>
@@ -405,7 +405,7 @@ const styles = StyleSheet.create({
   },
   removeItemText: { color: colors.cream, fontFamily: fonts.bodyBold, fontSize: 12 },
   editHint: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 10, marginTop: -4, marginBottom: spacing.sm },
-  loyaltyLine: { color: colors.success, fontFamily: fonts.bodySemiBold, fontSize: 12, marginTop: 8 },
+  loyaltyLine: { color: colors.successText, fontFamily: fonts.bodySemiBold, fontSize: 12, marginTop: 8 },
   scheduledLine: { color: colors.goldLight, fontFamily: fonts.bodyBold, fontSize: 13, marginTop: 8 },
   giftRow: {
     flexDirection: 'row',

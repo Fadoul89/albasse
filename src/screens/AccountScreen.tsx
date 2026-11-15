@@ -146,7 +146,7 @@ export function AccountScreen() {
       <View style={styles.profileCard}>
         <Pressable style={styles.avatar} onPress={handlePickAvatar} disabled={uploadingAvatar}>
           {profile.avatar_url ? (
-            <Image source={{ uri: profile.avatar_url }} style={styles.avatarImage} contentFit="cover" />
+            <Image accessibilityLabel="Ma photo de profil" source={{ uri: profile.avatar_url }} style={styles.avatarImage} contentFit="cover" />
           ) : (
             <Text style={styles.avatarText}>{(profile.full_name ?? profile.email)[0]?.toUpperCase()}</Text>
           )}
@@ -279,6 +279,10 @@ export function AccountScreen() {
         <Text style={styles.menuIcon}>↩️</Text>
         <Text style={styles.menuLabel}>Conditions de retour</Text>
       </Pressable>
+      <Pressable style={styles.menuItem} onPress={() => navigation.navigate('Terms')}>
+        <Text style={styles.menuIcon}>📜</Text>
+        <Text style={styles.menuLabel}>Conditions générales</Text>
+      </Pressable>
       <Pressable style={styles.menuItem} onPress={() => navigation.navigate('PrivacyPolicy')}>
         <Text style={styles.menuIcon}>🔒</Text>
         <Text style={styles.menuLabel}>Politique de confidentialité</Text>
@@ -291,7 +295,7 @@ export function AccountScreen() {
 
       <Pressable style={styles.menuItem} onPress={signOut}>
         <Text style={styles.menuIcon}>🚪</Text>
-        <Text style={[styles.menuLabel, { color: colors.red }]}>Se déconnecter</Text>
+        <Text style={[styles.menuLabel, { color: colors.errorText }]}>Se déconnecter</Text>
       </Pressable>
     </ScrollView>
   );

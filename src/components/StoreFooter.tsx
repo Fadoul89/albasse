@@ -1,10 +1,14 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, Linking } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useStoreSettings } from '../hooks/useStoreSettings';
 import { colors, fonts, radius, spacing } from '../theme';
+import type { RootStackParamList } from '../navigation/types';
 
 export function StoreFooter() {
   const { settings } = useStoreSettings();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const addressLine = [settings.address, settings.postal_code, settings.city, settings.country]
     .filter(Boolean)
@@ -44,6 +48,21 @@ export function StoreFooter() {
       )}
 
       {settings.hours && <Text style={styles.line}>🕐 {settings.hours}</Text>}
+
+      <View style={styles.legalRow} testID="footer-legal-links">
+        <Pressable onPress={() => navigation.navigate('Terms')} hitSlop={8} accessibilityRole="link" testID="footer-terms">
+          <Text style={styles.legalLink}>Conditions générales</Text>
+        </Pressable>
+        <Pressable onPress={() => navigation.navigate('ReturnPolicy')} hitSlop={8} accessibilityRole="link" testID="footer-returns">
+          <Text style={styles.legalLink}>Conditions de retour</Text>
+        </Pressable>
+        <Pressable onPress={() => navigation.navigate('PrivacyPolicy')} hitSlop={8} accessibilityRole="link" testID="footer-privacy">
+          <Text style={styles.legalLink}>Confidentialité</Text>
+        </Pressable>
+        <Pressable onPress={() => navigation.navigate('Contact')} hitSlop={8} accessibilityRole="link" testID="footer-contact">
+          <Text style={styles.legalLink}>Contact</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -61,4 +80,6 @@ const styles = StyleSheet.create({
   },
   shopName: { color: colors.goldLight, fontFamily: fonts.display, fontSize: 16, marginBottom: 6 },
   line: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 13 },
+  legalRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border },
+  legalLink: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 12, textDecorationLine: 'underline' },
 });

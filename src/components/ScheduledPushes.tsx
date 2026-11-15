@@ -143,7 +143,7 @@ export function ScheduledPushes({ products }: { products: Product[] }) {
       <Text style={styles.label}>1. L'article</Text>
       {product ? (
         <View style={styles.productCard} testID="push-product-selected">
-          {product.images?.[0] ? <Image source={{ uri: product.images[0] }} style={styles.thumb} contentFit="cover" /> : null}
+          {product.images?.[0] ? <Image accessibilityLabel={product.name} source={{ uri: product.images[0] }} style={styles.thumb} contentFit="cover" /> : null}
           <View style={{ flex: 1 }}>
             <Text style={styles.productName} numberOfLines={2}>
               {product.name}
@@ -182,7 +182,7 @@ export function ScheduledPushes({ products }: { products: Product[] }) {
                   }}
                   testID={`push-product-option-${p.id}`}
                 >
-                  {p.images?.[0] ? <Image source={{ uri: p.images[0] }} style={styles.smallThumb} contentFit="cover" /> : null}
+                  {p.images?.[0] ? <Image accessibilityLabel={p.name} source={{ uri: p.images[0] }} style={styles.smallThumb} contentFit="cover" /> : null}
                   <Text style={styles.suggestionText} numberOfLines={1}>
                     {p.name}
                   </Text>
@@ -211,7 +211,7 @@ export function ScheduledPushes({ products }: { products: Product[] }) {
 
       {product || message.trim() ? (
         <View style={styles.preview} testID="push-preview">
-          <Image source={require('../../assets/logo.jpg')} style={styles.previewIcon} contentFit="cover" />
+          <Image accessibilityLabel="Logo Albasse Shopping" source={require('../../assets/logo.jpg')} style={styles.previewIcon} contentFit="cover" />
           <View style={{ flex: 1 }}>
             <Text style={styles.previewTitle} numberOfLines={1}>
               {title || 'Albasse Shopping'}
@@ -220,7 +220,7 @@ export function ScheduledPushes({ products }: { products: Product[] }) {
               {message.trim() || '…'}
             </Text>
           </View>
-          {product?.images?.[0] ? <Image source={{ uri: product.images[0] }} style={styles.previewImage} contentFit="cover" /> : null}
+          {product?.images?.[0] ? <Image accessibilityLabel={product?.name ?? 'Article'} source={{ uri: product.images[0] }} style={styles.previewImage} contentFit="cover" /> : null}
         </View>
       ) : null}
 
@@ -324,7 +324,7 @@ function PushRow({ row, children }: { row: ScheduledPush; children?: React.React
   const image = row.product?.images?.[0];
   return (
     <View style={styles.row} testID={`push-row-${row.id}`}>
-      {image ? <Image source={{ uri: image }} style={styles.smallThumb} contentFit="cover" /> : null}
+      {image ? <Image accessibilityLabel="" source={{ uri: image }} style={styles.smallThumb} contentFit="cover" /> : null}
       <View style={{ flex: 1 }}>
         <Text style={styles.rowTitle} numberOfLines={1}>
           {row.product?.name ?? row.title}
@@ -438,7 +438,7 @@ const styles = StyleSheet.create({
   chipTextActive: { color: colors.goldLight },
   row2: { flexDirection: 'row', gap: 10 },
   when: { color: colors.goldLight, fontFamily: fonts.bodyMedium, fontSize: 12.5, marginBottom: spacing.sm },
-  error: { color: colors.red, fontFamily: fonts.bodyMedium, fontSize: 12.5, marginBottom: spacing.sm },
+  error: { color: colors.errorText, fontFamily: fonts.bodyMedium, fontSize: 12.5, marginBottom: spacing.sm },
   warning: { backgroundColor: colors.panelAlt, borderRadius: radius.md, borderWidth: 1, borderColor: colors.gold, padding: spacing.sm, marginBottom: spacing.sm },
   warningText: { color: colors.goldLight, fontFamily: fonts.bodyMedium, fontSize: 12.5 },
   listTitle: { color: colors.creamMuted, fontFamily: fonts.bodySemiBold, fontSize: 13, marginTop: spacing.md, marginBottom: spacing.sm },
@@ -456,5 +456,5 @@ const styles = StyleSheet.create({
   rowMeta: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11, marginTop: 4 },
   rowActions: { flexDirection: 'row', gap: 16, marginTop: 6 },
   link: { color: colors.gold, fontFamily: fonts.bodyMedium, fontSize: 12.5 },
-  danger: { color: colors.red, fontFamily: fonts.bodyMedium, fontSize: 12.5 },
+  danger: { color: colors.errorText, fontFamily: fonts.bodyMedium, fontSize: 12.5 },
 });

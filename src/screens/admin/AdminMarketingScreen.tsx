@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
   pickedClear: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 12 },
   button: { backgroundColor: colors.gold, borderRadius: radius.pill, alignItems: 'center', paddingVertical: 14, marginTop: spacing.lg },
   buttonText: { color: colors.background, fontFamily: fonts.bodyBold, fontSize: 15 },
-  error: { color: colors.error, fontFamily: fonts.body, fontSize: 13, marginTop: spacing.md },
+  error: { color: colors.errorText, fontFamily: fonts.body, fontSize: 13, marginTop: spacing.md },
   result: { backgroundColor: colors.panel, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, marginTop: spacing.lg },
   resultHint: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11, marginBottom: 8 },
   resultText: { color: colors.cream, fontFamily: fonts.body, fontSize: 14, lineHeight: 21 },
@@ -237,5 +237,5 @@ const styles = StyleSheet.create({
   mailButton: { borderWidth: 1, borderColor: colors.gold, borderRadius: radius.pill, alignItems: 'center', paddingVertical: 12 },
   mailButtonText: { color: colors.gold, fontFamily: fonts.bodySemiBold, fontSize: 14 },
   mailMsg: { fontFamily: fonts.body, fontSize: 13, lineHeight: 19 },
-  mailOk: { color: colors.success },
+  mailOk: { color: colors.successText },
 });

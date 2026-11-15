@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
   redText: {
     fontFamily: fonts.bodyBold,
     fontSize: 15,
-    color: colors.cream,
+    color: '#ffffff',
     letterSpacing: 0.5,
   },
   blueButton: {

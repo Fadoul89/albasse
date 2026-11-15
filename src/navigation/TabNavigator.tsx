@@ -61,12 +61,12 @@ export function TabNavigator() {
         // l'espace du milieu (entre Recherche et Commandes) est la place du bouton de Zara
         tabBarItemStyle:
           route.name === 'Search' ? { marginRight: TAB_CENTER_GAP / 2 } : route.name === 'Orders' ? { marginLeft: TAB_CENTER_GAP / 2 } : undefined,
-        tabBarActiveTintColor: colors.gold,
+        tabBarActiveTintColor: colors.goldLight,
         tabBarInactiveTintColor: colors.creamFaint,
         tabBarLabel: ({ color, focused }) => {
           const isOrders = route.name === 'Orders';
           const isAccount = route.name === 'Account';
-          const labelColor = isOrders ? '#3b9eff' : isAccount ? colors.gold : color;
+          const labelColor = isOrders ? '#7cbcff' : isAccount ? colors.goldLight : color;
           return (
             <Text
               style={{

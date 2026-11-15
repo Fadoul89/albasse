@@ -34,7 +34,7 @@ const CHAD_RED = '#D21034';
 // Sur le fond bleu du site, le bleu et le rouge du drapeau sont trop sombres pour du texte :
 // l'accroche utilise leurs teintes claires (le jaune reste celui du drapeau).
 const TAGLINE_BLUE = '#6EA4FF';
-const TAGLINE_RED = '#FF5A70';
+const TAGLINE_RED = '#FF7A8C';
 
 export function HomeScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -92,8 +92,8 @@ export function HomeScreen() {
     ).start();
   }, []);
   const blinkOpacity = blink.interpolate({ inputRange: [0, 1], outputRange: [0.35, 1] });
-  // la pastille rouge « LIVE » clignote doucement (le mot reste lisible)
-  const liveOpacity = blink.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] });
+  // la pastille rouge « LIVE » pulse doucement en taille (jamais en transparence : le mot reste toujours lisible)
+  const liveScale = blink.interpolate({ inputRange: [0, 1], outputRange: [1, 1.1] });
 
   // vrai nombre de personnes en ligne (lib/onlineCount), relu toutes les 30 s ; caché tant que la base ne répond pas
   const [onlineCount, setOnlineCount] = useState<number | null>(null);
@@ -124,7 +124,7 @@ export function HomeScreen() {
         </View>
         {onlineCount !== null && (
           <View style={styles.visitorsPill} testID="home-online">
-            <Animated.View style={[styles.liveTag, { opacity: liveOpacity }]} testID="home-live-tag">
+            <Animated.View style={[styles.liveTag, { transform: [{ scale: liveScale }] }]} testID="home-live-tag">
               <Text style={styles.liveTagText}>LIVE</Text>
             </Animated.View>
             <Text style={styles.visitorsText} testID="home-online-text">{onlineLabel(onlineCount)}</Text>
@@ -156,7 +156,7 @@ export function HomeScreen() {
             <Animated.Text
               style={[
                 styles.taglineWord,
-                { color: TAGLINE_BLUE, textShadowColor: TAGLINE_BLUE, textShadowRadius: glowRadius, opacity: glowOpacity },
+                { color: TAGLINE_BLUE, textShadowColor: TAGLINE_BLUE, textShadowRadius: glowRadius },
               ]}
             >
               SERVICE
@@ -164,7 +164,7 @@ export function HomeScreen() {
             <Animated.Text
               style={[
                 styles.taglineWord,
-                { color: CHAD_YELLOW, textShadowColor: CHAD_YELLOW, textShadowRadius: glowRadius, opacity: glowOpacity },
+                { color: CHAD_YELLOW, textShadowColor: CHAD_YELLOW, textShadowRadius: glowRadius },
               ]}
             >
               QUALITÉ
@@ -172,7 +172,7 @@ export function HomeScreen() {
             <Animated.Text
               style={[
                 styles.taglineWord,
-                { color: TAGLINE_RED, textShadowColor: TAGLINE_RED, textShadowRadius: glowRadius, opacity: glowOpacity },
+                { color: TAGLINE_RED, textShadowColor: TAGLINE_RED, textShadowRadius: glowRadius },
               ]}
             >
               GARANTIE
@@ -386,7 +386,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   liveTag: {
-    backgroundColor: '#ff2d2d',
+    backgroundColor: '#d8232a',
     borderRadius: 4,
     paddingHorizontal: 5,
     paddingVertical: 1,

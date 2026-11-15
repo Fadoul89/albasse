@@ -40,6 +40,7 @@ import { useStoreSettings } from '../hooks/useStoreSettings';
 import { guestOrderAllowed } from '../lib/accountWall';
 import { WebPushBanner } from '../components/WebPushBanner';
 import { ORDER_WHATSAPP } from '../constants/shopRules'; // numéro WhatsApp qui reçoit les commandes (chiffres uniquement)
+import { thumbUrl } from '../lib/imageThumb';
 
 // badges de confiance (fond transparent, réduits pour le téléphone)
 const BADGE_VERIFIED = require('../../assets/badge-vendeur-verifie.png');
@@ -268,6 +269,7 @@ export function ProductScreen({ route }: Props) {
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }}>
         <Image
           source={{ uri: product.images[activeImage] }}
+          accessibilityLabel={product.images.length > 1 ? `${product.name} - photo ${activeImage + 1}` : product.name}
           style={styles.mainImage}
           contentFit="cover"
           transition={150}
@@ -284,7 +286,8 @@ export function ProductScreen({ route }: Props) {
                 }}
               >
                 <Image
-                  source={{ uri }}
+                  source={{ uri: thumbUrl(uri, 160) }}
+                  accessibilityLabel={`${product.name} - miniature ${i + 1}`}
                   style={[styles.thumb, i === activeImage && styles.thumbActive]}
                   contentFit="cover"
                 />
@@ -405,7 +408,7 @@ export function ProductScreen({ route }: Props) {
           <View style={styles.shareRow}>
             <Text style={styles.shareLabel}>Partager :</Text>
             <Pressable style={[styles.shareBtn, styles.shareBtnWhatsApp]} onPress={shareToWhatsApp}>
-              <Text style={styles.shareBtnText}>💬 WhatsApp</Text>
+              <Text style={styles.shareBtnTextWhatsApp}>💬 WhatsApp</Text>
             </Pressable>
             <Pressable style={[styles.shareBtn, styles.shareBtnFacebook]} onPress={shareToFacebook}>
               <Text style={styles.shareBtnText}>📘 Facebook</Text>
@@ -480,11 +483,11 @@ const styles = StyleSheet.create({
   trustCol: { alignItems: 'center', gap: 4 },
   badgeVerified: { width: 46, height: 46 },
   badgeYears: { width: 102, height: 34 },
-  price: { fontFamily: fonts.bodyBold, fontSize: 20, color: colors.success },
+  price: { fontFamily: fonts.bodyBold, fontSize: 20, color: colors.successText },
   comparePrice: {
     fontFamily: fonts.body,
     fontSize: 15,
-    color: colors.red,
+    color: colors.errorText,
     textDecorationLine: 'line-through',
   },
   studentOffer: { fontFamily: fonts.bodySemiBold, fontSize: 13, lineHeight: 19, color: colors.goldLight, marginTop: 6 },
@@ -495,7 +498,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: spacing.md,
   },
-  waOrderText: { color: '#ffffff', fontFamily: fonts.bodyBold, fontSize: 16 },
+  waOrderText: { color: '#06240f', fontFamily: fonts.bodyBold, fontSize: 16 },
   waOrderHint: {
     color: colors.creamMuted,
     fontFamily: fonts.body,
@@ -511,6 +514,7 @@ const styles = StyleSheet.create({
   shareBtnFacebook: { backgroundColor: '#1877F2' },
   shareBtnLinkedIn: { backgroundColor: '#0A66C2' },
   shareBtnText: { color: '#ffffff', fontFamily: fonts.bodyBold, fontSize: 12 },
+  shareBtnTextWhatsApp: { color: '#06240f', fontFamily: fonts.bodyBold, fontSize: 12 },
   description: {
     fontFamily: fonts.body,
     fontSize: 14,

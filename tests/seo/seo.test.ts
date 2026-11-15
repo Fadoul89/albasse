@@ -277,7 +277,7 @@ const ldBlocks = (html: string): any[] => [...html.matchAll(/<script type="appli
     const { res } = await ask(sitemap, '/sitemap.xml', CHROME);
     const xml = await res.text();
     check('plan du site : type XML', /application\/xml/.test(res.headers.get('content-type') ?? ''));
-    check('plan du site : pages fixes + catégories + produits', (xml.match(/<loc>/g) ?? []).length === 4 + 2 + 2, (xml.match(/<loc>/g) ?? []).length);
+    check('plan du site : pages fixes + catégories + produits', (xml.match(/<loc>/g) ?? []).length === 5 + 2 + 2, (xml.match(/<loc>/g) ?? []).length);
     check('plan du site : photos des produits', xml.includes('<image:loc>https://img.example/a.jpg</image:loc>') && xml.includes('xmlns:image='));
     check('plan du site : balises retirées, « & » et guillemets échappés dans le XML', !xml.includes('<b>') && xml.includes('<image:title>Eau &quot;fraîche&quot; &amp; boisée</image:title>'), xml.match(/<image:title>[^<]*<\/image:title>/g));
     check('plan du site : jamais d\'adresse d\'administration', !/\/admin/.test(xml));
@@ -332,6 +332,7 @@ const ldBlocks = (html: string): any[] => [...html.matchAll(/<script type="appli
       ['/contact', 'Contact | Albasse Shopping', /contact@albasseshopping\.com/],
       ['/conditions-de-retour', 'Conditions de retour | Albasse Shopping', /72 heures.*frais de retour sont à notre charge/s],
       ['/confidentialite', 'Politique de confidentialité | Albasse Shopping', /Dernière mise à jour/],
+      ['/conditions-generales', 'Conditions générales | Albasse Shopping', /48 heures.*8h30 à 16h/s],
     ] as [string, string, RegExp][]) {
       const { res, state } = await ask(ogPreview, path);
       const html = await res.text();
@@ -344,7 +345,7 @@ const ldBlocks = (html: string): any[] => [...html.matchAll(/<script type="appli
     check('/contact/ (avec la barre finale) : la même page, la même adresse canonique sans barre', (await slash.res.text()).includes('rel="canonical" href="https://www.albasseshopping.com/contact"'));
     const visitor = await ask(ogPreview, '/contact', CHROME);
     check('visiteur normal sur /contact : l\'application normale, rien de modifié', visitor.state.next === 1 && (await visitor.res.text()) === '<html>application</html>');
-    check('les 3 pages d\'information sont dans le plan du site', seo.STATIC_PAGES.includes('/contact') && seo.STATIC_PAGES.includes('/conditions-de-retour') && seo.STATIC_PAGES.includes('/confidentialite'));
+    check('les 4 pages d\'information sont dans le plan du site', seo.STATIC_PAGES.includes('/contact') && seo.STATIC_PAGES.includes('/conditions-generales') && seo.STATIC_PAGES.includes('/conditions-de-retour') && seo.STATIC_PAGES.includes('/confidentialite'));
     check('la page conditions de retour ne promet pas « retour gratuit » (les frais dépendent du cas)', !/retour gratuit/i.test(seo.infoPage(seo.infoPageDef('/conditions-de-retour')!)));
   }
 
@@ -432,7 +433,7 @@ const ldBlocks = (html: string): any[] => [...html.matchAll(/<script type="appli
   {
     const toml = readFileSync(new URL('../../netlify.toml', import.meta.url), 'utf8');
     const paths = [...toml.matchAll(/path = "([^"]+)"\s+function = "([^"]+)"/g)].map((m) => `${m[1]}=>${m[2]}`);
-    check('netlify.toml : accueil, produits, catégories, pages d\'information, plan du site, robots.txt', ['/=>og-preview', '/produit/*=>og-preview', '/categorie/*=>og-preview', '/contact=>og-preview', '/conditions-de-retour=>og-preview', '/confidentialite=>og-preview', '/sitemap.xml=>sitemap', '/robots.txt=>sitemap'].every((x) => paths.includes(x)), paths);
+    check('netlify.toml : accueil, produits, catégories, pages d\'information, plan du site, robots.txt', ['/=>og-preview', '/produit/*=>og-preview', '/categorie/*=>og-preview', '/contact=>og-preview', '/conditions-de-retour=>og-preview', '/conditions-generales=>og-preview', '/confidentialite=>og-preview', '/sitemap.xml=>sitemap', '/robots.txt=>sitemap'].every((x) => paths.includes(x)), paths);
   }
 
   console.log(`\n${ok} vérifications réussies${process.exitCode ? ' — AVEC DES ÉCHECS' : ''}`);

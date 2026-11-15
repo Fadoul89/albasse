@@ -185,9 +185,9 @@ const styles = StyleSheet.create({
   flagBtn: {},
   flagText: { color: '#f5c542', fontFamily: fonts.bodyMedium, fontSize: 12 },
   deleteBtn: { marginLeft: 'auto' },
-  deleteText: { color: colors.red, fontFamily: fonts.bodyMedium, fontSize: 12 },
+  deleteText: { color: colors.errorText, fontFamily: fonts.bodyMedium, fontSize: 12 },
   flaggedBadge: {
-    color: colors.red,
+    color: colors.errorText,
     fontFamily: fonts.bodyBold,
     fontSize: 10,
     backgroundColor: 'rgba(216,35,42,0.15)',

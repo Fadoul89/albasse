@@ -100,7 +100,7 @@ function ProductCards({ products, lang, onOpen, onAdd }: { products: AssistantPr
           <Pressable key={p.slug} testID="assistant-card" style={styles.card} onPress={() => onOpen(p.slug)} accessibilityRole="link" accessibilityLabel={`${t.card.see} ${p.name}`}>
             <View style={styles.cardImageWrap}>
               {p.image ? (
-                <Image source={{ uri: p.image }} style={styles.cardImage} contentFit="cover" transition={150} />
+                <Image accessibilityLabel={p.name} source={{ uri: p.image }} style={styles.cardImage} contentFit="cover" transition={150} />
               ) : (
                 <View style={[styles.cardImage, styles.cardNoImage]}>
                   <Text style={styles.cardNoImageText}>🛍️</Text>
@@ -201,7 +201,7 @@ function Bubble({
   return (
     <View style={styles.group}>
       <View style={[styles.row, mine ? styles.rowMine : styles.rowBot]}>
-        {!mine && <Image source={AVATAR} style={styles.smallAvatar} contentFit="cover" />}
+        {!mine && <Image accessibilityLabel="Zara, assistante de vente" source={AVATAR} style={styles.smallAvatar} contentFit="cover" />}
         <View style={styles.bubbleColumn}>
           {mine ? (
             <LinearGradient colors={[colors.gold, colors.goldLight]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.bubble, styles.bubbleMine]}>
@@ -392,7 +392,7 @@ export function AssistantPanel() {
     >
       <LinearGradient colors={[colors.panelAlt, colors.panel]} style={[styles.header, compact && styles.headerCompact]}>
         <View style={[styles.avatarRing, compact && styles.avatarRingCompact]}>
-          <Image source={AVATAR} style={styles.headerAvatar} contentFit="cover" />
+          <Image accessibilityLabel="Zara, assistante de vente" source={AVATAR} style={styles.headerAvatar} contentFit="cover" />
           <View style={styles.onlineDot} />
         </View>
         <View style={styles.headerText}>
@@ -448,7 +448,7 @@ export function AssistantPanel() {
 
         {loading ? (
           <View style={[styles.row, styles.rowBot]}>
-            <Image source={AVATAR} style={styles.smallAvatar} contentFit="cover" />
+            <Image accessibilityLabel="Zara, assistante de vente" source={AVATAR} style={styles.smallAvatar} contentFit="cover" />
             <View style={[styles.bubble, styles.bubbleBot]}>
               <TypingDots label={t.ui.writing} />
             </View>
@@ -627,7 +627,7 @@ const styles = StyleSheet.create({
   addButtonPressed: { opacity: 0.7, transform: [{ scale: 0.96 }] },
   addText: { color: '#1b1405', fontFamily: fonts.bodyBold, fontSize: 13 },
   cardSee: { color: colors.gold, fontFamily: fonts.bodySemiBold, fontSize: 12, paddingHorizontal: 9, marginTop: 6 },
-  cardOut: { color: colors.error, fontFamily: fonts.bodySemiBold, fontSize: 12, paddingHorizontal: 9, marginTop: 6 },
+  cardOut: { color: colors.errorText, fontFamily: fonts.bodySemiBold, fontSize: 12, paddingHorizontal: 9, marginTop: 6 },
   cardLow: { color: '#ffb347', fontFamily: fonts.bodySemiBold, fontSize: 11.5, paddingHorizontal: 9, marginTop: 5 },
 
   inputBar: {

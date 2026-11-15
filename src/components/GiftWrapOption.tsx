@@ -21,7 +21,7 @@ export function GiftWrapOption({ checked, onToggle }: { checked: boolean; onTogg
       accessibilityLabel={`Emballage cadeau, ${formatXAF(GIFT_WRAP_FEE)}`}
       testID="gift-wrap-option"
     >
-      <Image source={GIFT_IMAGE} style={styles.image} contentFit="contain" />
+      <Image accessibilityLabel="Emballage cadeau" source={GIFT_IMAGE} style={styles.image} contentFit="contain" />
       <View style={styles.text}>
         <Text style={styles.title}>Emballage cadeau</Text>
         <Text style={styles.sub}>Votre commande arrive joliment emballée</Text>

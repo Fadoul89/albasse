@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { hasCookieConsent } from './cookieConsent';
 
 const PIXEL_ID = 'DA3G12RC77U6E65BDEGG';
 
@@ -10,8 +11,10 @@ declare global {
 
 let initialized = false;
 
+// Le pixel ne se charge qu'avec l'accord du visiteur (bandeau cookies).
 export function initTikTokPixel() {
   if (Platform.OS !== 'web' || typeof window === 'undefined' || initialized) return;
+  if (!hasCookieConsent()) return;
   initialized = true;
 
   const w = window as any;
@@ -56,5 +59,18 @@ export function initTikTokPixel() {
 
 export function trackTikTokEvent(event: string, params?: Record<string, unknown>) {
   if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+  if (!hasCookieConsent()) return;
   (window as any).ttq?.track(event, params);
+}
+
+/** Le visiteur change d'avis : on prévient TikTok (plus aucun événement n'est envoyé, voir trackTikTokEvent). */
+export function stopTikTokPixel() {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+  const ttq = (window as any).ttq;
+  try {
+    ttq?.revokeConsent?.();
+    ttq?.disableCookie?.();
+  } catch {
+    /* le pixel n'était pas chargé */
+  }
 }

@@ -79,7 +79,7 @@ export function ZaraAdsAudiences({ products, categories }: { products: Product[]
             </View>
             {ad ? (
               <View style={styles.adBox}>
-                {!!ad.product.images?.[0] && <Image source={{ uri: ad.product.images[0] }} style={styles.thumb} contentFit="cover" />}
+                {!!ad.product.images?.[0] && <Image accessibilityLabel={ad.product.name} source={{ uri: ad.product.images[0] }} style={styles.thumb} contentFit="cover" />}
                 <View style={styles.adText}>
                   <Text style={styles.adName} numberOfLines={2} testID={`zara-audience-${a}-name`}>
                     {ad.product.name.trim()}
