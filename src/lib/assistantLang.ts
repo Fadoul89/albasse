@@ -159,6 +159,17 @@ export function arabicCityToLatin(text: string): string | null {
 // Catégories : noms en arabe, mots qui les désignent
 // ---------------------------------------------------------------------------------------------
 
+// Catégories RENOMMÉES par le patron : Zara garde ses clés d'origine (« montre », « bebe-et-maternite ») pour tous ses textes, ses cadeaux et ses conseils ;
+// l'adresse réelle de la catégorie dans la boutique est « montre-accessoires » (MONTRE & ACCESSOIRES) et « produits-pour-bebes » (Produits pour bébés).
+// Sans cette correspondance, Zara ne reconnaissait plus les montres (cadeau pour lui, « une montre »…) ni les articles pour bébé. (15 novembre 2026)
+// (« Maison & Mobilier » → « Maison & Bureau » est traité à part : les clés « maison-bureau » existent déjà plus bas.)
+export const SHOP_SLUG_TO_KEY: Record<string, string> = { 'montre-accessoires': 'montre', 'produits-pour-bebes': 'bebe-et-maternite' };
+export const KEY_TO_SHOP_SLUG: Record<string, string> = Object.fromEntries(Object.entries(SHOP_SLUG_TO_KEY).map(([slug, key]) => [key, slug]));
+/** La clé de Zara d'une catégorie de la boutique (« montre-accessoires » → « montre »). Les autres ne changent pas. */
+export const zaraKey = (shopSlug: string): string => SHOP_SLUG_TO_KEY[shopSlug] ?? shopSlug;
+/** L'adresse réelle d'une catégorie de la boutique d'après la clé de Zara (« montre » → « montre-accessoires »), pour ouvrir sa page. */
+export const shopSlugOf = (key: string): string => KEY_TO_SHOP_SLUG[key] ?? key;
+
 export const CATEGORY_AR: Record<string, string> = {
   'agriculture-jardinage': 'الزراعة والبستنة',
   'bebe-et-maternite': 'الطفل والأمومة',
@@ -168,6 +179,8 @@ export const CATEGORY_AR: Record<string, string> = {
   lunettes: 'نظارات',
   'maison-mobilier': 'المنزل والأثاث',
   'maison-bureau': 'المنزل والمكتب',
+  'machines-et-equipements-professionnels': 'آلات ومعدات مهنية',
+  'ensemble-safari': 'طقم سفاري',
   montre: 'ساعات',
   'ordinateur-portable': 'حواسيب محمولة',
   parfum: 'عطور',

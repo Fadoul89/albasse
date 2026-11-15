@@ -31,7 +31,7 @@ async function serve(request: Request, context: Context): Promise<Response> {
   try {
     const [categories, products] = await Promise.all([
       rows<SeoCategory>(supabaseUrl, supabaseKey, 'categories?select=name,slug&order=sort_order.asc'),
-      rows<SeoProduct>(supabaseUrl, supabaseKey, 'products?is_active=eq.true&select=name,slug,price,images,stock,created_at&order=created_at.desc&limit=5000'),
+      rows<SeoProduct>(supabaseUrl, supabaseKey, 'products?is_active=eq.true&select=name,slug,price,description,images,stock,created_at&order=created_at.desc&limit=5000'),
     ]);
     // jamais de plan vide : si la base ne répond pas, on garde le fichier de la mise en ligne
     if (!categories || !products || products.length === 0) return context.next();

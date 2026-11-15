@@ -2735,7 +2735,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     await ask(page, 'Je veux faire une cadeau a mon marie', /Quel genre de cadeau pour lui \?/);
     check('cadeau pour mon mari : Zara pose une question avant de montrer des articles (aucune fiche produit)', (await cardsOf(page).count()) === before);
     const types = await chipLabels(page);
-    check('quel genre de cadeau : montre, parfum, chaussures... + « je ne sais pas »', types[0] === 'Montre' && types[1] === 'Parfum' && types[2] === 'Chaussures' && types.length >= 5 && types[types.length - 1] === '🤷 Je ne sais pas', types);
+    check('quel genre de cadeau : montre, parfum, chaussures... + « je ne sais pas »', types[0] === 'MONTRE & ACCESSOIRES' && types[1] === 'Parfum' && types[2] === 'Chaussures' && types.length >= 5 && types[types.length - 1] === '🤷 Je ne sais pas', types);
     await page.screenshot({ path: path.join(OUT, 'A2-quel-cadeau.png') });
     await tap(page, 'Montre', /Quel est votre budget(?:, Fatimé)? \?/);
     check('une seule question a la fois : maintenant le budget, toujours aucun article', (await cardsOf(page).count()) === before);
@@ -2770,7 +2770,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     before = await cardsOf(page).count();
     await ask(page, 'pour homme', /Quel type d’article pour lui \?/);
     const shopTypes = await chipLabels(page);
-    check("« pour homme » : Zara demande quel type d'article (chaussures, montre, parfum...)", (await cardsOf(page).count()) === before && shopTypes[0] === 'Chaussures' && shopTypes[1] === 'Montre' && shopTypes[shopTypes.length - 1] === '🤷 Je ne sais pas', shopTypes);
+    check("« pour homme » : Zara demande quel type d'article (chaussures, montre, parfum...)", (await cardsOf(page).count()) === before && shopTypes[0] === 'Chaussures' && shopTypes[1] === 'MONTRE & ACCESSOIRES' && shopTypes[shopTypes.length - 1] === '🤷 Je ne sais pas', shopTypes);
     await tap(page, 'Je ne sais pas', /Quel est votre budget(?:, Fatimé)? \?/);
     await tap(page, 'Moins de 10 000', /Voici mes meilleurs choix à moins de 10\s?000 FCFA(?:, Fatimé)? :|Je n’ai rien à moins de 10\s?000 FCFA pour cette sélection/);
     prices = await pricesSince(page, before);

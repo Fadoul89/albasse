@@ -20,7 +20,7 @@ import { colors, fonts, radius, spacing } from '../theme';
 import { navigationRef } from '../navigation/navigationRef';
 import { useAssistantStore, type ChatAction, type ChatImage, type ChatMessage } from '../store/assistantStore';
 import type { AssistantProduct } from '../lib/assistantData';
-import { hasArabic, type Lang } from '../lib/assistantLang';
+import { hasArabic, shopSlugOf, type Lang } from '../lib/assistantLang';
 import { currentDevice, markIntent } from '../lib/assistantAttribution';
 import { texts } from '../lib/assistantText';
 import { openInChrome } from '../lib/pwaInstallPrompt';
@@ -319,7 +319,7 @@ export function AssistantPanel() {
         return;
       // la catégorie elle-même s'affiche dans le chat (Zara) ; seul « Page » ouvre la page de la catégorie
       case 'categoryPage':
-        if (action.payload) go(() => navigationRef.navigate('Category', { slug: action.payload as string }));
+        if (action.payload) go(() => navigationRef.navigate('Category', { slug: shopSlugOf(action.payload as string) })); // la clé de Zara (« montre ») → l'adresse réelle (« montre-accessoires »)
         return;
       // ancien bouton « Voir mon panier » : il n'y a plus de panier, la commande commencée reprend
       case 'cart':
