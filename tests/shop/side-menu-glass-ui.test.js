@@ -96,6 +96,7 @@ async function visitor(b, { who = 'client', at = '2026-11-16T10:00:00+01:00', de
 }
 
 let shot = 0;
+let BROWSER = null;
 const openMenu = async (page) => {
   // la fenêtre « Télécharge l'app » du site peut s'ouvrir par-dessus : « Plus tard »
   const later = page.getByText('Plus tard', { exact: true });
@@ -120,6 +121,7 @@ const lum = (rgb) => {
   const server = process.env.BASE_URL ? null : spawn('node', [path.join(__dirname, '..', 'zara', 'serve.js'), path.resolve(__dirname, dist), port], { stdio: 'ignore' });
   await sleep(1000);
   const b = await chromium.launch();
+  BROWSER = b;
 
   // les vraies catégories : les principales (dans l'ordre de l'admin) et leurs sous-catégories
   const cats = await get('categories?select=id,slug,name,parent_id,sort_order');
@@ -305,7 +307,9 @@ const lum = (rgb) => {
   if (server) server.kill();
   console.log(ok ? '\nTOUT EST BON' : '\nIL Y A DES ECHECS');
   process.exit(ok ? 0 : 1);
-})().catch((e) => {
+})().catch(async (e) => {
   console.error('ERREUR', e);
+  // une photo de chaque page ouverte au moment du blocage, pour comprendre
+  for (const ctx of BROWSER ? BROWSER.contexts() : []) for (const pg of ctx.pages()) await pg.screenshot({ path: path.join(OUT, `menu-blocage-${++shot}.png`) }).catch(() => {});
   process.exit(1);
 });

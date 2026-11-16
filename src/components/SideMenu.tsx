@@ -9,7 +9,7 @@
 //  - en bas : « Mon compte » et « Se déconnecter » (client connecté).
 // Voir lib/sideMenu.ts (ce que le menu montre) et docs/menu-accueil.md.
 import React from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet, Modal, Animated, Platform, useWindowDimensions } from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet, Modal, Animated, Platform, Linking, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -22,6 +22,10 @@ import type { Category } from '../types';
 import { useCategories } from '../hooks/useCategories';
 import { MENU_TEXT, menuActive, menuCategories, menuHighlight, menuProfile, menuSubs, pointsLabel } from '../lib/sideMenu';
 import { CURVE_INSET, CurvedGlass } from './CurvedGlass';
+import { MenuAdCard } from './MenuAdCard';
+import { useStoreSettings } from '../hooks/useStoreSettings';
+import { menuAdItems, menuAdTarget } from '../lib/menuAd';
+import type { AdItem } from '../types';
 
 const ICONS: Record<string, string> = {
   costumes: '🕴️', chemises: '👔', cravates: '🎀', chaussures: '👟', montres: '⌚', montre: '⌚', accessoires: '💍', parfum: '🧴', vetements: '👔',
@@ -100,6 +104,9 @@ export function SideMenu({ visible, onClose, categories }: { visible: boolean; o
   const cats = menuCategories(categories);
   const active = menuActive(categories, useOpenCategorySlug());
   const highlight = visible ? menuHighlight(Date.now()) : null;
+  // la publicité mouvementée choisie dans l'admin passe AVANT la carte automatique « À la une »
+  const { settings } = useStoreSettings();
+  const ads = menuAdItems(settings.menu_ad_items);
   // la catégorie dont les sous-catégories sont montrées (une seule à la fois) : au départ, celle de la page ouverte si elle en a
   const [openId, setOpenId] = React.useState<string | null>(null);
   React.useEffect(() => {
@@ -131,6 +138,18 @@ export function SideMenu({ visible, onClose, categories }: { visible: boolean; o
       useAssistantStore.setState({ open: true, teaserDismissed: true });
       void z.choose({ label: texts(z.lang).chip.promotions, kind: 'say', payload: 'promotions' });
     });
+
+  // une image de la publicité : un article ou une catégorie s'ouvre dans le site ; une autre page du site à sa place ; WhatsApp ou un autre site à part
+  const openAd = (item: AdItem) => {
+    const target = menuAdTarget(item.link);
+    if (!target) return;
+    go(() => {
+      if (target.kind === 'product') navigation.navigate('Product', { slug: target.slug });
+      else if (target.kind === 'category') navigation.navigate('Category', { slug: target.slug });
+      else if (target.kind === 'page' && Platform.OS === 'web' && typeof window !== 'undefined') window.location.assign(target.path);
+      else if (target.kind === 'external') void Linking.openURL(target.url);
+    });
+  };
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -244,8 +263,10 @@ export function SideMenu({ visible, onClose, categories }: { visible: boolean; o
               );
             })}
 
-            {/* « À la une » : seulement pendant un vrai moment fort */}
-            {highlight ? (
+            {/* la publicité mouvementée du patron ; sinon « À la une », seulement pendant un vrai moment fort */}
+            {ads.length > 0 ? (
+              <MenuAdCard items={ads} onOpen={openAd} />
+            ) : highlight ? (
               <Pressable style={[styles.card, shadow(0.28, 18)]} onPress={openPromotions} accessibilityRole="button" accessibilityLabel={`${highlight.title}, ${highlight.when} : voir les promotions avec Zara`} testID="menu-highlight">
                 <View style={styles.cardLeft}>
                   <Text style={styles.cardTag}>{`${MENU_TEXT.highlightTag} · ${highlight.monthTag}`}</Text>

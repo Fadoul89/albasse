@@ -34,6 +34,7 @@ import { ZaraAdsDelay } from '../../components/ZaraAdsDelay';
 import { ZaraAdsAudiences } from '../../components/ZaraAdsAudiences';
 import { ZaraPromoPicker } from '../../components/ZaraPromoPicker';
 import type { SmartPromotion, AdItem } from '../../types';
+import { MENU_AD_MAX, MENU_AD_TEXT } from '../../lib/menuAd';
 
 type TargetType = 'category' | 'product' | 'none';
 
@@ -86,8 +87,11 @@ export function AdminPromotionsScreen() {
     new (window as any).Audio(voiceoverUrl).play();
   };
 
-  type AdSlot = 'left' | 'right';
+  type AdSlot = 'left' | 'right' | 'menu';
   const [leftAdItems, setLeftAdItems] = useState<AdItem[]>([]);
+  // publicité mouvementée du menu ☰ (add-menu-ad.sql) : la colonne existe-t-elle déjà ?
+  const hasMenuAdColumn = 'menu_ad_items' in storeSettings;
+  const [menuAdItems, setMenuAdItems] = useState<AdItem[]>([]);
   const [rightAdItems, setRightAdItems] = useState<AdItem[]>([]);
   const [uploadingAd, setUploadingAd] = useState<AdSlot | null>(null);
   const [savingAds, setSavingAds] = useState(false);
@@ -95,11 +99,13 @@ export function AdminPromotionsScreen() {
   useEffect(() => {
     setLeftAdItems(storeSettings.left_ad_items ?? []);
     setRightAdItems(storeSettings.right_ad_items ?? []);
+    setMenuAdItems(storeSettings.menu_ad_items ?? []);
   }, [storeSettings]);
 
   const SETTERS: Record<AdSlot, React.Dispatch<React.SetStateAction<AdItem[]>>> = {
     left: setLeftAdItems,
     right: setRightAdItems,
+    menu: setMenuAdItems,
   };
 
   const handleAddAdImages = async (slot: AdSlot) => {
@@ -142,7 +148,8 @@ export function AdminPromotionsScreen() {
     setSavingAds(true);
     const { error } = await supabase
       .from('store_settings')
-      .update({ left_ad_items: leftAdItems, right_ad_items: rightAdItems })
+      // la publicité du menu n'est envoyée que si sa colonne existe (sinon l'enregistrement des autres publicités échouerait)
+      .update(hasMenuAdColumn ? { left_ad_items: leftAdItems, right_ad_items: rightAdItems, menu_ad_items: menuAdItems.slice(0, MENU_AD_MAX) } : { left_ad_items: leftAdItems, right_ad_items: rightAdItems })
       .eq('id', 1);
     setSavingAds(false);
     if (error) {
@@ -392,6 +399,33 @@ export function AdminPromotionsScreen() {
                 loading={savingAds}
                 style={{ marginTop: spacing.sm }}
               />
+            </View>
+
+            {/* publicité mouvementée du menu ☰ (16 novembre 2026) */}
+            <View style={styles.voiceoverBox} testID="admin-menu-ad">
+              <Text style={styles.formTitle}>{MENU_AD_TEXT.section}</Text>
+              <Text style={styles.helperText}>{MENU_AD_TEXT.help}</Text>
+              {hasMenuAdColumn ? (
+                <>
+                  <AdItemsEditor
+                    title={MENU_AD_TEXT.editorTitle}
+                    items={menuAdItems}
+                    uploading={uploadingAd === 'menu'}
+                    onAdd={() => handleAddAdImages('menu')}
+                    onLinkChange={(i, v) => updateAdLink('menu', i, v)}
+                    onRemove={(i) => removeAdItem('menu', i)}
+                  />
+                  <GoldButton
+                    label="Enregistrer la publicité du menu"
+                    variant="outline"
+                    onPress={handleSaveAds}
+                    loading={savingAds}
+                    style={{ marginTop: spacing.sm }}
+                  />
+                </>
+              ) : (
+                <Text style={styles.helperText} testID="admin-menu-ad-missing">{MENU_AD_TEXT.missing}</Text>
+              )}
             </View>
 
             <Text style={styles.formTitle}>{editingId ? 'Modifier la promotion' : 'Nouvelle promotion'}</Text>

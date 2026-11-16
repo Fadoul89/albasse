@@ -48,6 +48,10 @@ export function useStoreSettings() {
             ...(data as StoreSettings),
             left_ad_items: (data as StoreSettings).left_ad_items ?? [],
             right_ad_items: (data as StoreSettings).right_ad_items ?? [],
+            // la colonne n'existe qu'après add-menu-ad.sql : sans elle, la clé reste absente (l'admin le sait)
+            ...('menu_ad_items' in (data as object)
+              ? { menu_ad_items: Array.isArray((data as StoreSettings).menu_ad_items) ? (data as StoreSettings).menu_ad_items : [] }
+              : {}),
           };
           setSettings(lastSettings);
         }
