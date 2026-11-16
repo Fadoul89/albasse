@@ -55,3 +55,19 @@ Le même menu ☰, dans le style de la vidéo « Curved Sidebar ». Seul le menu
   `src/lib/sideMenu.ts` (`menuSubs`, `menuActive`, `menuHighlight`). Aucun SQL.
 - Tests : `tests/email/side-menu.test.ts` (28) ; navigateur `tests/shop/side-menu-glass-ui.test.js` (vraies catégories, compte simulé,
   dates fixées au 16 novembre et au 15 décembre 2026) ; partie `C` de `tests/zara/zara-ui.test.js`.
+
+## Publicité mouvementée dans le menu (16 novembre 2026, « Possibilité de mettre publicité personnalisée ici » puis « Publicité mouvementée »)
+- **Où la choisir** : Admin › Promotions intelligentes › **« 📣 Publicité du menu ☰ »** : ajouter des images (format conseillé : paysage,
+  environ 1 200 × 700) et le lien de chacune (un article, une catégorie, WhatsApp…), puis « Enregistrer la publicité du menu ». 12 images au plus.
+- **Dans le menu** : la publicité remplace la carte « À la une ». Une nouvelle image toutes les **5 secondes** : elle glisse depuis la droite,
+  avec un **zoom lent**, un **reflet de lumière** qui passe, une **barre dorée** qui se remplit et des points qui disent quelle image est montrée.
+  « PUB » en haut à gauche ; « Voir › » fait un petit saut quand l'image a un lien. Après la dernière image, la première revient sans saut.
+- **Liens** : un article ou une catégorie du site s'ouvre dans le site (le menu se ferme) ; une autre page du site à sa place ;
+  WhatsApp ou un autre site s'ouvre à part. Une image sans lien n'est pas cliquable.
+- **« Moins d'animations »** (réglage du téléphone ou du navigateur) : ni zoom, ni reflet, ni saut ; les images changent sans glisser.
+- **Sans image choisie** : la carte automatique « À la une » (Black Friday, Tabaski… à leurs dates), sinon rien.
+- **Installation (une fois)** : `add-menu-ad.sql` dans Supabase › SQL Editor : **une colonne** `store_settings.menu_ad_items` (liste, 12 au plus),
+  aucune nouvelle table, mêmes droits que les autres réglages. Avant le script : rien ne change, l'admin dit de lancer le script, et les
+  publicités de l'accueil s'enregistrent comme avant.
+- Code : `src/components/MenuAdCard.tsx`, `src/lib/menuAd.ts`, branchés dans `src/components/SideMenu.tsx` et `src/screens/admin/AdminPromotionsScreen.tsx`.
+- Tests : `tests/email/menu-ad.test.ts` (14), `sh tests/sql/run-menu-ad.sh` (8, Postgres local jetable), navigateur `tests/shop/menu-ad-ui.test.js`.

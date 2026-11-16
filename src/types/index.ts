@@ -375,6 +375,8 @@ export interface StoreSettings {
   invoice_legal_line?: string | null;
   left_ad_items: AdItem[];
   right_ad_items: AdItem[];
+  // publicité mouvementée du menu ☰ (script add-menu-ad.sql) : absente tant que la colonne n'existe pas
+  menu_ad_items?: AdItem[];
   updated_at: string;
 }
 
