@@ -169,10 +169,10 @@ export function falseClaims(text: string, f: Facts): string[] {
   const hasScarcity = f.stock !== null && f.stock >= 1 && f.stock <= LOW_STOCK_MAX;
   if (!hasScarcity && /stock limit|dernières pièces|derniers exemplaires|plus que \d+ en stock|presque épuisé|il n.en reste/.test(t)) out.push("rareté");
   if (!hasUrgency && /dernière chance|offre limitée|dépêchez|plus que \d+ ?h|se termine|ce soir seulement|aujourd.hui seulement|jusqu.à minuit/.test(t)) out.push("urgence");
-  const people = [...t.matchAll(/(\d[\d\s  ]*)\s*personnes/g)].map((m) => Number(m[1].replace(/\D/g, "")));
+  const people = [...t.matchAll(/(\d[\d\s\u00a0\u202f]*)\s*personnes/g)].map((m) => Number(m[1].replace(/\D/g, "")));
   if (people.some((n) => n !== f.views)) out.push("nombre de personnes");
   if (/personnes (l.ont |ont )?(acheté|commandé)|déjà vendu|clients satisfaits/.test(t)) out.push("achats");
-  const fcfaNums = [...t.matchAll(/(\d[\d\s  ]*)\s*fcfa/g)].map((m) => Number(m[1].replace(/\D/g, ""))).filter((n) => n > 0);
+  const fcfaNums = [...t.matchAll(/(\d[\d\s\u00a0\u202f]*)\s*fcfa/g)].map((m) => Number(m[1].replace(/\D/g, ""))).filter((n) => n > 0);
   const known = new Set([f.price, f.oldPrice, f.saving].filter((n): n is number => typeof n === "number" && n > 0).map((n) => Math.round(n)));
   if (f.hasProduct && fcfaNums.some((n) => !known.has(n))) out.push("prix");
   return out;
