@@ -1,5 +1,5 @@
 // Menu ☰ de l'accueil : le profil du client avec ses points, puis les catégories une à une (src/lib/sideMenu.ts).
-import { MENU_TEXT, menuCategories, menuProfile, pointsLabel } from '../../src/lib/sideMenu.ts';
+import { MENU_TEXT, menuActive, menuCategories, menuHighlight, menuProfile, menuSubs, pointsLabel } from '../../src/lib/sideMenu.ts';
 
 let ok = 0;
 let ko = 0;
@@ -40,6 +40,23 @@ check('la liste d\'origine n\'est pas modifiée', cats.length === 5 && (cats[0] 
 // --- textes ------------------------------------------------------------------------------------------------------------------------------------
 check('titres : « Profil client » puis « Catégories »', /Profil client/.test(MENU_TEXT.profileTitle) && /Catégories/.test(MENU_TEXT.categories));
 check('visiteur : « Se connecter » et « Créer un compte »', MENU_TEXT.login === 'Se connecter' && MENU_TEXT.register === 'Créer un compte');
+
+// --- menu « verre courbé » (16 novembre 2026) : sous-catégories, catégorie de la page, carte « À la une » ------------------------------------------
+const tree = [cat('1', 'Vêtements', 1), cat('4', 'Chemises', 2, '1'), cat('6', 'Tissus', 1, '1'), cat('7', ' ', 3, '1'), cat('2', 'Montre', 2), cat('3', 'Parfum', 3)];
+check('sous-catégories d\'une catégorie : dans l\'ordre choisi (Tissus puis Chemises), sans nom écartée', menuSubs(tree, '1').map((c) => c.name).join('|') === 'Tissus|Chemises', menuSubs(tree, '1').map((c) => c.name));
+check('catégorie sans sous-catégorie : aucune (pas de flèche)', menuSubs(tree, '2').length === 0 && menuSubs(tree, 'inconnue').length === 0);
+check('page d\'une sous-catégorie (chemises) : sa catégorie (Vêtements) s\'ouvre et Chemises est mise en avant', JSON.stringify(menuActive(tree, 'chemises')) === JSON.stringify({ mainId: '1', activeId: '4' }), menuActive(tree, 'chemises'));
+check('page d\'une catégorie principale (montre) : elle-même', JSON.stringify(menuActive(tree, 'montre')) === JSON.stringify({ mainId: '2', activeId: '2' }));
+check('autre page (accueil) ou adresse inconnue : rien de mis en avant', menuActive(tree, null) === null && menuActive(tree, undefined) === null && menuActive(tree, 'nimporte-quoi') === null);
+const bf = menuHighlight(Date.parse('2026-11-16T10:00:00Z'));
+check('16 novembre 2026 : carte « BLACK FRIDAY », « Le 27 novembre », NOV.', !!bf && bf.key === 'blackFriday' && bf.title === 'BLACK FRIDAY' && bf.when === 'Le 27 novembre' && bf.monthTag === 'NOV.' && bf.emoji === '🖤', bf);
+check('le jour même (27 novembre) : toujours « Le 27 novembre »', menuHighlight(Date.parse('2026-11-27T15:00:00Z'))?.when === 'Le 27 novembre');
+check('après le Black Friday (15 décembre) : pas de carte (rien d\'inventé)', menuHighlight(Date.parse('2026-12-15T10:00:00Z')) === null);
+check('avant la période (1er novembre, plus de 21 jours avant) : pas de carte', menuHighlight(Date.parse('2026-11-01T10:00:00Z')) === null);
+const ram = menuHighlight(Date.parse('2027-02-20T10:00:00Z'));
+check('Ramadan 2027 commencé le 8 février : « Depuis le 8 février », FÉVR.', !!ram && ram.key === 'ramadan' && ram.when === 'Depuis le 8 février' && ram.monthTag === 'FÉVR.', ram);
+check('textes : CATÉGORIES, Tout voir, Mon compte, Se déconnecter, À LA UNE', MENU_TEXT.categoriesLabel === 'CATÉGORIES' && MENU_TEXT.seeAll === 'Tout voir' && MENU_TEXT.account === 'Mon compte' && MENU_TEXT.signOut === 'Se déconnecter' && MENU_TEXT.highlightTag === 'À LA UNE');
+check('flèche des sous-catégories : une phrase claire pour les lecteurs d\'écran', MENU_TEXT.openSubs('Montre') === 'Voir les sous-catégories de Montre' && MENU_TEXT.closeSubs('Montre') === 'Cacher les sous-catégories de Montre');
 
 console.log(`${ok} contrôles réussis, ${ko} échec(s)`);
 process.exit(ko ? 1 : 0);

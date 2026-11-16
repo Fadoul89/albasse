@@ -37,3 +37,21 @@ Demande du patron (15 novembre 2026) : « Un menu comme Jumia : le profil du cli
 - Seulement un mouvement à l'écran : le téléphone ne vibre pas. La taille et la place des boutons ne changent pas, et ils marchent comme avant.
 - Pas de mouvement pour les clients qui ont demandé « moins d'animations » (réglage du téléphone ou du navigateur).
 - Code : `src/components/VibrateView.tsx`, branché dans `src/screens/ProductScreen.tsx`. Tests : partie `C` de `tests/zara/zara-ui.test.js` (les deux boutons vibrent, taille inchangée, « Commander » ouvre toujours la commande, « moins d'animations » = aucun mouvement).
+
+## Menu « verre courbé » (16 novembre 2026, « Le menu à côté je veux comme ça »)
+Le même menu ☰, dans le style de la vidéo « Curved Sidebar ». Seul le menu change : le reste du site garde ses couleurs bleu et or.
+- **Le panneau** : du verre dépoli (le site se voit flou derrière) aux bords gauche et droit légèrement creusés, avec un fin liseré blanc,
+  posé à gauche avec une petite marge. Il arrive en glissant un peu. Le site reste visible à droite ; toucher à côté ferme le menu.
+- **En haut** : 💎 ALBASSE et le bouton pour fermer (|←, en haut à droite du panneau).
+- **Le profil** (client connecté) : sa photo avec un point vert, son nom, son numéro client et son palier (🥉 Bronze…), ses points et la barre
+  « … pts avant le palier … ». Toucher le profil ouvre **Mon compte**. Un visiteur voit toujours « Se connecter » / « Créer un compte ».
+- **CATÉGORIES** : une ligne par catégorie principale, dans l'ordre de l'administration. Toucher le **nom** ouvre toujours la page de la catégorie.
+  Une catégorie qui a des sous-catégories a une petite flèche : elle les montre **en arbre** (« Tout voir » puis chaque sous-catégorie), une seule
+  catégorie ouverte à la fois. Sur la page d'une catégorie ou d'une sous-catégorie, le menu s'ouvre sur elle et la met en avant (verre blanc).
+- **« À la une »** : une carte seulement pendant un **vrai moment fort** de l'année, aux mêmes dates que Zara (`lib/assistantOccasions.ts`) :
+  Black Friday (21 jours avant), Tabaski, Ramadan, Korité, Saint-Valentin. Elle ouvre Zara sur les promotions réelles. Hors de ces périodes : pas de carte.
+- **En bas** (client connecté) : **Mon compte** et **Se déconnecter**.
+- Code : `src/components/SideMenu.tsx`, `src/components/CurvedGlass.tsx` (le verre courbé, effet web ; hors web un panneau clair arrondi),
+  `src/lib/sideMenu.ts` (`menuSubs`, `menuActive`, `menuHighlight`). Aucun SQL.
+- Tests : `tests/email/side-menu.test.ts` (28) ; navigateur `tests/shop/side-menu-glass-ui.test.js` (vraies catégories, compte simulé,
+  dates fixées au 16 novembre et au 15 décembre 2026) ; partie `C` de `tests/zara/zara-ui.test.js`.
