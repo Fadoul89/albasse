@@ -4611,6 +4611,21 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const sandalesCat = cats.find((c) => c.id === sandales.category_id);
     console.log('info  suivi : produit', sandales.name.trim(), '| categorie', sandalesCat && sandalesCat.name, '| tailles', sandales.sizes.join(','), '| couleurs', sandales.colors.join(','));
     const sleepSec = (n) => sleep(n * 1000);
+    // recherche : l'article peut être en page 2 ou plus (20 articles par page depuis l'ajout des pages 1, 2, 3) : on tourne les pages jusqu'à lui
+    const clickInSearch = async (page, re) => {
+      const target = page.getByText(re).first();
+      for (let i = 0; i < 6; i++) {
+        try {
+          await target.waitFor({ state: 'visible', timeout: 4000 });
+          return target.click();
+        } catch (e) {}
+        const next = page.getByTestId('search-pages-next');
+        if (!(await next.count()) || (await next.getAttribute('aria-disabled')) === 'true') break;
+        await next.click();
+        await sleep(800);
+      }
+      return target.click();
+    };
     const touch = (pg, i = 0) => pg.mouse.move(120 + i * 7, 320 + i * 3);
     const openProduct = async (v, slug = sandales.slug) => {
       await v.page.goto(`${base}/produit/${slug}`, { waitUntil: 'load' });
@@ -4664,21 +4679,21 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const box = v.page.getByPlaceholder('Rechercher un produit…');
       await box.waitFor({ timeout: 25000 });
       await box.fill('sandales');
-      await v.page.getByText(/Sandales AL madjaz/i).first().click();
+      await clickInSearch(v.page, /Sandales AL madjaz/i);
       await v.page.waitForFunction((k) => { const p = JSON.parse(localStorage.getItem(k) || 'null'); return p && Object.keys(p.products).length > 0; }, PK, { timeout: 25000 });
       await touch(v.page, 1);
       await sleepSec(3.5);
       await v.page.goBack();
       await box.waitFor({ timeout: 15000 });
       await box.fill('clarks');
-      await v.page.getByText(/Clarks moccasin/i).first().click();
+      await clickInSearch(v.page, /Clarks moccasin/i);
       await sleepSec(1);
       await touch(v.page, 2);
       await sleepSec(3);
       await v.page.goBack();
       await box.waitFor({ timeout: 15000 });
       await box.fill('sandales');
-      await v.page.getByText(/Sandales AL madjaz/i).first().click();
+      await clickInSearch(v.page, /Sandales AL madjaz/i);
       await sleepSec(1.5);
       await touch(v.page, 3);
       await sleepSec(2);
