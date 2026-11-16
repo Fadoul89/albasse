@@ -6,8 +6,10 @@ import { ScreenHeader } from '../../components/ScreenHeader';
 import { supabase } from '../../lib/supabase';
 import { StoreSettingToggle } from '../../components/StoreSettingToggle';
 import { TelegramAbsentCard } from '../../components/TelegramAbsentCard';
+import { factLines, LEVER_KEYS, LEVER_LABELS, LEVER_REASONS, validLever, warningText, type LeverAvailability, type LeverFacts, type LeverKey } from '../../lib/marketingLevers';
 
 // Assistant marketing (admin) : écrit des publicités Facebook, TikTok, WhatsApp et Google à partir d'un article.
+// Psychologie de la vente : l'écran montre les VRAIS chiffres de l'article et ne propose que les leviers vrais (lib/marketingLevers).
 const CHANNELS = [
   { key: 'facebook', label: '📘 Facebook' },
   { key: 'tiktok', label: '🎵 TikTok' },
@@ -27,6 +29,11 @@ export function AdminMarketingScreen() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
+  const [lever, setLever] = useState<LeverKey>('auto');
+  const [facts, setFacts] = useState<LeverFacts | null>(null);
+  const [levers, setLevers] = useState<LeverAvailability[] | null>(null);
+  const [factsBusy, setFactsBusy] = useState(false);
   const [mailBusy, setMailBusy] = useState(false);
   const [mailResult, setMailResult] = useState<{ ok: boolean; text: string } | null>(null);
   const [promoBusy, setPromoBusy] = useState(false);
@@ -42,6 +49,41 @@ export function AdminMarketingScreen() {
       alive = false;
     };
   }, [profile?.is_admin]);
+
+  // les vrais chiffres et les leviers vrais de l'article choisi (lus par la fonction serveur) ; sans article : seulement le cadeau du chat
+  useEffect(() => {
+    if (!profile?.is_admin) return;
+    let alive = true;
+    setFacts(null);
+    if (!picked) {
+      setLevers([
+        ...(['social', 'loss', 'urgency', 'scarcity', 'trend'] as const).map((key) => ({ key, available: false, reason: 'no_product' })),
+        { key: 'reciprocity' as const, available: true },
+      ]);
+      return;
+    }
+    setLevers(null);
+    setFactsBusy(true);
+    Promise.resolve(supabase.functions.invoke('marketing-ai', { body: { action: 'facts', productId: picked.id } })).then(({ data }) => {
+      if (!alive) return;
+      setFactsBusy(false);
+      const d = data as { ok?: boolean; facts?: LeverFacts; levers?: LeverAvailability[] } | null;
+      if (d?.ok && d.facts && Array.isArray(d.levers)) {
+        setFacts(d.facts);
+        setLevers(d.levers);
+      } else {
+        setLevers([]); // fonction pas encore à jour : seulement « Automatique »
+      }
+    });
+    return () => {
+      alive = false;
+    };
+  }, [picked, profile?.is_admin]);
+
+  // un levier qui n'est plus vrai (autre article) : retour à « Automatique »
+  useEffect(() => {
+    setLever((cur) => validLever(cur, levers));
+  }, [levers]);
 
   const matches = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -62,17 +104,25 @@ export function AdminMarketingScreen() {
     setBusy(true);
     setError(null);
     setResult(null);
+    setWarning(null);
     const { data, error: err } = await supabase.functions.invoke('marketing-ai', {
-      body: { channel, productId: picked?.id ?? null, goal, note: '' },
+      body: { channel, productId: picked?.id ?? null, goal, note: '', lever },
     });
     setBusy(false);
-    const d = data as { ok?: boolean; text?: string; reason?: string } | null;
+    const d = data as { ok?: boolean; text?: string; reason?: string; warnings?: unknown } | null;
     if (err || !d?.ok || !d.text) {
-      setError(d?.reason === 'no_key' ? "La clé de l'IA n'est pas encore installée." : 'Impossible d’écrire le texte pour le moment. Réessayez dans un instant.');
+      setError(
+        d?.reason === 'no_key'
+          ? "La clé de l'IA n'est pas encore installée."
+          : d?.reason === 'lever'
+            ? "Ce levier n'est pas vrai pour cet article : choisissez-en un autre."
+            : 'Impossible d’écrire le texte pour le moment. Réessayez dans un instant.'
+      );
       return;
     }
     // pas de mise en forme markdown dans l'écran : on retire les étoiles du gras et de l'italique
     setResult(d.text.replace(/\*+/g, ''));
+    setWarning(warningText(d.warnings));
   };
 
   // E-mail de test (Brevo) vers l'adresse de l'administrateur : vérifie la clé, le domaine et l'expéditeur avant tout envoi aux clients.
@@ -136,6 +186,50 @@ export function AdminMarketingScreen() {
           </>
         )}
 
+        {picked ? (
+          <View style={styles.factsCard} testID="marketing-facts">
+            <Text style={styles.factsTitle}>Les vrais chiffres de l'article</Text>
+            {factsBusy ? <ActivityIndicator color={colors.gold} /> : null}
+            {factLines(facts).map((line) => (
+              <Text key={line} style={styles.factsLine}>
+                {line}
+              </Text>
+            ))}
+          </View>
+        ) : null}
+
+        <Text style={styles.label}>Levier psychologique</Text>
+        <View style={styles.row} testID="marketing-levers">
+          {LEVER_KEYS.map((key) => {
+            const info = key === 'auto' ? { available: true } : (levers ?? []).find((l) => l.key === key) ?? { available: false };
+            const on = lever === key;
+            return (
+              <Pressable
+                key={key}
+                style={[styles.chip, on && styles.chipActive, !info.available && styles.chipOff]}
+                onPress={() => info.available && setLever(key)}
+                disabled={!info.available}
+                role="radio"
+                aria-checked={on}
+                aria-disabled={!info.available}
+                testID={`marketing-lever-${key}`}
+              >
+                <Text style={[styles.chipText, on && styles.chipTextActive, !info.available && styles.chipTextOff]}>{LEVER_LABELS[key]}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        {(levers ?? []).some((l) => !l.available) ? (
+          <Text style={styles.leverHint} testID="marketing-levers-hint">
+            Barrés (pas vrais pour cet article) :{' '}
+            {(levers ?? [])
+              .filter((l) => !l.available)
+              .map((l) => `${LEVER_LABELS[l.key].replace(/^\S+\s/, '')} (${LEVER_REASONS[l.reason ?? ''] ?? 'pas vrai'})`)
+              .join(', ')}
+            .
+          </Text>
+        ) : null}
+
         <Text style={styles.label}>Objectif (facultatif)</Text>
         <TextInput value={goal} onChangeText={setGoal} placeholder="ex. fête des mères, nouvelle arrivée, promo du week-end" placeholderTextColor={colors.creamFaint} style={styles.input} />
 
@@ -148,6 +242,11 @@ export function AdminMarketingScreen() {
         {result ? (
           <View style={styles.result} testID="marketing-result">
             <Text style={styles.resultHint}>Touchez le texte pour le sélectionner et le copier.</Text>
+            {warning ? (
+              <Text style={styles.warning} testID="marketing-warning">
+                {warning}
+              </Text>
+            ) : null}
             <Text style={styles.resultText} selectable>
               {result}
             </Text>
@@ -209,6 +308,13 @@ const styles = StyleSheet.create({
   chipActive: { borderColor: colors.gold, backgroundColor: colors.panelAlt },
   chipText: { color: colors.creamMuted, fontFamily: fonts.bodyMedium, fontSize: 13 },
   chipTextActive: { color: colors.goldLight },
+  chipOff: { opacity: 0.45 },
+  chipTextOff: { textDecorationLine: 'line-through' },
+  leverHint: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 12, lineHeight: 17, marginTop: 6 },
+  factsCard: { backgroundColor: colors.panel, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: 12, marginTop: spacing.md, gap: 4 },
+  factsTitle: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 13, marginBottom: 2 },
+  factsLine: { color: colors.cream, fontFamily: fonts.body, fontSize: 13, lineHeight: 19 },
+  warning: { color: colors.errorText, fontFamily: fonts.bodySemiBold, fontSize: 13, lineHeight: 19, marginBottom: 8 },
   input: {
     backgroundColor: colors.panel,
     borderRadius: radius.md,

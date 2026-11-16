@@ -74,3 +74,53 @@ les visites plus de 1,5 s avant de montrer des fiches (sinon les fiches partent 
 - Règles : `node --import ./tests/zara/register.mjs tests/email/zara-views.test.ts`.
 - SQL (Postgres local jetable) : `sh tests/sql/run-most-viewed.sh` (une personne comptée une fois, admin exclu, articles inactifs exclus, 30 jours, aucune donnée de client, droits).
 - Navigateur : `PARTS=£` (bouton, ordre, vrai chiffre sur chaque fiche, arabe, script pas lancé, page d'un article).
+
+---
+
+# Côté communication : l'assistant marketing
+
+Demande du patron (16 novembre 2026, « psychologique côté communication ») : les mêmes principes dans les textes publicitaires
+qu'écrit l'**assistant marketing** (Admin › Marketing : Facebook, TikTok, WhatsApp, Google). Même règle : **rien d'inventé**.
+
+## Ce que voit l'administrateur
+
+1. **Les vrais chiffres de l'article**, lus dans la base par la fonction `marketing-ai` (action `facts`) : personnes en 30 jours
+   (et place parmi les plus regardés), prix et vraie économie (seulement pendant une vraie promotion), fin de la vente flash ou de la promotion, stock.
+2. **Un levier psychologique** : ✨ Automatique, 👀 Preuve sociale, 💰 Aversion à la perte, ⏰ Urgence, ⏳ Rareté, 🔥 Effet de mode, 🎁 Réciprocité.
+   Seuls les leviers **vrais** pour l'article peuvent être choisis ; les autres sont barrés, avec la raison.
+3. **Le texte** : chaque version commence par « Version N · <levier> ». « Automatique » écrit 2 versions avec les 2 meilleurs leviers vrais
+   (dans l'ordre : urgence, perte, preuve sociale, rareté, effet de mode, réciprocité).
+4. **Le contrôle** : si le texte de l'IA parle de « stock limité » sans stock bas, d'urgence sans date de fin, d'un autre nombre de personnes,
+   d'achats non prouvés ou d'un prix qui n'est pas celui de l'article, un avertissement rouge « Vérifiez avant de publier » s'affiche.
+
+## Quand un levier est vrai
+
+| Levier | Vrai si | Ce que l'IA reçoit |
+| --- | --- | --- |
+| Preuve sociale | au moins 50 personnes en 30 jours | « 1842 personnes ont regardé cet article ces 30 derniers jours » (« regardé », jamais « acheté ») |
+| Aversion à la perte | vraie promotion en cours (5 à 60 %) | « 40 000 FCFA au lieu de 50 000 FCFA : le client économise 10 000 FCFA » |
+| Urgence | vente flash ou promotion avec une date de fin | « cette remise se termine lundi 16 novembre à 19:45 (heure de N'Djamena) » |
+| Rareté | stock de 1 à 5 | « il n'en reste que 3 en stock » |
+| Effet de mode | parmi les 10 articles les plus regardés (et 50 personnes au moins) | « fait partie des 3 / 5 / 10 articles les plus regardés » |
+| Réciprocité | toujours (règle de la boutique) | le cadeau surprise des commandes passées dans le chat de Zara, sans valeur promise |
+
+Le levier demandé est revérifié par la fonction : un levier qui n'est pas vrai est refusé (`reason: "lever"`).
+L'ancien prix n'est plus cité hors d'une vraie promotion (avant, il l'était dès qu'un ancien prix était écrit).
+
+## Où est le code
+
+| Élément | Fichier |
+| --- | --- |
+| Règles (faits, leviers vrais, consignes à l'IA, contrôle du texte) | `supabase/functions/marketing-ai/levers.ts` |
+| Fonction (faits lus dans la base, écriture avec l'IA) | `supabase/functions/marketing-ai/index.ts` |
+| Écran : noms des leviers, lignes des chiffres, avertissement | `src/lib/marketingLevers.ts`, `src/screens/admin/AdminMarketingScreen.tsx` |
+
+## Tests
+
+- Règles : `node --import ./tests/zara/register.mjs tests/email/marketing-levers.test.ts` (mêmes clés et mêmes seuils que le site).
+- Écran : `NODE_PATH=/opt/node-tools/node_modules node tests/account/marketing-levers-ui.test.js <dossier dist>` (fonction simulée, aucune IA appelée).
+
+## Pour le patron : à lancer
+
+1. La fonction `marketing-ai` (déploiement Supabase), après son « Oui ».
+2. La publication du site, après son « Oui » (15 crédits Netlify).
