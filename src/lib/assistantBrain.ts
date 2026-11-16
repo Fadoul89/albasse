@@ -320,6 +320,7 @@ export type Intent =
   | 'orders'
   | 'delivery'
   | 'promo'
+  | 'popular'
   | 'new'
   | 'categories'
   | 'order'
@@ -346,6 +347,9 @@ export type Intent =
   | 'ranges'
   | 'compare'
   | 'search';
+
+// « les plus regardés », « les plus vus », « les plus populaires », « الأكثر مشاهدة » (texte déjà lissé par normalize)
+export const MOST_VIEWED_RE = /(^| )plus (regardes?|vus?|consultes?|populaires?)( |$)|الاكثر (مشاهده|رواجا|شعبيه)/;
 
 const has = (tokens: string[], words: string[]) => words.some((w) => tokens.includes(w));
 
@@ -532,6 +536,8 @@ export function detectIntent(text: string): Intent {
   if (has(tokens, ['cher', 'chere', 'chers', 'cheres', 'couteux', 'couteuse', 'negocier', 'marchander', 'baisser', 'diminuer', 'غالي', 'غال', 'غاليه', 'باهظ', 'مكلف', 'مساومه', 'تفاوض', 'ارخص'])) return 'price';
   if (/plus tard|reflechi|je verrai|on verra|pas maintenant|je reviendrai|je reviens|لاحقا|بعدين|سافكر|افكر|ليس الان/.test(n)) return 'later';
   if (has(tokens, ['livraison', 'livrer', 'livre', 'livrez', 'frais', 'expedition', 'delai', 'agence', 'paiement', 'payer', 'paye', 'payez', 'airtel', 'moov', 'cash', 'espece', 'especes', 'mobile', 'توصيل', 'شحن', 'دفع', 'ادفع', 'تسليم', 'رسوم', 'وكاله', 'ايرتل', 'موف', 'كاش', 'نقدا', 'تكلفه', 'مصاريف'])) return 'delivery';
+  // « les plus regardés » (psychologie de la vente : effet de mode, avec les vraies visites des 30 derniers jours)
+  if (MOST_VIEWED_RE.test(n)) return 'popular';
   if (has(tokens, ['promo', 'promos', 'promotion', 'promotions', 'solde', 'soldes', 'reduction', 'reductions', 'remise', 'remises', 'offre', 'offres', 'flash', 'rabais', 'عروض', 'عرض', 'تخفيضات', 'تخفيض', 'خصم', 'خصومات', 'تنزيلات', 'تنزيل'])) return 'promo';
   if (has(tokens, ['nouveaute', 'nouveautes', 'nouveau', 'nouveaux', 'recent', 'recents', 'derniere', 'dernieres', 'جديد', 'جديده', 'احدث', 'حديثا'])) return 'new';
   if (has(tokens, ['categorie', 'categories', 'catalogue', 'rayon', 'rayons', 'فئات', 'اقسام', 'تصنيفات', 'كتالوج', 'فئه', 'قسم'])) return 'categories';

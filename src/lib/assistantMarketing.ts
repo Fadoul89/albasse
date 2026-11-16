@@ -2,6 +2,7 @@ import { discount, newest, normalize, promotions, searchCatalog, tokenize, type 
 import { arabicToFrench, CATEGORY_WORDS, GENDERED_SLUGS, hasArabic, WHO_WORDS, type Lang, type Who } from './assistantLang';
 import { categoryLabel, fcfa, texts, type Range } from './assistantText';
 import { rankForStyle, type StyleKey } from './assistantPersona';
+import { savedAmount } from './assistantViews';
 
 // Conseil de Zara : fonctions simples (sans IA) pour comprendre le besoin du client, poser UNE question à la fois
 // (pour qui, quel article, quel budget), recommander avec des raisons vérifiées, proposer ce qui se complète,
@@ -162,7 +163,9 @@ export type Context =
   | { kind: 'gift'; who: Who; slug?: string }
   | { kind: 'who'; who: Who } // « pour homme » sans article précis : un peu de tout pour lui / elle / un enfant
   | { kind: 'promo' }
-  | { kind: 'new' };
+  | { kind: 'new' }
+  // « 👀 Les plus regardés » : les articles rangés par vraies visites des 30 derniers jours (lib/assistantViews), du plus regardé au moins regardé
+  | { kind: 'popular'; ids: string[] };
 
 const sellable = (p: CatalogProduct) => p.price > 0 && p.stock > 0 && !!p.image;
 const byDiscount = (list: CatalogProduct[]) => [...list].sort((a, b) => discount(b) - discount(a));
@@ -238,6 +241,10 @@ export function candidatesFor(catalog: CatalogProduct[], ctx: Context | null): C
       return promotions(catalog, 300);
     case 'new':
       return newest(catalog, 300);
+    case 'popular': {
+      const byId = new Map(base.map((p) => [p.id, p]));
+      return (Array.isArray(ctx.ids) ? ctx.ids : []).map((id) => byId.get(id)).filter((p): p is CatalogProduct => !!p);
+    }
   }
 }
 
@@ -374,10 +381,23 @@ export const whyAdvice = (p: CatalogProduct, range: Range, lang: Lang = 'fr', ch
   texts(lang).whyAdvice(short(p.name, 44), whyReasons(p, range, lang, cheapest));
 
 // Quand le visiteur ouvre le chat sur la fiche d'un produit.
-export function productPitch(p: CatalogProduct, lang: Lang = 'fr'): string {
+// Aversion à la perte : avec une vraie remise, Zara dit aussi ce que le client économise (ancien prix écrit par l'équipe moins le prix).
+// Preuve sociale : `views` = les personnes qui ont regardé l'article ces 30 derniers jours (déjà filtré par provenViews : 0 = rien à dire).
+export function productPitch(p: CatalogProduct, lang: Lang = 'fr', views = 0): string {
   const pct = p.compareAt ? Math.round(discount(p) * 100) : 0;
-  const price = p.compareAt && pct >= 5 ? (lang === 'ar' ? `${fcfa(p.price)} بدل ${fcfa(p.compareAt)} (-${pct} %)` : `${fcfa(p.price)} au lieu de ${fcfa(p.compareAt)} (-${pct} %)`) : fcfa(p.price);
-  return texts(lang).pitch(short(p.name, 48), price, p.stock >= 1 && p.stock <= 5 ? p.stock : null);
+  const save = p.compareAt ? savedAmount(p.price, p.compareAt) : 0;
+  const price =
+    p.compareAt && pct >= 5
+      ? lang === 'ar'
+        ? `${fcfa(p.price)} بدل ${fcfa(p.compareAt)} (-${pct} %: توفّر ${fcfa(save)})`
+        : `${fcfa(p.price)} au lieu de ${fcfa(p.compareAt)} (-${pct} % : vous économisez ${fcfa(save)})`
+      : fcfa(p.price);
+  const pitch = texts(lang).pitch(short(p.name, 48), price, p.stock >= 1 && p.stock <= 5 ? p.stock : null);
+  if (!(views > 0)) return pitch;
+  // la ligne des visites juste avant « Pour le commander… » (la dernière ligne du message)
+  const lines = pitch.split('\n');
+  lines.splice(Math.max(1, lines.length - 1), 0, texts(lang).viewsLine(views));
+  return lines.join('\n');
 }
 
 export const orderReminder = (name: string, total: number, lang: Lang = 'fr') => texts(lang).orderReminder(name, total);

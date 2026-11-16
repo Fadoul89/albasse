@@ -75,7 +75,7 @@ export interface Texts {
   chooseLang: string;
   fabLabel: string;
   openLabel: string;
-  card: { see: string; soldOut: string; last: string; only(n: number): string; addLabel(name: string): string; order: string };
+  card: { see: string; soldOut: string; last: string; only(n: number): string; addLabel(name: string): string; order: string; views(n: number): string };
   telegram: { chip: string; offer: string; already: string; needLogin: string; tip: string };
   langSwitched: string;
   chip: {
@@ -85,6 +85,7 @@ export interface Texts {
     promotions: string;
     coldSeason: string;
     news: string;
+    popular: string;
     advice: string;
     categories: string;
     delivery: string;
@@ -237,6 +238,10 @@ export interface Texts {
   // produits
   promoIntro(pct: number | null): string;
   noPromo: string;
+  // « 👀 Les plus regardés » : les vraies visites des 30 derniers jours (lib/assistantViews)
+  mostViewedIntro: string;
+  noMostViewed: string;
+  viewsLine(n: number): string;
   newIntro: string;
   chooseCategory: string;
   // une catégorie touchée dans le chat : ses articles s'affichent dans le chat (le chat reste ouvert)
@@ -494,7 +499,7 @@ const FR: Texts = {
   chooseLang: 'Choisissez votre langue',
   fabLabel: `Discuter avec ${ASSISTANT_NAME}, l'${ASSISTANT_ROLE}`,
   openLabel: `Ouvrir la discussion avec ${ASSISTANT_NAME}`,
-  card: { see: 'Voir le produit ›', soldOut: 'Épuisé', last: 'Dernier en stock', only: (n) => `Plus que ${n} en stock`, addLabel: (name) => `Commander : ${name}`, order: 'Commander' },
+  card: { see: 'Voir le produit ›', soldOut: 'Épuisé', last: 'Dernier en stock', only: (n) => `Plus que ${n} en stock`, addLabel: (name) => `Commander : ${name}`, order: 'Commander', views: (n) => `👀 Vu par ${fcfaGroup(n)} personnes (30 j)` },
   telegram: {
     chip: '✈️ Lier mon Telegram',
     offer: 'Avec Telegram, je vous préviens des nouveautés et des ventes flash directement sur votre téléphone ✈️ C’est gratuit : touchez le bouton, puis « Démarrer ». Vous arrêtez quand vous voulez en écrivant STOP.',
@@ -510,6 +515,7 @@ const FR: Texts = {
     promotions: '🔥 Promotions',
     coldSeason: '🧥 Blousons & manteaux',
     news: '🆕 Nouveautés',
+    popular: '👀 Les plus regardés',
     advice: '🎯 Conseil',
     categories: '🛍️ Catégories',
     delivery: '🚚 Livraison et paiement',
@@ -805,6 +811,9 @@ const FR: Texts = {
   errorOops: 'Oups, un petit souci de mon côté 😅 Réessayez dans un instant, ou écrivez-nous sur WhatsApp.',
   promoIntro: (pct) => `🔥 Voici nos meilleures promotions du moment${pct ? ` (jusqu’à -${pct} %)` : ''}{nom} !`,
   noPromo: 'Pas de promotion en ce moment, mais découvrez nos nouveautés !',
+  mostViewedIntro: '👀 Voici les articles les plus regardés ces 30 derniers jours chez Albasse Shopping{nom} 👇',
+  noMostViewed: 'Je ne peux pas encore vous montrer les articles les plus regardés 😊 Regardez nos promotions ou nos nouveautés en attendant !',
+  viewsLine: (n) => `👀 ${fcfaGroup(n)} personnes ont regardé cet article ces 30 derniers jours.`,
   newIntro: '🆕 Voici nos dernières nouveautés{nom} !',
   chooseCategory: 'Choisissez une catégorie 👇',
   categoryIntro: (category, total) => `🛍️ ${category} : voici nos articles{nom} 👇${total > 1 ? ` (${total} disponibles)` : ''}`,
@@ -874,7 +883,7 @@ const FR: Texts = {
   ],
   whyAdvice: (name, reasons) => `Mon conseil{nom} : « ${name} » — ${reasons.join(' · ')}.`,
   why: {
-    discount: (pct, price, old) => `${pct} % de remise : ${fcfa(price)} au lieu de ${fcfa(old)}`,
+    discount: (pct, price, old) => `${pct} % de remise : ${fcfa(price)} au lieu de ${fcfa(old)} · vous économisez ${fcfa(old - price)}`,
     budget: 'dans votre budget',
     lowStock: (n) => (n === 1 ? 'le dernier en stock' : `plus que ${n} en stock`),
     colors: (list) => `disponible en ${list}`,
@@ -1127,7 +1136,7 @@ const AR: Texts = {
   chooseLang: 'اختر لغتك',
   fabLabel: 'التحدث مع زارا كينغز، مساعدة التسويق',
   openLabel: 'فتح المحادثة مع زارا كينغز',
-  card: { see: 'عرض المنتج ›', soldOut: 'نفد', last: 'آخر قطعة', only: (n) => `بقي ${n} فقط`, addLabel: (name) => `اطلب: ${name}`, order: 'اطلب' },
+  card: { see: 'عرض المنتج ›', soldOut: 'نفد', last: 'آخر قطعة', only: (n) => `بقي ${n} فقط`, addLabel: (name) => `اطلب: ${name}`, order: 'اطلب', views: (n) => `👀 شاهده ${n} شخصا في 30 يوما` },
   telegram: {
     chip: '✈️ ربط تيليجرام',
     offer: 'عبر تيليجرام أُعلمك بالجديد وبالعروض السريعة مباشرة على هاتفك ✈️ الخدمة مجانية: اضغط على الزر ثم «ابدأ». يمكنك الإيقاف في أي وقت بكتابة «توقف».',
@@ -1143,6 +1152,7 @@ const AR: Texts = {
     promotions: '🔥 العروض',
     coldSeason: '🧥 جاكيتات ومعاطف',
     news: '🆕 الجديد',
+    popular: '👀 الأكثر مشاهدة',
     advice: '🎯 نصيحة',
     categories: '🛍️ الفئات',
     delivery: '🚚 التوصيل والدفع',
@@ -1437,6 +1447,9 @@ const AR: Texts = {
   errorOops: 'عذرا، حدثت مشكلة صغيرة من جهتي 😅 حاول بعد قليل، أو راسلنا على واتساب.',
   promoIntro: (pct) => `🔥 إليك أفضل عروضنا الحالية${pct ? ` (حتى -${pct} %)` : ''}{nom}!`,
   noPromo: 'لا توجد عروض الآن، لكن اكتشف جديدنا!',
+  mostViewedIntro: '👀 إليك المنتجات الأكثر مشاهدة خلال آخر 30 يوما في Albasse Shopping{nom} 👇',
+  noMostViewed: 'لا أستطيع بعد أن أعرض عليك المنتجات الأكثر مشاهدة 😊 اطلع على عروضنا أو جديدنا في الأثناء!',
+  viewsLine: (n) => `👀 شاهد ${n} شخصا هذا المنتج خلال آخر 30 يوما.`,
   newIntro: '🆕 إليك أحدث منتجاتنا{nom}!',
   chooseCategory: 'اختر فئة 👇',
   categoryIntro: (category, total) => `🛍️ ${category}: إليك منتجاتنا{nom} 👇${total > 1 ? ` (${total} متوفرة)` : ''}`,
@@ -1502,7 +1515,7 @@ const AR: Texts = {
   ],
   whyAdvice: (name, reasons) => `نصيحتي{nom}: «${name}» — ${reasons.join(' · ')}.`,
   why: {
-    discount: (pct, price, old) => `خصم ${pct} %: ${fcfa(price)} بدل ${fcfa(old)}`,
+    discount: (pct, price, old) => `خصم ${pct} %: ${fcfa(price)} بدل ${fcfa(old)} · توفّر ${fcfa(old - price)}`,
     budget: 'ضمن ميزانيتك',
     lowStock: (n) => (n === 1 ? 'آخر قطعة في المخزون' : `بقي ${n} فقط في المخزون`),
     colors: (list) => `متوفر بألوان: ${list}`,

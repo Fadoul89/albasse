@@ -6,6 +6,7 @@ import { currentDevice, type DeviceLabel } from './assistantAttribution';
 import { buildZaraStats, classifyStatsError, periodBounds, type StatsPeriod, type StatsFailure, type ZaraStats } from './assistantStats';
 import { buildBrowsingOverview, type BrowsingOverview } from './browsingOverview';
 import { buildSalesMap, SALES_WINDOW_DAYS, type SalesMap } from './assistantSales';
+import { buildViewsMap, provenViews, VIEWS_WINDOW_DAYS, type ViewsMap } from './assistantViews';
 import { parseAffinity, type Affinity } from './assistantWords';
 import { zaraKey } from './assistantLang';
 import { sortCategories } from './categoryOrder';
@@ -45,6 +46,8 @@ export interface AssistantProduct {
   image: string | null;
   in_stock: boolean;
   stock: number;
+  // preuve sociale vraie : le nombre de personnes qui ont regardé l'article ces 30 derniers jours (seulement un chiffre solide, sinon absent)
+  views?: number;
 }
 
 export interface CategoryInfo {
@@ -57,10 +60,19 @@ export interface StoreInfo {
   email: string | null;
 }
 
+// (un seul paramètre : `products.map(toCard)` passe aussi l'index du tableau, qui ne doit jamais être pris pour les visites)
 export function toCard(p: CatalogProduct): AssistantProduct {
+  return cardWithViews(p, null);
+}
+
+// La même fiche, avec « Vu par N personnes (30 j) » si le chiffre est solide.
+export function cardWithViews(p: CatalogProduct, views: ViewsMap | null): AssistantProduct {
   // offre élèves/étudiants (lib/studentOffer) : la carte montre le prix de l'offre (et le vrai prix normal barré) seulement à un client qui y a droit
   const deal = studentDeal({ slug: p.slug, price: p.price }, useAuthStore.getState().profile);
-  return { slug: p.slug, name: p.name, price: deal ? deal.price : p.price, compare_at_price: deal ? deal.listPrice : p.compareAt, image: p.image, in_stock: p.stock > 0, stock: p.stock };
+  const card: AssistantProduct = { slug: p.slug, name: p.name, price: deal ? deal.price : p.price, compare_at_price: deal ? deal.listPrice : p.compareAt, image: p.image, in_stock: p.stock > 0, stock: p.stock };
+  const seen = provenViews(views, p.id);
+  if (seen > 0) card.views = seen;
+  return card;
 }
 
 function cached<T>(load: () => Promise<T>) {
@@ -328,6 +340,29 @@ export async function getProductSales(): Promise<SalesMap> {
   } catch {
     return new Map();
   }
+}
+
+// Visites réelles des 30 derniers jours, par article (des totaux : personnes distinctes, sans les administrateurs ; aucune donnée de client).
+// Gardées 5 minutes. Sans la fonction de la base (add-zara-most-viewed.sql pas encore lancé), ou en cas de panne : une liste vide,
+// et Zara ne dit AUCUN chiffre de visites (« Les plus regardés » répond qu'elle ne peut pas encore les montrer).
+const loadViews = cached<ViewsMap>(async () => {
+  const { data, error } = await supabase.rpc('assistant_product_views', { p_days: VIEWS_WINDOW_DAYS });
+  if (error && (error as { code?: string }).code === 'PGRST202') return new Map();
+  if (error) throw error;
+  return buildViewsMap(data);
+});
+
+export async function getProductViews(): Promise<ViewsMap> {
+  try {
+    return await loadViews();
+  } catch {
+    return new Map();
+  }
+}
+
+// Pour ne jamais faire attendre le client : si les visites ne sont pas arrivées à temps, la fiche s'affiche sans le chiffre.
+export async function productViewsWithin(ms: number): Promise<ViewsMap> {
+  return Promise.race([getProductViews(), new Promise<ViewsMap>((resolve) => setTimeout(() => resolve(new Map()), ms))]);
 }
 
 // « X % des clients ont aussi acheté ceci » : les vrais totaux d'un article (fonction `product_affinity`, aucune donnée de client).

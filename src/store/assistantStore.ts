@@ -71,7 +71,8 @@ import {
   type Parsed,
   type Range,
 } from '../lib/assistantMarketing';
-import { fetchAffinity, fetchCartStatus, fetchLoyaltyPoints, fetchPaymentNumbers, fetchProductForCart, getCatalog, getCategories, getCities, getProductSales, getStoreInfo, logAssistantEvent, requestCallback, startChatToday, toCard, type AssistantProduct, type CallbackSource } from '../lib/assistantData';
+import { cardWithViews, fetchAffinity, fetchCartStatus, fetchLoyaltyPoints, fetchPaymentNumbers, fetchProductForCart, getCatalog, getCategories, getCities, getProductSales, getProductViews, getStoreInfo, logAssistantEvent, productViewsWithin, requestCallback, startChatToday, toCard, type AssistantProduct, type CallbackSource } from '../lib/assistantData';
+import { mostViewed, provenViews } from '../lib/assistantViews';
 import { compareFacts, declaredStyle, forcesFrom, jobFrom, jobKindOfProfession, rankForStyle, styleOrder, threeRanges, toneOf, type JobKind, type StyleKey } from '../lib/assistantPersona';
 import { FORCES_PRODUCT_SLUGS, isForcesProfession } from '../lib/adAudiences';
 import { emotionFrom, type Emotion } from '../lib/assistantEmotion';
@@ -286,7 +287,11 @@ const GREETING_WAIT_MS = 10000;
 let connectedAt: number | null = null;
 const MAX_SAVED = 40;
 const STEPS: Step[] = ['ask_lang', 'ask_name', 'menu', 'ask_city', 'ask_who', 'ask_type', 'ask_budget', 'co_name', 'co_phone', 'co_address', 'co_city', 'co_day', 'co_time', 'co_pay', 'co_gift', 'co_confirm'];
-const CTX_KINDS = ['query', 'category', 'gift', 'who', 'promo', 'new'];
+const CTX_KINDS = ['query', 'category', 'gift', 'who', 'promo', 'new', 'popular'];
+// « 👀 Les plus regardés » : le texte envoyé par le bouton (compris par detectIntent, lib/assistantBrain)
+const MOST_VIEWED_SAY: Record<Lang, string> = { fr: 'les plus regardés', ar: 'الأكثر مشاهدة' };
+// Zara n'attend jamais les visites plus de 1,5 s avant de montrer des fiches
+const VIEWS_WAIT_MS = 1500;
 
 interface Saved {
   messages: ChatMessage[];
@@ -642,6 +647,8 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     const actions: ChatAction[] = [];
     if (isGuest()) actions.push({ label: c.createAccount, kind: 'register', highlight: true }, { label: c.login, kind: 'login' });
     actions.push(sayBtn(c.promotions, 'promotions'), sayBtn(c.news, 'nouveautés'));
+    // psychologie de la vente (effet de mode) : les articles que le plus de personnes ont vraiment regardés ces 30 derniers jours
+    actions.push(sayBtn(c.popular, MOST_VIEWED_SAY[get().lang]));
     // un client qui a écrit un métier militaire ou de sécurité dans son compte : le badge « groupe sanguin » choisi pour eux, à un toucher
     if (isForcesClient()) actions.push({ ...sayBtn(c.forcesBadge, FORCES_SAY[get().lang]), highlight: true });
     // un élève ou un étudiant (métier écrit dans son compte) : l'offre du patron (URBANSOLE, code EE26) à un toucher
@@ -682,7 +689,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         if (slug) {
           const product = (await getCatalog()).find((p) => p.slug === slug);
           if (product && product.stock > 0) {
-            await say(productPitch(product, get().lang));
+            await say(productPitch(product, get().lang, provenViews(await productViewsWithin(VIEWS_WAIT_MS), product.id)));
             return true;
           }
         }
@@ -850,7 +857,9 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
   ) {
     setCtx(ctx);
     const lang = get().lang;
-    await say(intro, { products: products.map(toCard) });
+    // preuve sociale vraie : « 👀 Vu par N personnes (30 j) » sur les fiches (sans attendre plus de 1,5 s : sinon les fiches partent sans le chiffre)
+    const views = await productViewsWithin(VIEWS_WAIT_MS);
+    await say(intro, { products: products.map((p) => cardWithViews(p, views)) });
     const gift = ctx?.kind === 'gift';
     const pair = pairFor(products, catalog);
     const range = opts.range ?? ANY_BUDGET;
@@ -926,7 +935,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     const lines = [t.intro(shortName(product.name), fcfa(product.price))];
     if (line) lines.push(line);
     if (reasons.length > 0) lines.push(reasons.join(' · '));
-    await say(withName(lines.join('\n')), { products: [toCard(product)] });
+    await say(withName(lines.join('\n')), { products: [cardWithViews(product, await productViewsWithin(VIEWS_WAIT_MS))] });
     await say(t.ask, {
       actions: [{ label: t.chipOrder, kind: 'add', payload: product.slug, highlight: true }, sayBtn(t.chipOthers, 'conseil'), menuBtn(), wa()],
     });
@@ -941,6 +950,23 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       } else {
         await say(T().noPromo, { actions: [sayBtn(T().chip.news, 'nouveautés'), menuBtn()] });
       }
+    } catch {
+      await dataError();
+    }
+  }
+
+  // Effet de mode (psychologie de la vente) : les articles que le plus de personnes ont VRAIMENT regardés ces 30 derniers jours.
+  // Sans chiffre solide (fonction de la base pas encore lancée, ou trop peu de visites) : Zara le dit et propose les promotions.
+  async function mostViewedReply() {
+    try {
+      const [catalog, views] = await Promise.all([getCatalog(), getProductViews()]);
+      const picks = mostViewed(catalog, views);
+      if (picks.length === 0) {
+        await say(T().noMostViewed, { actions: [sayBtn(T().chip.promotions, 'promotions'), sayBtn(T().chip.news, 'nouveautés'), menuBtn(), wa()] });
+        return;
+      }
+      const ranked = mostViewed(catalog, views, 60).map((p) => p.id);
+      await showProducts(withName(T().mostViewedIntro), picks, { kind: 'popular', ids: ranked }, catalog);
     } catch {
       await dataError();
     }
@@ -3171,6 +3197,9 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
       case 'promo':
         await promoReply();
         return;
+      case 'popular':
+        await mostViewedReply();
+        return;
       case 'new':
         await newReply();
         return;
@@ -3612,6 +3641,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     teaserDismissed: false,
     openChat: () => {
       set({ open: true, teaserDismissed: true });
+      void getProductViews(); // les visites des 30 derniers jours arrivent pendant que Zara salue (fiches avec « Vu par N personnes »)
       if (get().loading) return;
       if (get().messages.length === 0) void run(begin);
       else if (shouldGreetMember()) get().greetMember();
@@ -3628,6 +3658,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     },
     adviseProduct: (slug) => {
       set({ open: true, teaserDismissed: true });
+      void getProductViews();
       if (get().loading || !slug) return;
       void run(() => adviseReply(slug));
     },
