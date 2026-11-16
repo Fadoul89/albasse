@@ -429,6 +429,12 @@ const DOUBLE_TAP_MS = 1200;
 const lastAddAt = new Map<string, number>();
 const pendingAdds = new Set<string>();
 let addChain: Promise<void> = Promise.resolve();
+// La présentation d'articles en cours (les fiches, puis la phrase « Mon conseil… » avec ses boutons, une seconde plus tard).
+// Un « Commander » touché pendant ce temps attend qu'elle finisse : sinon la phrase arrivait APRÈS « Quelle taille ? » et ses boutons
+// remplaçaient ceux des tailles et « Annuler » (le client ne pouvait plus choisir sa taille). 4 secondes au plus.
+let presenting: Promise<void> = Promise.resolve();
+const PRESENTING_MAX_WAIT_MS = 4000;
+const presentationDone = () => Promise.race([presenting, new Promise<void>((r) => setTimeout(r, PRESENTING_MAX_WAIT_MS))]);
 interface PendingAdd {
   product: Product;
   size: string | null;
@@ -822,7 +828,20 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     return crossSellTarget(catalog, slug, get().lang);
   }
 
-  async function showProducts(
+  // Présente des articles ; « Commander » attend la fin de la présentation (voir presenting)
+  function showProducts(
+    intro: string,
+    products: CatalogProduct[],
+    ctx: Context | null,
+    catalog: CatalogProduct[],
+    opts: { range?: Range; cheapest?: boolean; extra?: ChatAction[] } = {}
+  ): Promise<void> {
+    const run = showProductsNow(intro, products, ctx, catalog, opts);
+    presenting = run.catch(() => undefined);
+    return run;
+  }
+
+  async function showProductsNow(
     intro: string,
     products: CatalogProduct[],
     ctx: Context | null,
@@ -2209,6 +2228,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     lastAddAt.set(slug, now);
     pendingAdds.add(slug);
     addChain = addChain
+      .then(() => presentationDone())
       .then(() => addFlow(slug))
       .catch(() => undefined)
       .then(() => {
