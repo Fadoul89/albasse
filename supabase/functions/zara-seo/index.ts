@@ -9,6 +9,17 @@ import Anthropic from "npm:@anthropic-ai/sdk";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { proposeDescription, SYSTEM_PROMPT, type SeoFacts } from "./rules.ts";
 
+// Double vérification des admins (add-admin-mfa.sql) : c'est la base qui décide si ce jeton a les droits d'admin
+// (admin ET, s'il a activé la double vérification, code de Google Authenticator tapé). Même règle que tout le site.
+async function adminAllowed(jwt: string): Promise<boolean> {
+  const asUser = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    global: { headers: { Authorization: `Bearer ${jwt}` } },
+    auth: { persistSession: false },
+  });
+  const { data, error } = await asUser.rpc("is_admin");
+  return !error && data === true;
+}
+
 const MODEL = "claude-sonnet-5-5";
 const MAX_IDS = 8;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -33,7 +44,7 @@ Deno.serve(async (req: Request) => {
     const { data: userData, error: userError } = await db.auth.getUser(jwt);
     if (userError || !userData.user) return json({ ok: false, reason: "unauthenticated" }, 401);
     const { data: profile } = await db.from("profiles").select("is_admin").eq("id", userData.user.id).maybeSingle();
-    if (!profile?.is_admin) return json({ ok: false, reason: "forbidden" }, 403);
+    if (!profile?.is_admin || !(await adminAllowed(jwt))) return json({ ok: false, reason: "forbidden" }, 403);
 
     // 2. les articles demandés
     const body = await req.json().catch(() => null);

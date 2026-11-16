@@ -67,6 +67,9 @@ import { PrivacyPolicyScreen } from '../screens/PrivacyPolicyScreen';
 import { ReturnPolicyScreen } from '../screens/ReturnPolicyScreen';
 import { TermsScreen } from '../screens/TermsScreen';
 import { NotFoundScreen } from '../screens/NotFoundScreen';
+import { AdminSecurityScreen } from '../screens/admin/AdminSecurityScreen';
+import { AdminMfaGate } from '../components/AdminMfaGate';
+import { useMfaStore } from '../store/mfaStore';
 import { InstallScreen } from '../screens/InstallScreen';
 import { UnsubscribeScreen } from '../screens/UnsubscribeScreen';
 import { InvoiceScreen } from '../screens/InvoiceScreen';
@@ -164,6 +167,7 @@ const linking: LinkingOptions<RootStackParamList> = {
       AdminAffiliates: 'admin/affilies',
       AdminAffiliateSettings: 'admin/affilies/reglages',
       AdminAffiliateCommissions: 'admin/affilies/commissions',
+      AdminSecurity: 'admin/securite',
       // toute autre adresse : la page « Introuvable » (le serveur répond aussi 404, voir netlify/edge-functions/not-found.ts)
       NotFound: '*',
     },
@@ -194,6 +198,13 @@ export function RootNavigator() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const authLoading = useAuthStore((s) => s.isLoading);
   const myId = useAuthStore((s) => s.profile?.id ?? null);
+  // double vérification des admins : l'écran « Code de vérification » tant que l'admin ne l'a pas tapé (components/AdminMfaGate)
+  const isAdmin = useAuthStore((s) => !!s.profile?.is_admin);
+  const mfaStatus = useMfaStore((s) => s.status);
+  const mfaGate = isAuthenticated && isAdmin && mfaStatus === 'code';
+  useEffect(() => {
+    useMfaStore.getState().check(isAuthenticated && isAdmin);
+  }, [myId, isAdmin, isAuthenticated]);
   const wasAuthenticated = useRef(isAuthenticated);
   const { settings, isLoading: settingsLoading } = useStoreSettings();
   const [routeName, setRouteName] = useState<string | undefined>();
@@ -313,6 +324,7 @@ export function RootNavigator() {
             <Stack.Screen name="ReturnPolicy" component={ReturnPolicyScreen} options={{ presentation: 'modal' }} />
             <Stack.Screen name="Terms" component={TermsScreen} options={{ presentation: 'modal' }} />
             <Stack.Screen name="NotFound" component={NotFoundScreen} />
+            <Stack.Screen name="AdminSecurity" component={AdminSecurityScreen} />
             <Stack.Screen name="Messages" component={MessagesScreen} />
             <Stack.Screen name="AdminMessages" component={AdminMessagesScreen} />
             <Stack.Screen name="AffiliateApply" component={AffiliateApplyScreen} options={{ presentation: 'modal' }} />
@@ -333,10 +345,10 @@ export function RootNavigator() {
           {showWall && <AccountWall />}
         </View>
         <FavoritesSync />
-        <AdminOrderAlert />
+        {!mfaGate && <AdminOrderAlert />}
         {/* le tutoriel iPhone reste disponible sans compte : la page /installer le demande aux visiteurs qui n'ont pas encore de compte */}
         {!SINGLE && <IosInstallGuide />}
-        {!signUpFirst && !SINGLE && (
+        {!signUpFirst && !SINGLE && !mfaGate && (
           <>
             <Assistant />
             <SmartPromotionPopup />
@@ -345,6 +357,8 @@ export function RootNavigator() {
             <GlowBorder />
           </>
         )}
+        {/* par-dessus tout (Zara et les fenêtres sont cachées) : l'admin doit taper son code */}
+        {mfaGate && <AdminMfaGate />}
       </View>
     </NavigationContainer>
   );

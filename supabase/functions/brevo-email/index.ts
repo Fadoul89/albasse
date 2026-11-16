@@ -13,6 +13,17 @@ import { approveRun, runCheck, sendTestEmail, setMode, simulate, syncEvents, tic
 import { escapeHtml, layout, mask, realEmail } from "./orderEmails.ts";
 import { inactiveClientEmail, pickProducts } from "./promoEmails.ts";
 
+// Double vérification des admins (add-admin-mfa.sql) : c'est la base qui décide si ce jeton a les droits d'admin
+// (admin ET, s'il a activé la double vérification, code de Google Authenticator tapé). Même règle que tout le site.
+async function adminAllowed(jwt: string): Promise<boolean> {
+  const asUser = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    global: { headers: { Authorization: `Bearer ${jwt}` } },
+    auth: { persistSession: false },
+  });
+  const { data, error } = await asUser.rpc("is_admin");
+  return !error && data === true;
+}
+
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -71,7 +82,7 @@ Deno.serve(async (req) => {
   const { data: userData, error: userErr } = await service.auth.getUser(auth.replace(/^Bearer\s+/i, ""));
   if (userErr || !userData?.user) return json({ ok: false, reason: "auth" }, 401);
   const { data: me } = await service.from("profiles").select("is_admin,email,full_name").eq("id", userData.user.id).maybeSingle();
-  if (!me?.is_admin) return json({ ok: false, reason: "forbidden" }, 403);
+  if (!me?.is_admin || !(await adminAllowed(auth.replace(/^Bearer\s+/i, "")))) return json({ ok: false, reason: "forbidden" }, 403);
 
   let body: { action?: unknown; run_id?: unknown; mode?: unknown; confirm?: unknown };
   try {

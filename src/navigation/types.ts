@@ -40,6 +40,7 @@ export type RootStackParamList = {
   ReturnPolicy: undefined;
   Terms: undefined;
   NotFound: undefined;
+  AdminSecurity: undefined;
   Messages: undefined;
   AdminMessages: undefined;
   AffiliateApply: undefined;

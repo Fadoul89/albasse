@@ -10472,7 +10472,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         await page.screenshot({ path: path.join(OUT, 'C8-tableau-de-bord.png') });
         await page.setViewportSize({ width: 390, height: 800 });
         await sleep(400);
-        check('23 pages accessibles depuis le tableau de bord (dont Zara SEO, Parrainages, Mes partenaires et Paramètres Zara)', (await page.locator('[data-testid^="admin-menu-Admin"]').count()) === 23);
+        check('24 pages accessibles depuis le tableau de bord (dont Zara SEO, Parrainages, Mes partenaires, Paramètres Zara et Double vérification)', (await page.locator('[data-testid^="admin-menu-Admin"]').count()) === 24 && (await page.getByTestId('admin-menu-AdminSecurity').count()) === 1);
         check('« Paramètres Zara » : un theme a cote des Parametres, avec « Tous les réglages de Zara »', /^🤖 Paramètres Zara/.test(g.zara) && g.zara.includes('Tous les réglages de Zara') && (await page.getByTestId('admin-menu-group-settings').boundingBox()).y < (await page.getByTestId('admin-menu-group-zara').boundingBox()).y, g.zara);
         check('« Mes partenaires (privé) » est dans le thème Boutique, à côté des produits', /Mes partenaires/.test(g.shop), g.shop);
         await page.getByTestId('admin-menu-AdminStoreSettings').click();

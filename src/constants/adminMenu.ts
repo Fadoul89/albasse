@@ -26,6 +26,7 @@ export type AdminRoute = Extract<
   | 'AdminInvites'
   | 'AdminPartners'
   | 'AdminZaraSettings'
+  | 'AdminSecurity'
 >;
 
 export interface AdminMenuItem {
@@ -96,6 +97,7 @@ export const ADMIN_MENU_GROUPS: AdminMenuGroup[] = [
       { icon: '📍', label: 'Informations de contact', route: 'AdminStoreSettings' },
       { icon: '💳', label: 'Paiement', route: 'AdminPaymentSettings' },
       { icon: '🚚', label: 'Livraison (Villes)', route: 'AdminCities' },
+      { icon: '🔐', label: 'Double vérification', route: 'AdminSecurity' },
     ],
   },
   {

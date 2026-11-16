@@ -1,6 +1,17 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
+// Double vérification des admins (add-admin-mfa.sql) : c'est la base qui décide si ce jeton a les droits d'admin
+// (admin ET, s'il a activé la double vérification, code de Google Authenticator tapé). Même règle que tout le site.
+async function adminAllowed(jwt: string): Promise<boolean> {
+  const asUser = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    global: { headers: { Authorization: `Bearer ${jwt}` } },
+    auth: { persistSession: false },
+  });
+  const { data, error } = await asUser.rpc("is_admin");
+  return !error && data === true;
+}
+
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const serviceClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
@@ -39,7 +50,7 @@ Deno.serve(async (req: Request) => {
       .select("is_admin")
       .eq("id", userData.user.id)
       .maybeSingle();
-    if (callerError || !callerProfile?.is_admin) {
+    if (callerError || !callerProfile?.is_admin || !(await adminAllowed(jwt))) {
       return new Response(JSON.stringify({ error: "forbidden" }), { status: 403 });
     }
 
