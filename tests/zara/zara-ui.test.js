@@ -4611,6 +4611,21 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     const sandalesCat = cats.find((c) => c.id === sandales.category_id);
     console.log('info  suivi : produit', sandales.name.trim(), '| categorie', sandalesCat && sandalesCat.name, '| tailles', sandales.sizes.join(','), '| couleurs', sandales.colors.join(','));
     const sleepSec = (n) => sleep(n * 1000);
+    // recherche : l'article peut être en page 2 ou plus (20 articles par page depuis l'ajout des pages 1, 2, 3) : on tourne les pages jusqu'à lui
+    const clickInSearch = async (page, re) => {
+      const target = page.getByText(re).first();
+      for (let i = 0; i < 6; i++) {
+        try {
+          await target.waitFor({ state: 'visible', timeout: 4000 });
+          return target.click();
+        } catch (e) {}
+        const next = page.getByTestId('search-pages-next');
+        if (!(await next.count()) || (await next.getAttribute('aria-disabled')) === 'true') break;
+        await next.click();
+        await sleep(800);
+      }
+      return target.click();
+    };
     const touch = (pg, i = 0) => pg.mouse.move(120 + i * 7, 320 + i * 3);
     const openProduct = async (v, slug = sandales.slug) => {
       await v.page.goto(`${base}/produit/${slug}`, { waitUntil: 'load' });
@@ -4664,21 +4679,21 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       const box = v.page.getByPlaceholder('Rechercher un produit…');
       await box.waitFor({ timeout: 25000 });
       await box.fill('sandales');
-      await v.page.getByText(/Sandales AL madjaz/i).first().click();
+      await clickInSearch(v.page, /Sandales AL madjaz/i);
       await v.page.waitForFunction((k) => { const p = JSON.parse(localStorage.getItem(k) || 'null'); return p && Object.keys(p.products).length > 0; }, PK, { timeout: 25000 });
       await touch(v.page, 1);
       await sleepSec(3.5);
       await v.page.goBack();
       await box.waitFor({ timeout: 15000 });
       await box.fill('clarks');
-      await v.page.getByText(/Clarks moccasin/i).first().click();
+      await clickInSearch(v.page, /Clarks moccasin/i);
       await sleepSec(1);
       await touch(v.page, 2);
       await sleepSec(3);
       await v.page.goBack();
       await box.waitFor({ timeout: 15000 });
       await box.fill('sandales');
-      await v.page.getByText(/Sandales AL madjaz/i).first().click();
+      await clickInSearch(v.page, /Sandales AL madjaz/i);
       await sleepSec(1.5);
       await touch(v.page, 3);
       await sleepSec(2);
@@ -5515,7 +5530,11 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         const v = await visitor();
         await openZara(v);
         const all = await panelOf(v.page).innerText();
-        check('Zara a l\'ouverture : « La saison fraiche arrive », une seule fois, avant les infos importantes', (all.match(/La saison fraîche arrive/g) || []).length === 1 && all.indexOf('La saison fraîche arrive') < all.indexOf('À savoir avant de commander'), all.slice(0, 300));
+        // une seule phrase d'ouverture : un moment fort qui approche (ex. Black Friday, annoncé 21 jours avant) passe AVANT la saison fraîche (assistantStore.onboarding)
+        const nCold = (all.match(/La saison fraîche arrive/g) || []).length;
+        const nBf = (all.match(/🖤 Black Friday :/g) || []).length;
+        const opener = nBf ? '🖤 Black Friday :' : 'La saison fraîche arrive';
+        check(`Zara a l'ouverture : une seule phrase (${nBf ? 'Black Friday, qui passe avant la saison fraiche' : '« La saison fraiche arrive »'}), avant les infos importantes`, nCold + nBf === 1 && all.indexOf(opener) < all.indexOf('À savoir avant de commander'), all.slice(0, 300));
         check('le menu a le bouton « 🧥 Blousons & manteaux »', (await chipLabels(v.page)).includes('🧥 Blousons & manteaux'), await chipLabels(v.page));
         const before = await cardsOf(v.page).count();
         await tap(v.page, '🧥 Blousons & manteaux', /Nos blousons et manteaux/);
@@ -5566,7 +5585,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         await v.page.goto(`${base}/`, { waitUntil: 'load' });
         await sleep(2500);
         await v.page.getByTestId('assistant-fab').click();
-        await waitText(v.page, /موسم البرد يقترب/, 25000);
+        await waitText(v.page, /موسم البرد يقترب|🖤 الجمعة السوداء/, 25000); // le Black Friday qui approche passe avant la saison fraîche
         await waitText(v.page, /أنشئ حسابك|حسابك/, 25000);
         check('arabe : la ligne d\'ouverture et le bouton « 🧥 جاكيتات ومعاطف »', (await chipLabels(v.page)).includes('🧥 جاكيتات ومعاطف'), await chipLabels(v.page));
         const before = await cardsOf(v.page).count();

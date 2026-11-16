@@ -36,6 +36,16 @@ export function AdminDashboardScreen() {
       >
         <AdminMenuGroups />
 
+        {/* le nouveau tableau de bord « couleur hacker » (16 novembre 2026) : mêmes chiffres de la base, en noir et vert néon */}
+        <Pressable style={styles.hackerLink} onPress={() => navigation.navigate('AdminHackerDashboard')} accessibilityRole="button" testID="dashboard-hacker-link">
+          <Text style={styles.hackerLinkIcon}>&gt;_</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.hackerLinkTitle}>Tableau de bord hacker</Text>
+            <Text style={styles.hackerLinkSubtitle}>Visiteurs, clients, commandes, sources : vos vrais chiffres en noir et vert</Text>
+          </View>
+          <Text style={styles.hackerLinkArrow}>→</Text>
+        </Pressable>
+
         {isLoading && !stats ? (
           <Text style={styles.loading}>Chargement…</Text>
         ) : stats ? (
@@ -347,4 +357,9 @@ const styles = StyleSheet.create({
   sourceLinkTitle: { color: colors.goldLight, fontFamily: fonts.bodySemiBold, fontSize: 13 },
   sourceLinkSubtitle: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11, marginTop: 2 },
   sourceLinkArrow: { color: colors.gold, fontSize: 18 },
+  hackerLink: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#010401', borderWidth: 1, borderColor: '#00ff41', borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.lg },
+  hackerLinkIcon: { color: '#001a06', backgroundColor: '#00ff41', fontWeight: '900', fontSize: 13, width: 32, height: 32, lineHeight: 32, textAlign: 'center', borderRadius: 8, overflow: 'hidden' },
+  hackerLinkTitle: { color: '#00ff41', fontWeight: '700', fontSize: 13.5 },
+  hackerLinkSubtitle: { color: '#4fbf6b', fontSize: 11, marginTop: 2 },
+  hackerLinkArrow: { color: '#00ff41', fontSize: 18 },
 });
