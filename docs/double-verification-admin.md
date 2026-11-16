@@ -30,6 +30,13 @@ Seulement pour les comptes **administrateurs**. Les clients se connectent comme 
 - `NODE_PATH=/opt/node-tools/node_modules node tests/account/admin-mfa-ui.test.js <dist> 4520 <dossier photos>` (navigateur, Supabase simulé :
   client sans code, mise en route, mauvais / bon code, écran du code, Zara cachée, déconnexion).
 
+## État de la mise en ligne (16 novembre 2026)
+- Base : `add-admin-mfa.sql` appliqué. Vérifié : l'admin (sans double vérification) reste admin ; un client n'est jamais admin.
+- Fonctions redéployées avec `adminAllowed` : `telegram-broadcast`, `send-broadcast-push`, `marketing-ai`, `zara-seo`, `admin-client-account`, `order-invoice`.
+- **`brevo-email` pas encore redéployée** (165 Ko, 9 fichiers : la recopier à la main risquait de casser les e-mails de commande). En ligne, elle garde
+  l'ancien contrôle (jeton + `profiles.is_admin`) ; le dépôt contient déjà la version avec `adminAllowed`. À déployer avec la CLI Supabase
+  (`supabase functions deploy brevo-email --no-verify-jwt`) ou une action GitHub avec un jeton d'accès Supabase.
+
 ## Mise en ligne (ordre)
 1. `add-admin-mfa.sql` sur la base (sans effet tant que personne n'a activé la double vérification).
 2. Déployer les 7 fonctions serveur.
