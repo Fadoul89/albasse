@@ -124,6 +124,12 @@ function ProductCards({ products, lang, onOpen, onAdd }: { products: AssistantPr
             {p.in_stock && typeof p.stock === 'number' && p.stock >= 1 && p.stock <= 5 ? (
               <Text style={[styles.cardLow, rtl]}>🔥 {p.stock === 1 ? t.card.last : t.card.only(p.stock)}</Text>
             ) : null}
+            {/* preuve sociale vraie : les personnes qui ont regardé l'article ces 30 derniers jours (seulement un chiffre solide, lib/assistantViews) */}
+            {typeof p.views === 'number' && p.views > 0 ? (
+              <Text testID="assistant-card-views" style={[styles.cardViews, rtl]} numberOfLines={2}>
+                {t.card.views(p.views)}
+              </Text>
+            ) : null}
             {/* « Commander » : Zara prend la commande de cet article tout de suite (plus de panier) */}
             {p.in_stock ? (
               <Pressable
@@ -629,6 +635,7 @@ const styles = StyleSheet.create({
   cardSee: { color: colors.gold, fontFamily: fonts.bodySemiBold, fontSize: 12, paddingHorizontal: 9, marginTop: 6 },
   cardOut: { color: colors.errorText, fontFamily: fonts.bodySemiBold, fontSize: 12, paddingHorizontal: 9, marginTop: 6 },
   cardLow: { color: '#ffb347', fontFamily: fonts.bodySemiBold, fontSize: 11.5, paddingHorizontal: 9, marginTop: 5 },
+  cardViews: { color: '#9fd3ff', fontFamily: fonts.bodySemiBold, fontSize: 11, paddingHorizontal: 9, marginTop: 4 },
 
   inputBar: {
     flexDirection: 'row',

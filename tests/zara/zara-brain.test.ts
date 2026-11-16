@@ -441,7 +441,7 @@ async function main() {
   ok('au plus 3 raisons', why(fake({ stock: 2, colors: ['a', 'b'], sizes: ['1', '2'] }), { min: 0, max: 20000 }).length === 3);
   const advFr = m.whyAdvice(fake({}), m.ANY_BUDGET, 'fr');
   const advAr = m.whyAdvice(fake({}), m.ANY_BUDGET, 'ar');
-  ok('conseil en francais : « Mon conseil{nom} : « Rolex dorée » — ... »', /^Mon conseil\{nom\} : « Rolex dorée » — 50 % de remise : 12\s?500 FCFA au lieu de 25\s?000 FCFA · plus que 3 en stock\.$/.test(advFr), advFr);
+  ok('conseil en francais : « Mon conseil{nom} : « Rolex dorée » — ... »', /^Mon conseil\{nom\} : « Rolex dorée » — 50 % de remise : 12\s?500 FCFA au lieu de 25\s?000 FCFA · vous économisez 12\s?500 FCFA · plus que 3 en stock\.$/.test(advFr), advFr);
   ok('conseil en arabe : « نصيحتي{nom}: «Rolex dorée» — ... »', /^نصيحتي\{nom\}: «Rolex dorée» — خصم 50 %/.test(advAr) && /بدل/.test(advAr) && /بقي 3 فقط/.test(advAr), advAr);
   ok('le nom du produit trop long est raccourci', m.whyAdvice(fake({ name: 'A'.repeat(100) }), m.ANY_BUDGET).includes('…'));
 
@@ -453,9 +453,9 @@ async function main() {
   const maxPct = m.maxDiscountPct(catalog);
   ok('plus forte remise du catalogue : un entier entre 5 et 90', maxPct !== null && Number.isInteger(maxPct) && maxPct >= 5 && maxPct <= 90, maxPct);
   const pitch = m.productPitch(fake({ stock: 3 }));
-  ok('fiche produit regardee (fr) : prix barre, -50 %, stock, « Commander »', /12\s?500 FCFA au lieu de 25\s?000 FCFA \(-50 %\)/.test(pitch) && /Plus que 3 en stock/.test(pitch) && /« Commander »/.test(pitch), pitch);
+  ok('fiche produit regardee (fr) : prix barre, -50 %, stock, « Commander »', /12\s?500 FCFA au lieu de 25\s?000 FCFA \(-50 % : vous économisez 12\s?500 FCFA\)/.test(pitch) && /Plus que 3 en stock/.test(pitch) && /« Commander »/.test(pitch), pitch);
   const pitchAr = m.productPitch(fake({ stock: 3 }), 'ar');
-  ok('fiche produit regardee (ar) : prix barre, -50 %, stock, Commander', /بدل 25\s?000 FCFA \(-50 %\)/.test(pitchAr) && /بقي 3 فقط/.test(pitchAr) && /Commander/.test(pitchAr), pitchAr);
+  ok('fiche produit regardee (ar) : prix barre, -50 %, stock, Commander', /بدل 25\s?000 FCFA \(-50 %: توفّر 12\s?500 FCFA\)/.test(pitchAr) && /بقي 3 فقط/.test(pitchAr) && /Commander/.test(pitchAr), pitchAr);
   ok('fiche sans remise ni rarete : ni « au lieu de » ni « plus que »', !/au lieu de|Plus que|qu’un/.test(m.productPitch(fake({ compareAt: null, stock: 40 }))));
   ok('commande commencee pas terminee : l\'article et le total, sans « panier » (fr et ar)', /« Montre » pour 25\s?000 FCFA/.test(m.orderReminder('Montre', 25000)) && /n’est pas terminée/.test(m.orderReminder('Montre', 25000)) && !/panier/.test(m.orderReminder('Montre', 25000)) && /25\s?000 FCFA/.test(m.orderReminder('ساعة', 25000, 'ar')) && /طلبك لم يكتمل/.test(m.orderReminder('ساعة', 25000, 'ar')));
   ok("objection de prix (fr) : promotions (jusqu'a -50 %), budget, livraison gratuite a N'Djamena", /jusqu’à -50 %/.test(m.priceReply(50)) && !/jusqu’à/.test(m.priceReply(null)) && /Djamena, la livraison est gratuite/.test(m.priceReply(50)));

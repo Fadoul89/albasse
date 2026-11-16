@@ -6,6 +6,7 @@
 //           T (personnalite : politesse, compliments, adresse et numero personnels), O (Zara finalise l'achat dans le chat).
 //           F (programme de fidelite : grade, points, comment gagner). Y (conclure la vente, preuves vraies, packs), Z (rappel WhatsApp avec jour choisi et page admin), H (bouton de Zara : milieu de l'ecran, vibration, lumiere).
 //           § (Zara apprend les « mots qui vendent » : cadeau surprise du chat, sans risque, echeance vraie, vrai pourcentage).
+//           £ (psychologie de la vente : « 👀 Les plus regardés » sur 30 jours, « Vu par N personnes », « vous économisez »).
 //           Choisir avec PARTS=ABCDEMTOF.
 const { chromium, devices } = require('playwright');
 const { spawn } = require('child_process');
@@ -20,7 +21,7 @@ const BASE_HOST = new URL(BASE).hostname;
 // MOBILE_MONEY=on : le site a été construit avec EXPO_PUBLIC_MOBILE_MONEY=on (Airtel Money et Moov Money ouverts) : on lance les ANCIENS contrôles.
 // Sans cette variable (le site publié : Airtel / Moov retirés « pour le moment ») : les nouveaux contrôles (partie ¤) et les anciens contrôles de paiement sont remplacés.
 const MM = process.env.MOBILE_MONEY === 'on';
-const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI0123456789TOFBCDE+=^~%&@?¤$#').toUpperCase();
+const PARTS = (process.env.PARTS || 'ALKPMRSUVWXYZHGJNQI0123456789TOFBCDE+=^~%&@?¤$#£').toUpperCase();
 // saison fraiche (blousons et manteaux) : le bouton du menu de Zara n'existe que jusqu'au 31 decembre 2026 a 23h59 (N'Djamena)
 const COLD_ON = Date.now() < Date.parse('2027-01-01T00:00:00+01:00');
 const OUT = path.join(require('os').tmpdir(), 'zara-shots');
@@ -52,7 +53,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   // rank : rang du jour renvoye par la fonction de la base (null : fonction pas installee). fakeUser : compte simule (token : reponse a une connexion par mot de passe ; delay : lenteur du profil en ms). fakeOrders : { list: [...], patches: [] } = fausse table des commandes.
   // zaraInstall : par defaut, le visiteur a deja repondu « Plus tard » a l'installation (Zara ne la propose pas) ; null = vrai nouveau
   // visiteur, pour les parties qui testent l'installation
-  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, fakeSales = null, fakeAffinity = null, fakeCallbacks = null, fakePushes = null, fakeStore = null, fakeCats = null, fakeOnline = null, fakeRecent = null, fakeUnsub = null, initScripts = [], zaraInstall = 'dismissed', zaraPush = 'later', installAfterSignUp = '1', pushPerm = null, pushAnswer = 'granted', fakeAi = null, fakePromos = null, fakeTelegram = null, fakeInvites = null } = {}) {
+  async function newVisitor(opts, { storage = {}, session = {}, fakeUser = null, blockPath = null, fakeOrders = null, lang = 'fr', cookies = null, rank = null, oldRank = false, noStatsColumns = false, fakeStats = null, fakeBrowsing = null, fakeOverview = null, fakeSales = null, fakeViews = null, fakeAffinity = null, fakeCallbacks = null, fakePushes = null, fakeStore = null, fakeCats = null, fakeOnline = null, fakeRecent = null, fakeUnsub = null, initScripts = [], zaraInstall = 'dismissed', zaraPush = 'later', installAfterSignUp = '1', pushPerm = null, pushAnswer = 'granted', fakeAi = null, fakePromos = null, fakeTelegram = null, fakeInvites = null } = {}) {
     const ctx = await b.newContext(opts);
     if (cookies) await ctx.addCookies(cookies);
     if (lang) storage = { albasse_zara_lang: lang, ...storage };
@@ -189,6 +190,13 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
           (fakeSales.calls = fakeSales.calls || []).push(JSON.parse(req.postData() || '{}'));
           if (fakeSales.status && fakeSales.status >= 400) return json(route, fakeSales.body || { code: 'PGRST202', message: 'Could not find the function public.assistant_product_sales' }, fakeSales.status);
           return json(route, fakeSales.rows);
+        }
+        // visites reelles des 30 derniers jours (add-zara-most-viewed.sql) : fakeViews.rows = lignes { product_id, visitors } ; sans fakeViews, la fonction est « absente »
+        if (u.pathname === '/rest/v1/rpc/assistant_product_views' && m === 'POST') {
+          if (!fakeViews) return json(route, { code: 'PGRST202', message: 'Could not find the function public.assistant_product_views(p_days) in the schema cache' }, 404);
+          (fakeViews.calls = fakeViews.calls || []).push(JSON.parse(req.postData() || '{}'));
+          if (fakeViews.status && fakeViews.status >= 400) return json(route, fakeViews.body || { message: 'erreur' }, fakeViews.status);
+          return json(route, fakeViews.rows);
         }
         // « X % des clients ont aussi acheté » : fakeAffinity.body = la reponse de la fonction product_affinity ; sans fakeAffinity, le script SQL n'est « pas applique »
         if (u.pathname === '/rest/v1/rpc/product_affinity' && m === 'POST') {
@@ -2729,7 +2737,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
     await waitText(page, /À savoir avant de commander/);
     await waitText(page, /Créez votre compte gratuit(?:, Fatimé)?/);
     const menu = await chipLabels(page);
-    check('menu du visiteur : compte, connexion, promotions, nouveautes, conseil, categories, livraison, WhatsApp, langue', menu.join('|') === `👤 Créer mon compte|Me connecter|🔥 Promotions|🆕 Nouveautés|${COLD_ON ? '🧥 Blousons & manteaux|' : ''}🎯 Conseil|🛍️ Catégories|🚚 Livraison et paiement|💬 WhatsApp|🌐 العربية`, menu);
+    check('menu du visiteur : compte, connexion, promotions, nouveautes, plus regardes, conseil, categories, livraison, WhatsApp, langue', menu.join('|') === `👤 Créer mon compte|Me connecter|🔥 Promotions|🆕 Nouveautés|👀 Les plus regardés|${COLD_ON ? '🧥 Blousons & manteaux|' : ''}🎯 Conseil|🛍️ Catégories|🚚 Livraison et paiement|💬 WhatsApp|🌐 العربية`, menu);
     await page.screenshot({ path: path.join(OUT, 'A1-accueil.png') });
 
     // 1. la phrase du test du patron : un cadeau pour son mari -> des questions AVANT de montrer des articles
@@ -2901,7 +2909,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check("informations importantes en arabe : livraison 8:30-16:00, paiement a la livraison seulement a N'Djamena, 48 heures", /8:30/.test(infoAr) && /16:00/.test(infoAr) && (MM ? /فقط في إنجامينا/.test(infoAr) : /في إنجامينا/.test(infoAr) && /واتساب/.test(infoAr) && !/Airtel|Moov/.test(infoAr)) && /48 ساعة/.test(infoAr), infoAr);
       await waitText(page, /أنشئ حسابك المجاني(?:، فاطمة)?/);
       const menuAr = await chipLabels(page);
-      check('menu en arabe : compte, connexion, offres, nouveautes, conseil, categories, livraison, WhatsApp, Francais', menuAr.join('|') === `👤 إنشاء حسابي|تسجيل الدخول|🔥 العروض|🆕 الجديد|${COLD_ON ? '🧥 جاكيتات ومعاطف|' : ''}🎯 نصيحة|🛍️ الفئات|🚚 التوصيل والدفع|💬 واتساب|🌐 Français`, menuAr);
+      check('menu en arabe : compte, connexion, offres, nouveautes, plus regardes, conseil, categories, livraison, WhatsApp, Francais', menuAr.join('|') === `👤 إنشاء حسابي|تسجيل الدخول|🔥 العروض|🆕 الجديد|👀 الأكثر مشاهدة|${COLD_ON ? '🧥 جاكيتات ومعاطف|' : ''}🎯 نصيحة|🛍️ الفئات|🚚 التوصيل والدفع|💬 واتساب|🌐 Français`, menuAr);
       await page.screenshot({ path: path.join(OUT, 'L2-menu-arabe.png') });
 
       // --- L2. cadeau en arabe : questions une par une
@@ -12811,6 +12819,133 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
       check(`${url} : l'accueil d'Albasse s'ouvre (categories), plus de page cafe`, (await v.page.getByTestId('cafe-page').count()) === 0 && (await v.page.getByTestId('home-categories').count()) === 1 && /Albasse/i.test(await v.page.title()), await v.page.title());
       check(`${url} : aucune erreur`, v.errs.length === 0, v.errs);
       await v.ctx.close();
+    }
+  }
+
+  // =============================================== £. PSYCHOLOGIE DE LA VENTE : LES PLUS REGARDES (30 JOURS), « VU PAR N PERSONNES », « VOUS ECONOMISEZ » ===============================================
+  // Les visites viennent de la fonction de la base assistant_product_views (simulee ici). VIEWS_FILE=fichier.json : les VRAIES lignes de la base (pour l'image du resultat).
+  if (PARTS.includes('£')) {
+    console.log('\n== £ psychologie de la vente : « 👀 Les plus regardés » (30 jours), « Vu par N personnes », « vous économisez »');
+    const real = (await get('products?select=id,name,slug,price,compare_at_price,stock,images&is_active=eq.true&stock=gt.0&price=gt.0&order=created_at.desc&limit=60')).filter((p) => (p.images || [])[0]);
+    const counts = [1842, 1641, 900, 400, 120, 49];
+    const rows = process.env.VIEWS_FILE ? JSON.parse(fs.readFileSync(process.env.VIEWS_FILE, 'utf8')) : real.slice(0, counts.length).map((p, i) => ({ product_id: p.id, visitors: counts[i] }));
+    if (realProduct && !process.env.VIEWS_FILE) rows.push({ product_id: realProduct.id, visitors: 321 });
+    const byId = new Map(rows.map((r) => [r.product_id, r.visitors]));
+    // les noms des articles des lignes (lus dans la vraie base : les plus regardés ne sont pas toujours parmi les plus récents)
+    const named = rows.length ? await get(`products?select=id,name&id=in.(${rows.map((r) => r.product_id).join(',')})`) : [];
+    const nameOf = new Map([...real, ...named].map((p) => [p.name.trim(), p.id]));
+    const fmt = (n) => n.toLocaleString('fr-FR');
+    const viewsOfCard = async (card) => ((await card.innerText()).split('\n').map((l) => l.trim()).find((l) => /^👀 /.test(l)) || '');
+
+    // £1. en francais : le bouton du menu, 4 articles au plus, du plus regarde au moins regarde, le vrai chiffre sur chaque fiche
+    {
+      const fakeViews = { rows };
+      const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Fatimé' }, fakeViews });
+      const { page } = v;
+      await page.goto(`${BASE}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await page.getByRole('button', { name: FAB_NAME }).click();
+      await waitText(page, WELCOME_FR('Fatimé'));
+      await waitText(page, /Créez votre compte gratuit(?:, Fatimé)?/);
+      const menu = await chipLabels(page);
+      check('menu : « 👀 Les plus regardés » juste après « 🆕 Nouveautés »', menu.indexOf('👀 Les plus regardés') === menu.indexOf('🆕 Nouveautés') + 1, menu);
+      const before = await cardsOf(page).count();
+      await tap(page, '👀 Les plus regardés', /les plus regardés ces 30 derniers jours/);
+      const intro = await panelOf(page).getByText(/les plus regardés ces 30 derniers jours/).last().innerText();
+      check('présentation : « 👀 Voici les articles les plus regardés ces 30 derniers jours chez Albasse Shopping »', /^👀 Voici les articles les plus regardés ces 30 derniers jours chez Albasse Shopping/.test(intro), intro);
+      const cs = await newCards(page, before);
+      const shown = [];
+      for (const c of cs) {
+        // le nom vient de l'etiquette de la fiche (« Voir le produit › NOM ») : le texte visible commence parfois par la remise (-13%)
+        const name = String((await c.getAttribute('aria-label')) || '').replace(/^Voir le produit ›\s*/, '').trim();
+        shown.push({ name, views: await viewsOfCard(c) });
+      }
+      const ids = shown.map((x) => nameOf.get(x.name));
+      const vis = ids.map((id) => byId.get(id) ?? 0);
+      check('1 à 4 articles, tous avec un chiffre solide (50 personnes ou plus)', cs.length >= 1 && cs.length <= 4 && vis.every((n) => n >= 50), shown);
+      check('rangés du plus regardé au moins regardé', vis.every((n, i) => i === 0 || vis[i - 1] >= n), vis);
+      check('chaque fiche dit le VRAI chiffre : « 👀 Vu par N personnes (30 j) »', shown.every((x, i) => x.views === `👀 Vu par ${fmt(vis[i])} personnes (30 j)`), shown);
+      check('jamais l\'article à 49 personnes (chiffre trop petit)', !vis.includes(49));
+      check('la base est interrogée sur 30 jours', !!fakeViews.calls && fakeViews.calls.length >= 1 && fakeViews.calls.every((c) => c.p_days === 30), fakeViews.calls);
+      // aversion a la perte : si le conseil cite une remise, il dit aussi la vraie economie (ancien prix - prix)
+      const adviceAll = (await panelOf(page).getByText(/^Mon conseil/).allInnerTexts()).pop() || '';
+      const mm = adviceAll.match(/([\d\s  ]+) FCFA au lieu de ([\d\s  ]+) FCFA · vous économisez ([\d\s  ]+) FCFA/);
+      if (/au lieu de/.test(adviceAll)) check('conseil avec remise : « vous économisez » = ancien prix - prix', !!mm && num(mm[2]) - num(mm[1]) === num(mm[3]), adviceAll);
+      else console.log('info  le premier article n\'a pas de remise en ce moment : pas de « vous économisez » (normal)', adviceAll.slice(0, 120));
+      const all = await panelOf(page).innerText();
+      check('jamais « acheté » ni « regardent en ce moment » à côté des visites', !/personnes (l’ont )?achet|regardent en ce moment/.test(all));
+      await page.setViewportSize({ width: 390, height: 1400 });
+      await sleep(500);
+      await page.screenshot({ path: path.join(OUT, '£1-plus-regardes.png') });
+      // le panneau seul, depuis la présentation (pour l'image montrée au patron)
+      await panelOf(page).getByText(/les plus regardés ces 30 derniers jours/).last().scrollIntoViewIfNeeded();
+      await sleep(400);
+      await panelOf(page).screenshot({ path: path.join(OUT, '£1b-panneau.png') });
+      await page.setViewportSize({ width: 390, height: 800 });
+      // ecrit a la main
+      await ask(page, 'les plus vus', /les plus regardés ces 30 derniers jours/);
+      check('écrit « les plus vus » : même réponse', true);
+      check('aucune écriture réelle dans la base, aucune erreur', v.writes.every((w) => /visitor_sessions|product_views/.test(w)) && v.errs.length === 0, { writes: v.writes, errs: v.errs });
+      await v.ctx.close();
+    }
+
+    // £2. en arabe
+    {
+      const v = await newVisitor(phone, { lang: 'ar', storage: { albasse_zara_name: 'Ali', albasse_zara_lang: 'ar' }, fakeViews: { rows } });
+      const { page } = v;
+      await page.goto(`${BASE}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await page.getByRole('button', { name: /Discuter avec Zara Kings|التحدث مع زارا كينغز/ }).click();
+      await chip(page, '👀 الأكثر مشاهدة').first().waitFor({ timeout: 25000 });
+      const before = await cardsOf(page).count();
+      await tap(page, '👀 الأكثر مشاهدة', /المنتجات الأكثر مشاهدة خلال آخر 30 يوما/);
+      const cs = await newCards(page, before);
+      const first = cs[0] ? await viewsOfCard(cs[0]) : '';
+      check('arabe : présentation et fiches « 👀 شاهده N شخصا في 30 يوما »', cs.length >= 1 && /^👀 شاهده \d+ شخصا في 30 يوما$/.test(first), first);
+      await page.setViewportSize({ width: 390, height: 1400 });
+      await sleep(500);
+      await page.screenshot({ path: path.join(OUT, '£2-plus-regardes-arabe.png') });
+      await panelOf(page).getByText(/المنتجات الأكثر مشاهدة خلال آخر 30 يوما/).last().scrollIntoViewIfNeeded();
+      await sleep(400);
+      await panelOf(page).screenshot({ path: path.join(OUT, '£2b-panneau-arabe.png') });
+      check('arabe : aucune écriture réelle, aucune erreur', v.writes.every((w) => /visitor_sessions|product_views/.test(w)) && v.errs.length === 0, { writes: v.writes, errs: v.errs });
+      await v.ctx.close();
+    }
+
+    // £3. script SQL pas encore lancé : Zara le dit gentiment, et aucune fiche ne montre de chiffre de visites
+    {
+      const v = await newVisitor(phone, { storage: { albasse_zara_name: 'Fatimé' } });
+      const { page } = v;
+      await page.goto(`${BASE}/`, { waitUntil: 'load' });
+      await sleep(2500);
+      await page.getByRole('button', { name: FAB_NAME }).click();
+      await waitText(page, /Créez votre compte gratuit(?:, Fatimé)?/);
+      await tap(page, '👀 Les plus regardés', /Je ne peux pas encore vous montrer les articles les plus regardés/);
+      const chips = await chipLabels(page);
+      check('sans la fonction de la base : message clair + promotions, nouveautés, menu, WhatsApp', ['🔥 Promotions', '🆕 Nouveautés', '🏠 Menu', '💬 WhatsApp'].every((l) => chips.includes(l)), chips);
+      await tap(page, '🔥 Promotions', /promotions du moment|Pas de promotion en ce moment/);
+      await sleep(1200);
+      check('sans la fonction de la base : aucune fiche ne montre « Vu par … »', (await panelOf(page).getByTestId('assistant-card-views').count()) === 0);
+      check('aucune écriture réelle, aucune erreur', v.writes.every((w) => /visitor_sessions|product_views/.test(w)) && v.errs.length === 0, { writes: v.writes, errs: v.errs });
+      await v.ctx.close();
+    }
+
+    // £4. sur la fiche d'un article très regardé : Zara le dit (avec la vraie économie s'il y a une remise)
+    if (realProduct && !process.env.VIEWS_FILE) {
+      const c = await newVisitor(phone, { storage: { albasse_zara_name: 'Ali' }, fakeViews: { rows } });
+      await c.page.goto(`${BASE}/produit/rolex`, { waitUntil: 'load' });
+      await sleep(3500);
+      await c.page.getByRole('button', { name: FAB_NAME }).click();
+      await waitText(c.page, /Vous regardez « Rolex » \? Excellent choix !/);
+      const pitch = await panelOf(c.page).getByText(/Vous regardez « Rolex »/).first().innerText();
+      const lines = pitch.split('\n');
+      check('fiche regardée : « 👀 321 personnes ont regardé cet article ces 30 derniers jours. » juste avant « Pour le commander »', lines[lines.length - 2] === '👀 321 personnes ont regardé cet article ces 30 derniers jours.' && /Pour le commander/.test(lines[lines.length - 1]), lines);
+      if (/au lieu de/.test(pitch)) {
+        const pm = pitch.match(/([\d\s  ]+) FCFA au lieu de ([\d\s  ]+) FCFA \(-\d+ % : vous économisez ([\d\s  ]+) FCFA\)/);
+        check('fiche regardée avec remise : « vous économisez » = ancien prix - prix', !!pm && num(pm[2]) - num(pm[1]) === num(pm[3]), pitch);
+      }
+      check('fiche regardée : aucune écriture réelle, aucune erreur', c.writes.every((w) => /visitor_sessions|product_views/.test(w)) && c.errs.length === 0, { writes: c.writes, errs: c.errs });
+      await c.ctx.close();
     }
   }
 
