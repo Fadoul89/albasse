@@ -40,6 +40,7 @@ import { AdminPaymentSettingsScreen } from '../screens/admin/AdminPaymentSetting
 import { AdminCustomersScreen } from '../screens/admin/AdminCustomersScreen';
 import { AdminCustomerDetailScreen } from '../screens/admin/AdminCustomerDetailScreen';
 import { AdminDashboardScreen } from '../screens/admin/AdminDashboardScreen';
+import { AdminHackerDashboardScreen } from '../screens/admin/AdminHackerDashboardScreen';
 import { AdminSourcePerformanceScreen } from '../screens/admin/AdminSourcePerformanceScreen';
 import { AdminZaraStatsScreen } from '../screens/admin/AdminZaraStatsScreen';
 import { AdminMarketingAIScreen } from '../screens/admin/AdminMarketingAIScreen';
@@ -124,6 +125,7 @@ const linking: LinkingOptions<RootStackParamList> = {
       ForgotPassword: 'mot-de-passe-oublie',
       ResetPassword: 'reinitialiser-mot-de-passe',
       AdminDashboard: 'admin/tableau-de-bord',
+      AdminHackerDashboard: 'admin/tableau-de-bord-hacker',
       AdminSourcePerformance: 'admin/performance-par-source',
       AdminZaraStats: 'admin/statistiques-zara',
       AdminMarketingAI: 'admin/zara-marketing',
@@ -304,6 +306,7 @@ export function RootNavigator() {
             <Stack.Screen name="AdminCustomers" component={AdminCustomersScreen} />
             <Stack.Screen name="AdminCustomerDetail" component={AdminCustomerDetailScreen} />
             <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
+            <Stack.Screen name="AdminHackerDashboard" component={AdminHackerDashboardScreen} />
             <Stack.Screen name="AdminSourcePerformance" component={AdminSourcePerformanceScreen} />
             <Stack.Screen name="AdminZaraStats" component={AdminZaraStatsScreen} />
             <Stack.Screen name="AdminMarketingAI" component={AdminMarketingAIScreen} />
