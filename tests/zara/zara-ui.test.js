@@ -5530,7 +5530,11 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         const v = await visitor();
         await openZara(v);
         const all = await panelOf(v.page).innerText();
-        check('Zara a l\'ouverture : « La saison fraiche arrive », une seule fois, avant les infos importantes', (all.match(/La saison fraîche arrive/g) || []).length === 1 && all.indexOf('La saison fraîche arrive') < all.indexOf('À savoir avant de commander'), all.slice(0, 300));
+        // une seule phrase d'ouverture : un moment fort qui approche (ex. Black Friday, annoncé 21 jours avant) passe AVANT la saison fraîche (assistantStore.onboarding)
+        const nCold = (all.match(/La saison fraîche arrive/g) || []).length;
+        const nBf = (all.match(/🖤 Black Friday :/g) || []).length;
+        const opener = nBf ? '🖤 Black Friday :' : 'La saison fraîche arrive';
+        check(`Zara a l'ouverture : une seule phrase (${nBf ? 'Black Friday, qui passe avant la saison fraiche' : '« La saison fraiche arrive »'}), avant les infos importantes`, nCold + nBf === 1 && all.indexOf(opener) < all.indexOf('À savoir avant de commander'), all.slice(0, 300));
         check('le menu a le bouton « 🧥 Blousons & manteaux »', (await chipLabels(v.page)).includes('🧥 Blousons & manteaux'), await chipLabels(v.page));
         const before = await cardsOf(v.page).count();
         await tap(v.page, '🧥 Blousons & manteaux', /Nos blousons et manteaux/);
@@ -5581,7 +5585,7 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         await v.page.goto(`${base}/`, { waitUntil: 'load' });
         await sleep(2500);
         await v.page.getByTestId('assistant-fab').click();
-        await waitText(v.page, /موسم البرد يقترب/, 25000);
+        await waitText(v.page, /موسم البرد يقترب|🖤 الجمعة السوداء/, 25000); // le Black Friday qui approche passe avant la saison fraîche
         await waitText(v.page, /أنشئ حسابك|حسابك/, 25000);
         check('arabe : la ligne d\'ouverture et le bouton « 🧥 جاكيتات ومعاطف »', (await chipLabels(v.page)).includes('🧥 جاكيتات ومعاطف'), await chipLabels(v.page));
         const before = await cardsOf(v.page).count();
