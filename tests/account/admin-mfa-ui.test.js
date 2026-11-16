@@ -9,7 +9,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const dist = process.argv[2] || '../../dist';
 const port = process.argv[3] || '4520';
 const OUT = process.argv[4] || os.tmpdir();
-const BASE = `http://localhost:${port}`;
+const BASE = (process.env.BASE_URL || `http://localhost:${port}`).replace(/\/$/, ""); // BASE_URL=https://www.albasseshopping.com : le vrai site (Supabase toujours simulé)
 const GOOD = '123456';
 
 let ok = true;

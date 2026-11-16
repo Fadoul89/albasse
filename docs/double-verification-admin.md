@@ -33,7 +33,7 @@ Seulement pour les comptes **administrateurs**. Les clients se connectent comme 
 ## État de la mise en ligne (16 novembre 2026)
 - Base : `add-admin-mfa.sql` appliqué. Vérifié : l'admin (sans double vérification) reste admin ; un client n'est jamais admin.
 - Fonctions redéployées avec `adminAllowed` : `telegram-broadcast`, `send-broadcast-push`, `marketing-ai`, `zara-seo`, `admin-client-account`, `order-invoice`.
-- **`brevo-email` pas encore redéployée** (165 Ko, 9 fichiers : la recopier à la main risquait de casser les e-mails de commande). En ligne, elle garde
+- **`brevo-email` laissée telle quelle (décision du patron, 16 novembre 2026)**. Pas encore redéployée (165 Ko, 9 fichiers : la recopier à la main risquait de casser les e-mails de commande). En ligne, elle garde
   l'ancien contrôle (jeton + `profiles.is_admin`) ; le dépôt contient déjà la version avec `adminAllowed`. À déployer avec la CLI Supabase
   (`supabase functions deploy brevo-email --no-verify-jwt`) ou une action GitHub avec un jeton d'accès Supabase.
 
