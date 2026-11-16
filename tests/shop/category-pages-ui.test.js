@@ -1,4 +1,4 @@
-// Pages des catégories (« ‹ 1 2 3 … › » et « Page suivante ») dans le navigateur, sur le site fabriqué (expo export).
+// Pages des catégories et de la Recherche (« ‹ 1 2 3 … › » et « Page suivante ») dans le navigateur, sur le site fabriqué (expo export).
 // Les articles et les catégories sont lus dans la VRAIE base (lecture seule) ; toute écriture est bloquée ; le compte obligatoire est simulé « éteint ».
 // Usage : SUPABASE_ANON_KEY=… NODE_PATH=/opt/node-tools/node_modules node tests/shop/category-pages-ui.test.js <dossier dist> [port] [dossier des photos]
 // BASE_URL=https://www.albasseshopping.com : le vrai site en ligne.
@@ -190,6 +190,55 @@ const pageParam = (page) => new URL(page.url()).searchParams.get('page');
     await waitCards(w.page);
     await sleep(800);
     check(`petite catégorie (${small}, ${familyCount(small)} articles) : tous montrés, pas de barre de pages`, (await cardsOn(w.page)).length === familyCount(small) && (await w.page.getByTestId('category-pages').count()) === 0);
+    await w.ctx.close();
+  }
+
+  // 8 bis) « Tous les articles » : toutes les catégories, en pages
+  {
+    const w = await visitor(b);
+    await w.page.goto(`${BASE}/categorie/tous`, { waitUntil: 'load' });
+    await waitCards(w.page);
+    await bar(w.page).scrollIntoViewIfNeeded();
+    const info = await w.page.getByTestId('category-pages-info').innerText();
+    const total = prods.length;
+    check(`« Tous les articles » : ${total} articles en ${Math.ceil(total / 20)} pages de 20`, info === `Page 1 sur ${Math.ceil(total / 20)} · articles 1–20 sur ${total}` && (await cardsOn(w.page)).length === 20, info);
+    const items = await buttons(w.page);
+    check('« Tous les articles » : 5 numéros au plus (1 2 3 … dernière)', items.length <= 5 && items[items.length - 1] === String(Math.ceil(total / 20)), items);
+    await w.ctx.close();
+  }
+
+  // 8 ter) la page Recherche : mêmes pages
+  {
+    const w = await visitor(b);
+    await w.page.goto(`${BASE}/recherche`, { waitUntil: 'load' });
+    await w.page.getByPlaceholder('Rechercher un produit…').waitFor({ timeout: 30000 });
+    await w.page.getByPlaceholder('Rechercher un produit…').fill('montre');
+    await sleep(1500);
+    const sCards = () => w.page.getByTestId('search-list').locator('[data-testid^="product-card-"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid').replace('product-card-', '')));
+    const r1 = await sCards();
+    const sBar = w.page.getByTestId('search-pages');
+    if ((await sBar.count()) > 0) {
+      await sBar.scrollIntoViewIfNeeded();
+      const info = await w.page.getByTestId('search-pages-info').innerText();
+      const total = Number((info.match(/sur (\d+)$/) || [])[1]);
+      check('Recherche « montre » : 20 résultats sur la page 1, et la barre « Page 1 sur … »', r1.length === 20 && /^Page 1 sur \d+ · articles 1–20 sur \d+$/.test(info), info);
+      const seen = new Set(r1);
+      let guard = 0;
+      while ((await w.page.getByTestId('search-pages-next-big').count()) > 0 && guard++ < 40) {
+        await w.page.getByTestId('search-pages-next-big').click();
+        await sleep(800);
+        (await sCards()).forEach((x) => seen.add(x));
+      }
+      check(`Recherche « montre » : tous les ${total} résultats, chacun une fois, en passant les pages`, seen.size === total, { vus: seen.size, total });
+      await w.page.getByPlaceholder('Rechercher un produit…').fill('parfum');
+      await sleep(1500);
+      await w.page.getByTestId('search-pages').scrollIntoViewIfNeeded().catch(() => {});
+      const info2 = (await w.page.getByTestId('search-pages-info').count()) ? await w.page.getByTestId('search-pages-info').innerText() : 'Page 1';
+      check('une nouvelle recherche repart de la page 1', /^Page 1/.test(info2), info2);
+    } else {
+      check('Recherche « montre » : moins de 21 résultats, tous sur une page (pas de barre)', r1.length <= 20 && r1.length > 0, r1.length);
+    }
+    check('Recherche : aucune erreur', w.errs.length === 0, w.errs);
     await w.ctx.close();
   }
 
