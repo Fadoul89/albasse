@@ -12466,8 +12466,9 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
   if (PARTS.includes('@')) {
     console.log('\n== @ accueil : 4 articles par categorie (dans l\'ordre de l\'admin), le reste dans la categorie, « Voir les N autres articles » et « Voir tous les articles » (fausse liste d\'articles : lecture seule)');
     const HDRA = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
-    const cats = await get('categories?select=id,name,slug');
-    check('la base a au moins 3 categories', cats.length >= 3, cats.length);
+    // seulement les categories principales : l'accueil ne montre pas de section pour une sous-categorie (ex. « parfum-feminin »)
+    const cats = (await get('categories?select=id,name,slug,parent_id')).filter((c) => !c.parent_id);
+    check('la base a au moins 3 categories principales', cats.length >= 3, cats.length);
     const [cA, cB, cC] = cats;
     const catalog = (await get('products?select=*&is_active=eq.true&stock=gt.0&limit=80&order=created_at.desc')).filter((p) => (p.images || [])[0] && Number(p.price) > 0);
     const uniq = []; const seen = new Set();
@@ -12573,13 +12574,16 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
 
     // avec le VRAI catalogue (lecture seule) : memes regles, dans l'ordre reel des categories ; et l'image exemple (ecran de telephone tres haut : tout l'accueil d'un coup)
     {
-      const realCats = await get('categories?select=id,name,slug,sort_order');
-      const catsOk = Array.isArray(realCats) ? realCats : await get('categories?select=id,name,slug');
+      // l'accueil montre les categories PRINCIPALES ; le total d'une categorie compte aussi ses sous-categories (meme regle que la page de la categorie)
+      const realCatsAll = await get('categories?select=id,name,slug,sort_order,parent_id');
+      const catsAll = Array.isArray(realCatsAll) ? realCatsAll : await get('categories?select=id,name,slug,parent_id');
+      const catsOk = catsAll.filter((c) => !c.parent_id);
       const rank = (c) => (typeof c.sort_order === 'number' ? c.sort_order : Infinity);
       const sorted = [...catsOk].sort((x, y) => (rank(x) !== rank(y) ? (rank(x) < rank(y) ? -1 : 1) : x.name.localeCompare(y.name, 'fr')));
       const realProducts = await get('products?select=id,category_id,is_active&is_active=eq.true&limit=1000');
       const totals = {};
-      for (const p of realProducts) totals[p.category_id] = (totals[p.category_id] || 0) + 1;
+      const familyOf = (id) => { const c = catsAll.find((x) => x.id === id); return c && c.parent_id ? c.parent_id : id; };
+      for (const p of realProducts) totals[familyOf(p.category_id)] = (totals[familyOf(p.category_id)] || 0) + 1;
       const expected = sorted.filter((c) => totals[c.id] > 0);
       const v = await newVisitor({ ...phone, viewport: { width: 390, height: 3600 }, deviceScaleFactor: 1.5 });
       await v.page.goto(`${BASE}/`, { waitUntil: 'load' });

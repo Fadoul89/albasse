@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TextInput, StyleSheet, FlatList, Platform, Pressable, ScrollView, useWindowDimensions } from 'react-native';
 import type { RouteProp } from '@react-navigation/native';
 import { useNavigation } from '@react-navigation/native';
@@ -11,6 +11,12 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { MenuLauncher } from '../components/SideMenu';
 import { trackCategoryView, trackSearchQuery } from '../lib/browsingTracker';
 import { inFamily, parentOf, subCategoriesOf } from '../lib/subCategories';
+import { clampPage, pageCount, pageSlice } from '../lib/pagination';
+import { ShopPageBar } from '../components/ShopPageBar';
+
+// Pages de la liste (demande du patron, 16 novembre 2026) : 20 articles par page sur téléphone (10 lignes de 2), 24 sur grand écran (6 lignes de 4).
+// Toute la page est affichée d'un coup : plus de zone vide en bas pendant que la liste charge en défilant.
+export const categoryPageSize = (columns: number) => (columns >= 4 ? 24 : 20);
 
 interface Props {
   route: RouteProp<RootStackParamList, 'Category'>;
@@ -18,6 +24,7 @@ interface Props {
 
 export function CategoryScreen({ route }: Props) {
   const { slug } = route.params;
+  const listRef = useRef<FlatList>(null);
   const { products } = useProducts();
   const { categories } = useCategories();
   const [query, setQuery] = useState('');
@@ -31,7 +38,9 @@ export function CategoryScreen({ route }: Props) {
   // sous-catégories : la catégorie principale de la page (elle-même, ou son parent) et ses sous-catégories, montrées en petites puces
   const main = category ? parentOf(categories, category) ?? category : null;
   const subs = main ? subCategoriesOf(categories, main.id) : [];
-  const openCategory = (target: string) => (navigation as unknown as { setParams: (p: { slug: string }) => void }).setParams({ slug: target });
+  const setParams = (p: { slug?: string; page?: number }) => (navigation as unknown as { setParams: (q: { slug?: string; page?: number }) => void }).setParams(p);
+  // une autre sous-catégorie : on repart de la page 1
+  const openCategory = (target: string) => setParams({ slug: target, page: undefined });
 
   useEffect(() => {
     if (Platform.OS === 'web') {
@@ -64,13 +73,28 @@ export function CategoryScreen({ route }: Props) {
     });
   }, [products, categories, category, showAll, query]);
 
+  const size = categoryPageSize(columns);
+  const pages = pageCount(filtered.length, size);
+  const current = clampPage(Number(route.params.page ?? 1), filtered.length, size);
+  const visible = useMemo(() => pageSlice(filtered, current, size), [filtered, current, size]);
+  const goToPage = (n: number) => {
+    setParams({ page: n > 1 ? n : undefined });
+    // la nouvelle page commence en haut
+    setTimeout(() => listRef.current?.scrollToOffset({ offset: 0, animated: false }), 30);
+  };
+  // une nouvelle recherche : page 1
+  const onSearch = (text: string) => {
+    setQuery(text);
+    if (current > 1) setParams({ page: undefined });
+  };
+
   return (
     <View style={styles.screen}>
       <ScreenHeader title={name} showBack right={<MenuLauncher />} />
       <View style={styles.searchWrap}>
         <TextInput
           value={query}
-          onChangeText={setQuery}
+          onChangeText={onSearch}
           placeholder={`Rechercher dans ${name.toLowerCase()}…`}
           placeholderTextColor={colors.creamFaint}
           style={styles.search}
@@ -96,14 +120,19 @@ export function CategoryScreen({ route }: Props) {
         </ScrollView>
       )}
       <FlatList
+        ref={listRef}
         key={columns}
-        data={filtered}
+        data={visible}
+        initialNumToRender={size}
+        testID="category-list"
         keyExtractor={(item) => item.id}
         numColumns={columns}
         columnWrapperStyle={{ justifyContent: 'space-between' }}
-        contentContainerStyle={styles.grid}
+        // avec une barre de pages : de la place en bas, pour que le bouton rond de Zara ne cache ni « › » ni « Page suivante »
+        contentContainerStyle={[styles.grid, pages > 1 && styles.gridWithPages]}
         renderItem={({ item }) => <ProductCard product={item} columns={columns} />}
         ListEmptyComponent={<Text style={styles.empty}>Aucun produit trouvé.</Text>}
+        ListFooterComponent={<ShopPageBar current={current} count={pages} total={filtered.length} size={size} onGo={goToPage} testID="category-pages" />}
       />
     </View>
   );
@@ -129,6 +158,7 @@ const styles = StyleSheet.create({
   chipText: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 13 },
   chipTextActive: { color: colors.background },
   grid: { paddingHorizontal: spacing.md, paddingBottom: 40 },
+  gridWithPages: { paddingBottom: 190 },
   empty: {
     color: colors.creamFaint,
     fontFamily: fonts.body,

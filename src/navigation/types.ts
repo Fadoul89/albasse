@@ -1,6 +1,7 @@
 export type RootStackParamList = {
   Tabs: undefined;
-  Category: { slug: string };
+  // page : la page de la liste (1, 2, 3…), gardée dans l'adresse (?page=2) pour revenir au même endroit
+  Category: { slug: string; page?: number | string };
   Product: { slug: string };
   Checkout: undefined;
   Travel: undefined;
