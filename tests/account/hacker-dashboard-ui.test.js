@@ -111,6 +111,18 @@ async function visitor(b, { who = 'admin', rpc, viewport, pagePath = '/admin/tab
   v.page.on('pageerror', (e) => errors.push(e.message));
   await v.page.getByTestId('dashboard-hacker-link').waitFor({ timeout: 25000 });
   check('ancien tableau de bord : le bouton « Tableau de bord hacker » est là', /Tableau de bord hacker/.test(await v.page.getByTestId('dashboard-hacker-link').innerText()));
+  // les couleurs hacker restent DANS le nouveau tableau de bord : l'ancien garde les couleurs du site (demande du patron)
+  const oldBg = await v.page.getByTestId('dashboard-hacker-link').evaluate((el) => {
+    for (let e = el.parentElement; e; e = e.parentElement) {
+      const c = getComputedStyle(e).backgroundColor;
+      if (c && c !== 'rgba(0, 0, 0, 0)' && c !== 'transparent') return c;
+    }
+    return null;
+  });
+  check('ancien tableau de bord : garde les couleurs du site (pas le fond noir hacker)', !!oldBg && oldBg !== 'rgb(1, 4, 1)', oldBg);
+  await v.page.getByTestId('dashboard-hacker-link').evaluate((e) => e.scrollIntoView({ block: 'center' }));
+  await sleep(1500);
+  await v.page.screenshot({ path: path.join(OUT, 'hacker-0-ancien-tableau-de-bord.png') });
   await v.page.getByTestId('dashboard-hacker-link').click();
   await v.page.getByTestId('hacker-visitors-value').waitFor({ timeout: 15000 });
   check('le bouton ouvre /admin/tableau-de-bord-hacker', new URL(v.page.url()).pathname === '/admin/tableau-de-bord-hacker', v.page.url());
