@@ -5,7 +5,8 @@
 //   → { ok: true, items: [{ id, name, current, proposal, source: "ia" | "modele", problems: [] }] }
 // Les règles (ce que Zara n'écrit jamais, repli avec les seuls faits connus) sont dans rules.ts (testées : tests/seo/zara-seo.test.ts).
 // Sans clé ANTHROPIC_API_KEY, ou si le modèle répond mal, la proposition est fabriquée avec les faits connus (source « modele »).
-import Anthropic from "npm:@anthropic-ai/sdk";
+import type Anthropic from "npm:@anthropic-ai/sdk";
+import { aiReady, createMessage } from "../_shared/llm.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { proposeDescription, SYSTEM_PROMPT, type SeoFacts } from "./rules.ts";
 
@@ -57,15 +58,13 @@ Deno.serve(async (req: Request) => {
       .in("id", ids);
     if (error) return json({ ok: false, reason: "database" });
 
-    // 3. le modèle (si la clé existe)
-    const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
-    const client = apiKey ? new Anthropic({ apiKey }) : null;
-    const callModel = client
+    // 3. le modèle (si une clé IA existe : OmniRoute ou Claude)
+    const callModel = aiReady()
       ? async (text: string, imageUrl: string | null): Promise<string> => {
           const content: Anthropic.ContentBlockParam[] = [];
           if (imageUrl) content.push({ type: "image", source: { type: "url", url: imageUrl } });
           content.push({ type: "text", text });
-          const res = await client.messages.create({ model: MODEL, max_tokens: 500, system: SYSTEM_PROMPT, messages: [{ role: "user", content }] });
+          const res = await createMessage({ model: MODEL, max_tokens: 500, system: SYSTEM_PROMPT, messages: [{ role: "user", content }] });
           return res.content.map((b) => (b.type === "text" ? b.text : "")).join("");
         }
       : null;
