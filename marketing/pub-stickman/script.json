@@ -1,0 +1,15 @@
+{
+  "lines": [
+    { "id": "l1", "scene": 1, "speaker": "client", "text": "Mon frère, je cherche des chaussures, des vêtements et un bon parfum. Je dois encore faire le tour de toutes les boutiques !" },
+    { "id": "l2", "scene": 2, "speaker": "ami", "text": "Mais pourquoi te fatiguer ? Tu ne connais pas Albasse Shopping ?" },
+    { "id": "l3", "scene": 2, "speaker": "client", "text": "Albasse Shopping ? C'est quoi ça ?" },
+    { "id": "l4", "scene": 2, "speaker": "ami", "text": "C'est une plateforme où tu peux retrouver tout ce que tu cherches !" },
+    { "id": "l5", "scene": 3, "speaker": "ami", "text": "Regarde ! Tu vas simplement sur Albasseshopping.com et tu écris le nom de l'article que tu recherches dans la barre de recherche." },
+    { "id": "l6", "scene": 4, "speaker": "client", "text": "Incroyable ! Tout ça sur un seul site ?" },
+    { "id": "l7", "scene": 4, "speaker": "ami", "text": "Exactement ! Tu choisis ton article et tu passes ta commande directement en ligne." },
+    { "id": "l8", "scene": 5, "speaker": "livreur", "text": "Livraison Albasse Shopping ! Votre commande est arrivée !" },
+    { "id": "l9", "scene": 5, "speaker": "client", "text": "Ah ! Maintenant, je comprends ! Pourquoi personne ne m'avait parlé de ce site ?" },
+    { "id": "rire", "scene": 5, "speaker": "tous", "text": "", "laugh": true },
+    { "id": "vo", "scene": 6, "speaker": "voixoff", "text": "Tchadiennes, Tchadiens, ne cherchez plus partout ! Découvrez Albasse Shopping. Visitez notre site, recherchez votre article et commandez en quelques clics. Albasse Shopping, votre boutique en ligne !" }
+  ]
+}
