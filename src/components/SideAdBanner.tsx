@@ -9,10 +9,18 @@ const TRANSITION_MS = 700;
 const NEON_PURPLE = '#C400FF';
 const VISIBLE_COUNT = 3;
 
+// Les images changent par « page » : les 3 images de la bande sont remplacées toutes ensemble par les 3 suivantes.
+// La page se calcule sur l'horloge (même ROTATE_MS pour toutes les bandes) : les deux bandes de l'accueil
+// changent donc au même moment, et les 6 images sont remplacées par 6 autres d'un coup.
+export function pageAt(now: number, pageCount: number) {
+  return pageCount > 0 ? Math.floor(now / ROTATE_MS) % pageCount : 0;
+}
+
 // height : la hauteur de la bande (plus haute sur téléphone, où chaque bande prend toute la largeur)
 export function SideAdBanner({ items, height = 120 }: { items: AdItem[]; height?: number }) {
   const visibleCount = Math.min(VISIBLE_COUNT, items.length);
-  const [index, setIndex] = useState(0);
+  const pageCount = visibleCount > 0 ? Math.ceil(items.length / visibleCount) : 0;
+  const [page, setPage] = useState(() => pageAt(Date.now(), pageCount));
   const fade = useRef(new Animated.Value(1)).current;
   const slide = useRef(new Animated.Value(0)).current;
 
@@ -22,26 +30,40 @@ export function SideAdBanner({ items, height = 120 }: { items: AdItem[]; height?
   }, [items]);
 
   useEffect(() => {
-    if (items.length <= visibleCount) return;
-    const id = setInterval(() => {
-      Animated.parallel([
-        Animated.timing(fade, { toValue: 0, duration: TRANSITION_MS / 2, easing: Easing.in(Easing.quad), useNativeDriver: true }),
-        Animated.timing(slide, { toValue: -16, duration: TRANSITION_MS / 2, easing: Easing.in(Easing.quad), useNativeDriver: true }),
-      ]).start(() => {
-        setIndex((i) => (i + 1) % items.length);
-        slide.setValue(16);
+    setPage(pageAt(Date.now(), pageCount));
+    if (pageCount <= 1) return;
+    let timer: ReturnType<typeof setTimeout>;
+    // délai jusqu'au prochain tic ; un minuteur parti un peu en avance ne déclenche pas deux changements de suite
+    const waitForTick = () => {
+      const wait = ROTATE_MS - (Date.now() % ROTATE_MS);
+      return wait < 200 ? wait + ROTATE_MS : wait;
+    };
+    const schedule = () => {
+      // attendre le prochain « tic » de l'horloge commune
+      timer = setTimeout(() => {
+        const next = pageAt(Date.now() + TRANSITION_MS, pageCount);
         Animated.parallel([
-          Animated.timing(fade, { toValue: 1, duration: TRANSITION_MS / 2, easing: Easing.out(Easing.quad), useNativeDriver: true }),
-          Animated.timing(slide, { toValue: 0, duration: TRANSITION_MS / 2, easing: Easing.out(Easing.quad), useNativeDriver: true }),
-        ]).start();
-      });
-    }, ROTATE_MS);
-    return () => clearInterval(id);
-  }, [items.length, visibleCount, fade, slide]);
+          Animated.timing(fade, { toValue: 0, duration: TRANSITION_MS / 2, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+          Animated.timing(slide, { toValue: -16, duration: TRANSITION_MS / 2, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+        ]).start(() => {
+          setPage(next);
+          slide.setValue(16);
+          Animated.parallel([
+            Animated.timing(fade, { toValue: 1, duration: TRANSITION_MS / 2, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+            Animated.timing(slide, { toValue: 0, duration: TRANSITION_MS / 2, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+          ]).start();
+        });
+        schedule();
+      }, waitForTick());
+    };
+    schedule();
+    return () => clearTimeout(timer);
+  }, [pageCount, fade, slide]);
 
   if (items.length === 0) return null;
 
-  const slots = Array.from({ length: visibleCount }, (_, i) => items[(index + i) % items.length]);
+  const start = (page % Math.max(pageCount, 1)) * visibleCount;
+  const slots = Array.from({ length: visibleCount }, (_, i) => items[(start + i) % items.length]);
 
   const renderSlot = (item: AdItem) => {
     const image = (
