@@ -1,10 +1,12 @@
 // Zara IA : vendeuse et conseillère marketing. Répond aux messages écrits librement par les clients (français ou arabe) avec
 // Claude Sonnet 5.5, en cherchant dans les vrais articles de la boutique (lecture seule : rien n'est jamais modifié). Limite : 20 messages par visiteur et par
-// jour (et 200 par adresse IP), comptés dans la base par zara_ai_take (add-zara-ai.sql). Sans clé ANTHROPIC_API_KEY ou sans
+// jour (et 200 par adresse IP), comptés dans la base par zara_ai_take (add-zara-ai.sql). Passe par OmniRoute si configuré
+// (voir _shared/llm.ts), sinon Claude. Sans clé IA (OmniRoute ou ANTHROPIC_API_KEY) ou sans
 // le script SQL, la fonction répond { ok: false } et Zara garde ses réponses habituelles.
 // Compétences (skills.ts) : « photo → article » (le client envoie une photo, 5 par jour : Zara cherche ce qui ressemble) et
 // « mémoire du client » (clients connectés : quelques notes courtes dans zara_memory, add-zara-memory.sql ; sans ce script, pas de mémoire).
-import Anthropic from "npm:@anthropic-ai/sdk";
+import type Anthropic from "npm:@anthropic-ai/sdk";
+import { aiReady, createMessage } from "../_shared/llm.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   bearerToken,
@@ -252,8 +254,7 @@ Deno.serve(async (req) => {
   // prénom du client (pour le saluer), sans chiffres ni symboles
   const name = typeof body.name === "string" ? body.name.replace(/[^\p{L} '-]/gu, "").trim().slice(0, 30) : "";
 
-  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!apiKey) return json({ ok: false, reason: "no_key" });
+  if (!aiReady()) return json({ ok: false, reason: "no_key" });
 
   const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 
@@ -305,7 +306,6 @@ Deno.serve(async (req) => {
     : message;
   const messages: Anthropic.MessageParam[] = [...history, { role: "user", content }];
 
-  const client = new Anthropic({ apiKey });
   const system = [SYSTEM.replace("{{DATE}}", today()), PHOTO_RULES, memoryRules(member !== null, notes)].join("\n\n");
   const tools: Anthropic.Tool[] = member ? [...TOOLS, MEMORY_TOOL] : TOOLS;
   const shown: string[] = [];
@@ -315,7 +315,7 @@ Deno.serve(async (req) => {
     const items = await catalog(db);
     const known = new Set(items.map((p) => p.id));
     for (let round = 0; round < MAX_ROUNDS; round++) {
-      const res = await client.messages.create({
+      const res = await createMessage({
         model: MODEL,
         max_tokens: 2000,
         system: name ? [{ type: "text", text: system }, { type: "text", text: `Le client s'appelle ${name}.` }] : system,

@@ -3,7 +3,8 @@
 // L'appelant doit être connecté et administrateur (profiles.is_admin), sinon la fonction refuse.
 // Psychologie de la vente (levers.ts) : { action: "facts", productId } renvoie les vrais chiffres et les leviers VRAIS de l'article ;
 // { channel, productId, goal, lever } écrit le texte avec ce levier (« auto » = les 2 meilleurs leviers vrais), puis contrôle le texte.
-import Anthropic from "npm:@anthropic-ai/sdk";
+import type Anthropic from "npm:@anthropic-ai/sdk";
+import { aiReady, createMessage } from "../_shared/llm.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { chooseLevers, computeFacts, falseClaims, leverAvailability, leverInstructions, LEVERS, LEVERS_SYSTEM, type Facts, type ProductRow } from "./levers.ts";
 
@@ -101,10 +102,9 @@ Deno.serve(async (req) => {
     const remise = f.oldPrice ? `, ancien prix ${f.oldPrice} FCFA (remise ${f.pct} %, le client économise ${f.saving} FCFA)` : "";
     facts = `Article : ${String(p.name).replace(/\s+/g, " ").trim()}. Prix ${f.price ?? p.price} FCFA${remise}. Stock ${f.stock ?? "?"}. Description : ${String(p.description ?? "").replace(/\s+/g, " ").trim().slice(0, 400)}`;
   }
-  const client = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY") ?? "" });
-  if (!Deno.env.get("ANTHROPIC_API_KEY")) return json({ ok: false, reason: "no_key" });
+  if (!aiReady()) return json({ ok: false, reason: "no_key" });
   try {
-    const res = await client.messages.create({
+    const res = await createMessage({
       model: MODEL,
       // 2 versions (une par levier) + la réflexion de l'IA : assez de place pour ne jamais couper le texte
       max_tokens: 8000,
