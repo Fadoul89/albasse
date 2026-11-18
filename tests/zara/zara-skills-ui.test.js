@@ -14,6 +14,7 @@ const PHOTO = process.argv[3];
 const port = process.argv[4] || '4580';
 const OUT = process.argv[5] || os.tmpdir();
 const BASE = (process.env.BASE_URL || `http://localhost:${port}`).replace(/\/$/, '');
+const BASE_HOST = new URL(BASE).hostname;
 const KEY = process.env.SUPABASE_ANON_KEY;
 const REST = 'https://xtitsmmccpkelxfjyqyh.supabase.co/rest/v1';
 const SK = 'sb-xtitsmmccpkelxfjyqyh-auth-token';
@@ -62,7 +63,7 @@ async function visitor(b, { member = false, memory = [], ai }) {
     const r = route.request();
     const u = new URL(r.url());
     const m = r.method();
-    if (u.hostname === 'localhost') return route.continue();
+    if (u.hostname === 'localhost' || u.hostname === BASE_HOST) return route.continue();
     if (!u.hostname.endsWith('.supabase.co')) return route.abort();
     if (m === 'OPTIONS') return json(route, {});
     if (u.pathname === '/functions/v1/zara-ai' && m === 'POST') {
