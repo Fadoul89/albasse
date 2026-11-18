@@ -14,9 +14,12 @@ function omni() {
   return url && key ? { url: chatUrl(url), key, model: Deno.env.get("OMNIROUTE_MODEL")?.trim() || "" } : null;
 }
 
+// la clé Claude, sans espace ni retour à la ligne autour (une clé copiée sur téléphone en emporte souvent un : Anthropic la refuserait)
+const anthropicKeyOf = () => Deno.env.get("ANTHROPIC_API_KEY")?.trim() || "";
+
 /** true si au moins une voie (OmniRoute ou Claude) est configurée. */
 export function aiReady(): boolean {
-  return omni() !== null || !!Deno.env.get("ANTHROPIC_API_KEY");
+  return omni() !== null || !!anthropicKeyOf();
 }
 
 async function viaOmniRoute(cfg: { url: string; key: string; model: string }, params: ClaudeRequest): Promise<Anthropic.Message> {
@@ -33,7 +36,7 @@ async function viaOmniRoute(cfg: { url: string; key: string; model: string }, pa
 
 export async function createMessage(params: Anthropic.MessageCreateParamsNonStreaming): Promise<Anthropic.Message> {
   const cfg = omni();
-  const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
+  const anthropicKey = anthropicKeyOf();
   if (cfg) {
     try {
       return await viaOmniRoute(cfg, params as unknown as ClaudeRequest);

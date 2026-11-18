@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Albasse Shopping – publicité Stickman</title>
+<style>
+  @font-face { font-family: 'Fraunces'; font-weight: 800; src: url('assets/fonts/Fraunces-800.ttf'); }
+  @font-face { font-family: 'Fraunces'; font-weight: 700; src: url('assets/fonts/Fraunces-700.ttf'); }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1080px; height: 1920px; overflow: hidden; background: #000; }
+  #root { position: relative; width: 1080px; height: 1920px; overflow: hidden; background: #0b2a72; font-family: 'Inter', 'Inter Display', system-ui, sans-serif; }
+  #banner { position: absolute; inset: 0; z-index: 0; display: none; }
+  #stage { position: absolute; inset: 0; z-index: 1; width: 1080px; height: 1920px; }
+  #phone { position: absolute; left: 0; top: 0; z-index: 5; width: 880px; height: 1640px; transform-origin: 0 0; display: none; }
+  #wipe { position: absolute; top: 0; bottom: 0; width: 1080px; left: 1080px; z-index: 8; background: #c9a24a; }
+  #sub { position: absolute; left: 60px; right: 60px; top: 1500px; z-index: 10; text-align: center; display: none; }
+  #sub .who { display: inline-block; background: #c9a24a; color: #0b1f55; font: 800 30px/1 'Inter Display', 'Inter', sans-serif; letter-spacing: 1px; padding: 10px 18px; border-radius: 999px; margin-bottom: 10px; text-transform: uppercase; }
+  #sub .txt { display: inline-block; background: rgba(5, 12, 35, 0.72); color: #fff; font: 700 46px/1.25 'Inter Display', 'Inter', sans-serif; padding: 18px 30px; border-radius: 22px; max-width: 960px; -webkit-text-stroke: 0; }
+  #sub .txt b { color: #f1c96b; }
+
+  /* le téléphone : une interface inspirée du vrai site (bleu nuit, or) */
+  .frame { position: absolute; inset: 0; background: #0b0f1d; border-radius: 96px; padding: 22px; box-shadow: 0 30px 80px rgba(0,0,0,.45); }
+  .screen { position: relative; width: 100%; height: 100%; border-radius: 76px; overflow: hidden; background: #0b2a72; color: #f4ecd8; }
+  .notch { position: absolute; left: 50%; top: 18px; width: 240px; height: 50px; margin-left: -120px; background: #0b0f1d; border-radius: 30px; z-index: 3; }
+  .status { height: 86px; display: flex; align-items: flex-end; justify-content: space-between; padding: 0 44px 8px; font: 700 26px 'Inter', sans-serif; color: #fff; }
+  .appbar { display: flex; align-items: center; gap: 18px; padding: 10px 36px 18px; }
+  .appbar img { width: 92px; height: 92px; border-radius: 50%; box-shadow: 0 0 0 3px #c9a24a; }
+  .brand { font: 800 44px/1 'Fraunces', serif; color: #f1c96b; letter-spacing: 4px; }
+  .brand small { display: block; font: 700 22px/1.4 'Inter', sans-serif; color: #f4ecd8; letter-spacing: 7px; }
+  .search { margin: 6px 36px 0; height: 104px; border-radius: 30px; background: #ffffff; display: flex; align-items: center; gap: 18px; padding: 0 30px; font: 500 40px 'Inter', sans-serif; color: #111; border: 4px solid #c9a24a; position: relative; }
+  .search .ph { color: #8a8f9a; }
+  .search .caret { display: inline-block; width: 4px; height: 50px; background: #0b2a72; margin-left: 4px; }
+  .search .glass { font-size: 44px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; padding: 28px 36px; }
+  .card { background: #0f2f80; border: 2px solid #2b4c9c; border-radius: 28px; overflow: hidden; transform-origin: 50% 60%; }
+  .card .img { width: 100%; height: 300px; background: #fff center/cover no-repeat; }
+  .card .nm { font: 600 27px/1.25 'Inter', sans-serif; color: #f4ecd8; padding: 14px 18px 4px; height: 82px; overflow: hidden; }
+  .card .pr { font: 800 32px 'Inter Display', 'Inter', sans-serif; color: #4ade80; padding: 0 18px 18px; }
+  .tabs { position: absolute; left: 0; right: 0; bottom: 0; height: 130px; background: #071c52; border-top: 2px solid #23458f; display: flex; justify-content: space-around; align-items: center; font: 600 24px 'Inter', sans-serif; color: #9fb0da; padding-bottom: 14px; }
+  .tabs b { color: #f1c96b; }
+  .tabs span { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .tabs i { font-style: normal; font-size: 40px; }
+  .page { position: absolute; inset: 0; display: none; background: #0b2a72; }
+  .pp-img { width: 100%; height: 760px; background: #fff center/cover no-repeat; }
+  .pp-body { padding: 30px 40px; }
+  .pp-nm { font: 800 50px/1.15 'Inter Display', 'Inter', sans-serif; color: #f4ecd8; }
+  .pp-pr { font: 800 60px 'Inter Display', 'Inter', sans-serif; color: #4ade80; margin: 16px 0 10px; }
+  .pp-note { font: 500 28px 'Inter', sans-serif; color: #c9d3ee; margin-bottom: 36px; }
+  .btn-gold { height: 118px; border-radius: 30px; background: linear-gradient(180deg, #f1c96b, #c9a24a); color: #0b1f55; font: 800 42px/118px 'Inter Display', 'Inter', sans-serif; text-align: center; position: relative; }
+  .ripple { position: absolute; left: 50%; top: 50%; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; background: rgba(255,255,255,.55); transform: scale(0); }
+  .form { padding: 30px 40px; }
+  .form h2 { font: 800 46px 'Inter Display', 'Inter', sans-serif; color: #f1c96b; margin-bottom: 26px; }
+  .field { background: #0f2f80; border: 2px solid #2b4c9c; border-radius: 22px; padding: 20px 26px; margin-bottom: 18px; }
+  .field small { display: block; font: 600 22px 'Inter', sans-serif; color: #9fb0da; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 6px; }
+  .field span { font: 600 36px 'Inter', sans-serif; color: #fff; }
+  .pay { display: flex; align-items: center; gap: 16px; background: #0f2f80; border: 3px solid #c9a24a; border-radius: 22px; padding: 22px 26px; font: 700 32px 'Inter', sans-serif; color: #f4ecd8; margin-bottom: 30px; }
+  .confirm { position: absolute; inset: 0; display: none; background: #0b2a72; align-items: center; justify-content: center; flex-direction: column; gap: 30px; text-align: center; padding: 60px; }
+  .check { width: 300px; height: 300px; border-radius: 50%; background: #16a34a; display: flex; align-items: center; justify-content: center; color: #fff; font: 900 200px/1 'Inter Display', sans-serif; box-shadow: 0 0 0 24px rgba(74,222,128,.25); }
+  .confirm h2 { font: 800 62px/1.15 'Inter Display', 'Inter', sans-serif; color: #fff; }
+  .confirm p { font: 500 34px/1.4 'Inter', sans-serif; color: #c9d3ee; }
+  .cursor { position: absolute; width: 110px; height: 110px; border-radius: 50%; background: rgba(255,255,255,.28); border: 4px solid rgba(255,255,255,.85); display: none; z-index: 4; margin: -55px 0 0 -55px; }
+
+  /* la bannière du final */
+  #banner { background: radial-gradient(circle at 50% 18%, #1d4bb8 0, #0b2a72 45%, #071c52 100%); }
+  #banner .gold { position: absolute; inset: 44px; border: 12px solid #c9a24a; border-radius: 48px; box-shadow: inset 0 0 0 6px #0b2a72, inset 0 0 0 9px #f1c96b; }
+  #banner img { position: absolute; left: 50%; top: 130px; width: 340px; height: 340px; margin-left: -170px; border-radius: 50%; box-shadow: 0 0 0 8px #c9a24a, 0 20px 60px rgba(0,0,0,.45); }
+  #banner .title { position: absolute; left: 0; right: 0; top: 520px; text-align: center; font: 800 128px/1 'Fraunces', serif; color: #f1c96b; letter-spacing: 6px; text-shadow: 0 8px 0 #7a5c15, 0 20px 40px rgba(0,0,0,.4); }
+  #banner .title small { display: block; font: 800 60px/1.5 'Inter Display', 'Inter', sans-serif; color: #fff; letter-spacing: 18px; }
+  #banner .tag { position: absolute; left: 80px; right: 80px; top: 790px; text-align: center; font: 800 58px/1.2 'Inter Display', 'Inter', sans-serif; color: #fff; }
+  #banner .cats { position: absolute; left: 40px; right: 40px; top: 965px; text-align: center; font: 600 31px/1.6 'Inter', sans-serif; color: #c9d3ee; }
+  #banner .cats b { color: #f1c96b; font-weight: 600; margin: 0 10px; }
+  #banner .url { position: absolute; left: 50%; top: 1080px; transform: translateX(-50%); background: #fff; color: #0b2a72; font: 800 60px/1 'Inter Display', 'Inter', sans-serif; padding: 30px 54px; border-radius: 999px; box-shadow: 0 16px 40px rgba(0,0,0,.35); white-space: nowrap; }
+  #banner .floor { position: absolute; left: 0; right: 0; bottom: 0; height: 330px; background: linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,.35)); }
+</style>
+</head>
+<body>
+<div id="root">
+  <div id="banner">
+    <div class="gold"></div>
+    <img src="assets/logo-512.png" alt="">
+    <div class="title">ALBASSE<small>SHOPPING</small></div>
+    <div class="tag">TOUT CE QUE VOUS CHERCHEZ,<br>AU MÊME ENDROIT !</div>
+    <div class="cats">Vêtements <b>|</b> Chaussures <b>|</b> Parfums <b>|</b> Montres <b>|</b> Sacs <b>|</b> Accessoires</div>
+    <div class="url">www.albasseshopping.com</div>
+    <div class="floor"></div>
+  </div>
+  <svg id="stage" viewBox="0 0 1080 1920" xmlns="http://www.w3.org/2000/svg"></svg>
+  <div id="phone">
+    <div class="frame"><div class="screen">
+      <div class="notch"></div>
+      <div class="page" id="pg-home" style="display:block">
+        <div class="status"><span>9:41</span><span>4G ▮▮▮ 🔋</span></div>
+        <div class="appbar"><img src="assets/logo-256.png" alt=""><div class="brand">ALBASSE<small>SHOPPING</small></div></div>
+        <div class="search"><span class="glass">🔍</span><span class="q" id="q"></span><span class="caret" id="caret"></span><span class="ph" id="ph">Rechercher un produit…</span></div>
+        <div class="grid" id="grid"></div>
+        <div class="tabs"><span><i>🏠</i>Accueil</span><span><b><i>🔎</i>Recherche</b></span><span><i>💬</i>Zara</span><span><i>📦</i>Commandes</span><span><i>👤</i>Compte</span></div>
+      </div>
+      <div class="page" id="pg-product">
+        <div class="pp-img" id="pp-img"></div>
+        <div class="pp-body">
+          <div class="pp-nm" id="pp-nm"></div>
+          <div class="pp-pr" id="pp-pr"></div>
+          <div class="pp-note">💵 Paiement à la livraison possible</div>
+          <div class="btn-gold" id="btn-order">🛍️ Commander<div class="ripple" id="rip1"></div></div>
+        </div>
+      </div>
+      <div class="page" id="pg-form">
+        <div class="form">
+          <h2>Votre commande</h2>
+          <div class="field"><small>Nom et prénom</small><span id="f-nom"></span></div>
+          <div class="field"><small>Téléphone</small><span id="f-tel"></span></div>
+          <div class="field"><small>Ville</small><span id="f-ville"></span></div>
+          <div class="pay">💵 Paiement à la livraison</div>
+          <div class="btn-gold" id="btn-confirm">✅ Confirmer la commande<div class="ripple" id="rip2"></div></div>
+        </div>
+      </div>
+      <div class="confirm" id="pg-confirm">
+        <div class="check" id="check">✓</div>
+        <h2>Commande confirmée !</h2>
+        <p>Merci. Nous préparons votre colis.<br>Vous payez à la livraison.</p>
+      </div>
+      <div class="cursor" id="cursor"></div>
+    </div></div>
+  </div>
+  <div id="wipe"></div>
+  <div id="sub"><div class="who" id="sub-who"></div><br><div class="txt" id="sub-txt"></div></div>
+</div>
+<script src="timeline.js"></script>
+<script src="assets/products.js"></script>
+<script src="src/pub.js"></script>
+</body>
+</html>

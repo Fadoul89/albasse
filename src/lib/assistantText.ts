@@ -235,6 +235,21 @@ export interface Texts {
   ordersLink: string;
   errorData: string;
   errorOops: string;
+  // compétences de Zara IA : « photo → article » (bouton 📷) et « mémoire du client » (clients connectés)
+  skills: {
+    photoButton: string;
+    photoAlt: string;
+    photoAsk: string;
+    photoUnreadable: string;
+    photoLimit: string;
+    photoUnavailable: string;
+    memoryChip: string;
+    memoryForget: string;
+    memoryList(notes: string[]): string;
+    memoryEmpty: string;
+    memoryForgotten: string;
+    memoryForgetFailed: string;
+  };
   // produits
   promoIntro(pct: number | null): string;
   noPromo: string;
@@ -809,6 +824,20 @@ const FR: Texts = {
   ordersLink: 'Retrouvez et suivez toutes vos commandes ici 👇',
   errorData: 'Je n’arrive pas à charger ces informations pour le moment. Réessayez dans un instant, ou écrivez-nous sur WhatsApp.',
   errorOops: 'Oups, un petit souci de mon côté 😅 Réessayez dans un instant, ou écrivez-nous sur WhatsApp.',
+  skills: {
+    photoButton: 'Envoyer une photo à Zara',
+    photoAlt: 'Votre photo',
+    photoAsk: 'Voici une photo. Avez-vous des articles qui ressemblent ?',
+    photoUnreadable: 'Je n’arrive pas à ouvrir cette photo 😕 Essayez une autre photo, ou décrivez-moi l’article en quelques mots.',
+    photoLimit: 'Vous avez déjà envoyé 5 photos aujourd’hui 🙏 Décrivez-moi l’article en quelques mots (type, couleur) et je le cherche pour vous.',
+    photoUnavailable: 'Je ne peux pas regarder les photos pour le moment 😕 Décrivez-moi l’article en quelques mots (ex. « chaussures noires homme »), ou envoyez la photo à l’équipe sur WhatsApp.',
+    memoryChip: '🧠 Zara se souvient de vous',
+    memoryForget: 'Tout oublier',
+    memoryList: (notes) => `Voici ce que je retiens de vous{nom} 🧠\n${notes.map((n) => `• ${n}`).join('\n')}\nVous pouvez tout effacer avec « Tout oublier ».`,
+    memoryEmpty: 'Je ne garde aucune note sur vous pour le moment. Dites-moi votre taille, votre pointure ou votre budget, et je m’en souviendrai la prochaine fois 😊',
+    memoryForgotten: 'C’est fait : j’ai tout oublié 🧹 Je ne garde plus aucune note sur vous.',
+    memoryForgetFailed: 'Je n’arrive pas à effacer pour le moment 😕 Réessayez dans un instant.',
+  },
   promoIntro: (pct) => `🔥 Voici nos meilleures promotions du moment${pct ? ` (jusqu’à -${pct} %)` : ''}{nom} !`,
   noPromo: 'Pas de promotion en ce moment, mais découvrez nos nouveautés !',
   mostViewedIntro: '👀 Voici les articles les plus regardés ces 30 derniers jours chez Albasse Shopping{nom} 👇',
@@ -1445,6 +1474,20 @@ const AR: Texts = {
   ordersLink: 'تابع كل طلباتك هنا 👇',
   errorData: 'لا أستطيع تحميل هذه المعلومات الآن. حاول بعد قليل، أو راسلنا على واتساب.',
   errorOops: 'عذرا، حدثت مشكلة صغيرة من جهتي 😅 حاول بعد قليل، أو راسلنا على واتساب.',
+  skills: {
+    photoButton: 'أرسل صورة إلى زارا',
+    photoAlt: 'صورتك',
+    photoAsk: 'هذه صورة. هل عندكم منتجات تشبهها؟',
+    photoUnreadable: 'لم أستطع فتح هذه الصورة 😕 جرّب صورة أخرى، أو صف لي المنتج بكلمات قليلة.',
+    photoLimit: 'أرسلت 5 صور اليوم 🙏 صف لي المنتج بكلمات قليلة (النوع واللون) وسأبحث عنه لك.',
+    photoUnavailable: 'لا أستطيع رؤية الصور الآن 😕 صف لي المنتج بكلمات قليلة، أو أرسل الصورة إلى الفريق على واتساب.',
+    memoryChip: '🧠 زارا تتذكرك',
+    memoryForget: 'انسَ كل شيء',
+    memoryList: (notes) => `هذا ما أتذكره عنك{nom} 🧠\n${notes.map((n) => `• ${n}`).join('\n')}\nيمكنك مسح كل شيء بزر « انسَ كل شيء ».`,
+    memoryEmpty: 'لا أحتفظ بأي ملاحظة عنك الآن. قل لي مقاسك أو مقاس حذائك أو ميزانيتك، وسأتذكرها في المرة القادمة 😊',
+    memoryForgotten: 'تم: نسيت كل شيء 🧹 لم أعد أحتفظ بأي ملاحظة عنك.',
+    memoryForgetFailed: 'لم أستطع المسح الآن 😕 حاول بعد قليل.',
+  },
   promoIntro: (pct) => `🔥 إليك أفضل عروضنا الحالية${pct ? ` (حتى -${pct} %)` : ''}{nom}!`,
   noPromo: 'لا توجد عروض الآن، لكن اكتشف جديدنا!',
   mostViewedIntro: '👀 إليك المنتجات الأكثر مشاهدة خلال آخر 30 يوما في Albasse Shopping{nom} 👇',

@@ -91,7 +91,10 @@ import { availability, familyPicks, isFamily, moreInCategory, perfumesInStock, p
 import * as bi from '../lib/browsingInsights';
 import { getBrowsingProfile, getVisitorId, recordSuggestion, setTrackingChoice, trackingState } from '../lib/browsingTracker';
 import { createOrder, generateOrderId } from '../lib/orders';
-import { askZaraAi } from '../lib/zaraAi';
+import { askZaraAi, askZaraAiPhoto, type ZaraAiAnswer } from '../lib/zaraAi';
+import { preparePhoto } from '../lib/zaraPhoto';
+import { historyText, photoAllowed } from '../lib/zaraPhotoCore';
+import { forgetZaraMemory, loadZaraMemory } from '../lib/zaraMemory';
 import { fetchLoyaltyStatus, loyaltyDiscount, type LoyaltyStatus } from '../lib/loyaltyDiscount';
 import { asksStudentOffer, dealFromPrice, isStudentCustomer, offerTexts, settleStudentPrice, STUDENT_OFFER, studentDeal } from '../lib/studentOffer';
 import { trackTikTokEvent } from '../lib/tiktokPixel';
@@ -264,6 +267,13 @@ interface AssistantState {
   closeChat: () => void;
   dismissTeaser: () => void;
   send: (text: string) => Promise<void>;
+  // Photo → article : la photo choisie (et le petit texte écrit avant, s'il y en a) part à Zara IA, qui montre ce qui ressemble
+  sendPhoto: (uri: string, caption?: string) => Promise<void>;
+  // Mémoire de Zara (clients connectés) : ses notes ; null = visiteur sans compte, ou mémoire pas installée
+  memory: string[] | null;
+  refreshMemory: () => void;
+  showMemory: () => Promise<void>;
+  forgetMemory: () => Promise<void>;
   choose: (action: ChatAction) => Promise<void>;
   toggleLang: () => void;
   // (le bouton « Commander » des fiches produit du chat : voir orderProduct)
@@ -1052,18 +1062,48 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
   // false : pas de réponse de l'IA (pas installée, limite du jour, réseau) : les règles habituelles répondent.
   async function aiReply(text: string, catalog: CatalogProduct[]): Promise<boolean> {
     if (!typedTurn) return false;
-    const history = get()
-      .messages.filter((m) => m.text)
-      .slice(-7, -1)
-      .map((m) => ({ role: m.role, text: m.text }));
-    const auth = useAuthStore.getState();
-    const first = (auth.isAuthenticated ? firstNameOfFullName(auth.profile?.full_name) : null) ?? get().name;
-    const answer = await askZaraAi(text, history, getVisitorId(), first);
+    const answer = await askZaraAi(text, aiHistory(), getVisitorId(), aiName());
     if (!answer) return false;
-    const items = answer.productIds.map((id) => catalog.find((p) => p.id === id)).filter((p): p is CatalogProduct => !!p);
-    if (items.length > 0) await showProducts(answer.text, items, { kind: 'query', query: text }, catalog);
-    else await say(answer.text, { actions: [sayBtn(T().chip.categories, 'catégories'), sayBtn(T().chip.promotions, 'promotions'), wa()] });
+    await showAiAnswer(answer, text, catalog);
     return true;
+  }
+
+  // les derniers échanges pour Zara IA (sans le message en cours) ; une photo sans texte compte comme « (photo envoyée) »
+  const aiHistory = () =>
+    get()
+      .messages.map((m) => ({ role: m.role, text: historyText(m) }))
+      .filter((m) => m.text)
+      .slice(-7, -1);
+  const aiName = () => {
+    const auth = useAuthStore.getState();
+    return (auth.isAuthenticated ? firstNameOfFullName(auth.profile?.full_name) : null) ?? get().name;
+  };
+
+  async function showAiAnswer(answer: ZaraAiAnswer, query: string, catalog: CatalogProduct[]) {
+    // la mémoire du client connecté a pu changer pendant ce message (« Noté : pointure 42 »)
+    if (answer.memory && useAuthStore.getState().isAuthenticated) set({ memory: answer.memory });
+    const items = answer.productIds.map((id) => catalog.find((p) => p.id === id)).filter((p): p is CatalogProduct => !!p);
+    if (items.length > 0) await showProducts(answer.text, items, { kind: 'query', query }, catalog);
+    else await say(answer.text, { actions: [sayBtn(T().chip.categories, 'catégories'), sayBtn(T().chip.promotions, 'promotions'), wa()] });
+  }
+
+  // Photo → article : la photo est réduite sur le téléphone, montrée dans la bulle du client, puis Zara IA cherche ce qui ressemble.
+  async function photoReply(uri: string, caption: string) {
+    const photo = await preparePhoto(uri);
+    if (!photo) {
+      await say(T().skills.photoUnreadable, { actions: [sayBtn(T().chip.categories, 'catégories'), wa()] });
+      return;
+    }
+    push({ id: newId(), role: 'user', text: caption, image: { src: photo.thumb, alt: T().skills.photoAlt, ratio: photo.ratio } });
+    const catalog = await getCatalog();
+    const res = await askZaraAiPhoto({ mediaType: 'image/jpeg', data: photo.data }, caption || T().skills.photoAsk, aiHistory(), getVisitorId(), aiName());
+    if ('failure' in res) {
+      await say(res.failure === 'photo_limit' ? T().skills.photoLimit : T().skills.photoUnavailable, {
+        actions: [sayBtn(T().chip.categories, 'catégories'), sayBtn(T().chip.promotions, 'promotions'), wa()],
+      });
+      return;
+    }
+    await showAiAnswer(res.answer, caption || T().skills.photoAsk, catalog);
   }
 
   async function searchReply(text: string, parsed: Parsed = parseNeed(text)) {
@@ -3642,6 +3682,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     openChat: () => {
       set({ open: true, teaserDismissed: true });
       void getProductViews(); // les visites des 30 derniers jours arrivent pendant que Zara salue (fiches avec « Vu par N personnes »)
+      get().refreshMemory(); // client connecté : « 🧠 Zara se souvient de vous » s'il y a des notes
       if (get().loading) return;
       if (get().messages.length === 0) void run(begin);
       else if (shouldGreetMember()) get().greetMember();
@@ -3668,6 +3709,42 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
     },
     closeChat: () => set({ open: false }),
     dismissTeaser: () => set({ teaserDismissed: true }),
+    sendPhoto: async (uri, caption = '') => {
+      if (get().loading || !photoAllowed(get().step)) return;
+      await run(async () => {
+        await photoReply(uri, caption.trim().slice(0, 300));
+        await afterTurn();
+      });
+    },
+    memory: null,
+    refreshMemory: () => {
+      const id = useAuthStore.getState().profile?.id;
+      if (!useAuthStore.getState().isAuthenticated || !id) {
+        set({ memory: null });
+        return;
+      }
+      void loadZaraMemory(id).then((notes) => {
+        // le client a pu se déconnecter entre-temps
+        if (useAuthStore.getState().profile?.id === id) set({ memory: notes });
+      });
+    },
+    showMemory: async () => {
+      if (get().loading) return;
+      const notes = get().memory ?? [];
+      await run(async () => {
+        await say(notes.length ? withName(T().skills.memoryList(notes)) : T().skills.memoryEmpty);
+      });
+    },
+    forgetMemory: async () => {
+      const id = useAuthStore.getState().profile?.id;
+      if (get().loading || !id) return;
+      userSays(T().skills.memoryForget);
+      await run(async () => {
+        const done = await forgetZaraMemory(id);
+        if (done) set({ memory: [] });
+        await say(done ? T().skills.memoryForgotten : T().skills.memoryForgetFailed);
+      });
+    },
     send: async (text) => {
       if (get().loading) return;
       typedTurn = true; // écrit par le client : Zara IA peut répondre
@@ -3728,11 +3805,14 @@ useAuthStore.subscribe((state, prev) => {
   const account = state.isAuthenticated ? firstNameOfFullName(state.profile?.full_name) : null;
   if (account) {
     if (assistant.name !== account) useAssistantStore.setState({ name: account });
+    // nouveau compte connecté, chat ouvert : sa mémoire (« 🧠 Zara se souvient de vous »)
+    if (assistant.open && state.profile?.id !== prev.profile?.id) assistant.refreshMemory();
     // le chat est ouvert : Zara salue tout de suite (une seule fois par visite, elle note qu'elle l'a déjà fait)
     if (assistant.open) assistant.greetMember();
     return;
   }
   if (prev.isAuthenticated && !state.isAuthenticated) {
+    useAssistantStore.setState({ memory: null }); // la mémoire de Zara appartient au compte : on ne la montre plus
     AsyncStorage.getItem(NAME_KEY)
       .then((value) => useAssistantStore.setState({ name: firstNameFrom(value ?? '') }))
       .catch(() => useAssistantStore.setState({ name: null }));
