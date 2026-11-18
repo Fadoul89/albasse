@@ -14,6 +14,7 @@ import {
   type TextStyle,
 } from 'react-native';
 import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts, radius, spacing } from '../theme';
@@ -26,6 +27,7 @@ import { texts } from '../lib/assistantText';
 import { openInChrome } from '../lib/pwaInstallPrompt';
 import { downloadOrOpenInvoice } from '../lib/invoiceDownload';
 import { ASSISTANT_NAME, WHATSAPP_URL } from '../constants/assistant';
+import { photoAllowed } from '../lib/zaraPhotoCore';
 
 const AVATAR = require('../../assets/assistante-avatar.jpg');
 const DESKTOP_WIDTH = 640;
@@ -36,6 +38,25 @@ const SHEET_RATIO = 0.6;
 const SHEET_MIN_HEIGHT = 360;
 
 const formatXAF = (n: number) => `${Math.round(n).toLocaleString('fr-FR')} FCFA`;
+
+// « NOUVEAU » sur le bouton 📷 jusqu'à la première photo envoyée (retenu sur l'appareil)
+const PHOTO_SEEN_KEY = 'albasse_zara_photo_seen';
+function photoSeen(): boolean {
+  if (Platform.OS !== 'web') return true;
+  try {
+    return window.localStorage.getItem(PHOTO_SEEN_KEY) === '1';
+  } catch {
+    return true;
+  }
+}
+function markPhotoSeen() {
+  if (Platform.OS !== 'web') return;
+  try {
+    window.localStorage.setItem(PHOTO_SEEN_KEY, '1');
+  } catch {
+    // ignore : le badge reviendra simplement à la prochaine visite
+  }
+}
 
 // Texte arabe : écrit de droite à gauche.
 const NO_ACTIONS: ChatAction[] = [];
@@ -176,7 +197,11 @@ function ActionChips({ actions, onChoose, old = false }: { actions: ChatAction[]
 }
 
 // Une photo envoyée par Zara (ex. comment installer sur iPhone) : touchée, elle s'ouvre en grand dans un nouvel onglet.
-function ChatPhoto({ image }: { image: ChatImage }) {
+// La photo du client (photo → article) reste dans sa bulle, plus petite.
+function ChatPhoto({ image, mine = false }: { image: ChatImage; mine?: boolean }) {
+  if (mine) {
+    return <Image source={{ uri: image.src }} style={[styles.myPhoto, { aspectRatio: image.ratio }]} contentFit="cover" accessibilityLabel={image.alt} testID="assistant-my-photo" />;
+  }
   return (
     <Pressable onPress={() => Linking.openURL(image.src)} accessibilityRole="imagebutton" accessibilityLabel={image.alt} testID="assistant-photo">
       <Image source={{ uri: image.src }} style={[styles.photo, { aspectRatio: image.ratio }]} contentFit="cover" accessibilityLabel={image.alt} />
@@ -209,12 +234,15 @@ function Bubble({
       <View style={[styles.row, mine ? styles.rowMine : styles.rowBot]}>
         {!mine && <Image accessibilityLabel="Zara, assistante de vente" source={AVATAR} style={styles.smallAvatar} contentFit="cover" />}
         <View style={styles.bubbleColumn}>
+          {mine && message.image ? <ChatPhoto image={message.image} mine /> : null}
           {mine ? (
-            <LinearGradient colors={[colors.gold, colors.goldLight]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.bubble, styles.bubbleMine]}>
-              <Text style={textStyle} selectable>
-                {message.text}
-              </Text>
-            </LinearGradient>
+            message.text ? (
+              <LinearGradient colors={[colors.gold, colors.goldLight]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.bubble, styles.bubbleMine]}>
+                <Text style={textStyle} selectable>
+                  {message.text}
+                </Text>
+              </LinearGradient>
+            ) : null
           ) : (
             <View style={[styles.bubble, styles.bubbleBot]}>
               <Text style={textStyle} selectable>
@@ -246,6 +274,11 @@ export function AssistantPanel() {
   const toggleLang = useAssistantStore((s) => s.toggleLang);
   const orderProduct = useAssistantStore((s) => s.orderProduct);
   const startCheckout = useAssistantStore((s) => s.startCheckout);
+  const sendPhoto = useAssistantStore((s) => s.sendPhoto);
+  const memory = useAssistantStore((s) => s.memory);
+  const showMemory = useAssistantStore((s) => s.showMemory);
+  const forgetMemory = useAssistantStore((s) => s.forgetMemory);
+  const [photoNew, setPhotoNew] = useState(() => !photoSeen());
 
   const t = texts(lang);
   const desktop = width >= DESKTOP_WIDTH;
@@ -281,6 +314,24 @@ export function AssistantPanel() {
     setDraft('');
     send(value);
   };
+
+  // 📷 : la galerie ou l'appareil photo du téléphone ; le texte déjà écrit part avec la photo (« Vous avez ça ? »)
+  const pickPhoto = async () => {
+    if (loading) return;
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
+      const uri = result.canceled ? null : result.assets?.[0]?.uri;
+      if (!uri) return;
+      markPhotoSeen();
+      setPhotoNew(false);
+      const caption = draft.trim();
+      setDraft('');
+      void sendPhoto(uri, caption);
+    } catch {
+      // la galerie n'a pas pu s'ouvrir : rien ne change
+    }
+  };
+  const canPhoto = photoAllowed(step);
 
   // Sur telephone le chat couvre l'ecran : on le ferme quand on ouvre une autre page du site.
   const go = (open: () => void) => {
@@ -439,6 +490,18 @@ export function AssistantPanel() {
         </Pressable>
       </LinearGradient>
 
+      {memory && memory.length > 0 ? (
+        <View style={styles.memoryBar} testID="assistant-memory">
+          <Pressable onPress={() => void showMemory()} disabled={loading} accessibilityRole="button" testID="assistant-memory-show">
+            <Text style={[styles.memoryText, rtlStyle(rtl)]}>{t.skills.memoryChip}</Text>
+          </Pressable>
+          <Text style={styles.memoryDot}>·</Text>
+          <Pressable onPress={() => void forgetMemory()} disabled={loading} accessibilityRole="button" testID="assistant-memory-forget">
+            <Text style={[styles.memoryForget, rtlStyle(rtl)]}>{t.skills.memoryForget}</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       <ScrollView ref={scrollRef} style={styles.messages} contentContainerStyle={styles.messagesContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {messages.map((m, i) => (
           <Bubble
@@ -464,6 +527,23 @@ export function AssistantPanel() {
 
 
       <View style={[styles.inputBar, !desktop ? { paddingBottom: spacing.sm + (area ? 0 : insets.bottom) } : null]}>
+        {canPhoto ? (
+          <Pressable
+            onPress={() => void pickPhoto()}
+            disabled={loading}
+            style={[styles.photoButton, loading && styles.sendButtonDisabled]}
+            accessibilityRole="button"
+            accessibilityLabel={t.skills.photoButton}
+            testID="assistant-photo-button"
+          >
+            <Text style={styles.photoIcon}>📷</Text>
+            {photoNew ? (
+              <View style={styles.photoNew} testID="assistant-photo-new">
+                <Text style={styles.photoNewText}>{lang === 'ar' ? 'جديد' : 'NOUVEAU'}</Text>
+              </View>
+            ) : null}
+          </Pressable>
+        ) : null}
         <TextInput
           value={draft}
           onChangeText={setDraft}
@@ -661,6 +741,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   sendButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.gold, alignItems: 'center', justifyContent: 'center' },
+  photoButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 2,
+    borderColor: colors.goldLight,
+    backgroundColor: 'rgba(199,154,62,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoIcon: { fontSize: 19 },
+  photoNew: { position: 'absolute', top: -9, left: -6, backgroundColor: colors.red, borderRadius: 8, paddingHorizontal: 5, paddingVertical: 1 },
+  photoNewText: { color: '#fff', fontFamily: fonts.bodyBold, fontSize: 9 },
+  myPhoto: { width: 190, maxWidth: '100%', alignSelf: 'flex-end', borderRadius: 14, borderWidth: 3, borderColor: colors.gold, backgroundColor: '#fff' },
+  memoryBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: spacing.md,
+    backgroundColor: 'rgba(95,211,141,0.12)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(95,211,141,0.45)',
+  },
+  memoryText: { color: '#bff0d2', fontFamily: fonts.bodySemiBold, fontSize: 12.5 },
+  memoryDot: { color: '#bff0d2', fontSize: 12.5 },
+  memoryForget: { color: colors.errorText, fontFamily: fonts.bodyBold, fontSize: 12.5, textDecorationLine: 'underline' },
   sendButtonDisabled: { opacity: 0.45 },
   sendIcon: { color: '#1b1405', fontSize: 17 },
   note: {
