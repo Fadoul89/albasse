@@ -12,7 +12,7 @@ import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { CountdownTimer } from '../../components/CountdownTimer';
 import { formatOrderDate, getOrderDay } from '../../lib/formatDuration';
 import { useToastStore } from '../../store/toastStore';
-import { filterOrders, orderNumberLabel, ordersToCsv, type PeriodFilter } from '../../lib/invoice';
+import { filterOrders, orderNumberLabel, ordersToCsv, type PeriodFilter, type StatusFilter } from '../../lib/invoice';
 import { countsAsSale, salesTotal } from '../../lib/salesRules';
 import { flagDeadlineIso, formatSlot, waitsForAppointment } from '../../lib/scheduledDelivery';
 import { SCHEDULED_DELIVERY } from '../../constants/shopRules';
@@ -66,7 +66,8 @@ export function AdminOrdersScreen() {
   const showToast = useToastStore((s) => s.show);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [query, setQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<OrderStatus | 'all'>('all');
+  // la page s'ouvre sur « À traiter » : les commandes livrées ou annulées sont dans « Livrée » et « Annulée » (demande du patron, 21 novembre 2026)
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('todo');
   const [period, setPeriod] = useState<PeriodFilter>('all');
   const filtered = useMemo(() => filterOrders(orders, { query, status: statusFilter, period }), [orders, query, statusFilter, period]);
   // seules les commandes livrées (et non signalées fausses) comptent dans le total
@@ -126,8 +127,17 @@ export function AdminOrdersScreen() {
     const currentIndex = flow.indexOf(order.status);
     if (currentIndex === -1 || currentIndex === flow.length - 1) return;
     const nextStatus = flow[currentIndex + 1];
-    await supabase.from('orders').update({ status: nextStatus }).eq('id', order.id);
+    const { error } = await supabase.from('orders').update({ status: nextStatus }).eq('id', order.id);
+    if (error) {
+      console.error('Erreur changement de statut:', error);
+      showToast("Le statut n'a pas pu être changé. Réessayez.", { title: 'Erreur', type: 'error' });
+      return;
+    }
     setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, status: nextStatus } : o)));
+    // livrée : elle quitte « À traiter » ; on dit où la retrouver
+    if (nextStatus === 'delivered') {
+      showToast(`${orderNumberLabel(order)} est livrée. Elle est maintenant dans « Livrée ».`, { title: 'Commande livrée ✅', type: 'success' });
+    }
   };
 
   const confirmDelete = async () => {
@@ -189,9 +199,9 @@ export function AdminOrdersScreen() {
         autoCorrect={false}
       />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
-        {(['all', 'pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled'] as const).map((st) => (
-          <Pressable key={st} onPress={() => setStatusFilter(st)} style={[styles.chip, statusFilter === st && styles.chipOn]} testID={`orders-status-${st}`} accessibilityRole="button">
-            <Text style={[styles.chipText, statusFilter === st && styles.chipTextOn]}>{st === 'all' ? 'Tous les statuts' : STATUS_LABELS[st]}</Text>
+        {(['todo', 'all', 'pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled'] as const).map((st) => (
+          <Pressable key={st} onPress={() => setStatusFilter(st)} style={[styles.chip, statusFilter === st && styles.chipOn]} testID={`orders-status-${st}`} accessibilityRole="button" aria-selected={statusFilter === st}>
+            <Text style={[styles.chipText, statusFilter === st && styles.chipTextOn]}>{st === 'todo' ? '📋 À traiter' : st === 'all' ? 'Tous les statuts' : STATUS_LABELS[st]}</Text>
           </Pressable>
         ))}
       </ScrollView>
@@ -205,7 +215,9 @@ export function AdminOrdersScreen() {
       <Text style={styles.rule} testID="orders-rule">Seules les commandes livrées comptent dans les ventes. Les commandes signalées comme fausses ne comptent jamais.</Text>
       <View style={styles.summaryRow}>
         <Text style={styles.summary} testID="orders-summary">
-          {`${filtered.length} commande${filtered.length > 1 ? 's' : ''} · ${soldCount} livrée${soldCount > 1 ? 's' : ''} comptée${soldCount > 1 ? 's' : ''} : ${formatXAF(soldTotal)}`}
+          {statusFilter === 'todo'
+            ? `${filtered.length} commande${filtered.length > 1 ? 's' : ''} à traiter · les livrées sont dans « Livrée », les annulées dans « Annulée »`
+            : `${filtered.length} commande${filtered.length > 1 ? 's' : ''} · ${soldCount} livrée${soldCount > 1 ? 's' : ''} comptée${soldCount > 1 ? 's' : ''} : ${formatXAF(soldTotal)}`}
         </Text>
         {Platform.OS === 'web' ? (
           <Pressable onPress={exportCsv} accessibilityRole="button" style={styles.exportBtn} testID="orders-export">
@@ -231,7 +243,7 @@ export function AdminOrdersScreen() {
         renderItem={({ item }) => {
           const commission = commissionByOrder[item.id];
           return (
-          <View style={styles.card}>
+          <View style={styles.card} testID={`admin-order-${item.id}`}>
             <View style={styles.cardHeader}>
               <Text style={styles.orderId} testID="admin-order-number">{orderNumberLabel(item)}</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -242,8 +254,13 @@ export function AdminOrdersScreen() {
             <Text style={styles.customer}>{item.shipping_name} · {item.shipping_phone}</Text>
             <Text style={styles.address}>{item.shipping_address}, {item.shipping_city}</Text>
             {item.delivery_type === 'scheduled' && item.scheduled_for ? (
-              <Text style={styles.giftBadge} testID="admin-order-scheduled">
-                {`📅 Livraison programmée : ${formatSlot(item.scheduled_for)} · Zara vous prévient sur Telegram ${SCHEDULED_DELIVERY.reminderMinutes} min avant`}
+              // une fois livrée (ou annulée), le rappel Telegram n'a plus de sens : on garde seulement le rendez-vous
+              <Text style={[styles.giftBadge, item.status === 'delivered' && styles.doneBadge]} testID="admin-order-scheduled">
+                {item.status === 'delivered'
+                  ? `✅ Livrée · rendez-vous du ${formatSlot(item.scheduled_for)}`
+                  : item.status === 'cancelled'
+                    ? `📅 Rendez-vous annulé : ${formatSlot(item.scheduled_for)}`
+                    : `📅 Livraison programmée : ${formatSlot(item.scheduled_for)} · Zara vous prévient sur Telegram ${SCHEDULED_DELIVERY.reminderMinutes} min avant`}
               </Text>
             ) : null}
             {hasChatGift(item) && <Text style={styles.giftBadge} testID="admin-order-chat-gift">{GIFT_ADMIN_BADGE}</Text>}
@@ -342,7 +359,7 @@ export function AdminOrdersScreen() {
             </Text>
             <Text style={styles.total}>Total : {formatXAF(item.total)}</Text>
             {item.status !== 'delivered' && item.status !== 'cancelled' && (
-              <Pressable style={styles.advanceBtn} onPress={() => advanceStatus(item)}>
+              <Pressable style={styles.advanceBtn} onPress={() => advanceStatus(item)} testID="admin-order-advance" accessibilityRole="button">
                 <Text style={styles.advanceText}>Étape suivante →</Text>
               </Pressable>
             )}
@@ -382,7 +399,17 @@ export function AdminOrdersScreen() {
           </View>
           );
         }}
-        ListEmptyComponent={!loading ? <Text style={styles.denied}>{orders.length > 0 ? 'Aucune commande ne correspond à votre recherche.' : 'Aucune commande pour le moment.'}</Text> : null}
+        ListEmptyComponent={
+          !loading ? (
+            <Text style={styles.denied} testID="orders-empty">
+              {orders.length === 0
+                ? 'Aucune commande pour le moment.'
+                : statusFilter === 'todo' && !query.trim()
+                  ? 'Aucune commande à traiter 🎉 Les commandes livrées sont dans « Livrée ».'
+                  : 'Aucune commande ne correspond à votre recherche.'}
+            </Text>
+          ) : null
+        }
       />
       <ConfirmDialog
         visible={!!pendingDelete}
@@ -509,6 +536,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     marginBottom: 6,
   },
+  doneBadge: { color: colors.successText, borderColor: colors.successText },
   flaggedBadge: {
     color: colors.errorText,
     fontFamily: fonts.bodyBold,
