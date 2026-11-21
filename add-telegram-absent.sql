@@ -110,10 +110,12 @@ grant execute on function public.telegram_absent_record(uuid, text, text) to ser
 
 -- 4) le rapport quotidien : e-mails publicitaires et Telegram, sur les envois des 7 derniers jours (réservé à la fonction serveur)
 -- « revenus » = clients contactés qui ont ouvert une visite sur le site APRÈS le message ; « commandes » = clients contactés qui ont commandé APRÈS le message.
+-- E-mails publicitaires = l'ancienne publicité « absents » ET Zara Marketing (21 novembre 2026 : quand Zara Marketing est en marche,
+-- l'ancienne s'arrête pour éviter les doublons, et le rapport affichait 0 alors que des centaines d'e-mails partaient).
 create or replace function public.telegram_promos_report()
 returns jsonb language sql stable security definer set search_path = public as $$
 with em as (
-  select o.user_id, o.sent_at from public.email_outbox o where o.kind = 'promo_inactive' and o.status = 'sent' and o.sent_at > now() - interval '7 days'
+  select o.user_id, o.sent_at from public.email_outbox o where o.kind in ('promo_inactive', 'marketing') and o.status = 'sent' and o.sent_at > now() - interval '7 days'
 ), tg as (
   select t.user_id, t.sent_at from public.telegram_promos t where t.status = 'sent' and t.sent_at > now() - interval '7 days'
 ), today as (

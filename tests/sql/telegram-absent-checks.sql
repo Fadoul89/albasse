@@ -159,6 +159,9 @@ insert into public.email_outbox(kind, user_id, status, sent_at) values
   ('promo_inactive', t.uid(3), 'sent', now() - interval '1 minute'),
   ('promo_inactive', t.uid(4), 'sent', now() - interval '2 days'),
   ('promo_inactive', t.uid(5), 'failed', null),
+  ('marketing', t.uid(7), 'sent', now() - interval '1 minute'),
+  ('marketing', t.uid(8), 'sent', now() - interval '9 days'),
+  ('marketing', t.uid(13), 'failed', null),
   ('welcome', t.uid(6), 'sent', now() - interval '1 minute');
 insert into public.visitor_sessions(user_id, last_seen_at) values (t.uid(4), now() - interval '1 day'), (t.uid(3), now() - interval '10 days');
 create temp table rep as select public.telegram_promos_report() as r;
@@ -166,7 +169,7 @@ select t.ok('rapport Telegram : 1 message aujourd''hui, 3 sur 7 jours (celui d''
 select t.ok('rapport Telegram : 1 client revenu (visite après le message : u9) ; la visite d''u11 date d''AVANT son message', (select (r->'telegram'->>'returned')::int = 1 from rep));
 select t.ok('rapport Telegram : 1 client a commandé après le message (u9) ; la commande d''u11 date d''avant', (select (r->'telegram'->>'orders')::int = 1 from rep));
 select t.ok('rapport Telegram : 1 échec et 1 bot bloqué', (select (r->'telegram'->>'failed')::int = 1 and (r->'telegram'->>'blocked')::int = 1 from rep));
-select t.ok('rapport e-mails : 2 aujourd''hui, 3 sur 7 jours (pas l''échec, pas le « bienvenue »)', (select (r->'emails'->>'today')::int = 2 and (r->'emails'->>'week')::int = 3 from rep));
+select t.ok('rapport e-mails : 3 aujourd''hui, 4 sur 7 jours, Zara Marketing compris (pas les échecs, pas le « bienvenue », pas celui d''il y a 9 jours)', (select (r->'emails'->>'today')::int = 3 and (r->'emails'->>'week')::int = 4 from rep));
 select t.ok('rapport e-mails : 1 client revenu après l''e-mail (u4) ; la visite d''u3 date d''avant', (select (r->'emails'->>'returned')::int = 1 from rep));
 select t.ok('rapport : les deux interrupteurs sont lus', (select (r->>'telegram_enabled')::boolean = true and (r->>'emails_enabled')::boolean = false from rep));
 select t.ok('rapport : clients liés (12 hors administrateur), 10 qui ont accepté et ne sont pas arrêtés, 1 arrêté',
