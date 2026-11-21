@@ -22,8 +22,9 @@ export const GLASS_FILTER = 'blur(8px) saturate(150%) brightness(1.8)';
 // le reflet de vitre : deux bandes claires en biais
 const GLASS_SHINE =
   'linear-gradient(118deg, rgba(255,255,255,0) 22%, rgba(255,255,255,0.28) 30%, rgba(255,255,255,0) 40%, rgba(255,255,255,0) 62%, rgba(255,255,255,0.14) 68%, rgba(255,255,255,0) 74%)';
-// le halo blanc des lettres du menu (hérité par tous les textes du panneau)
-const TEXT_HALO = '[data-testid="menu-panel"]{text-shadow:0 0 6px rgba(255,255,255,0.95),0 0 2px rgba(255,255,255,0.9)}';
+// le halo blanc des lettres du menu (tous les textes du panneau : les textes de React Native Web ne l'héritent pas)
+const TEXT_HALO =
+  '[data-testid="menu-panel"],[data-testid="menu-panel"] div{text-shadow:0 0 6px rgba(255,255,255,0.95),0 0 2px rgba(255,255,255,0.9)}';
 
 export function CurvedGlass() {
   if (Platform.OS !== 'web') return <View pointerEvents="none" style={styles.native} />;
