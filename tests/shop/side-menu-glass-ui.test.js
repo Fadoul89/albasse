@@ -146,7 +146,12 @@ const lum = (rgb) => {
     const cs = getComputedStyle(g);
     return { clip: cs.clipPath || cs.webkitClipPath, blur: cs.backdropFilter || cs.webkitBackdropFilter, bg: cs.backgroundImage, path: !!document.querySelector('#albasse-menu-curve path') };
   });
-  check('panneau en verre : découpé par le chemin courbé et flou du fond', !!glass && /albasse-menu-curve/.test(glass.clip) && /blur\(22px\)/.test(glass.blur) && glass.path && /gradient/.test(glass.bg), glass);
+  check('panneau en vitre claire : découpé par le chemin courbé, fond à peine flou et éclairci', !!glass && /albasse-menu-curve/.test(glass.clip) && /blur\(8px\)/.test(glass.blur) && /brightness/.test(glass.blur) && glass.path && /gradient/.test(glass.bg), glass);
+  const vitre = await page.evaluate(() => {
+    const label = document.querySelector('[data-testid^="menu-cat-"] div[dir]') || document.querySelector('[data-testid^="menu-cat-"]');
+    return { reflet: !!document.querySelector('[data-glass="reflet"]'), halo: label ? getComputedStyle(label).textShadow : null };
+  });
+  check('vitre claire : reflet en biais et halo blanc autour des lettres du menu', vitre.reflet && /rgba\(255, 255, 255/.test(vitre.halo || ''), vitre);
   const panel = await page.getByTestId('menu-panel').boundingBox();
   check('téléphone : panneau posé à gauche (marge 10), 335 px de large, le site visible à droite', panel && Math.round(panel.x) === 10 && Math.abs(panel.width - 335) <= 1 && panel.x + panel.width < 390, panel);
   check('téléphone : pas de défilement de côté', await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
