@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, TextInput, StyleSheet, FlatList, Platform, Pressable, ScrollView, useWindowDimensions } from 'react-native';
+import { View, Text, TextInput, StyleSheet, FlatList, Platform, Pressable, ScrollView } from 'react-native';
 import type { RouteProp } from '@react-navigation/native';
 import { useNavigation } from '@react-navigation/native';
 import type { RootStackParamList } from '../navigation/types';
@@ -7,6 +7,8 @@ import { colors, fonts, spacing } from '../theme';
 import { useProducts } from '../hooks/useProducts';
 import { useCategories } from '../hooks/useCategories';
 import { ProductCard } from '../components/ProductCard';
+import { useProductGrid } from '../hooks/useProductGrid';
+import { GRID_GAP } from '../lib/productGrid';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { MenuLauncher } from '../components/SideMenu';
 import { trackCategoryView, trackSearchQuery } from '../lib/browsingTracker';
@@ -16,7 +18,7 @@ import { ShopPageBar } from '../components/ShopPageBar';
 
 // Pages de la liste (demande du patron, 16 novembre 2026) : 20 articles par page sur téléphone (10 lignes de 2), 24 sur grand écran (6 lignes de 4).
 // Toute la page est affichée d'un coup : plus de zone vide en bas pendant que la liste charge en défilant.
-export const categoryPageSize = (columns: number) => (columns >= 4 ? 24 : 20);
+export const categoryPageSize = (columns: number) => (columns >= 3 ? 24 : 20);
 
 interface Props {
   route: RouteProp<RootStackParamList, 'Category'>;
@@ -28,8 +30,8 @@ export function CategoryScreen({ route }: Props) {
   const { products } = useProducts();
   const { categories } = useCategories();
   const [query, setQuery] = useState('');
-  const { width } = useWindowDimensions();
-  const columns = width >= 700 ? 4 : 2;
+  // la grille suit la vraie largeur de la liste : 2 colonnes sur un téléphone, jusqu'à 6 sur un grand écran
+  const { columns, cardWidth, onLayout: onGridLayout } = useProductGrid(spacing.md);
 
   const navigation = useNavigation();
   const showAll = slug === 'tous';
@@ -127,10 +129,11 @@ export function CategoryScreen({ route }: Props) {
         testID="category-list"
         keyExtractor={(item) => item.id}
         numColumns={columns}
-        columnWrapperStyle={{ justifyContent: 'space-between' }}
+        columnWrapperStyle={{ gap: GRID_GAP }}
+        onLayout={onGridLayout}
         // avec une barre de pages : de la place en bas, pour que le bouton rond de Zara ne cache ni « › » ni « Page suivante »
         contentContainerStyle={[styles.grid, pages > 1 && styles.gridWithPages]}
-        renderItem={({ item }) => <ProductCard product={item} columns={columns} />}
+        renderItem={({ item }) => <ProductCard product={item} width={cardWidth} />}
         ListEmptyComponent={<Text style={styles.empty}>Aucun produit trouvé.</Text>}
         ListFooterComponent={<ShopPageBar current={current} count={pages} total={filtered.length} size={size} onGo={goToPage} testID="category-pages" />}
       />

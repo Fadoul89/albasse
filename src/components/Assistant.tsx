@@ -467,12 +467,14 @@ export function Assistant() {
           {showTeaser ? (
             // la bulle est au-dessus du bouton, au milieu de l'ecran (le reste de la ligne laisse passer les touchers)
             <View
-              style={[styles.teaserRow, bubbleBelow ? { top: fabTop + SIZE + TEASER_GAP } : { bottom: fabBottom + SIZE + TEASER_GAP }, { transform: [{ translateX: bubbleShift }] }]}
+              style={[styles.teaserRow, bubbleBelow ? { top: fabTop + SIZE + TEASER_GAP } : { bottom: fabBottom + SIZE + TEASER_GAP }]}
               pointerEvents="box-none"
             >
               <Pressable
                 ref={teaserRef}
-                style={styles.teaser}
+                // seule la bulle se décale vers le bouton (avant : toute la ligne, large comme l'écran, dépassait à droite sur un ordinateur
+                // et faisait défiler la page de côté)
+                style={[styles.teaser, { transform: [{ translateX: bubbleShift }] }]}
                 onPress={pushDue ? () => openFor('push') : installDue ? () => openFor('install') : openChat}
                 accessibilityRole="button"
                 accessibilityLabel={t.openLabel}

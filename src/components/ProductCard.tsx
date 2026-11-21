@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, View, Text, StyleSheet, Dimensions } from 'react-native';
+import { Pressable, View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -10,17 +10,18 @@ import { colors, fonts, radius, spacing } from '../theme';
 import { StarRating } from './StarRating';
 import { FavoriteButton } from './FavoriteButton';
 
-const { width } = Dimensions.get('window');
-
-function cardWidth(columns: number) {
-  return Math.min((width - spacing.md * (columns + 1)) / columns, 220);
+// largeur par défaut (accueil, articles du même genre…) : selon la fenêtre ACTUELLE (avant : figée à l'ouverture du site)
+function cardWidth(windowWidth: number, columns: number) {
+  return Math.min((windowWidth - spacing.md * (columns + 1)) / columns, 220);
 }
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
 
-export function ProductCard({ product, columns = 2 }: { product: Product; columns?: number }) {
+// width : la largeur exacte donnée par une grille (useProductGrid) ; sinon, la largeur par défaut selon columns
+export function ProductCard({ product, columns = 2, width }: { product: Product; columns?: number; width?: number }) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const CARD_WIDTH = cardWidth(columns);
+  const { width: windowWidth } = useWindowDimensions();
+  const CARD_WIDTH = width ?? cardWidth(windowWidth, columns);
   // l'ancien prix et le « -X % » seulement pendant une vraie promotion (vente flash ou promotion de Zara en cours)
   const oldPrice = shownOldPrice(product);
   const discount = oldPrice ? realDiscountPct(product.price, oldPrice) : null;
