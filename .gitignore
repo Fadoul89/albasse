@@ -43,3 +43,4 @@ yarn-error.*
 
 # Local Netlify folder
 .netlify
+trader/config.json

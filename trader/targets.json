@@ -1,0 +1,187 @@
+{
+  "source": "BERKSHIRE HATHAWAY INC 13F-HR, quarter ending 2026-09-30, filed 2026-11-16 (accession 0001193125-26-463399)",
+  "as_of": "2026-09-30",
+  "filed": "2026-11-16",
+  "cik": "0001067983",
+  "method": "top 5 stock positions by value, share classes combined, pct_of_13f scaled to 100",
+  "weights": [
+    {
+      "ticker": "AAPL",
+      "name": "Apple",
+      "weight": 34.87,
+      "pct_of_13f": 24.95,
+      "value": 75901188420.0,
+      "shares": 227917808.0,
+      "cusips": [
+        "037833100"
+      ]
+    },
+    {
+      "ticker": "AXP",
+      "name": "American Express",
+      "weight": 21.19,
+      "pct_of_13f": 15.16,
+      "value": 46104813870.0,
+      "shares": 151610700.0,
+      "cusips": [
+        "025816109"
+      ]
+    },
+    {
+      "ticker": "GOOGL",
+      "name": "Alphabet",
+      "weight": 16.72,
+      "pct_of_13f": 11.96,
+      "value": 36374651401.0,
+      "shares": 105979600.0,
+      "cusips": [
+        "02079K305",
+        "02079K107"
+      ],
+      "classes": [
+        "GOOGL",
+        "GOOG"
+      ]
+    },
+    {
+      "ticker": "KO",
+      "name": "Coca Cola",
+      "weight": 15.82,
+      "pct_of_13f": 11.32,
+      "value": 34432000000.0,
+      "shares": 400000000.0,
+      "cusips": [
+        "191216100"
+      ]
+    },
+    {
+      "ticker": "BAC",
+      "name": "Bank of America",
+      "weight": 11.4,
+      "pct_of_13f": 8.16,
+      "value": 24812509222.0,
+      "shares": 455860908.0,
+      "cusips": [
+        "060505104"
+      ]
+    }
+  ],
+  "skipped": [
+    {
+      "issuer": "CHEVRON CORPORATION",
+      "ticker": "CVX",
+      "why": "outside the top 5"
+    },
+    {
+      "issuer": "OCCIDENTAL PETE CORP",
+      "ticker": "OXY",
+      "why": "outside the top 5"
+    },
+    {
+      "issuer": "MOODYS CORP",
+      "ticker": "MCO",
+      "why": "outside the top 5"
+    },
+    {
+      "issuer": "CHUBB LIMITED",
+      "ticker": "CB",
+      "why": "outside the top 5"
+    },
+    {
+      "issuer": "KRAFT HEINZ CO",
+      "ticker": "KHC",
+      "why": "outside the top 5"
+    },
+    {
+      "issuer": "DELTA AIR LINES INC",
+      "ticker": "DAL",
+      "why": "outside the top 5"
+    },
+    {
+      "issuer": "DAVITA INC",
+      "ticker": "DVA",
+      "why": "outside the top 5"
+    },
+    {
+      "issuer": "SIRIUSXM HOLDINGS INC",
+      "ticker": "SIRI",
+      "why": "outside the top 5"
+    },
+    {
+      "issuer": "LENNAR CORP",
+      "ticker": "LEN",
+      "why": "outside the top 5"
+    },
+    {
+      "issuer": "KROGER CO",
+      "ticker": "KR",
+      "why": "outside the top 5"
+    },
+    {
+      "issuer": "VERISIGN INC",
+      "ticker": "VRSN",
+      "why": "outside the top 5"
+    },
+    {
+      "issuer": "LIBERTY LIVE HOLDINGS INC",
+      "ticker": "LLYVK",
+      "why": "outside the top 5"
+    },
+    {
+      "issuer": "ALLY FINL INC",
+      "ticker": "ALLY",
+      "why": "outside the top 5"
+    },
+    {
+      "issuer": "NEW YORK TIMES CO MTN BE",
+      "ticker": "NYT",
+      "why": "outside the top 5"
+    },
+    {
+      "issuer": "BENDING SPOONS SPA",
+      "ticker": "BSP",
+      "why": "outside the top 5"
+    },
+    {
+      "issuer": "NUCOR CORP",
+      "ticker": "NUE",
+      "why": "outside the top 5"
+    },
+    {
+      "issuer": "LOUISIANA PAC CORP",
+      "ticker": "LPX",
+      "why": "outside the top 5"
+    },
+    {
+      "issuer": "CAPITAL ONE FINL CORP",
+      "ticker": "COF",
+      "why": "outside the top 5"
+    },
+    {
+      "issuer": "MACYS INC",
+      "ticker": "M",
+      "why": "outside the top 5"
+    },
+    {
+      "issuer": "NVR INC",
+      "ticker": "NVR",
+      "why": "outside the top 5"
+    },
+    {
+      "issuer": "JEFFERIES FINANCIAL GROUP IN",
+      "ticker": "JEF",
+      "why": "outside the top 5"
+    },
+    {
+      "issuer": "D R HORTON INC",
+      "ticker": "DHI",
+      "why": "outside the top 5"
+    }
+  ],
+  "caveats": [
+    "A 13F is a snapshot of the last day of the quarter, filed up to 45 days later. The investor may have sold or added since.",
+    "It shows long positions in US-listed stocks only: no shorts, cash, bonds, foreign stocks, private companies or trades made inside the quarter.",
+    "It is filed by the firm, not by the person it is known for.",
+    "Education and tooling, not financial advice. Nothing here places an order."
+  ]
+}
