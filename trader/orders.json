@@ -1,0 +1,50 @@
+{
+  "created_by": "trader-budget",
+  "created_at": "2026-11-21T16:26:41",
+  "status": "proposed",
+  "paper": true,
+  "note": "Proposals only. Nothing is placed until trader-risk passes each order and you say yes to it in the chat.",
+  "source": "BERKSHIRE HATHAWAY INC 13F-HR, quarter ending 2026-09-30, filed 2026-11-16 (accession 0001193125-26-463399)",
+  "orders": [
+    {
+      "symbol": "AAPL",
+      "side": "buy",
+      "notional": "1250",
+      "type": "market",
+      "time_in_force": "day",
+      "why": "34.87% of the stock sleeve, copying BERKSHIRE HATHAWAY INC 13F-HR, quarter ending 2026-09-30, filed 2026-11-16 (accession 0001193125-26-463399); capped at 25% of the $5,000 budget"
+    },
+    {
+      "symbol": "AXP",
+      "side": "buy",
+      "notional": "1058",
+      "type": "market",
+      "time_in_force": "day",
+      "why": "21.19% of the stock sleeve, copying BERKSHIRE HATHAWAY INC 13F-HR, quarter ending 2026-09-30, filed 2026-11-16 (accession 0001193125-26-463399)"
+    },
+    {
+      "symbol": "GOOGL",
+      "side": "buy",
+      "notional": "834",
+      "type": "market",
+      "time_in_force": "day",
+      "why": "16.72% of the stock sleeve, copying BERKSHIRE HATHAWAY INC 13F-HR, quarter ending 2026-09-30, filed 2026-11-16 (accession 0001193125-26-463399)"
+    },
+    {
+      "symbol": "KO",
+      "side": "buy",
+      "notional": "789",
+      "type": "market",
+      "time_in_force": "day",
+      "why": "15.82% of the stock sleeve, copying BERKSHIRE HATHAWAY INC 13F-HR, quarter ending 2026-09-30, filed 2026-11-16 (accession 0001193125-26-463399)"
+    },
+    {
+      "symbol": "BAC",
+      "side": "buy",
+      "notional": "569",
+      "type": "market",
+      "time_in_force": "day",
+      "why": "11.40% of the stock sleeve, copying BERKSHIRE HATHAWAY INC 13F-HR, quarter ending 2026-09-30, filed 2026-11-16 (accession 0001193125-26-463399)"
+    }
+  ]
+}
