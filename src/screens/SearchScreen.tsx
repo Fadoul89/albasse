@@ -3,6 +3,8 @@ import { View, Text, TextInput, StyleSheet, FlatList, Pressable } from 'react-na
 import { colors, fonts, spacing } from '../theme';
 import { useProducts } from '../hooks/useProducts';
 import { ProductCard } from '../components/ProductCard';
+import { useProductGrid } from '../hooks/useProductGrid';
+import { GRID_GAP } from '../lib/productGrid';
 import { MenuLauncher } from '../components/SideMenu';
 import { trackSearchQuery } from '../lib/browsingTracker';
 import { normalize, tokenize } from '../lib/assistantBrain';
@@ -19,6 +21,8 @@ const haystack = (p: Product) => normalize(`${p.name} ${p.description ?? ''} ${p
 
 export function SearchScreen() {
   const { products } = useProducts();
+  // la grille suit la vraie largeur de la liste : 2 colonnes sur un téléphone, jusqu'à 6 sur un grand écran
+  const { columns, cardWidth, onLayout: onGridLayout } = useProductGrid(spacing.md);
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
   const listRef = useRef<FlatList>(null);
@@ -89,11 +93,13 @@ export function SearchScreen() {
         initialNumToRender={SEARCH_PAGE_SIZE}
         testID="search-list"
         keyExtractor={(item) => item.id}
-        numColumns={2}
-        columnWrapperStyle={{ justifyContent: 'space-between' }}
+        key={columns}
+        numColumns={columns}
+        columnWrapperStyle={{ gap: GRID_GAP }}
+        onLayout={onGridLayout}
         // avec une barre de pages : de la place en bas, pour que le bouton rond de Zara ne la cache pas
         contentContainerStyle={[styles.grid, pages > 1 && styles.gridWithPages]}
-        renderItem={({ item }) => <ProductCard product={item} />}
+        renderItem={({ item }) => <ProductCard product={item} width={cardWidth} />}
         ListHeaderComponent={
           suggestion ? (
             <View style={styles.suggestBox}>
