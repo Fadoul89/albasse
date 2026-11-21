@@ -148,12 +148,13 @@ const lum = (rgb) => {
     const cs = getComputedStyle(g);
     return { clip: cs.clipPath || cs.webkitClipPath, blur: cs.backdropFilter || cs.webkitBackdropFilter, bg: cs.backgroundImage, path: !!document.querySelector('#albasse-menu-curve path') };
   });
-  check('panneau en vitre claire : découpé par le chemin courbé, fond à peine flou et éclairci', !!glass && /albasse-menu-curve/.test(glass.clip) && /blur\(8px\)/.test(glass.blur) && /brightness/.test(glass.blur) && glass.path && /gradient/.test(glass.bg), glass);
+  check('panneau en vitre claire bleutée : découpé par le chemin courbé, fond flou, voile bleu léger', !!glass && /albasse-menu-curve/.test(glass.clip) && /blur\(9px\)/.test(glass.blur) && /brightness/.test(glass.blur) && glass.path && /gradient/.test(glass.bg) && /rgba\(20, 45, 120/.test(glass.bg), glass);
   const vitre = await page.evaluate(() => {
     const label = document.querySelector('[data-testid^="menu-cat-"] div[dir]') || document.querySelector('[data-testid^="menu-cat-"]');
-    return { reflet: !!document.querySelector('[data-glass="reflet"]'), halo: label ? getComputedStyle(label).textShadow : null };
+    const tier = document.querySelector('[data-testid="menu-profile-tier"]');
+    return { reflet: !!document.querySelector('[data-glass="reflet"]'), ombre: label ? getComputedStyle(label).textShadow : null, palier: tier ? getComputedStyle(tier).textShadow : null };
   });
-  check('vitre claire : reflet en biais et halo blanc autour des lettres du menu', vitre.reflet && /rgba\(255, 255, 255/.test(vitre.halo || ''), vitre);
+  check('vitre claire : reflet en biais, ombre bleu nuit douce sous les lettres (rien sous le palier, sur fond blanc)', vitre.reflet && /rgba\(0, 18, 60/.test(vitre.ombre || '') && (LOOK || vitre.palier === 'none'), vitre);
   const panel = await page.getByTestId('menu-panel').boundingBox();
   check('téléphone : panneau posé à gauche (marge 10), 335 px de large, le site visible à droite', panel && Math.round(panel.x) === 10 && Math.abs(panel.width - 335) <= 1 && panel.x + panel.width < 390, panel);
   check('téléphone : pas de défilement de côté', await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
@@ -165,7 +166,7 @@ const lum = (rgb) => {
   check(`une flèche seulement pour les catégories qui ont des sous-catégories (${withSubs.length})`, toggles.length === withSubs.length && withSubs.every((c) => toggles.includes(c.slug)), toggles);
   const ink = await page.getByTestId(`menu-cat-${rows[0]}`).locator('div[dir], div').last().evaluate((e) => getComputedStyle(e).color).catch(() => null);
   const nameColor = await page.getByTestId(`menu-cat-${rows[0]}`).evaluate((e) => { const t = [...e.querySelectorAll('div')].find((d) => d.children.length === 0 && d.innerText.trim().length > 2); return t ? getComputedStyle(t).color : null; });
-  check('texte foncé sur verre clair (lisible)', nameColor && lum(nameColor) < 0.05, [nameColor, ink]);
+  check('lettres blanches sur la vitre bleutée (lisible)', nameColor && lum(nameColor) > 0.9, [nameColor, ink]);
   const hl = page.getByTestId('menu-highlight');
   check('16 novembre : carte « À LA UNE · NOV. », « BLACK FRIDAY », « Le 27 novembre »', (await hl.count()) === 1 && /À LA UNE · NOV\./.test(await hl.innerText()) && /BLACK\s+FRIDAY/.test(await hl.innerText()) && /Le 27 novembre/.test(await hl.innerText()), await hl.innerText().catch(() => ''));
   check('client connecté : « Mon compte » et « Se déconnecter » en bas', (await page.getByTestId('menu-account').count()) === 1 && (await page.getByTestId('menu-signout').count()) === 1);
@@ -208,7 +209,7 @@ const lum = (rgb) => {
   // sur la page de la sous-catégorie : sa catégorie est ouverte et elle est mise en avant
   await openMenu(page);
   const subBg = await page.getByTestId(`menu-sub-${montreSub.slug}`).evaluate((e) => getComputedStyle(e).backgroundColor).catch(() => null);
-  check(`page « ${montreSub.name} » : « ${montre.name} » ouverte d'elle-même, « ${montreSub.name} » mise en avant (verre blanc)`, (await page.getByTestId(`menu-subs-${montre.slug}`).count()) === 1 && /rgba\(255, 255, 255, 0\.8/.test(subBg || ''), subBg);
+  check(`page « ${montreSub.name} » : « ${montre.name} » ouverte d'elle-même, « ${montreSub.name} » mise en avant (verre clair sur la vitre bleutée)`, (await page.getByTestId(`menu-subs-${montre.slug}`).count()) === 1 && /rgba\(255, 255, 255, 0\.2/.test(subBg || ''), subBg);
   await page.screenshot({ path: path.join(OUT, 'menu-2-sous-categorie.png') });
   await page.getByTestId(`menu-sub-all-${montre.slug}`).click();
   await sleep(1500);

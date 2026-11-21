@@ -167,12 +167,14 @@ const adState = (page) =>
   check('pas encore de changement d\'image avant 5 secondes', s1.active === 0 && s1.track === 0, s1);
   await page.getByTestId('menu-panel').screenshot({ path: path.join(OUT, 'pub-1-image-1.png') });
   const s2 = await waitImage(page, 1);
-  const took = Date.now() - tOpen;
+  // le chrono de l'image 3 part à l'arrivée de l'image 2 (avant la capture d'écran, dont la durée varie)
+  const t2 = Date.now();
+  const took = t2 - tOpen;
   check('5 secondes après l\'ouverture : l\'image 2 est arrivée en glissant (la bande avance d\'une largeur)', s2.active === 1 && Math.abs(s2.track + s2.w) <= 2 && took >= 4600 && took <= 5900, { active: s2.active, track: s2.track, took });
   await page.getByTestId('menu-panel').screenshot({ path: path.join(OUT, 'pub-2-image-2.png') });
-  const t2 = Date.now();
   const s3 = await waitImage(page, 2);
-  check('5 secondes plus tard : l\'image 3', s3.active === 2 && Date.now() - t2 >= 4300 && Date.now() - t2 <= 5800, { ...s3, gap: Date.now() - t2 });
+  const gap = Date.now() - t2;
+  check('5 secondes plus tard : l\'image 3', s3.active === 2 && gap >= 4600 && gap <= 5900, { ...s3, gap });
   const s4 = await waitImage(page, 0);
   check('5 secondes plus tard : retour à l\'image 1, sans saut (la boucle continue)', s4.active === 0 && Math.abs(s4.track) <= 2 && s4.after >= 4000 && s4.after <= 5800, s4);
   // toucher l'image 1 (un article du site) : l'article s'ouvre dans le site et le menu se ferme
