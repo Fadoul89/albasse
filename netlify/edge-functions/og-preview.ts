@@ -4,10 +4,7 @@
 // Une adresse produit ou catégorie qui n'existe pas (ou plus) répond 404 aux robots : elle sort de l'index de Google.
 // Les textes et les données viennent de ./lib/seo.ts (testé : tests/seo/seo.test.ts).
 import type { Context } from 'https://edge.netlify.com';
-import { categoryPage, copiesOf, homePage, infoPage, infoPageDef, notFoundPage, oldCategoryRedirect, pickCanonicalSlug, productPage, type CopyRow, type SeoCategory, type SeoProduct } from './lib/seo.ts';
-
-const BOT_REGEX =
-  /facebookexternalhit|Facebot|Twitterbot|TikTok|WhatsApp|LinkedInBot|Slackbot|Discordbot|Pinterest|TelegramBot|Googlebot|Google-InspectionTool|bingbot|BingPreview|DuckDuckBot|YandexBot|Applebot|Baiduspider|SkypeUriPreview/i;
+import { categoryPage, copiesOf, homePage, infoPage, infoPageDef, isBot, notFoundPage, oldCategoryRedirect, pickCanonicalSlug, productPage, type CopyRow, type SeoCategory, type SeoProduct } from './lib/seo.ts';
 
 const HTML_HEADERS = { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=600', vary: 'User-Agent' };
 
@@ -26,7 +23,7 @@ async function serve(request: Request, context: Context): Promise<Response> {
   if (moved) return new Response(null, { status: 301, headers: { location: moved, 'cache-control': 'public, max-age=3600' } });
   const userAgent = request.headers.get('user-agent') || '';
   // visiteur normal : exactement la page d'avant, rien n'est modifié
-  if (!BOT_REGEX.test(userAgent)) return context.next();
+  if (!isBot(userAgent)) return context.next();
 
   const supabaseUrl = Deno.env.get('EXPO_PUBLIC_SUPABASE_URL');
   const supabaseKey = Deno.env.get('EXPO_PUBLIC_SUPABASE_ANON_KEY');

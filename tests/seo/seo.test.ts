@@ -148,6 +148,41 @@ const ldBlocks = (html: string): any[] => [...html.matchAll(/<script type="appli
     check('visiteur normal : réponse non modifiée (aucun en-tête ajouté)', res.headers.get('vary') === null && calls.length === 0, { vary: res.headers.get('vary'), appels: calls.length });
   }
 
+  // les robots des IA et les outils d'analyse reçoivent la même page lisible que Google (inspection Bunzy, 21 novembre 2026)
+  {
+    const AI = [
+      'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; GPTBot/1.2; +https://openai.com/gptbot)',
+      'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; ChatGPT-User/1.0; +https://openai.com/bot',
+      'Mozilla/5.0 (compatible; OAI-SearchBot/1.0; +https://openai.com/searchbot)',
+      'Mozilla/5.0 (compatible; ClaudeBot/1.0; +claudebot@anthropic.com)',
+      'Mozilla/5.0 (compatible; Claude-User/1.0; +Claude-User@anthropic.com)',
+      'Mozilla/5.0 (compatible; PerplexityBot/1.0; +https://perplexity.ai/perplexitybot)',
+      'Mozilla/5.0 (compatible; Amazonbot/0.1)',
+      'CCBot/2.0 (https://commoncrawl.org/faq/)',
+      'meta-externalagent/1.1 (+https://developers.facebook.com/docs/sharing/webmasters/crawler)',
+      'Mozilla/5.0 (compatible; BunzyBot/1.0; +https://bunzy.io)',
+      'Mozilla/5.0 (compatible; AhrefsBot/7.0; +http://ahrefs.com/robot/)',
+      'Mozilla/5.0 (compatible; SemrushBot/7~bl; +http://www.semrush.com/bot.html)',
+    ];
+    const notBots = [
+      CHROME,
+      'Mozilla/5.0 (Linux; Android 11; CUBOT X30) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0 Mobile Safari/537.36',
+      'Mozilla/5.0 (Linux; Android 13; CUBOT_KINGKONG_9) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36',
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+      '',
+    ];
+    check('robots des IA et outils d\'analyse reconnus (ChatGPT, Claude, Perplexity, Amazon, Common Crawl, Meta, Bunzy, Ahrefs, Semrush)', AI.every((u) => seo.isBot(u)), AI.filter((u) => !seo.isBot(u)));
+    check('vrais téléphones et ordinateurs PAS pris pour des robots (même un téléphone « CUBOT »)', notBots.every((u) => !seo.isBot(u)), notBots.filter((u) => seo.isBot(u)));
+    check('les robots d\'avant restent reconnus (Google, Bing, Facebook, WhatsApp, TikTok, Telegram, Apple)', [GOOGLEBOT, 'Mozilla/5.0 (compatible; bingbot/2.0)', 'facebookexternalhit/1.1', 'WhatsApp/2.23', 'Mozilla/5.0 TikTok', 'TelegramBot (like TwitterBot)', 'Mozilla/5.0 (Macintosh) Applebot/0.1'].every((u) => seo.isBot(u)));
+    calls.length = 0;
+    const { res, state } = await ask(ogPreview, '/', AI[3]);
+    const html = await res.text();
+    check('ClaudeBot sur l\'accueil : la page lisible (titre, titre principal, liens), pas l\'application vide', state.next === 0 && res.status === 200 && /<title>Albasse Shopping – Boutique en ligne au Tchad<\/title>/.test(html) && /<h1>/.test(html) && html.includes('/categorie/montres'));
+    const gpt = await ask(ogPreview, '/produit/montre-keep-moving', AI[0]);
+    check('GPTBot sur une fiche produit : la page lisible du produit', gpt.state.next === 0 && /Montre KEEP MOVING/.test(await gpt.res.text()));
+  }
+
   // accueil
   {
     calls.length = 0;
@@ -310,7 +345,13 @@ const ldBlocks = (html: string): any[] => [...html.matchAll(/<script type="appli
   // la page d'accueil fabriquée par la mise en ligne : description et aperçu par défaut
   {
     const html = readFileSync(new URL('../../public/index.html', import.meta.url), 'utf8');
-    check('index.html : description par défaut', /<meta name="description" content="Albasse Shopping, boutique en ligne au Tchad/.test(html));
+    const desc = (html.match(/<meta name="description" content="([^"]*)"/) || [])[1] || '';
+    const title = (html.match(/<title>([^<]*)<\/title>/) || [])[1] || '';
+    check('index.html : description par défaut, 70 à 165 caractères (inspection Bunzy : 213 avant)', /^Boutique en ligne au Tchad/.test(desc) && desc.length >= 70 && desc.length <= 165, desc.length);
+    check('index.html : titre de 25 à 65 caractères (inspection Bunzy : 16 avant), le même que la page des robots', title === seo.homeTitle() && title.length >= 25 && title.length <= 65, title);
+    check('index.html : page de secours lisible sans JavaScript (titre principal, texte, liens, place pour les catégories)',
+      /<!--albasse-static-start-->[\s\S]*<h1[^>]*>Albasse Shopping : boutique en ligne au Tchad<\/h1>[\s\S]*href="\/categorie\/tous"[\s\S]*<!--albasse-static-categories-->[\s\S]*<!--albasse-static-end-->/.test(html)
+      && /<div id="root"><!--albasse-static-start-->/.test(html));
     check('index.html : aperçu par défaut (og:title, og:image)', /og:title/.test(html) && /og:image" content="https:\/\/www\.albasseshopping\.com\/icon-512\.png"/.test(html));
     check('index.html : PAS de canonical (la page sert toutes les adresses)', !/rel="canonical"/.test(html));
   }

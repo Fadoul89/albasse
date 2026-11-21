@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
-    <title>%WEB_TITLE%</title>
-    <meta name="description" content="Albasse Shopping, boutique en ligne au Tchad : mode, montres, parfums et plus encore. Prix en FCFA, livraison à N'Djamena et dans les autres villes, paiement à la livraison à N'Djamena, Airtel Money et Moov Money." />
+    <title>Albasse Shopping – Boutique en ligne au Tchad</title>
+    <meta name="description" content="Boutique en ligne au Tchad : mode, chaussures, montres, parfums et plus. Prix en FCFA, livraison dans tout le Tchad, paiement à la livraison à N'Djamena." />
     <meta property="og:site_name" content="Albasse Shopping" />
     <meta property="og:locale" content="fr_FR" />
     <meta property="og:type" content="website" />
@@ -52,10 +52,21 @@
   <body>
     <!-- Use static rendering with Expo Router to support running without JavaScript. -->
     <noscript>
-      You need to enable JavaScript to run this app.
+      <p style="font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:#f4efe4;text-align:center;margin:12px">Activez JavaScript pour commander sur ce site.</p>
     </noscript>
     <!-- The root element for your Expo app. -->
-    <div id="root"></div>
+    <div id="root"><!--albasse-static-start-->
+      <!-- Page de secours lisible SANS JavaScript (robots qui ne lancent pas l'application, inspection Bunzy du 21 novembre 2026 :
+           « 0 mot lisible, aucun titre principal ») : React la remplace par l'application dès qu'elle démarre.
+           Les liens des catégories sont ajoutés pendant la fabrication du site (scripts/generate-sitemap.js) ;
+           le site « page unique » retire tout ce bloc (scripts/single-page-shell.js). -->
+      <main id="seo-static" style="font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:#f4efe4;max-width:720px;margin:0 auto;padding:32px 20px;line-height:1.5">
+        <h1 style="font-size:24px;color:#e7c87a;margin:0 0 12px">Albasse Shopping : boutique en ligne au Tchad</h1>
+        <p style="margin:0 0 12px">Achetez en ligne au Tchad : chaussures, vêtements, montres, parfums, sacs, maison et bien plus. Prix en FCFA, livraison à N'Djamena et dans les autres villes du Tchad, paiement à la livraison à N'Djamena, par Airtel Money ou Moov Money. Commandez sur le site, ou avec Zara, notre assistante.</p>
+        <nav aria-label="Pages principales" style="margin:0 0 12px"><a href="/categorie/tous" style="color:#e7c87a">Tous les articles</a> · <a href="/recherche" style="color:#e7c87a">Rechercher un article</a> · <a href="/contact" style="color:#e7c87a">Contact</a> · <a href="/conditions-de-retour" style="color:#e7c87a">Conditions de retour</a></nav>
+        <!--albasse-static-categories-->
+      </main>
+    <!--albasse-static-end--></div>
     <script>
       // Photos des articles protégées : ni clic droit ni appui long (menu « Enregistrer l'image », « Rechercher avec Google Lens »), ni glisser-déposer.
       // Seulement les photos rangées dans « product-images » (articles, catégories, pubs des côtés). Cela décourage la copie ; une capture d'écran reste
