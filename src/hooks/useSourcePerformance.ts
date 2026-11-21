@@ -3,9 +3,21 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { TRAFFIC_SOURCES, type TrafficSource } from '../lib/analytics';
 import type { Order } from '../types';
 import { countsAsSale, salesTotal } from '../lib/salesRules';
-import { buildLeaderboard, parseSourceReport, type CampaignRow, type Leaderboard, type ReportTotals, type SourceReport, type SourceRow } from '../lib/sourceReport';
+import {
+  applyAttribution,
+  buildLeaderboard,
+  parseSourceReport,
+  unattributedFor,
+  type Attribution,
+  type CampaignRow,
+  type Leaderboard,
+  type OtherHost,
+  type ReportTotals,
+  type SourceReport,
+  type SourceRow,
+} from '../lib/sourceReport';
 
-export type { CampaignRow, Leaderboard, ReportTotals, SourceRow };
+export type { Attribution, CampaignRow, Leaderboard, OtherHost, ReportTotals, SourceRow };
 
 export type Period = 'today' | 'yesterday' | '7d' | '30d' | 'month' | 'lastMonth' | 'custom';
 
@@ -103,6 +115,8 @@ export function useSourcePerformance() {
   const [orders, setOrders] = useState<Order[]>([]);
   // le rapport exact compté par la base (add-source-report.sql) ; null tant que ce script n'est pas lancé : l'ancien calcul prend alors le relais
   const [report, setReport] = useState<SourceReport | null>(null);
+  // comment ranger les ventes : la première visite du client (par défaut) ou la visite où il a commandé
+  const [attribution, setAttribution] = useState<Attribution>('first');
   const [isLoading, setIsLoading] = useState(isSupabaseConfigured);
 
   const refresh = async () => {
@@ -185,7 +199,10 @@ export function useSourcePerformance() {
   }, [period, customStart, customEnd]);
 
   const { rows, campaigns, leaderboard, totals } = useMemo(() => {
-    if (report) return { rows: report.rows, campaigns: report.campaigns, leaderboard: buildLeaderboard(report.rows), totals: report.totals as ReportTotals | null };
+    if (report) {
+      const shown = applyAttribution(report.rows, attribution);
+      return { rows: shown, campaigns: report.campaigns, leaderboard: buildLeaderboard(shown), totals: report.totals as ReportTotals | null };
+    }
     const { start, end } = getPeriodRange(period, customStart, customEnd);
     const startIso = start.toISOString();
     const endIso = end.toISOString();
@@ -249,7 +266,12 @@ export function useSourcePerformance() {
     const leaderboard: Leaderboard = buildLeaderboard(rows);
 
     return { rows, campaigns, leaderboard, totals: null as ReportTotals | null };
-  }, [report, sessions, firstSeen, views, cartAdds, orders, period, customStart, customEnd]);
+  }, [report, attribution, sessions, firstSeen, views, cartAdds, orders, period, customStart, customEnd]);
+
+  // les nouveautés du 21 novembre 2026 : présentes seulement quand la nouvelle version de add-source-report.sql est lancée
+  const hasFirstVisit = !!report?.unattributed;
+  const unattributed = report ? unattributedFor(report.unattributed, attribution) : null;
+  const otherHosts: OtherHost[] | null = report?.otherHosts ?? null;
 
   return {
     period,
@@ -262,6 +284,11 @@ export function useSourcePerformance() {
     campaigns,
     leaderboard,
     totals,
+    attribution,
+    setAttribution,
+    hasFirstVisit,
+    unattributed,
+    otherHosts,
     isLoading,
     refresh,
   };

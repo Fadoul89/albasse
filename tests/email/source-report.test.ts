@@ -1,6 +1,7 @@
 // Page « Performance par source » : lecture du rapport exact de la base (admin_source_report), classement automatique. Aucun réseau.
 // Lancer : node --import ./tests/zara/register.mjs tests/email/source-report.test.ts
-import { buildLeaderboard, conversionRate, parseSourceReport } from '../../src/lib/sourceReport.ts';
+import { applyAttribution, buildLeaderboard, conversionRate, hostHint, parseSourceReport, unattributedFor } from '../../src/lib/sourceReport.ts';
+import { referrerHostOf, shortText } from '../../src/lib/referrerHost.ts';
 
 let ok = 0;
 const check = (label: string, cond: unknown, detail?: unknown) => {
@@ -80,5 +81,53 @@ const mixed = parseSourceReport({
 }, SOURCES)!;
 const lb2 = buildLeaderboard(mixed.rows);
 check('classement : Google gagne en ventes, conversion (20 %) et visiteurs ; Facebook a le plus long temps (90 s)', lb2.bestSales === 'Google' && lb2.bestConversion === 'Google' && lb2.mostVisitors === 'Google' && lb2.longestAvgTime === 'Facebook', lb2);
+
+// ---- 21 novembre 2026 : première visite, commandes sans visite, clics « Commander » site / WhatsApp, d'où vient « Autre »
+check('ancien script (sans « unattributed ») : pas de chiffres de première visite ni de clics séparés, pas de liste « Autre »',
+  !!r && r.unattributed === undefined && r.otherHosts === undefined && r.rows.every((x) => x.ordersFirst === undefined && x.checkoutSite === undefined));
+check('ancien script : « première visite » ne change rien (les lignes restent)', !!r && applyAttribution(r.rows, 'first')[0] === r.rows[0] && unattributedFor(r.unattributed, 'first') === null);
+const raw2 = {
+  totals: { sessions: 10, visitors: 8, real_sessions: 2, real_visitors: 2 },
+  sources: [
+    { source: 'Accès direct', sessions: 6, visitors: 4, cart_adds: 4, checkout_site: 2, checkout_whatsapp: '1', orders: 1, revenue: 22500, orders_first: 0, revenue_first: 0 },
+    { source: 'TikTok', sessions: 0, visitors: 0, orders: 0, revenue: 0, orders_first: 1, revenue_first: '22500' },
+    { source: 'Autre', sessions: 4, visitors: 4, orders: 1, revenue: 30000, orders_first: 0, revenue_first: 0 },
+    { source: 'Facebook', sessions: 0, visitors: 2, orders_first: 1, revenue_first: 30000 },
+  ],
+  campaigns: [],
+  unattributed: { orders: 1, revenue: '15000', orders_first: 2, revenue_first: 20000 },
+  other_hosts: [{ label: 'org.telegram.messenger', visitors: 2, sessions: 3 }, { label: 'utm : qr', visitors: '1' }, { label: null, visitors: 1 }, { label: 'x', visitors: 'pas un nombre' }, 'pas un objet'],
+};
+const r2 = parseSourceReport(raw2, SOURCES)!;
+const direct = r2.rows.find((x) => x.source === 'Accès direct')!;
+check('nouveau script : Accès direct 4 clics « Commander » dont 2 sur le site et 1 sur WhatsApp (texte lu)', direct.cartAdds === 4 && direct.checkoutSite === 2 && direct.checkoutWhatsapp === 1, direct);
+check('nouveau script : une source sans ligne (Google) a des zéros, pas « absent »', (() => { const g = r2.rows.find((x) => x.source === 'Google')!; return g.checkoutSite === 0 && g.ordersFirst === 0 && g.revenueFirst === 0; })());
+check('nouveau script : commandes sans visite lues (1 / 15 000 et 2 / 20 000)', r2.unattributed?.orders === 1 && r2.unattributed?.revenue === 15000 && r2.unattributed?.ordersFirst === 2 && r2.unattributed?.revenueFirst === 20000, r2.unattributed);
+check('nouveau script : liste « Autre » = 3 lignes valides (Telegram 2, utm : qr 1, inconnu 1), les illisibles ignorées',
+  r2.otherHosts?.length === 3 && r2.otherHosts[0].label === 'org.telegram.messenger' && r2.otherHosts[0].visitors === 2 && r2.otherHosts[1].label === 'utm : qr' && r2.otherHosts[1].visitors === 1 && r2.otherHosts[2].label === null, r2.otherHosts);
+const byOrder = applyAttribution(r2.rows, 'order');
+const byFirst = applyAttribution(r2.rows, 'first');
+const pick = (rows: typeof byFirst, s: string) => rows.find((x) => x.source === s)!;
+check('« visite de la commande » : Accès direct 1 vente 22 500, TikTok 0', pick(byOrder, 'Accès direct').orders === 1 && pick(byOrder, 'Accès direct').revenue === 22500 && pick(byOrder, 'TikTok').orders === 0);
+check('« première visite » : TikTok 1 vente 22 500, Accès direct 0, Facebook 1 vente 30 000 (conversion 50 % : 1 sur 2 visiteurs)',
+  pick(byFirst, 'TikTok').orders === 1 && pick(byFirst, 'TikTok').revenue === 22500 && pick(byFirst, 'Accès direct').orders === 0 && pick(byFirst, 'Accès direct').revenue === 0
+  && pick(byFirst, 'Facebook').orders === 1 && pick(byFirst, 'Facebook').revenue === 30000 && pick(byFirst, 'Facebook').conversionRate === 50);
+check('« première visite » : sans visiteur dans la période (TikTok), conversion 0 (pas une division par zéro)', pick(byFirst, 'TikTok').conversionRate === 0);
+check('« première visite » ne touche pas aux visites, clics et articles vus', pick(byFirst, 'Accès direct').visitors === 4 && pick(byFirst, 'Accès direct').checkoutSite === 2 && pick(byFirst, 'Accès direct').cartAdds === 4);
+check('classement « première visite » : meilleure vente Facebook (30 000) ; « visite de la commande » : Autre (30 000)',
+  buildLeaderboard(byFirst).bestSales === 'Facebook' && buildLeaderboard(byOrder).bestSales === 'Autre', [buildLeaderboard(byFirst), buildLeaderboard(byOrder)]);
+check('commandes sans visite selon le rangement : première visite 2 / 20 000, visite de la commande 1 / 15 000',
+  JSON.stringify(unattributedFor(r2.unattributed, 'first')) === JSON.stringify({ orders: 2, revenue: 20000 }) && JSON.stringify(unattributedFor(r2.unattributed, 'order')) === JSON.stringify({ orders: 1, revenue: 15000 }));
+check('explications : code QR, Telegram, votre site, lien WhatsApp Business, inconnu ; un site inconnu : rien',
+  hostHint('utm : qr') === 'votre code QR' && hostHint('org.telegram.messenger') === "l'appli Telegram" && hostHint('www.albasseshopping.com') === 'retour depuis votre propre site'
+  && hostHint('l.wl.co') === 'un lien WhatsApp Business' && /avant la mise à jour/.test(hostHint(null)) && hostHint('exemple.org') === '' && hostHint('utm : affiche') === 'un lien avec « utm_source »');
+
+// ---- le nom du site d'où vient le visiteur (jamais l'adresse complète)
+check('nom du site : seulement le nom, en minuscules, sans le chemin ni les paramètres',
+  referrerHostOf('https://WWW.TikTok.com/@albasse/video/123?lang=fr&token=secret') === 'www.tiktok.com' && referrerHostOf('https://l.wl.co/l?u=https%3A%2F%2Fx') === 'l.wl.co');
+check('nom du site : une appli Android (android-app://org.telegram.messenger/) donne org.telegram.messenger', referrerHostOf('android-app://org.telegram.messenger/') === 'org.telegram.messenger');
+check('nom du site : vide, absent ou illisible : null', referrerHostOf('') === null && referrerHostOf(null) === null && referrerHostOf(undefined) === null && referrerHostOf('pas une adresse') === null);
+check('nom du site : 120 caractères au plus (règle de la base)', (referrerHostOf('https://' + 'a'.repeat(150) + '.com/') ?? '').length <= 120);
+check('utm_source : coupé à 120 caractères, espaces retirés, vide = null', shortText('  qr  ') === 'qr' && shortText('x'.repeat(200))?.length === 120 && shortText('   ') === null && shortText(null) === null);
 
 console.log(`\n${ok} contrôles réussis`);

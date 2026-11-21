@@ -91,7 +91,7 @@ export function CafeScreen() {
       return;
     }
     setOrderItem(product, 1, product.colors[0] ?? null, product.sizes[0] ?? null);
-    trackAddToCart(product.id);
+    trackAddToCart(product.id, 'site');
     if (!profile && !guestOrderAllowed(settings.account_required)) {
       showToast('Créez un compte ou connectez-vous pour passer une commande.', { title: 'Compte requis', type: 'info' });
       navigation.navigate('Login');
