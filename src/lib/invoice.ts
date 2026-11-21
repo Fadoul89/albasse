@@ -70,11 +70,17 @@ export const formatXAF = (n: number) => `${Math.round(Number(n) || 0).toLocaleSt
 
 // ---- Tri des commandes (page admin) ----
 export type PeriodFilter = 'all' | 'today' | '7d' | '30d';
+// 'todo' (« À traiter », la vue d'ouverture de l'admin) : les commandes à faire avancer
+export type StatusFilter = OrderStatus | 'all' | 'todo';
 export interface OrderFilter {
   query: string;
-  status: OrderStatus | 'all';
+  status: StatusFilter;
   period: PeriodFilter;
 }
+
+// « À traiter » : ni livrée, ni annulée, ni signalée fausse (les livrées restent dans « Livrée », comme un historique)
+export const isToDo = (o: Pick<Order, 'status' | 'is_flagged_fake'>): boolean =>
+  o.status !== 'delivered' && o.status !== 'cancelled' && !o.is_flagged_fake;
 const digits = (s: string) => s.replace(/\D/g, '');
 const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
@@ -104,7 +110,8 @@ export function inPeriod(createdAt: string, period: PeriodFilter, now = Date.now
 }
 
 export function filterOrders(orders: Order[], f: OrderFilter, now = Date.now()): Order[] {
-  return orders.filter((o) => (f.status === 'all' || o.status === f.status) && inPeriod(o.created_at, f.period, now) && matchesQuery(o, f.query));
+  const statusOk = (o: Order) => f.status === 'all' || (f.status === 'todo' ? isToDo(o) : o.status === f.status);
+  return orders.filter((o) => statusOk(o) && inPeriod(o.created_at, f.period, now) && matchesQuery(o, f.query));
 }
 
 // ---- Export pour le comptable (CSV, séparateur « ; », ouvert directement par Excel en français) ----

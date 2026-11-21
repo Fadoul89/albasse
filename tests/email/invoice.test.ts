@@ -1,6 +1,6 @@
 // Numéro de commande, facture, tri des commandes et export CSV (src/lib/invoice.ts) : fonctions pures, aucun réseau, aucune base.
 // Lancer : node --import ./tests/zara/register.mjs tests/email/invoice.test.ts
-import { filterOrders, invoiceBreakdown, invoiceNumber, matchesQuery, ordersToCsv, orderNumberLabel } from '../../src/lib/invoice.ts';
+import { filterOrders, invoiceBreakdown, invoiceNumber, isToDo, matchesQuery, ordersToCsv, orderNumberLabel } from '../../src/lib/invoice.ts';
 import type { Order } from '../../src/types';
 
 let ok = 0;
@@ -86,6 +86,22 @@ check('numéro de facture sans numéro de commande : repère de 8 caractères', 
   check('statut : livrées', ids({ query: '', status: 'delivered', period: 'all' }) === 'b,d');
   check('période : aujourd’hui, 7 jours, 30 jours', ids({ query: '', status: 'all', period: 'today' }) === 'a' && ids({ query: '', status: 'all', period: '7d' }) === 'a,b' && ids({ query: '', status: 'all', period: '30d' }) === 'a,b,c');
   check('statut + période + numéro ensemble', ids({ query: '2', status: 'delivered', period: '7d' }) === 'b' && ids({ query: '4', status: 'delivered', period: '7d' }) === '');
+  check('« À traiter » : seulement la commande en attente (ni les livrées, ni l\'annulée)', ids({ query: '', status: 'todo', period: 'all' }) === 'a');
+}
+{
+  const list = [
+    mk({ id: 'p', status: 'pending' }),
+    mk({ id: 'q', status: 'paid' }),
+    mk({ id: 'r', status: 'processing' }),
+    mk({ id: 's', status: 'shipped' }),
+    mk({ id: 'f', status: 'pending', is_flagged_fake: true }),
+    mk({ id: 'l', status: 'delivered' }),
+    mk({ id: 'x', status: 'cancelled' }),
+  ];
+  const ids = (f: Parameters<typeof filterOrders>[1]) => filterOrders(list, f, NOW).map((o) => o.id).join();
+  check('« À traiter » : en attente, payée, en préparation, expédiée ; pas la fausse, la livrée ni l\'annulée', ids({ query: '', status: 'todo', period: 'all' }) === 'p,q,r,s');
+  check('isToDo : livrée non, annulée non, signalée fausse non, expédiée oui', !isToDo({ status: 'delivered', is_flagged_fake: false }) && !isToDo({ status: 'cancelled', is_flagged_fake: false }) && !isToDo({ status: 'pending', is_flagged_fake: true }) && isToDo({ status: 'shipped', is_flagged_fake: false }));
+  check('« Tous les statuts » : toujours les 7', ids({ query: '', status: 'all', period: 'all' }).split(',').length === 7);
 }
 
 // export CSV

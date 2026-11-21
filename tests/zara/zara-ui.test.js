@@ -10269,6 +10269,19 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
           const badge = await page.getByTestId('admin-order-scheduled').innerText();
           check('admin : badge « Livraison programmee » avec l\'heure et le rappel Telegram de 10 minutes, sur une seule commande', (await page.getByTestId('admin-order-scheduled').count()) === 1 && /📅 Livraison programmée : .* à \d+h\d{2}/.test(badge) && /Telegram 10 min avant/.test(badge), badge);
           check('admin : le signalement automatique de la commande programmee part du rendez-vous', (await page.getByText(/48 h après le rendez-vous/).count()) === 1);
+          // passée en « Livrée » (bouton jusqu'au bout) : elle quitte « À traiter », et son badge dit « Livrée · rendez-vous du … » sans rappel Telegram
+          const sCard = page.getByTestId(`admin-order-${S.id}`);
+          for (let i = 0; i < 5 && (await sCard.count()) === 1; i++) {
+            await sCard.getByTestId('admin-order-advance').click();
+            await sleep(500);
+          }
+          check('admin : la commande programmee livree quitte « À traiter » (message « Commande livrée »)', (await page.getByTestId('admin-order-scheduled').count()) === 0 && (await page.getByText(/est livrée\. Elle est maintenant dans « Livrée »/).count()) >= 1);
+          await page.getByTestId('orders-status-delivered').click();
+          await sleep(400);
+          const done = await page.getByTestId('admin-order-scheduled').innerText().catch(() => '');
+          check('admin : dans « Livrée », badge « ✅ Livrée · rendez-vous du … », sans rappel Telegram', /^✅ Livrée · rendez-vous du .* à \d+h\d{2}/.test(done) && !/Telegram/.test(done), done);
+          await page.getByTestId('orders-status-todo').click();
+          await sleep(300);
           await page.screenshot({ path: path.join(OUT, 'C11-admin-programmee.png') });
           check('aucune erreur (admin programmee)', c.errs.length === 0, c.errs);
           await c.ctx.close();
@@ -10436,8 +10449,13 @@ const phone = { ...devices['Pixel 7'], viewport: { width: 390, height: 800 }, de
         await page.goto(`${BASE}/admin/commandes`, { waitUntil: 'load' });
         await page.getByTestId('orders-search').waitFor({ timeout: 25000 });
         await page.getByText('N° 4', { exact: true }).waitFor({ timeout: 15000 });
-        check('admin : chaque commande a son numero (N° 4, 3, 2, 1) au lieu des lettres au hasard', (await shown()) === 'N° 4|N° 3|N° 2|N° 1', await shown());
         const summary = async () => (await page.getByTestId('orders-summary').innerText()).replace(/\s+/g, ' ');
+        // la page s'ouvre sur « À traiter » (21 novembre 2026) : les livrées et l'annulée sont dans leurs puces
+        check('admin : la page s\'ouvre sur « À traiter » : seulement N° 4 (en attente), « 1 commande à traiter »',
+          (await shown()) === 'N° 4' && (await page.getByTestId('orders-status-todo').getAttribute('aria-selected')) === 'true' && /^1 commande à traiter · les livrées sont dans « Livrée »/.test(await summary()), [await shown(), await summary()]);
+        await page.getByTestId('orders-status-all').click();
+        await sleep(300);
+        check('admin : chaque commande a son numero (N° 4, 3, 2, 1) au lieu des lettres au hasard', (await shown()) === 'N° 4|N° 3|N° 2|N° 1', await shown());
         check('admin : resume « 4 commandes · 2 livrees comptees : 60 000 FCFA » (seules les livrees comptent)', /^4 commandes · 2 livrées comptées : 60\s000 FCFA/.test(await summary()), await summary());
         check('admin : la regle est ecrite (livrees seulement, fausses commandes jamais)', /Seules les commandes livrées comptent/.test(await page.getByTestId('orders-rule').innerText()) && /fausses/.test(await page.getByTestId('orders-rule').innerText()));
         await page.getByTestId('orders-search').fill('3');
