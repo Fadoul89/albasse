@@ -8,6 +8,7 @@
 // Si, après cela, il reste « Albasse » dans la coquille de la page, la fabrication ÉCHOUE : jamais de site à moitié neutre mis en ligne.
 const fs = require('fs');
 const path = require('path');
+const { removeStaticBlock } = require('./static-home');
 
 const NAME = 'Vitalité & Énergie Homme';
 const SHORT_NAME = 'V&É Homme';
@@ -23,7 +24,8 @@ const brandLeft = (text) => /albasse/i.test(text);
 
 function neutralHtml(html, { siteUrl = '' } = {}) {
   const image = `${String(siteUrl).replace(/\/$/, '')}/icon-512.png`;
-  let out = html;
+  // la page de secours d'Albasse Shopping (lisible sans JavaScript) n'a rien à faire sur ce site
+  let out = removeStaticBlock(html);
   const set = (re, replacement) => {
     out = out.replace(re, replacement);
   };
@@ -82,7 +84,7 @@ function apply(distDir, { env = process.env, publicDir = path.join(__dirname, '.
   fs.rmSync(path.join(distDir, 'single'), { recursive: true, force: true });
 
   const left = [];
-  if (brandLeft(shellOf(read('index.html')))) left.push('index.html');
+  if (brandLeft(shellOf(read('index.html'))) || read('index.html').includes('albasse-static-start')) left.push('index.html');
   if (brandLeft(read('manifest.json'))) left.push('manifest.json');
   if (exists('offline.html') && brandLeft(read('offline.html'))) left.push('offline.html');
   if (left.length) throw new Error(`Le nom « Albasse » est encore dans : ${left.join(', ')}. Le modèle public/index.html a changé : adapter scripts/single-page-shell.js.`);

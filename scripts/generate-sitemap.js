@@ -2,6 +2,7 @@
 // produits actuellement en base. A executer APRES `expo export -p web`.
 const fs = require('fs');
 const path = require('path');
+const { fillStaticCategories } = require('./static-home');
 
 function loadEnvFile(filePath) {
   if (!fs.existsSync(filePath)) return;
@@ -38,13 +39,15 @@ async function main() {
 
   let categoryUrls = [];
   let productUrls = [];
+  let categoryList = [];
 
   if (SUPABASE_URL && SUPABASE_ANON_KEY) {
     try {
       const headers = { apikey: SUPABASE_ANON_KEY };
 
-      const catRes = await fetch(`${SUPABASE_URL}/rest/v1/categories?select=slug`, { headers });
+      const catRes = await fetch(`${SUPABASE_URL}/rest/v1/categories?select=slug,name,parent_id,sort_order`, { headers });
       const categories = await catRes.json();
+      categoryList = Array.isArray(categories) ? categories : [];
       categoryUrls = (categories ?? []).map((c) => ({
         loc: `${SITE_URL}/categorie/${c.slug}`,
         priority: '0.8',
@@ -78,6 +81,10 @@ ${allUrls
 `;
 
   fs.writeFileSync(path.join(distDir, 'sitemap.xml'), xml);
+
+  // la page de secours lisible sans JavaScript : les liens des catégories principales (sans base : la marque disparaît, rien d'autre ne change)
+  const indexPath = path.join(distDir, 'index.html');
+  if (fs.existsSync(indexPath)) fs.writeFileSync(indexPath, fillStaticCategories(fs.readFileSync(indexPath, 'utf8'), categoryList));
 
   // fichier de secours : le vrai plan du site et le vrai robots.txt sont refaits à chaque demande par
   // netlify/edge-functions/sitemap.ts (même liste de pages privées : un test compare les deux)

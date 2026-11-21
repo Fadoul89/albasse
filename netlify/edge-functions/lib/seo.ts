@@ -8,6 +8,25 @@ export const SITE_NAME = 'Albasse Shopping';
 export const SITE_LOGO = `${SITE_URL}/icon-512.png`;
 export const HOME_CITY = "N'Djamena";
 
+// Les robots qui reçoivent la page lisible (titre, description, texte, liens, données structurées) au lieu de l'application :
+// moteurs de recherche, aperçus des réseaux sociaux, et (21 novembre 2026, inspection Bunzy : « 0 mot lisible ») les robots des IA
+// (ChatGPT, Claude, Perplexity, Gemini passe par Googlebot…) et les outils d'analyse qui se présentent comme « …Bot/1.0 ».
+// Jamais un vrai téléphone : « CUBOT X30 » (une marque de téléphone) n'est pas un robot, il faut « bot/ » suivi d'un chiffre.
+export const BOT_REGEX = new RegExp(
+  [
+    'facebookexternalhit', 'Facebot', 'Twitterbot', 'TikTok', 'WhatsApp', 'LinkedInBot', 'Slackbot', 'Discordbot', 'Pinterest', 'TelegramBot',
+    'Googlebot', 'Google-InspectionTool', 'Google-CloudVertexBot', 'bingbot', 'BingPreview', 'DuckDuckBot', 'DuckAssistBot', 'YandexBot', 'Applebot',
+    'Baiduspider', 'SkypeUriPreview',
+    'GPTBot', 'ChatGPT-User', 'OAI-SearchBot', 'ClaudeBot', 'Claude-User', 'Claude-SearchBot', 'anthropic-ai', 'PerplexityBot', 'Perplexity-User',
+    'Amazonbot', 'CCBot', 'cohere-ai', 'Meta-ExternalAgent', 'Meta-ExternalFetcher', 'Bytespider', 'MistralAI-User', 'YouBot',
+    '[a-z0-9._-]*(?:bot|crawler|spider)/\\d',
+  ].join('|'),
+  'i'
+);
+export function isBot(userAgent: string | null | undefined): boolean {
+  return BOT_REGEX.test(userAgent || '');
+}
+
 export interface SeoCategory {
   id?: string;
   name: string;
