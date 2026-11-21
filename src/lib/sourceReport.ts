@@ -19,6 +19,30 @@ export interface SourceRow {
   conversionRate: number;
   // « vrais visiteurs » (restent 20 s ou plus, voient 2 pages ou plus, ou sont connectés) ; absent tant que add-source-report.sql n'est pas lancé
   realVisitors?: number;
+  // 21 novembre 2026 (absents tant que la nouvelle version de add-source-report.sql n'est pas lancée) :
+  // clics « Commander » sur le site / sur WhatsApp (cartAdds = tous, y compris ceux d'avant la mise à jour, sans canal)
+  checkoutSite?: number;
+  checkoutWhatsapp?: number;
+  // ventes rangées selon la PREMIÈRE visite connue du client (orders / revenue : selon la visite où il a commandé)
+  ordersFirst?: number;
+  revenueFirst?: number;
+}
+
+// comment ranger les ventes : la première visite du client (par défaut) ou la visite où il a commandé
+export type Attribution = 'first' | 'order';
+
+// les commandes livrées sans visite connue (commande WhatsApp ajoutée à la main…), pour chaque rangement
+export interface Unattributed {
+  orders: number;
+  revenue: number;
+  ordersFirst: number;
+  revenueFirst: number;
+}
+
+// « D'où viennent les visiteurs Autre ? » : le nom du site d'où ils viennent (ou « utm : … ») ; null = inconnu (visites d'avant la mise à jour)
+export interface OtherHost {
+  label: string | null;
+  visitors: number;
 }
 
 export interface CampaignRow {
@@ -50,6 +74,9 @@ export interface SourceReport {
   rows: SourceRow[];
   campaigns: CampaignRow[];
   totals: ReportTotals;
+  // absents tant que la nouvelle version de add-source-report.sql n'est pas lancée
+  unattributed?: Unattributed;
+  otherHosts?: OtherHost[];
 }
 
 // conversion = commandes / visiteurs (en %), 0 sans visiteur
@@ -71,12 +98,23 @@ export function parseSourceReport(raw: unknown, sources: readonly TrafficSource[
     const name = text(row.source);
     if (name && num(row.sessions) !== null) bySource.set(name, row);
   }
+  // la nouvelle version du script (21 novembre 2026) : première visite, commandes sans visite, clics « Commander », d'où vient « Autre »
+  const v2 = isObject(raw.unattributed) && Array.isArray(raw.other_hosts);
   const rows: SourceRow[] = sources.map((source) => {
     const r = bySource.get(source);
     const v = r ? num(r.visitors) ?? 0 : 0;
     const nv = r ? num(r.new_visitors) ?? 0 : 0;
     const orders = r ? num(r.orders) ?? 0 : 0;
+    const extra = v2
+      ? {
+          checkoutSite: r ? num(r.checkout_site) ?? 0 : 0,
+          checkoutWhatsapp: r ? num(r.checkout_whatsapp) ?? 0 : 0,
+          ordersFirst: r ? num(r.orders_first) ?? 0 : 0,
+          revenueFirst: r ? num(r.revenue_first) ?? 0 : 0,
+        }
+      : {};
     return {
+      ...extra,
       source,
       visitors: v,
       newVisitors: nv,
@@ -111,7 +149,61 @@ export function parseSourceReport(raw: unknown, sources: readonly TrafficSource[
       realVisitors: num(row.real_visitors) ?? 0,
     });
   }
-  return { rows, campaigns, totals: { sessions, visitors, realSessions, realVisitors } };
+  const report: SourceReport = { rows, campaigns, totals: { sessions, visitors, realSessions, realVisitors } };
+  if (v2 && isObject(raw.unattributed) && Array.isArray(raw.other_hosts)) {
+    const u = raw.unattributed;
+    report.unattributed = {
+      orders: num(u.orders) ?? 0,
+      revenue: num(u.revenue) ?? 0,
+      ordersFirst: num(u.orders_first) ?? 0,
+      revenueFirst: num(u.revenue_first) ?? 0,
+    };
+    report.otherHosts = [];
+    for (const row of raw.other_hosts) {
+      if (!isObject(row)) continue;
+      const visitors = num(row.visitors);
+      if (visitors === null) continue;
+      report.otherHosts.push({ label: text(row.label), visitors });
+    }
+  }
+  return report;
+}
+
+// Les lignes affichées selon le rangement choisi : « première visite » remplace commandes, ventes et conversion par celles de la première visite.
+// Sans les chiffres de la première visite (ancien script), les lignes restent telles quelles.
+export function applyAttribution(rows: SourceRow[], mode: Attribution): SourceRow[] {
+  if (mode !== 'first') return rows;
+  return rows.map((r) =>
+    r.ordersFirst === undefined ? r : { ...r, orders: r.ordersFirst, revenue: r.revenueFirst ?? 0, conversionRate: conversionRate(r.ordersFirst, r.visitors) }
+  );
+}
+
+// les commandes sans visite connue, pour le rangement choisi
+export function unattributedFor(u: Unattributed | undefined, mode: Attribution): { orders: number; revenue: number } | null {
+  if (!u) return null;
+  return mode === 'first' ? { orders: u.ordersFirst, revenue: u.revenueFirst } : { orders: u.orders, revenue: u.revenue };
+}
+
+// une explication simple sous le nom du site d'où vient un visiteur « Autre »
+const HOST_HINTS: [RegExp, string][] = [
+  [/^utm : qr$/i, 'votre code QR'],
+  [/^utm : /i, 'un lien avec « utm_source »'],
+  [/albasseshopping\.com$|netlify\.app$/i, 'retour depuis votre propre site'],
+  [/telegram/i, "l'appli Telegram"],
+  [/snapchat/i, 'Snapchat'],
+  [/(^|\.)wl\.co$/i, 'un lien WhatsApp Business'],
+  [/(^|\.)t\.co$|twitter|(^|\.)x\.com$/i, 'X (Twitter)'],
+  [/youtube|youtu\.be/i, 'YouTube'],
+  [/linkedin|lnkd\.in/i, 'LinkedIn'],
+  [/com\.google\.android\.gm$/i, "l'appli Gmail"],
+  [/(^|\.)bing\./i, 'Bing'],
+  [/yahoo/i, 'Yahoo'],
+  [/duckduckgo/i, 'DuckDuckGo'],
+];
+export function hostHint(label: string | null): string {
+  if (!label) return "visites d'avant la mise à jour, ou sans adresse d'origine";
+  for (const [re, hint] of HOST_HINTS) if (re.test(label)) return hint;
+  return '';
 }
 
 // « Classement automatique » : la meilleure source pour les ventes, la conversion, les visiteurs et le temps moyen (jamais une source à zéro)

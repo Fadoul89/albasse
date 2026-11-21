@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase, isSupabaseConfigured } from './supabase';
 import { trackTikTokEvent } from './tiktokPixel';
+import { referrerHostOf, shortText } from './referrerHost';
 
 const HEARTBEAT_SECONDS = 20;
 const VISITOR_ID_KEY = 'albasse_visitor_id';
@@ -106,6 +107,10 @@ interface DetectedAttribution {
   utmCampaign: string | null;
 }
 
+// une base où add-source-report.sql n'est pas encore lancé ne connaît pas les nouvelles colonnes : on réessaie alors sans elles
+const missingColumn = (error: { code?: string; message?: string } | null, names: string[]): boolean =>
+  !!error && (error.code === 'PGRST204' || names.some((n) => (error.message ?? '').includes(n)));
+
 function detectAttribution(): DetectedAttribution {
   if (Platform.OS !== 'web' || typeof document === 'undefined') {
     return { source: 'Autre', utmSource: null, utmMedium: null, utmCampaign: null };
@@ -155,7 +160,7 @@ export function initAnalyticsSession(userId: string | null): Promise<void> {
     // lecture de visitor_sessions est reservee aux admins par RLS : une
     // visiteuse normale ne pourrait pas relire la ligne qu'elle vient de creer.
     const newSessionId = generateUUID();
-    const { error } = await supabase.from('visitor_sessions').insert({
+    const base = {
       id: newSessionId,
       user_id: userId,
       visitor_id: currentVisitorId,
@@ -163,7 +168,13 @@ export function initAnalyticsSession(userId: string | null): Promise<void> {
       utm_medium: attribution.utmMedium,
       utm_campaign: attribution.utmCampaign,
       referral_code: referralCode,
-    });
+    };
+    const extra = {
+      referrer_host: Platform.OS === 'web' && typeof document !== 'undefined' ? referrerHostOf(document.referrer) : null,
+      utm_source: shortText(attribution.utmSource),
+    };
+    let { error } = await supabase.from('visitor_sessions').insert({ ...base, ...extra });
+    if (missingColumn(error, ['referrer_host', 'utm_source'])) ({ error } = await supabase.from('visitor_sessions').insert(base));
 
     if (error) {
       console.error('Erreur creation session visiteur:', error);
@@ -208,14 +219,13 @@ export async function trackProductView(productId: string) {
   });
 }
 
-export async function trackAddToCart(productId: string) {
+// Le panier n'existe plus : un clic « Commander », sur le site (vers la page de commande) ou sur WhatsApp.
+export async function trackAddToCart(productId: string, channel: 'site' | 'whatsapp' = 'site') {
   trackTikTokEvent('AddToCart', { content_id: productId, content_type: 'product' });
   if (!isSupabaseConfigured) return;
-  await supabase.from('cart_events').insert({
-    session_id: sessionId,
-    user_id: currentUserId,
-    product_id: productId,
-  });
+  const base = { session_id: sessionId, user_id: currentUserId, product_id: productId };
+  const { error } = await supabase.from('cart_events').insert({ ...base, channel });
+  if (missingColumn(error, ['channel'])) await supabase.from('cart_events').insert(base);
 }
 
 export function stopAnalyticsSession() {

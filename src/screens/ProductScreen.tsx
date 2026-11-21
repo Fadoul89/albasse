@@ -169,7 +169,7 @@ export function ProductScreen({ route }: Props) {
       return;
     }
     setOrderItem(product, quantity, pickedColor, pickedSize);
-    trackAddToCart(product.id);
+    trackAddToCart(product.id, 'site');
     // sans compte, le visiteur commande quand même (ses informations sont demandées sur la page de commande, son compte est créé à la confirmation)
     // sauf si « Compte obligatoire » est activé : il doit alors créer son compte ou se connecter d'abord
     if (!profile && !guestOrderAllowed(storeSettings.account_required)) {
@@ -196,7 +196,7 @@ export function ProductScreen({ route }: Props) {
   };
 
   const orderOnWhatsApp = () => {
-    trackAddToCart(product.id);
+    trackAddToCart(product.id, 'whatsapp');
     const lines = [
       'Bonjour Albasse Shopping, je veux commander :',
       `🛍️ ${product.name.trim()}`,

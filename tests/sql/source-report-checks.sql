@@ -132,6 +132,85 @@ select t.ok('période sans aucune visite : tout à zéro, listes vides',
   and jsonb_array_length(public.admin_source_report('2027-01-01 00:00+00', '2027-01-02 00:00+00') -> 'sources') = 0
   and jsonb_array_length(public.admin_source_report('2027-01-01 00:00+00', '2027-01-02 00:00+00') -> 'campaigns') = 0);
 
+-- 3. 21 novembre 2026 : ventes selon la PREMIÈRE visite, commandes sans visite, clics « Commander » site / WhatsApp, d'où vient « Autre »
+reset role;
+select t.ok('colonnes ajoutées : visitor_sessions.referrer_host et utm_source, cart_events.channel',
+  (select count(*) from information_schema.columns where table_schema = 'public'
+     and ((table_name = 'visitor_sessions' and column_name in ('referrer_host', 'utm_source')) or (table_name = 'cart_events' and column_name = 'channel'))) = 3);
+select t.fails('clic « Commander » : seulement site ou whatsapp', 'insert into public.cart_events (channel) values (''facebook'')', 'cart_events_channel_check');
+select t.fails('nom du site d''où vient le visiteur : 120 caractères au plus', 'insert into public.visitor_sessions (referrer_host) values (repeat(''a'', 121))', 'visitor_sessions_referrer_host_len');
+select t.fails('utm_source : 120 caractères au plus', 'insert into public.visitor_sessions (utm_source) values (repeat(''a'', 121))', 'visitor_sessions_utm_source_len');
+
+-- La période : du 1er au 7 novembre 2026.
+insert into public.visitor_sessions (id, user_id, visitor_id, started_at, referrer_source, referrer_host, utm_source) values
+  -- w1 découvre la boutique par TikTok en octobre, revient le 3 novembre en tapant l'adresse et commande (22 500)
+  (t.sid(200), null,     'w1',    '2026-10-20 10:00+00', 'TikTok',       'www.tiktok.com', null),
+  (t.sid(201), null,     'w1',    '2026-11-03 10:00+00', 'Accès direct', null, null),
+  -- w2 vient de Facebook le 2, revient le 4 par Telegram et commande sans compte (son compte uid(5) est créé à la commande : 30 000)
+  (t.sid(202), null,     'w2',    '2026-11-02 10:00+00', 'Facebook',     'm.facebook.com', null),
+  (t.sid(203), t.uid(5), 'w2',    '2026-11-04 10:00+00', null,           'org.telegram.messenger', null),
+  -- le compte uid(6) : venu par Instagram le 1er octobre sur un téléphone, commande le 5 novembre depuis un autre (Google : 12 000)
+  (t.sid(204), t.uid(6), 'w3old', '2026-10-01 10:00+00', 'Instagram',    'l.instagram.com', null),
+  (t.sid(205), t.uid(6), 'w3new', '2026-11-05 10:00+00', 'Google',       'www.google.com', null),
+  -- la visite de la commande de w4 commence 10 minutes AVANT la période, la commande tombe dedans (5 000)
+  (t.sid(206), null,     'w4',    '2026-10-31 23:50+00', 'WhatsApp',     'l.wl.co', null),
+  -- le compte uid(7) : sa commande (ajoutée à la main, sans visite) date du 3 ; il visite le site seulement le 6 : ce n'est pas sa « première visite »
+  (t.sid(210), t.uid(7), 'w8',    '2026-11-06 10:00+00', 'WhatsApp',     'l.wl.co', null),
+  -- d'autres visiteurs « Autre » : Telegram, le code QR (utm_source inconnu), et une visite sans rien (d'avant la mise à jour)
+  (t.sid(207), null,     'w5',    '2026-11-02 11:00+00', 'Autre',        'org.telegram.messenger', null),
+  (t.sid(208), null,     'w6',    '2026-11-02 12:00+00', 'Autre',        null, 'qr'),
+  (t.sid(209), null,     'w7',    '2026-11-02 13:00+00', 'Autre',        null, null);
+insert into public.orders (user_id, session_id, total, status, is_flagged_fake, created_at) values
+  (t.uid(4), t.sid(201), 22500, 'delivered', false, '2026-11-03 10:05+00'),
+  (t.uid(4), t.sid(201), 99000, 'pending',   false, '2026-11-03 10:06+00'),
+  (t.uid(5), t.sid(203), 30000, 'delivered', false, '2026-11-04 10:05+00'),
+  (t.uid(6), t.sid(205), 12000, 'delivered', false, '2026-11-05 10:05+00'),
+  (t.uid(8), t.sid(206), 5000,  'delivered', false, '2026-11-01 00:10+00'),
+  (t.uid(7), null,       15000, 'delivered', false, '2026-11-03 09:00+00');
+-- clics « Commander » de w1 le 3 : 2 sur le site, 1 sur WhatsApp, 1 d'avant la mise à jour (sans channel)
+insert into public.cart_events (session_id, channel) values (t.sid(201), 'site'), (t.sid(201), 'site'), (t.sid(201), 'whatsapp'), (t.sid(201), null);
+
+set role authenticated;
+select set_config('test.is_admin', 'on', false);
+create temp table rep2 as select public.admin_source_report('2026-11-01 00:00:00+00', '2026-11-07 23:59:59.999+00') as r;
+
+select t.ok('visite de la commande : Accès direct 1 commande 22 500, Autre 1 commande 30 000, Google 1 commande 12 000',
+  (t.src((select r from rep2), 'Accès direct') ->> 'orders')::int = 1 and (t.src((select r from rep2), 'Accès direct') ->> 'revenue')::numeric = 22500
+  and (t.src((select r from rep2), 'Autre') ->> 'orders')::int = 1 and (t.src((select r from rep2), 'Autre') ->> 'revenue')::numeric = 30000
+  and (t.src((select r from rep2), 'Google') ->> 'orders')::int = 1 and (t.src((select r from rep2), 'Google') ->> 'revenue')::numeric = 12000);
+select t.ok('visite de la commande commencée 10 minutes avant la période : la vente compte quand même (WhatsApp 1 commande 5 000)',
+  (t.src((select r from rep2), 'WhatsApp') ->> 'orders')::int = 1 and (t.src((select r from rep2), 'WhatsApp') ->> 'revenue')::numeric = 5000);
+select t.ok('première visite : la vente de w1 va à TikTok (vu en octobre), même sans visite TikTok dans la période (0 visite)',
+  (t.src((select r from rep2), 'TikTok') ->> 'orders_first')::int = 1 and (t.src((select r from rep2), 'TikTok') ->> 'revenue_first')::numeric = 22500
+  and (t.src((select r from rep2), 'TikTok') ->> 'sessions')::int = 0 and (t.src((select r from rep2), 'TikTok') ->> 'orders')::int = 0
+  and (t.src((select r from rep2), 'Accès direct') ->> 'orders_first')::int = 0);
+select t.ok('première visite : la commande sans compte de w2 va à Facebook (même visiteur), pas à « Autre »',
+  (t.src((select r from rep2), 'Facebook') ->> 'orders_first')::int = 1 and (t.src((select r from rep2), 'Facebook') ->> 'revenue_first')::numeric = 30000
+  and (t.src((select r from rep2), 'Autre') ->> 'orders_first')::int = 0);
+select t.ok('première visite : le compte uid(6) a commandé depuis un autre téléphone, la vente va à Instagram (son compte, 1er octobre)',
+  (t.src((select r from rep2), 'Instagram') ->> 'orders_first')::int = 1 and (t.src((select r from rep2), 'Instagram') ->> 'revenue_first')::numeric = 12000
+  and (t.src((select r from rep2), 'Google') ->> 'orders_first')::int = 0);
+select t.ok('première visite : w4 (WhatsApp) reste WhatsApp ; la visite de uid(7) APRÈS sa commande ne compte pas',
+  (t.src((select r from rep2), 'WhatsApp') ->> 'orders_first')::int = 1 and (t.src((select r from rep2), 'WhatsApp') ->> 'revenue_first')::numeric = 5000);
+select t.ok('commande sans visite connue (uid(7), 15 000) : « sans visite » dans les deux rangements ; l''en attente ne compte nulle part',
+  (select (r -> 'unattributed' ->> 'orders')::int from rep2) = 1 and (select (r -> 'unattributed' ->> 'revenue')::numeric from rep2) = 15000
+  and (select (r -> 'unattributed' ->> 'orders_first')::int from rep2) = 1 and (select (r -> 'unattributed' ->> 'revenue_first')::numeric from rep2) = 15000);
+select t.ok('les ventes livrées se retrouvent toutes : 84 500 = 69 500 dans les sources + 15 000 sans visite, dans les deux rangements',
+  (select sum((e ->> 'revenue')::numeric) from jsonb_array_elements((select r -> 'sources' from rep2)) e) = 69500
+  and (select sum((e ->> 'revenue_first')::numeric) from jsonb_array_elements((select r -> 'sources' from rep2)) e) = 69500);
+select t.ok('clics « Commander » de w1 (Accès direct) : 4 en tout, 2 sur le site, 1 sur WhatsApp (le 4e : d''avant la mise à jour)',
+  (t.src((select r from rep2), 'Accès direct') ->> 'cart_adds')::int = 4 and (t.src((select r from rep2), 'Accès direct') ->> 'checkout_site')::int = 2
+  and (t.src((select r from rep2), 'Accès direct') ->> 'checkout_whatsapp')::int = 1);
+select t.ok('« Autre » : Telegram (2 visiteurs) d''abord, puis « utm : qr » (1), puis inconnu (1) ; pas les visites des autres sources',
+  (select jsonb_array_length(r -> 'other_hosts') from rep2) = 3
+  and (select r -> 'other_hosts' -> 0 ->> 'label' from rep2) = 'org.telegram.messenger' and (select (r -> 'other_hosts' -> 0 ->> 'visitors')::int from rep2) = 2
+  and (select r -> 'other_hosts' -> 1 ->> 'label' from rep2) = 'utm : qr' and (select (r -> 'other_hosts' -> 1 ->> 'visitors')::int from rep2) = 1
+  and (select r -> 'other_hosts' -> 2 -> 'label' from rep2) = 'null'::jsonb and (select (r -> 'other_hosts' -> 2 ->> 'visitors')::int from rep2) = 1);
+select t.ok('la première période (octobre) : la première visite donne aussi 3 ventes TikTok (30 500,50), rien sans visite, aucun « Autre » connu',
+  (t.src((select r from rep), 'TikTok') ->> 'orders_first')::int = 3 and (t.src((select r from rep), 'TikTok') ->> 'revenue_first')::numeric = 30500.5
+  and (select (r -> 'unattributed' ->> 'orders')::int from rep) = 0
+  and (select r -> 'other_hosts' -> 0 -> 'label' from rep) = 'null'::jsonb);
+
 -- le client est toujours refusé après
 select set_config('test.is_admin', 'off', false);
 select t.fails('un client est toujours refusé', 'select public.admin_source_report(''2026-10-10 00:00+00'', ''2026-10-16 23:59:59.999+00'')', 'Non autorise');
