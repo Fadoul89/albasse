@@ -110,6 +110,15 @@ const opened = (page) => page.evaluate(() => window.__opened.slice());
         const card = document.querySelector('[data-testid="albasse-tv"]').getBoundingClientRect();
         return { src: ifr.getAttribute('src'), allow: ifr.getAttribute('allow'), title: ifr.getAttribute('title'), w: p.width, h: p.height, cardLeft: card.left, cardRight: card.right, inner: window.innerWidth, ifrW: ifr.getBoundingClientRect().width };
       });
+      // la place : après la 1re catégorie (et après l'affiche « Vos articles préférés » si le client l'a), avant la 2e catégorie
+      const place = await v.page.evaluate(() => {
+        const r = (sel) => { const e = document.querySelector(sel); return e ? e.getBoundingClientRect() : null; };
+        const secs = [...document.querySelectorAll('[data-testid^="home-section-"]')].filter((e) => /^home-section-[^-]/.test(e.getAttribute('data-testid')) && !e.getAttribute('data-testid').startsWith('home-section-title-'));
+        const tv = r('[data-testid="albasse-tv"]');
+        const ad = r('[data-testid="targeted-ad"]');
+        return { tvTop: tv.top, tvBottom: tv.bottom, first: secs[0] ? secs[0].getBoundingClientRect().bottom : null, second: secs[1] ? secs[1].getBoundingClientRect().top : null, adBottom: ad ? ad.bottom : null, travel: r('[data-testid="home-sections"]').top };
+      });
+      check('place : après la 1re catégorie' + (place.adBottom !== null ? ' et après l\'affiche « Vos articles préférés »' : '') + ', avant la 2e catégorie', place.first !== null && place.tvTop >= place.first && (place.second === null || place.tvBottom <= place.second) && (place.adBottom === null || place.tvTop >= place.adBottom), place);
       const src = new URL(f.src);
       check('à l\'écran : le lecteur se charge (youtube-nocookie, liste des envois de la chaîne)', src.origin === 'https://www.youtube-nocookie.com' && src.pathname === '/embed/videoseries' && src.searchParams.get('list') === 'UUFSsx6lIT9sQa87xg-628Bw', f.src);
       check('la vidéo démarre seule, sans le son, sur place', ['autoplay', 'mute', 'playsinline'].every((k) => src.searchParams.get(k) === '1') && /autoplay/.test(f.allow || ''), { src: f.src, allow: f.allow });

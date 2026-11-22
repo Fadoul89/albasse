@@ -312,9 +312,6 @@ export function HomeScreen() {
         <Text style={styles.travelArrow}>→</Text>
       </Pressable>
 
-      {/* « Albasse TV » : la dernière vidéo de la chaîne YouTube démarre seule, sans le son (demande du patron) */}
-      <AlbasseTV />
-
       {/* une section par catégorie : ses 4 premiers articles, puis un bouton vers les autres (demande du patron) */}
       <View style={styles.collectionSection} testID="home-sections">
         {sections.map(({ category, items, total, rest }, sectionIndex) => (
@@ -349,6 +346,9 @@ export function HomeScreen() {
           </View>
           {/* « Annonce » ciblée de Zara, comme une vraie pub dans le fil (si l'admin lui confie les publicités) : après la première catégorie */}
           {sectionIndex === 0 && <TargetedAdCard products={products} categories={categories} />}
+          {/* « Albasse TV » : la dernière vidéo de la chaîne YouTube démarre seule, sans le son ; juste après l'affiche
+              « Vos articles préférés » (demande du patron, 22 novembre 2026) ; sans affiche : après la 1re catégorie */}
+          {sectionIndex === 0 && <AlbasseTV style={styles.albasseTv} />}
           </React.Fragment>
         ))}
         {products.length > 0 && (
@@ -486,6 +486,7 @@ const styles = StyleSheet.create({
   coldSubtitle: { fontFamily: fonts.body, fontSize: 12, color: colors.creamFaint, marginTop: 4 },
   collectionSection: { marginTop: spacing.md, paddingHorizontal: spacing.md },
   categorySection: { marginBottom: spacing.lg },
+  albasseTv: { marginHorizontal: 0, marginTop: spacing.sm, marginBottom: spacing.lg },
   categoryHeader: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: spacing.sm, marginBottom: spacing.md },
   categoryTitle: { flexShrink: 1, fontFamily: fonts.display, fontSize: 20, color: colors.cream },
   categoryCount: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.creamFaint },

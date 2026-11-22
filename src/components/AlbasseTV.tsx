@@ -1,15 +1,16 @@
-// « Albasse TV » sur l'accueil (demande du patron, 22 novembre 2026 : « un espace qui ouvre automatiquement la première vidéo ») :
+// « Albasse TV » sur l'accueil, après l'affiche « Vos articles préférés » (demande du patron, 22 novembre 2026 : « un espace qui ouvre
+// automatiquement la première vidéo ») :
 // la dernière vidéo de la chaîne YouTube démarre seule, sans le son ; « S'abonner » et « Toutes nos vidéos ».
 // Données mobiles : le lecteur ne se charge que si l'espace reste 1,5 s à l'écran (pas pendant le chargement de la page),
 // et la vidéo se met en pause dès que l'espace sort de l'écran, puis reprend quand il revient.
 // Sur le site seulement (le lecteur YouTube est une page web).
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, Platform, Linking, useWindowDimensions } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Platform, Linking, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
 import { colors, fonts, radius, spacing } from '../theme';
 import { YoutubeIcon } from './YoutubeIcon';
 import { ALBASSE_TV_DWELL_MS, YOUTUBE_CHANNEL_URL, YOUTUBE_EMBED_ORIGIN, YOUTUBE_SUBSCRIBE_URL, albasseTvEmbedUrl, youtubeCommand } from '../lib/youtube';
 
-export function AlbasseTV() {
+export function AlbasseTV({ style }: { style?: StyleProp<ViewStyle> }) {
   const { width } = useWindowDimensions();
   const boxRef = useRef<View>(null);
   const [loaded, setLoaded] = useState(false);
@@ -63,7 +64,7 @@ export function AlbasseTV() {
   const playerWidth = Math.min(280, Math.round((Math.min(width, 900) - 2 * spacing.md - 2 * 12) * 0.56));
 
   return (
-    <View style={styles.card} testID="albasse-tv">
+    <View style={[styles.card, style]} testID="albasse-tv">
       <View style={styles.header}>
         <YoutubeIcon width={30} />
         <Text style={styles.title}>Albasse TV</Text>
