@@ -5,6 +5,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import { useAuthStore } from '../store/authStore';
 import { useMyAffiliate } from '../hooks/useMyAffiliate';
+import { commissionLabel } from '../lib/affiliateStats';
 import { useAffiliateSettings } from '../hooks/useAffiliateSettings';
 import { useToastStore } from '../store/toastStore';
 import { ScreenHeader } from '../components/ScreenHeader';
@@ -113,7 +114,7 @@ export function AffiliateDashboardScreen() {
           stats.commissions.map((c) => (
             <View key={c.id} style={styles.commissionRow}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.commissionOrder}>Commande #{c.order_id.slice(0, 8)}</Text>
+                <Text style={styles.commissionOrder}>{commissionLabel(c)}</Text>
                 <Text style={styles.commissionDate}>
                   {new Date(c.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
                 </Text>

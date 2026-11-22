@@ -9,19 +9,9 @@ import { useToastStore } from '../store/toastStore';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { GoldButton } from '../components/GoldButton';
+import { generateReferralCode, isDuplicateCodeError } from '../lib/affiliateStats';
 
 const AFFILIATE_TYPES = ['TikTokeur', 'Influenceur', 'Vendeur', 'Étudiant', 'Créateur de contenu', 'Particulier', 'Autre'];
-
-function generateReferralCode(name: string | null): string {
-  const base = (name ?? 'AFF')
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-zA-Z]/g, '')
-    .toUpperCase()
-    .slice(0, 4) || 'AFF';
-  const suffix = Math.floor(100 + Math.random() * 900);
-  return `${base}${suffix}`;
-}
 
 export function AffiliateApplyScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -49,21 +39,26 @@ export function AffiliateApplyScreen() {
       return;
     }
     setSubmitting(true);
-    const code = profile.referral_code ?? generateReferralCode(profile.full_name);
-    const { error } = await supabase
-      .from('profiles')
-      .update({
-        is_affiliate: true,
-        affiliate_status: 'pending',
-        affiliate_type: affiliateType,
-        social_link: socialLink.trim(),
-        affiliate_mobile_money: mobileMoney.trim(),
-        referral_code: code,
-      })
-      .eq('id', profile.id);
+    // un code déjà pris par un autre affilié (la base refuse les doublons) : on en tire un autre, 5 essais au plus
+    let error: { code?: string; message?: string } | null = null;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const code = profile.referral_code ?? generateReferralCode(profile.full_name);
+      ({ error } = await supabase
+        .from('profiles')
+        .update({
+          is_affiliate: true,
+          affiliate_status: 'pending',
+          affiliate_type: affiliateType,
+          social_link: socialLink.trim(),
+          affiliate_mobile_money: mobileMoney.trim(),
+          referral_code: code,
+        })
+        .eq('id', profile.id));
+      if (!error || profile.referral_code || !isDuplicateCodeError(error)) break;
+    }
     setSubmitting(false);
     if (error) {
-      showToast(error.message, { title: 'Erreur', type: 'error' });
+      showToast("La candidature n'a pas pu être envoyée. Vérifiez votre connexion puis réessayez.", { title: 'Erreur', type: 'error' });
       return;
     }
     showToast('Votre candidature a été envoyée. Vous serez averti dès son approbation.', {

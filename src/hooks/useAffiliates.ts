@@ -33,9 +33,11 @@ export function useAffiliates() {
     const sessions = (sessionsRes.data as { referral_code: string }[]) ?? [];
     const commissions = (commissionsRes.data as any[]) ?? [];
 
+    // code comparé sans tenir compte des majuscules ni des espaces (comme la base : « amin123 » = « AMIN123 »)
+    const key = (code: string) => code.trim().toUpperCase();
     const visitorsByCode: Record<string, number> = {};
     sessions.forEach((s) => {
-      visitorsByCode[s.referral_code] = (visitorsByCode[s.referral_code] ?? 0) + 1;
+      visitorsByCode[key(s.referral_code)] = (visitorsByCode[key(s.referral_code)] ?? 0) + 1;
     });
 
     const summaries: AffiliateSummary[] = profiles.map((p) => {
@@ -43,7 +45,7 @@ export function useAffiliates() {
       const active = own.filter((c) => c.status !== 'cancelled');
       return {
         profile: p,
-        visitorsSent: (p.referral_code && visitorsByCode[p.referral_code]) || 0,
+        visitorsSent: (p.referral_code && visitorsByCode[key(p.referral_code)]) || 0,
         ordersCount: active.length,
         revenue: active.reduce((s, c) => s + (c.orders?.total ?? 0), 0),
         pendingCommission: own.filter((c) => c.status === 'pending').reduce((s, c) => s + Number(c.amount), 0),
