@@ -48,9 +48,13 @@ export function useAffiliateCommissions() {
     refresh();
   }, []);
 
-  const markPaid = async (id: string) => {
-    await supabase.from('affiliate_commissions').update({ paid: true, paid_at: new Date().toISOString() }).eq('id', id);
-    setCommissions((prev) => prev.map((c) => (c.id === id ? { ...c, paid: true, paid_at: new Date().toISOString() } : c)));
+  // vrai seulement si la base a bien enregistré le paiement (avant : affiché « payée » même en cas de refus)
+  const markPaid = async (id: string): Promise<boolean> => {
+    const paidAt = new Date().toISOString();
+    const { error } = await supabase.from('affiliate_commissions').update({ paid: true, paid_at: paidAt }).eq('id', id);
+    if (error) return false;
+    setCommissions((prev) => prev.map((c) => (c.id === id ? { ...c, paid: true, paid_at: paidAt } : c)));
+    return true;
   };
 
   return { commissions, isLoading, refresh, markPaid };

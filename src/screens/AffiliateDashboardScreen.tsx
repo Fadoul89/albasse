@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import { useAuthStore } from '../store/authStore';
 import { useMyAffiliate } from '../hooks/useMyAffiliate';
+import { commissionLabel, paymentCountLabel, paymentHistory } from '../lib/affiliateStats';
+import { PaymentHistorySheet } from '../components/PaymentHistorySheet';
 import { useAffiliateSettings } from '../hooks/useAffiliateSettings';
 import { useToastStore } from '../store/toastStore';
 import { ScreenHeader } from '../components/ScreenHeader';
@@ -26,6 +28,8 @@ export function AffiliateDashboardScreen() {
   const { stats, isLoading } = useMyAffiliate();
   const { settings } = useAffiliateSettings();
   const showToast = useToastStore((s) => s.show);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const history = useMemo(() => paymentHistory(stats.commissions), [stats.commissions]);
 
   if (!profile?.is_affiliate) {
     return (
@@ -101,7 +105,7 @@ export function AffiliateDashboardScreen() {
           <Stat icon="💰" label="Chiffre d'affaires généré" value={formatXAF(stats.revenue)} />
           <Stat icon="⏳" label="Commission en attente" value={formatXAF(stats.pendingCommission)} />
           <Stat icon="✅" label="Commission validée" value={formatXAF(stats.validatedCommission)} highlight />
-          <Stat icon="💳" label="Déjà payé" value={formatXAF(stats.paidCommission)} />
+          <Stat icon="💳" label="Déjà payé" value={formatXAF(stats.paidCommission)} hint="Voir l'historique ›" onPress={() => setHistoryOpen(true)} testID="stat-paid" />
         </View>
 
         <Text style={styles.sectionTitle}>Historique des commissions</Text>
@@ -113,7 +117,7 @@ export function AffiliateDashboardScreen() {
           stats.commissions.map((c) => (
             <View key={c.id} style={styles.commissionRow}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.commissionOrder}>Commande #{c.order_id.slice(0, 8)}</Text>
+                <Text style={styles.commissionOrder}>{commissionLabel(c)}</Text>
                 <Text style={styles.commissionDate}>
                   {new Date(c.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
                 </Text>
@@ -126,17 +130,49 @@ export function AffiliateDashboardScreen() {
           ))
         )}
       </ScrollView>
+      <PaymentHistorySheet
+        visible={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        title="Historique des paiements"
+        subtitle="L'argent qu'Albasse Shopping vous a déjà envoyé."
+        totalLabel="Total reçu"
+        sideLines={[paymentCountLabel(history.count), ...(profile.affiliate_mobile_money ? [`sur Mobile Money ${profile.affiliate_mobile_money}`] : [])]}
+        history={history}
+      />
     </View>
   );
 }
 
-function Stat({ icon, label, value, highlight }: { icon: string; label: string; value: string; highlight?: boolean }) {
-  return (
-    <View style={styles.stat}>
+function Stat({
+  icon,
+  label,
+  value,
+  highlight,
+  hint,
+  onPress,
+  testID,
+}: {
+  icon: string;
+  label: string;
+  value: string;
+  highlight?: boolean;
+  hint?: string;
+  onPress?: () => void;
+  testID?: string;
+}) {
+  const body = (
+    <>
       <Text style={styles.statIcon}>{icon}</Text>
       <Text style={[styles.statValue, highlight && { color: colors.goldLight }]}>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
-    </View>
+      {hint ? <Text style={styles.statHint}>{hint}</Text> : null}
+    </>
+  );
+  if (!onPress) return <View style={styles.stat}>{body}</View>;
+  return (
+    <Pressable style={[styles.stat, styles.statTappable]} onPress={onPress} accessibilityRole="button" accessibilityLabel={`${label} : ${value}. ${hint ?? ''}`} testID={testID}>
+      {body}
+    </Pressable>
   );
 }
 
@@ -189,6 +225,8 @@ const styles = StyleSheet.create({
   statIcon: { fontSize: 16, marginBottom: 4 },
   statValue: { color: colors.cream, fontFamily: fonts.bodyBold, fontSize: 13, textAlign: 'center' },
   statLabel: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 9, textAlign: 'center', marginTop: 3, paddingHorizontal: 4 },
+  statTappable: { borderWidth: 1, borderColor: colors.gold },
+  statHint: { color: colors.goldLight, fontFamily: fonts.bodyBold, fontSize: 9, textAlign: 'center', marginTop: 4 },
   sectionTitle: { color: colors.cream, fontFamily: fonts.display, fontSize: 16, marginBottom: spacing.sm },
   emptyText: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 12, textAlign: 'center', marginTop: 20 },
   commissionRow: {

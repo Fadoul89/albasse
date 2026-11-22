@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase, isSupabaseConfigured } from './supabase';
 import { trackTikTokEvent } from './tiktokPixel';
 import { referrerHostOf, shortText } from './referrerHost';
+import { normalizeReferralCode } from './affiliateStats';
 
 const HEARTBEAT_SECONDS = 20;
 const VISITOR_ID_KEY = 'albasse_visitor_id';
@@ -65,13 +66,14 @@ async function getOrCreateVisitorId(): Promise<string> {
 
 // Capture le code de parrainage (?ref=CODE) present dans l'URL et le memorise
 // 30 jours (meme au-dela de la session en cours), pour attribuer une vente
-// meme si le client revient plus tard sans le lien.
+// meme si le client revient plus tard sans le lien. Le code est nettoye (majuscules,
+// sans espaces) : « amin123 » et « AMIN123 » sont le meme affilie.
 async function getOrCaptureReferralCode(): Promise<string | null> {
   if (Platform.OS !== 'web' || typeof window === 'undefined') return null;
 
   try {
     const params = new URLSearchParams(window.location.search);
-    const refFromUrl = params.get('ref');
+    const refFromUrl = normalizeReferralCode(params.get('ref'));
     if (refFromUrl) {
       const expiresAt = Date.now() + REFERRAL_CODE_DAYS * 24 * 60 * 60 * 1000;
       await AsyncStorage.setItem(REFERRAL_CODE_KEY, JSON.stringify({ code: refFromUrl, expiresAt }));
@@ -85,7 +87,7 @@ async function getOrCaptureReferralCode(): Promise<string | null> {
       await AsyncStorage.removeItem(REFERRAL_CODE_KEY);
       return null;
     }
-    return parsed.code;
+    return normalizeReferralCode(parsed.code);
   } catch {
     return null;
   }

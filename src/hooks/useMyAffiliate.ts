@@ -1,11 +1,9 @@
 import { useEffect, useState } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
-import type { AffiliateCommission } from '../types';
+import { affiliateTotals, parseAffiliateStats, type AffiliateCommissionRow } from '../lib/affiliateStats';
 
-export interface MyAffiliateCommission extends AffiliateCommission {
-  order_total: number | null;
-}
+export type MyAffiliateCommission = AffiliateCommissionRow;
 
 export interface MyAffiliateStats {
   visitorsSent: number;
@@ -38,48 +36,37 @@ export function useMyAffiliate() {
       return;
     }
     setIsLoading(true);
+    try {
+      // 1) la fonction sûre de la base (add-affiliate-fixes.sql) : SES visiteurs et SES commissions, avec le numéro et le montant
+      //    de la commande, sans jamais les données des clients
+      const { data, error } = await supabase.rpc('affiliate_my_stats');
+      const parsed = error ? null : parseAffiliateStats(data, profile.id);
+      if (parsed) {
+        setStats({ visitorsSent: parsed.visitors, ...affiliateTotals(parsed.commissions), commissions: parsed.commissions });
+        return;
+      }
 
-    const [sessionsRes, commissionsRes] = await Promise.all([
-      supabase.from('visitor_sessions').select('id', { count: 'exact', head: true }).eq('referral_code', profile.referral_code),
-      supabase
-        .from('affiliate_commissions')
-        .select('*, orders(total)')
-        .eq('affiliate_id', profile.id)
-        .order('created_at', { ascending: false }),
-    ]);
-
-    const rawCommissions = (commissionsRes.data as any[]) ?? [];
-    const commissions: MyAffiliateCommission[] = rawCommissions.map((c) => ({
-      id: c.id,
-      affiliate_id: c.affiliate_id,
-      order_id: c.order_id,
-      amount: Number(c.amount),
-      status: c.status,
-      paid: c.paid,
-      paid_at: c.paid_at,
-      created_at: c.created_at,
-      order_total: c.orders?.total ?? null,
-    }));
-
-    const revenue = commissions
-      .filter((c) => c.status !== 'cancelled')
-      .reduce((sum, c) => sum + (c.order_total ?? 0), 0);
-    const pendingCommission = commissions.filter((c) => c.status === 'pending').reduce((s, c) => s + c.amount, 0);
-    const validatedCommission = commissions
-      .filter((c) => c.status === 'validated' && !c.paid)
-      .reduce((s, c) => s + c.amount, 0);
-    const paidCommission = commissions.filter((c) => c.paid).reduce((s, c) => s + c.amount, 0);
-
-    setStats({
-      visitorsSent: sessionsRes.count ?? 0,
-      ordersCount: commissions.filter((c) => c.status !== 'cancelled').length,
-      revenue,
-      pendingCommission,
-      validatedCommission,
-      paidCommission,
-      commissions,
-    });
-    setIsLoading(false);
+      // 2) script pas encore lancé : l'ancienne lecture (les commissions ; visites et montants restent réservés à l'administrateur)
+      const [sessionsRes, commissionsRes] = await Promise.all([
+        supabase.from('visitor_sessions').select('id', { count: 'exact', head: true }).eq('referral_code', profile.referral_code),
+        supabase.from('affiliate_commissions').select('*, orders(total)').eq('affiliate_id', profile.id).order('created_at', { ascending: false }),
+      ]);
+      const commissions: MyAffiliateCommission[] = ((commissionsRes.data as any[]) ?? []).map((c) => ({
+        id: c.id,
+        affiliate_id: c.affiliate_id,
+        order_id: c.order_id,
+        order_number: null,
+        order_total: c.orders?.total ?? null,
+        amount: Number(c.amount),
+        status: c.status,
+        paid: c.paid,
+        paid_at: c.paid_at,
+        created_at: c.created_at,
+      }));
+      setStats({ visitorsSent: sessionsRes.count ?? 0, ...affiliateTotals(commissions), commissions });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {

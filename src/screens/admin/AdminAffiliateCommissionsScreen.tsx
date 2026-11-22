@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, FlatList, Pressable } from 'react-native';
 import { useAuthStore } from '../../store/authStore';
+import { useToastStore } from '../../store/toastStore';
 import { useAffiliateCommissions, type AdminCommissionRow } from '../../hooks/useAffiliateCommissions';
 import { colors, fonts, radius, spacing } from '../../theme';
 import { ScreenHeader } from '../../components/ScreenHeader';
@@ -19,6 +20,7 @@ type Filter = 'all' | 'to_pay' | 'pending' | 'paid';
 export function AdminAffiliateCommissionsScreen() {
   const profile = useAuthStore((s) => s.profile);
   const { commissions, isLoading, refresh, markPaid } = useAffiliateCommissions();
+  const showToast = useToastStore((s) => s.show);
   const [filter, setFilter] = useState<Filter>('to_pay');
   const [pendingPay, setPendingPay] = useState<AdminCommissionRow | null>(null);
 
@@ -89,7 +91,9 @@ export function AdminAffiliateCommissionsScreen() {
         message={`${pendingPay ? formatXAF(pendingPay.amount) : ''} pour ${pendingPay?.affiliate_name ?? ''}.`}
         confirmLabel="Confirmer"
         onConfirm={async () => {
-          if (pendingPay) await markPaid(pendingPay.id);
+          if (pendingPay && !(await markPaid(pendingPay.id))) {
+            showToast("Le paiement n'a pas été enregistré. Réessayez.", { title: 'Erreur', type: 'error' });
+          }
           setPendingPay(null);
         }}
         onCancel={() => setPendingPay(null)}

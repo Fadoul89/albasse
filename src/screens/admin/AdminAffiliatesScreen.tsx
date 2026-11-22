@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, FlatList, Pressable } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -9,6 +9,8 @@ import { useToastStore } from '../../store/toastStore';
 import { supabase } from '../../lib/supabase';
 import { colors, fonts, radius, spacing } from '../../theme';
 import { ScreenHeader } from '../../components/ScreenHeader';
+import { PaymentHistorySheet } from '../../components/PaymentHistorySheet';
+import { paymentCountLabel, paymentHistory } from '../../lib/affiliateStats';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
 
@@ -23,6 +25,7 @@ export function AdminAffiliatesScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { affiliates, isLoading, refresh } = useAffiliates();
   const showToast = useToastStore((s) => s.show);
+  const [historyFor, setHistoryFor] = useState<AffiliateSummary | null>(null);
 
   if (!profile?.is_admin) {
     return (
@@ -77,7 +80,7 @@ export function AdminAffiliatesScreen() {
               <>
                 <Text style={styles.sectionTitle}>📥 Demandes en attente ({pending.length})</Text>
                 {pending.map((a) => (
-                  <AffiliateRow key={a.profile.id} item={a} onApprove={() => setStatus(a.profile.id, 'approved')} onBlock={() => setStatus(a.profile.id, 'blocked')} />
+                  <AffiliateRow key={a.profile.id} item={a} onApprove={() => setStatus(a.profile.id, 'approved')} onBlock={() => setStatus(a.profile.id, 'blocked')} onShowPayments={() => setHistoryFor(a)} />
                 ))}
               </>
             )}
@@ -89,11 +92,31 @@ export function AdminAffiliatesScreen() {
             item={item}
             onApprove={item.profile.affiliate_status === 'blocked' ? () => setStatus(item.profile.id, 'approved') : undefined}
             onBlock={item.profile.affiliate_status === 'approved' ? () => setStatus(item.profile.id, 'blocked') : undefined}
+            onShowPayments={() => setHistoryFor(item)}
           />
         )}
         ListEmptyComponent={!isLoading ? <Text style={styles.denied}>Aucun affilié pour le moment.</Text> : null}
       />
+      {historyFor ? <AffiliatePayments item={historyFor} onClose={() => setHistoryFor(null)} /> : null}
     </View>
+  );
+}
+
+// l'historique des paiements d'un affilié (case « Déjà payé »)
+function AffiliatePayments({ item, onClose }: { item: AffiliateSummary; onClose: () => void }) {
+  const history = paymentHistory(item.paidCommissions);
+  const { profile } = item;
+  return (
+    <PaymentHistorySheet
+      visible
+      onClose={onClose}
+      title={`Paiements · ${profile.full_name ?? profile.email ?? 'Affilié'}`}
+      subtitle={`Code ${profile.referral_code ?? '—'} · Mobile Money ${profile.affiliate_mobile_money ?? '—'}`}
+      totalLabel="Total payé"
+      sideLines={[paymentCountLabel(history.count), `Reste à payer : ${formatXAF(item.validatedCommission)}`]}
+      history={history}
+      detailed
+    />
   );
 }
 
@@ -101,10 +124,12 @@ function AffiliateRow({
   item,
   onApprove,
   onBlock,
+  onShowPayments,
 }: {
   item: AffiliateSummary;
   onApprove?: () => void;
   onBlock?: () => void;
+  onShowPayments?: () => void;
 }) {
   const { profile } = item;
   const isPending = profile.affiliate_status === 'pending';
@@ -134,6 +159,7 @@ function AffiliateRow({
         <Metric label="CA" value={formatXAF(item.revenue)} />
         <Metric label="En attente" value={formatXAF(item.pendingCommission)} />
         <Metric label="À payer" value={formatXAF(item.validatedCommission)} highlight />
+        <Metric label="Déjà payé" value={`${formatXAF(item.paidCommission)} ›`} onPress={onShowPayments} testID={`paid-${profile.id}`} />
       </View>
 
       {(onApprove || onBlock) && (
@@ -154,12 +180,18 @@ function AffiliateRow({
   );
 }
 
-function Metric({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
-  return (
-    <View style={styles.metric}>
+function Metric({ label, value, highlight, onPress, testID }: { label: string; value: string; highlight?: boolean; onPress?: () => void; testID?: string }) {
+  const body = (
+    <>
       <Text style={[styles.metricValue, highlight && { color: colors.goldLight }]}>{value}</Text>
       <Text style={styles.metricLabel}>{label}</Text>
-    </View>
+    </>
+  );
+  if (!onPress) return <View style={styles.metric}>{body}</View>;
+  return (
+    <Pressable style={[styles.metric, styles.metricTappable]} onPress={onPress} accessibilityRole="button" accessibilityLabel={`${label} : ${value} Voir l'historique des paiements`} testID={testID}>
+      {body}
+    </Pressable>
   );
 }
 
@@ -192,6 +224,7 @@ const styles = StyleSheet.create({
   metric: { backgroundColor: colors.panelAlt, borderRadius: radius.sm, paddingHorizontal: 8, paddingVertical: 6, minWidth: 66, alignItems: 'center' },
   metricValue: { color: colors.cream, fontFamily: fonts.bodyBold, fontSize: 11 },
   metricLabel: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 8, marginTop: 1 },
+  metricTappable: { borderWidth: 1, borderColor: colors.gold },
   actionsRow: { flexDirection: 'row', gap: 10, marginTop: 10 },
   approveBtn: { backgroundColor: colors.gold, borderRadius: radius.sm, paddingHorizontal: 14, paddingVertical: 8 },
   approveBtnText: { color: colors.background, fontFamily: fonts.bodyBold, fontSize: 12 },
