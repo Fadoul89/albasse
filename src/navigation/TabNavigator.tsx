@@ -12,6 +12,7 @@ import { AccountScreen } from '../screens/AccountScreen';
 import { TAB_BAR_HEIGHT, TAB_CENTER_GAP } from './tabLayout';
 import { CafeScreen } from '../screens/CafeScreen';
 import { isSinglePage } from '../lib/singlePage';
+import { HomeIcon } from '../components/HomeIcon';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 
@@ -90,9 +91,11 @@ export function TabNavigator() {
                 isOrders ? styles.iconWrapBlue : isAccount ? styles.iconWrapGold : focused && styles.iconWrapActive,
               ]}
             >
-              <Text style={{ fontSize: focused ? 26 : 23 }}>
-                {ICONS[route.name as keyof TabParamList]}
-              </Text>
+              {route.name === 'Home' ? (
+                <HomeIcon size={focused ? 32 : 30} />
+              ) : (
+                <Text style={{ fontSize: focused ? 26 : 23 }}>{ICONS[route.name as keyof TabParamList]}</Text>
+              )}
             </View>
           );
         },

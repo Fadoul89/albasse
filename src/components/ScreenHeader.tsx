@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { HomeIcon } from './HomeIcon';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
@@ -33,8 +34,8 @@ export function ScreenHeader({ title, showBack, right }: Props) {
             <Pressable onPress={handleBack} hitSlop={12}>
               <Text style={styles.back}>←</Text>
             </Pressable>
-            <Pressable onPress={() => navigation.navigate('Tabs', { screen: 'Home' } as never)} hitSlop={12}>
-              <Text style={styles.home}>🏠</Text>
+            <Pressable onPress={() => navigation.navigate('Tabs', { screen: 'Home' } as never)} hitSlop={12} accessibilityRole="button" accessibilityLabel="Accueil" testID="header-home">
+              <HomeIcon size={34} />
             </Pressable>
           </>
         )}
@@ -57,7 +58,6 @@ const styles = StyleSheet.create({
   side: { width: 76 },
   sideStart: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   back: { color: colors.gold, fontSize: 28 },
-  home: { fontSize: 26 },
   title: {
     flex: 1,
     color: colors.cream,

@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, View, Text, StyleSheet, useWindowDimensions } from 'react-native';
+import { Pressable, View, Text, StyleSheet, Platform, useWindowDimensions } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -16,6 +17,16 @@ function cardWidth(windowWidth: number, columns: number) {
 }
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
+
+// l'éclat de lumière qui traverse l'étiquette du prix (demande du patron, 22 novembre 2026) : une animation CSS du site
+// (déclarée dans la feuille de styles : styles.shineAnim), toutes les 3,6 s ; chaque article a son moment (décalage selon
+// l'article) pour que les étiquettes ne brillent pas toutes ensemble
+const SHINE_MS = 3600;
+function shineDelay(seed: string): object {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return { animationDelay: `-${h % SHINE_MS}ms` };
+}
 
 // width : la largeur exacte donnée par une grille (useProductGrid) ; sinon, la largeur par défaut selon columns
 export function ProductCard({ product, columns = 2, width }: { product: Product; columns?: number; width?: number }) {
@@ -45,10 +56,23 @@ export function ProductCard({ product, columns = 2, width }: { product: Product;
         {product.name}
       </Text>
       <View style={styles.priceRow}>
-        <Text style={styles.price}>{formatXAF(product.price)}</Text>
+        {/* le prix : étiquette verte traversée par un éclat de lumière */}
+        <View style={styles.priceTag} testID="product-price">
+          <Text style={styles.price}>
+            {product.price.toLocaleString('fr-FR')}
+            <Text style={styles.priceUnit}> FCFA</Text>
+          </Text>
+          {Platform.OS === 'web' ? (
+            <View pointerEvents="none" style={[styles.shine, styles.shineAnim, shineDelay(product.id)]} testID="product-price-shine">
+              <LinearGradient colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.7)', 'rgba(255,255,255,0)']} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
+            </View>
+          ) : null}
+        </View>
+        {/* l'ancien prix (vraie promotion seulement) : comme avant, en rouge barré */}
         {oldPrice && <Text style={styles.comparePrice} testID="product-old-price">{formatXAF(oldPrice)}</Text>}
       </View>
-      <StarRating rating={product.rating} size={11} reviewCount={product.review_count} />
+      {/* les étoiles seulement quand l'article a des avis (des étoiles vides « (0) » donnent l'air que personne n'achète) */}
+      {product.review_count > 0 ? <StarRating rating={product.rating} size={11} reviewCount={product.review_count} /> : null}
     </Pressable>
   );
 }
@@ -74,9 +98,20 @@ const styles = StyleSheet.create({
   },
   badgeText: { color: '#ffffff', fontFamily: fonts.bodyBold, fontSize: 11 },
   favoriteBtn: { position: 'absolute', top: 8, right: 8 },
-  name: { color: colors.cream, fontFamily: fonts.bodyMedium, fontSize: 13, marginBottom: 4 },
-  priceRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
-  price: { color: colors.successText, fontFamily: fonts.bodyBold, fontSize: 14 },
+  name: { color: colors.cream, fontFamily: fonts.bodySemiBold, fontSize: 13, marginBottom: 5 },
+  priceRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, rowGap: 4, marginBottom: 4 },
+  // étiquette verte unie (texte vert très foncé : bien lisible sur le vert)
+  priceTag: { backgroundColor: '#2fcf77', borderRadius: 9, paddingHorizontal: 10, paddingVertical: 4, overflow: 'hidden', alignSelf: 'flex-start' },
+  price: { color: '#06341d', fontFamily: fonts.bodyBold, fontSize: 14 },
+  priceUnit: { fontSize: 10 },
+  shine: { position: 'absolute', top: -6, bottom: -6, width: '26%', left: '-60%', transform: [{ skewX: '-22deg' }] },
+  // propriétés d'animation du site (react-native-web) : absentes des types de React Native, d'où le « as object »
+  shineAnim: {
+    animationKeyframes: [{ '0%': { left: '-60%' }, '62%': { left: '-60%' }, '82%': { left: '130%' }, '100%': { left: '130%' } }],
+    animationDuration: `${SHINE_MS}ms`,
+    animationTimingFunction: 'ease-in-out',
+    animationIterationCount: 'infinite',
+  } as object,
   comparePrice: {
     color: colors.errorText,
     fontFamily: fonts.body,
