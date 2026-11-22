@@ -5,7 +5,8 @@
 //   C. un lien ?ref= tapé en minuscules ou avec des espaces : le code est enregistré en MAJUSCULES (la vente sera bien comptée) ;
 //   D. candidature : un code déjà pris → un autre code est tiré, la candidature passe ; une autre erreur → message en français ;
 //   E. l'affilié touche « Déjà payé » : l'historique de ses paiements (un paiement = les commissions payées le même jour) ;
-//   F. l'administrateur touche « Déjà payé » sur la fiche d'un affilié : ses paiements, avec l'heure et ce qu'il reste à payer.
+//   F. l'administrateur touche « Déjà payé » sur la fiche d'un affilié : ses paiements, avec l'heure et ce qu'il reste à payer ;
+//   G. « Mes produits » › 📥 Photos : les vraies photos de l'article enregistrées, signées (drapeau du Tchad + albasseshopping.com).
 // Le compte affilié et les réponses de la base sont SIMULÉS ; les articles sont lus dans la VRAIE base (lecture seule) ; toute écriture est bloquée.
 // Usage : SUPABASE_ANON_KEY=… NODE_PATH=/opt/node-tools/node_modules node tests/shop/affiliate-ui.test.js <dossier dist> [port] [dossier des photos]
 const { chromium, devices } = require('playwright');
@@ -40,7 +41,7 @@ const SEED = {
 };
 
 // un navigateur : connecté (profil donné) ou anonyme ; `rpc` décide de la réponse de affiliate_my_stats ; `patch` celle des mises à jour du profil
-async function visitor(b, { profile, rpc, patch, extra }) {
+async function visitor(b, { profile, rpc, patch, extra, blockPhotos }) {
   const ctx = await b.newContext({ ...devices['Pixel 7'], viewport: { width: 412, height: 1400 }, deviceScaleFactor: 1 });
   await ctx.addInitScript(([seed, s]) => {
     try {
@@ -58,6 +59,7 @@ async function visitor(b, { profile, rpc, patch, extra }) {
     const m = r.method();
     if (!u.hostname.endsWith('.supabase.co')) return route.continue();
     if (m === 'OPTIONS') return json(route, {});
+    if (blockPhotos && u.pathname.startsWith('/storage/')) return route.abort();
     if (u.pathname === '/auth/v1/user') return profile ? json(route, user) : json(route, { message: 'no' }, 401);
     if (u.pathname === '/auth/v1/token') return profile ? json(route, session) : json(route, { message: 'no' }, 400);
     if (extra) {
@@ -327,6 +329,87 @@ const STATS = (prods) => ({
       check('F. aucune erreur', v.errs.length === 0, v.errs);
       check('F. aucune écriture', v.log.writes.length === 0, v.log.writes);
       await v.ctx.close();
+    }
+
+    // G. « Mes produits » › 📥 Photos : les photos de l'article, signées
+    {
+      const v = await visitor(b, { profile: AFFILIATE, rpc: STATS });
+      const downloads = [];
+      v.page.on('download', (d) => downloads.push(d));
+      await v.page.goto(`${BASE}/espace-affilie/produits`, { waitUntil: 'load' });
+      await v.page.locator('[data-testid^="photos-"]').first().waitFor({ timeout: 30000 });
+      await sleep(800);
+      // un article qui a plusieurs photos
+      const btns = await v.page.locator('[data-testid^="photos-"]').evaluateAll((els) => els.map((e) => ({ id: e.getAttribute('data-testid'), text: e.innerText, label: e.getAttribute('aria-label') })));
+      const multi = btns.find((x) => /Photos \(\d+\)/.test(x.text));
+      check('G. un bouton « 📥 Photo(s) » sur chaque article qui a une photo, à côté de « Copier mon lien »', btns.length > 0 && btns.every((x) => /📥 Photos? ?(\(\d+\))?/.test(x.text)), btns.slice(0, 3));
+      check('G. le bouton dit ce qu\'il fait (lecteur d\'écran) : « … avec la signature albasseshopping.com »', btns.every((x) => /signature albasseshopping\.com/.test(x.label || '')), btns[0]);
+      const target = multi || btns[0];
+      const n = multi ? Number(multi.text.match(/\((\d+)\)/)[1]) : 1;
+      await v.page.getByTestId(target.id).scrollIntoViewIfNeeded();
+      await v.page.screenshot({ path: path.join(OUT, 'affilie-photos-bouton.png') });
+      await v.page.getByTestId(target.id).click();
+      for (let i = 0; i < 80 && downloads.length < n; i++) await sleep(250);
+      await sleep(1000);
+      check(`G. ${n} photo(s) enregistrée(s) d'un coup`, downloads.length === n, downloads.map((d) => d.suggestedFilename()));
+      const names = downloads.map((d) => d.suggestedFilename());
+      check('G. noms des fichiers : albasse-<article>(-1, -2…).jpg', names.every((f) => /^albasse-[a-z0-9-]+\.jpg$/.test(f)) && (n === 1 || names.every((f, i) => f.endsWith(`-${i + 1}.jpg`))), names);
+      const t = norm(await v.page.evaluate(() => document.body.innerText));
+      check('G. message « … enregistrée(s), avec la signature albasseshopping.com »', /(\d+ photos enregistrées|Photo enregistrée), avec la signature albasseshopping\.com/.test(t));
+      // la photo enregistrée : une vraie photo JPEG, avec la signature en bas à droite (bleu du site, drapeau, texte blanc)
+      if (downloads[0]) {
+        const file = path.join(OUT, names[0]);
+        await downloads[0].saveAs(file);
+        const buf = require('fs').readFileSync(file);
+        check('G. le fichier est une photo JPEG', buf[0] === 0xff && buf[1] === 0xd8 && buf.length > 20000, buf.length);
+        const probe = await b.newPage();
+        const res = await probe.evaluate(async (dataUrl) => {
+          const img = new Image();
+          img.src = dataUrl;
+          await img.decode();
+          const c = document.createElement('canvas');
+          c.width = img.naturalWidth; c.height = img.naturalHeight;
+          const ctx = c.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          const W = c.width, H = c.height;
+          const zone = (x0, y0, x1, y1) => {
+            const d = ctx.getImageData(x0, y0, x1 - x0, y1 - y0).data;
+            const near = (r, g, b, R, G, B, tol) => Math.abs(r - R) < tol && Math.abs(g - G) < tol && Math.abs(b - B) < tol;
+            let blue = 0, yellow = 0, red = 0, white = 0, pill = 0;
+            for (let i = 0; i < d.length; i += 4) {
+              const [r, g, b] = [d[i], d[i + 1], d[i + 2]];
+              if (near(r, g, b, 0x00, 0x26, 0x64, 40)) blue++;
+              if (near(r, g, b, 0xfe, 0xcb, 0x00, 50)) yellow++;
+              if (near(r, g, b, 0xc6, 0x0c, 0x30, 50)) red++;
+              if (r > 235 && g > 235 && b > 235) white++;
+              if (b > 70 && b < 160 && r < 60 && g < 80) pill++;
+            }
+            return { blue, yellow, red, white, pill };
+          };
+          return { W, H, corner: zone(Math.round(W * 0.4), Math.round(H * 0.85), W, H), top: zone(0, 0, Math.round(W * 0.4), Math.round(H * 0.1)) };
+        }, 'data:image/jpeg;base64,' + buf.toString('base64'));
+        await probe.close();
+        check('G. taille gardée (2048 px au plus)', res.W > 200 && Math.max(res.W, res.H) <= 2048, { W: res.W, H: res.H });
+        check('G. en bas à droite : le drapeau du Tchad (bleu, jaune, rouge) et le texte blanc sur la pastille bleue', res.corner.blue > 30 && res.corner.yellow > 30 && res.corner.red > 30 && res.corner.white > 100 && res.corner.pill > 500, res.corner);
+        check('G. le haut de la photo n\'a pas de signature (l\'article reste visible)', res.top.yellow < res.corner.yellow / 4 || res.top.pill < res.corner.pill / 4, res.top);
+      }
+      check('G. aucune erreur', v.errs.length === 0, v.errs);
+      check('G. aucune écriture', v.log.writes.length === 0, v.log.writes);
+      await v.ctx.close();
+
+      // photo impossible à lire (connexion coupée) : message en français, aucun fichier
+      const v2 = await visitor(b, { profile: AFFILIATE, rpc: STATS, blockPhotos: true });
+      const d2 = [];
+      v2.page.on('download', (d) => d2.push(d));
+      await v2.page.goto(`${BASE}/espace-affilie/produits`, { waitUntil: 'load' });
+      await v2.page.locator('[data-testid^="photos-"]').first().waitFor({ timeout: 30000 });
+      await v2.page.locator('[data-testid^="photos-"]').first().click();
+      for (let i = 0; i < 40; i++) { if (/pas pu être enregistrée/.test(await v2.page.evaluate(() => document.body.innerText))) break; await sleep(250); }
+      const t2 = norm(await v2.page.evaluate(() => document.body.innerText));
+      check('G. photo illisible : « La photo n\'a pas pu être enregistrée… », aucun fichier', /La photo n'a pas pu être enregistrée/.test(t2) && d2.length === 0);
+      check('G. le bouton redevient utilisable', !/⏳ Photos…/.test(t2));
+      check('G. aucune erreur (photo illisible)', v2.errs.length === 0, v2.errs);
+      await v2.ctx.close();
     }
   } finally {
     await b.close();
