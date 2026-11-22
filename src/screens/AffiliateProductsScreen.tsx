@@ -8,6 +8,7 @@ import { rootOf } from '../lib/subCategories';
 import { useAffiliateSettings } from '../hooks/useAffiliateSettings';
 import { useToastStore } from '../store/toastStore';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { downloadSignedPhotos } from '../lib/signedPhoto';
 import { colors, fonts, radius, spacing } from '../theme';
 
 const SITE_URL = 'https://www.albasseshopping.com';
@@ -48,6 +49,7 @@ export function AffiliateProductsScreen() {
   const [query, setQuery] = useState('');
   const [pastedUrl, setPastedUrl] = useState('');
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState<string | null>(null);
 
   if (!profile?.is_affiliate || profile.affiliate_status !== 'approved') {
     return (
@@ -68,6 +70,29 @@ export function AffiliateProductsScreen() {
   };
 
   const copyLink = (slug: string) => copyToClipboard(`${SITE_URL}/produit/${slug}?ref=${profile.referral_code}`);
+
+  // les photos de l'article, signées « albasseshopping.com », enregistrées sur le téléphone de l'affilié
+  const downloadPhotos = async (productId: string, name: string, images: string[]) => {
+    if (downloading) return;
+    if (Platform.OS !== 'web' || typeof document === 'undefined') {
+      showToast('Ouvrez albasseshopping.com dans le navigateur pour enregistrer les photos.', { title: 'Photos', type: 'error' });
+      return;
+    }
+    setDownloading(productId);
+    try {
+      const saved = await downloadSignedPhotos(name, images);
+      if (saved === 0) {
+        showToast("La photo n'a pas pu être enregistrée. Vérifiez votre connexion puis réessayez.", { title: 'Erreur', type: 'error' });
+      } else {
+        showToast(saved > 1 ? `${saved} photos enregistrées, avec la signature albasseshopping.com.` : 'Photo enregistrée, avec la signature albasseshopping.com.', {
+          title: 'Prêt à publier 📥',
+          type: 'success',
+        });
+      }
+    } finally {
+      setDownloading(null);
+    }
+  };
 
   const handleGenerate = () => {
     const link = buildAffiliateLink(pastedUrl, profile.referral_code!);
@@ -140,9 +165,25 @@ export function AffiliateProductsScreen() {
                   <Text style={styles.metricTextHighlight}>💰 {formatXAF(r.commission)}</Text>
                 </View>
                 <Text style={styles.rateBadge}>📊 Commission estimée : {rateFor(r)}%</Text>
-                <Pressable style={styles.linkBtn} onPress={() => copyLink(r.product.slug)}>
-                  <Text style={styles.linkBtnText}>🔗 Copier mon lien</Text>
-                </Pressable>
+                <View style={styles.btnRow}>
+                  <Pressable style={styles.linkBtn} onPress={() => copyLink(r.product.slug)}>
+                    <Text style={styles.linkBtnText}>🔗 Copier mon lien</Text>
+                  </Pressable>
+                  {r.product.images.length > 0 ? (
+                    <Pressable
+                      style={[styles.photoBtn, downloading === r.product.id && { opacity: 0.6 }]}
+                      onPress={() => downloadPhotos(r.product.id, r.product.name, r.product.images)}
+                      disabled={!!downloading}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Télécharger ${r.product.images.length > 1 ? `les ${r.product.images.length} photos` : 'la photo'} de ${r.product.name}, avec la signature albasseshopping.com`}
+                      testID={`photos-${r.product.id}`}
+                    >
+                      <Text style={styles.photoBtnText}>
+                        {downloading === r.product.id ? '⏳ Photos…' : r.product.images.length > 1 ? `📥 Photos (${r.product.images.length})` : '📥 Photo'}
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                </View>
               </View>
             </View>
           ))
@@ -204,4 +245,7 @@ const styles = StyleSheet.create({
   rateBadge: { color: colors.gold, fontFamily: fonts.bodyMedium, fontSize: 10.5, marginBottom: 6 },
   linkBtn: { alignSelf: 'flex-start', backgroundColor: colors.gold, borderRadius: radius.sm, paddingHorizontal: 12, paddingVertical: 6 },
   linkBtnText: { color: colors.background, fontFamily: fonts.bodyBold, fontSize: 11 },
+  btnRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  photoBtn: { alignSelf: 'flex-start', borderWidth: 1.5, borderColor: colors.gold, borderRadius: radius.sm, paddingHorizontal: 12, paddingVertical: 5 },
+  photoBtnText: { color: colors.goldLight, fontFamily: fonts.bodyBold, fontSize: 11 },
 });
