@@ -39,6 +39,10 @@ export const MENU_TEXT = {
   signOut: 'Se déconnecter',
   highlightTag: 'À LA UNE',
   highlightCta: 'VOIR LES PROMOS ›',
+  // la chaîne YouTube de la boutique (demande du patron, 22 novembre 2026)
+  youtubeTitle: 'Notre chaîne YouTube',
+  youtubeSub: 'Essayages, nouveautés, arrivages',
+  youtubeSubscribe: "S'abonner",
 };
 
 /** Le profil montré dans le menu, ou null pour un visiteur sans compte. */

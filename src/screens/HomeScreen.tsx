@@ -22,6 +22,7 @@ import { MenuButton, SideMenu } from '../components/SideMenu';
 import { TargetedAdCard } from '../components/TargetedAdCard';
 import { WebPushBanner } from '../components/WebPushBanner';
 import { SurveyCard } from '../components/SurveyCard';
+import { AlbasseTV } from '../components/AlbasseTV';
 import { fetchOnlineCount, onlineLabel } from '../lib/onlineCount';
 import { coldSeasonActive, coldSeasonPicks } from '../lib/coldSeason';
 import { activeFlash, activePromotions, nextPromoChange } from '../lib/promotions';
@@ -310,6 +311,9 @@ export function HomeScreen() {
         </View>
         <Text style={styles.travelArrow}>→</Text>
       </Pressable>
+
+      {/* « Albasse TV » : la dernière vidéo de la chaîne YouTube démarre seule, sans le son (demande du patron) */}
+      <AlbasseTV />
 
       {/* une section par catégorie : ses 4 premiers articles, puis un bouton vers les autres (demande du patron) */}
       <View style={styles.collectionSection} testID="home-sections">

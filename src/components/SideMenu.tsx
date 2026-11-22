@@ -26,6 +26,8 @@ import { MenuAdCard } from './MenuAdCard';
 import { useStoreSettings } from '../hooks/useStoreSettings';
 import { menuAdItems, menuAdTarget } from '../lib/menuAd';
 import type { AdItem } from '../types';
+import { YoutubeIcon } from './YoutubeIcon';
+import { YOUTUBE_CHANNEL_URL, YOUTUBE_SUBSCRIBE_URL } from '../lib/youtube';
 
 const ICONS: Record<string, string> = {
   costumes: '🕴️', chemises: '👔', cravates: '🎀', chaussures: '👟', montres: '⌚', montre: '⌚', accessoires: '💍', parfum: '🧴', vetements: '👔',
@@ -298,6 +300,18 @@ export function SideMenu({ visible, onClose, categories }: { visible: boolean; o
                 </Pressable>
               </View>
             ) : null}
+
+            {/* la chaîne YouTube de la boutique (demande du patron) : la carte ouvre la chaîne, « S'abonner » la fenêtre d'abonnement */}
+            <Pressable style={[styles.ytCard, shadow(0.12, 10)]} onPress={() => Linking.openURL(YOUTUBE_CHANNEL_URL)} accessibilityRole="link" accessibilityLabel={`${MENU_TEXT.youtubeTitle} : ${MENU_TEXT.youtubeSub}`} testID="menu-youtube">
+              <YoutubeIcon width={44} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.ytTitle}>{MENU_TEXT.youtubeTitle}</Text>
+                <Text style={styles.ytSub}>{MENU_TEXT.youtubeSub}</Text>
+              </View>
+              <Pressable style={styles.ytBtn} onPress={() => Linking.openURL(YOUTUBE_SUBSCRIBE_URL)} accessibilityRole="link" accessibilityLabel="S'abonner à notre chaîne YouTube" hitSlop={6} testID="menu-youtube-subscribe">
+                <Text style={styles.ytBtnText}>{MENU_TEXT.youtubeSubscribe}</Text>
+              </Pressable>
+            </Pressable>
           </ScrollView>
         </Animated.View>
         {/* toucher à côté du panneau le ferme */}
@@ -385,6 +399,11 @@ const styles = StyleSheet.create({
   star: { position: 'absolute', color: '#ffffff', fontSize: 9 },
   cardCta: { position: 'absolute', right: 10, bottom: 8, color: '#d4d9ea', fontFamily: fonts.bodyBold, fontSize: 8.5, letterSpacing: 1.2 },
   foot: { marginTop: 4 },
+  ytCard: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 14, marginBottom: 6, paddingHorizontal: 12, paddingVertical: 12, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: 1.5, borderColor: '#ff3b30' },
+  ytTitle: { color: G.text, fontFamily: fonts.bodyBold, fontSize: 14 },
+  ytSub: { color: G.muted, fontFamily: fonts.body, fontSize: 11, marginTop: 2 },
+  ytBtn: { backgroundColor: '#ff0000', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 6 },
+  ytBtnText: { color: '#ffffff', fontFamily: fonts.bodyBold, fontSize: 11 },
   footIcon: { width: 28, height: 28, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.22)', alignItems: 'center', justifyContent: 'center' },
   footEmoji: { fontSize: 14, color: G.ink },
 });
