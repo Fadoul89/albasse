@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import type { Profile } from '../types';
+import type { PaidCommissionInput } from '../lib/affiliateStats';
 
 export interface AffiliateSummary {
   profile: Profile;
@@ -10,6 +11,8 @@ export interface AffiliateSummary {
   pendingCommission: number;
   validatedCommission: number;
   paidCommission: number;
+  // les commissions déjà payées (historique des paiements, bouton « Déjà payé »)
+  paidCommissions: PaidCommissionInput[];
 }
 
 export function useAffiliates() {
@@ -26,7 +29,7 @@ export function useAffiliates() {
     const [profilesRes, sessionsRes, commissionsRes] = await Promise.all([
       supabase.from('profiles').select('*').eq('is_affiliate', true).order('created_at', { ascending: false }),
       supabase.from('visitor_sessions').select('referral_code').not('referral_code', 'is', null),
-      supabase.from('affiliate_commissions').select('*, orders(total)'),
+      supabase.from('affiliate_commissions').select('*, orders(total, order_number)'),
     ]);
 
     const profiles = (profilesRes.data as Profile[]) ?? [];
@@ -53,6 +56,16 @@ export function useAffiliates() {
           .filter((c) => c.status === 'validated' && !c.paid)
           .reduce((s, c) => s + Number(c.amount), 0),
         paidCommission: own.filter((c) => c.paid).reduce((s, c) => s + Number(c.amount), 0),
+        paidCommissions: own
+          .filter((c) => c.paid)
+          .map((c) => ({
+            order_id: c.order_id,
+            order_number: c.orders?.order_number ?? null,
+            order_total: c.orders?.total ?? null,
+            amount: Number(c.amount),
+            paid: true,
+            paid_at: c.paid_at,
+          })),
       };
     });
 

@@ -3,7 +3,9 @@
 //      d'affaires, commissions (annulées à part), « Commande N° 101 » ; « Mes produits » : vues, commandes, commission par article ;
 //   B. si le script de la base n'est pas encore lancé (fonction absente) : l'ancienne lecture, sans erreur ;
 //   C. un lien ?ref= tapé en minuscules ou avec des espaces : le code est enregistré en MAJUSCULES (la vente sera bien comptée) ;
-//   D. candidature : un code déjà pris → un autre code est tiré, la candidature passe ; une autre erreur → message en français.
+//   D. candidature : un code déjà pris → un autre code est tiré, la candidature passe ; une autre erreur → message en français ;
+//   E. l'affilié touche « Déjà payé » : l'historique de ses paiements (un paiement = les commissions payées le même jour) ;
+//   F. l'administrateur touche « Déjà payé » sur la fiche d'un affilié : ses paiements, avec l'heure et ce qu'il reste à payer.
 // Le compte affilié et les réponses de la base sont SIMULÉS ; les articles sont lus dans la VRAIE base (lecture seule) ; toute écriture est bloquée.
 // Usage : SUPABASE_ANON_KEY=… NODE_PATH=/opt/node-tools/node_modules node tests/shop/affiliate-ui.test.js <dossier dist> [port] [dossier des photos]
 const { chromium, devices } = require('playwright');
@@ -28,7 +30,7 @@ const b64u = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
 const jwt = `${b64u({ alg: 'HS256', typ: 'JWT' })}.${b64u({ sub: UID, role: 'authenticated', aud: 'authenticated', exp: 4102444800, aal: 'aal1' })}.c2ln`;
 const user = { id: UID, aud: 'authenticated', role: 'authenticated', email: 'affilie@example.com', app_metadata: { provider: 'email' }, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' };
 const session = { access_token: jwt, refresh_token: 'x', token_type: 'bearer', expires_in: 3600, expires_at: 4102444800, user };
-const AFFILIATE = { id: UID, email: 'affilie@example.com', full_name: 'Aminata Hassan', phone: '66123456', banned: false, is_admin: false, role: 'customer', is_affiliate: true, affiliate_status: 'approved', referral_code: 'AMIN123', loyalty_points: 0, created_at: '2026-01-01T00:00:00Z' };
+const AFFILIATE = { id: UID, email: 'affilie@example.com', full_name: 'Aminata Hassan', phone: '66123456', banned: false, is_admin: false, role: 'customer', is_affiliate: true, affiliate_status: 'approved', referral_code: 'AMIN123', affiliate_mobile_money: '66123456', loyalty_points: 0, created_at: '2026-01-01T00:00:00Z' };
 const CUSTOMER = { ...AFFILIATE, full_name: 'Aïcha Mahamat', is_affiliate: false, affiliate_status: null, referral_code: null };
 
 const norm = (s) => s.replace(/[  ]/g, ' ');
@@ -38,7 +40,7 @@ const SEED = {
 };
 
 // un navigateur : connecté (profil donné) ou anonyme ; `rpc` décide de la réponse de affiliate_my_stats ; `patch` celle des mises à jour du profil
-async function visitor(b, { profile, rpc, patch }) {
+async function visitor(b, { profile, rpc, patch, extra }) {
   const ctx = await b.newContext({ ...devices['Pixel 7'], viewport: { width: 412, height: 1400 }, deviceScaleFactor: 1 });
   await ctx.addInitScript(([seed, s]) => {
     try {
@@ -58,6 +60,10 @@ async function visitor(b, { profile, rpc, patch }) {
     if (m === 'OPTIONS') return json(route, {});
     if (u.pathname === '/auth/v1/user') return profile ? json(route, user) : json(route, { message: 'no' }, 401);
     if (u.pathname === '/auth/v1/token') return profile ? json(route, session) : json(route, { message: 'no' }, 400);
+    if (extra) {
+      const res = extra(u, m, r);
+      if (res) return json(route, res.body, res.status ?? 200, res.headers ?? {});
+    }
     if (u.pathname === '/rest/v1/profiles' && m === 'GET') return json(route, (r.headers()['accept'] || '').includes('vnd.pgrst.object') ? profile : [profile]);
     if (u.pathname === '/rest/v1/profiles' && m === 'PATCH') {
       const body = r.postDataJSON();
@@ -231,6 +237,95 @@ const STATS = (prods) => ({
         check('D. autre erreur : un seul essai, message en français (plus le message technique anglais)', codes.length === 1 && /pas pu être envoyée/.test(t) && !/row-level security/.test(t), { codes, t: t.slice(0, 300) });
       }
       check(`D. aucune erreur (${mode})`, v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+
+    // E. l'affilié touche « Déjà payé » : l'historique de ses paiements
+    {
+      const withPaid = (prods) => {
+        const res = STATS(prods);
+        res.body.commissions.push(
+          { id: 'c5', order_id: '11111111-aaaa-4000-8000-000000000005', order_number: 99, order_total: 22000, amount: 1100, status: 'validated', paid: true, paid_at: '2026-11-21T08:00:00Z', created_at: '2026-11-10T09:00:00Z' },
+          { id: 'c6', order_id: '11111111-aaaa-4000-8000-000000000006', order_number: 100, order_total: 28000, amount: 1400, status: 'validated', paid: true, paid_at: '2026-11-21T13:05:00Z', created_at: '2026-11-11T09:00:00Z' },
+        );
+        return res;
+      };
+      const v = await visitor(b, { profile: AFFILIATE, rpc: withPaid });
+      await v.page.goto(`${BASE}/espace-affilie`, { waitUntil: 'load' });
+      await v.page.getByTestId('stat-paid').waitFor({ timeout: 30000 });
+      await sleep(800);
+      const tile = norm(await v.page.getByTestId('stat-paid').innerText());
+      check('E. la case « Déjà payé » : 3 400 FCFA et « Voir l\'historique › »', /3 400\s*FCFA/.test(tile) && /Voir l'historique ›/.test(tile), tile);
+      check('E. avant de toucher : l\'historique est fermé', (await v.page.getByTestId('payment-history').count()) === 0);
+      await v.page.getByTestId('stat-paid').click();
+      await v.page.getByTestId('payment-history').waitFor({ timeout: 10000 });
+      await sleep(700);
+      const h = norm(await v.page.getByTestId('payment-history').innerText());
+      check('E. « Historique des paiements » : total reçu 3 400 FCFA, 2 paiements, sur Mobile Money 66123456', /Historique des paiements/.test(h) && /Total reçu\s*\n?\s*3 400\s*FCFA/.test(h) && h.includes('2 paiements') && h.includes('sur Mobile Money 66123456'), h);
+      const rows = (await v.page.getByTestId('payment-row').allInnerTexts()).map(norm);
+      check('E. 1er paiement : 21 novembre 2026, 2 500 FCFA, « 2 commandes : N° 100 · N° 99 », ✓ Payé', rows.length === 2 && /21 novembre 2026/.test(rows[0]) && /2 500\s*FCFA/.test(rows[0]) && rows[0].includes('2 commandes : N° 100 · N° 99') && rows[0].includes('✓ Payé'), rows);
+      check('E. 2e paiement : 15 novembre 2026, 900 FCFA, « 1 commande : N° 96 »', /15 novembre 2026/.test(rows[1] || '') && /900\s*FCFA/.test(rows[1] || '') && (rows[1] || '').includes('1 commande : N° 96'), rows[1]);
+      check('E. côté affilié : ni l\'heure ni le montant des commandes des clients', !/\d+h\d\d/.test(h) && !h.includes('(22 000'), h);
+      await v.page.screenshot({ path: path.join(OUT, 'affilie-paiements.png') });
+      await v.page.getByLabel('Fermer', { exact: true }).click();
+      await sleep(900);
+      check('E. ✕ ferme l\'historique', (await v.page.getByTestId('payment-history').count()) === 0);
+      check('E. aucune erreur', v.errs.length === 0, v.errs);
+      check('E. aucune écriture', v.log.writes.length === 0, v.log.writes);
+      await v.ctx.close();
+    }
+
+    // F. l'administrateur touche « Déjà payé » sur la fiche d'un affilié
+    {
+      const ADMIN = { id: UID, email: 'admin@example.com', full_name: 'Admin Albasse', phone: '66000000', banned: false, role: 'admin', is_admin: true, created_at: '2026-01-01T00:00:00Z' };
+      const A1 = { ...AFFILIATE, id: '77777777-7777-4777-8777-000000000001', created_at: '2026-02-01T00:00:00Z' };
+      const A2 = { ...AFFILIATE, id: '77777777-7777-4777-8777-000000000002', full_name: 'Bachir Ali', referral_code: 'BACH4521', affiliate_mobile_money: '99887766', created_at: '2026-03-01T00:00:00Z' };
+      const com = (id, aff, n, total, amount, status, paid, paidAt) => ({ id, affiliate_id: aff, order_id: `22222222-bbbb-4000-8000-00000000000${id}`, amount, status, paid, paid_at: paidAt, created_at: '2026-11-01T00:00:00Z', orders: { total, order_number: n } });
+      const COMMISSIONS = [
+        com(1, A1.id, 101, 40000, 2500, 'validated', true, '2026-11-21T13:05:00Z'),
+        com(2, A1.id, 99, 22000, 1100, 'validated', true, '2026-11-21T08:00:00Z'),
+        com(3, A1.id, 96, 18000, 900, 'validated', true, '2026-11-15T09:12:00Z'),
+        com(4, A1.id, 108, 40000, 2500, 'validated', false, null),
+        com(5, A1.id, 109, 20000, 1000, 'pending', false, null),
+        com(6, A2.id, 110, 30000, 1500, 'validated', false, null),
+      ];
+      let selects = [];
+      const extra = (u, m, r) => {
+        if (m !== 'GET') return null;
+        if (u.pathname === '/rest/v1/profiles' && u.searchParams.get('is_affiliate') === 'eq.true') return { body: [A2, A1] };
+        if (u.pathname === '/rest/v1/visitor_sessions') return { body: [{ referral_code: 'AMIN123' }, { referral_code: 'amin123' }, { referral_code: 'BACH4521' }] };
+        if (u.pathname === '/rest/v1/affiliate_commissions') { selects.push(u.searchParams.get('select')); return { body: COMMISSIONS }; }
+        return null;
+      };
+      const v = await visitor(b, { profile: ADMIN, rpc: () => ({ status: 200, body: null }), extra });
+      await v.page.goto(`${BASE}/admin/affilies`, { waitUntil: 'load' });
+      await v.page.getByTestId(`paid-${A1.id}`).waitFor({ timeout: 30000 });
+      await sleep(800);
+      check('F. la lecture des commissions demande aussi le numéro de commande', selects.some((s) => /orders\(total,\s*order_number\)/.test(s || '')), selects);
+      const m1 = norm(await v.page.getByTestId(`paid-${A1.id}`).innerText());
+      const m2 = norm(await v.page.getByTestId(`paid-${A2.id}`).innerText());
+      check('F. nouvelle case « Déjà payé » sur chaque fiche : Aminata 4 500 FCFA ›, Bachir 0 FCFA ›', /4 500\s*FCFA ›/.test(m1) && /Déjà payé/.test(m1) && /0\s*FCFA ›/.test(m2), { m1, m2 });
+      const page1 = norm(await v.page.evaluate(() => document.body.innerText));
+      check('F. visiteurs d\'Aminata : 2 (AMIN123 et amin123 comptés ensemble)', /\b2\s*\n?\s*Visiteurs/.test(page1));
+      await v.page.getByTestId(`paid-${A1.id}`).click();
+      await v.page.getByTestId('payment-history').waitFor({ timeout: 10000 });
+      await sleep(700);
+      const h = norm(await v.page.getByTestId('payment-history').innerText());
+      check('F. « Paiements · Aminata Hassan », code et Mobile Money', h.includes('Paiements · Aminata Hassan') && h.includes('Code AMIN123 · Mobile Money 66123456'), h);
+      check('F. total payé 4 500 FCFA, 2 paiements, reste à payer 2 500 FCFA (la commission en attente n\'est pas encore due)', /Total payé\s*\n?\s*4 500\s*FCFA/.test(h) && h.includes('2 paiements') && /Reste à payer : 2 500\s*FCFA/.test(h), h);
+      const rows = (await v.page.getByTestId('payment-row').allInnerTexts()).map(norm);
+      check('F. 1er paiement : 21 novembre 2026 · 14h05, 3 600 FCFA, N° 101 (40 000 FCFA) · N° 99 (22 000 FCFA)', rows.length === 2 && rows[0].includes('21 novembre 2026 · 14h05') && /3 600\s*FCFA/.test(rows[0]) && /N° 101 \(40 000\s*FCFA\) · N° 99 \(22 000\s*FCFA\)/.test(rows[0]), rows);
+      check('F. 2e paiement : 15 novembre 2026 · 10h12, 900 FCFA, N° 96 (18 000 FCFA)', (rows[1] || '').includes('15 novembre 2026 · 10h12') && /N° 96 \(18 000\s*FCFA\)/.test(rows[1] || ''), rows[1]);
+      await v.page.screenshot({ path: path.join(OUT, 'admin-paiements.png') });
+      await v.page.getByLabel('Fermer', { exact: true }).click();
+      await sleep(900);
+      check('F. ✕ ferme l\'historique', (await v.page.getByTestId('payment-history').count()) === 0);
+      await v.page.getByTestId(`paid-${A2.id}`).click();
+      await v.page.getByTestId('payment-history').waitFor({ timeout: 10000 });
+      const h2 = norm(await v.page.getByTestId('payment-history').innerText());
+      check('F. Bachir, jamais payé : « Aucun paiement pour le moment. », reste à payer 1 500 FCFA', h2.includes('Paiements · Bachir Ali') && h2.includes('Aucun paiement pour le moment.') && /Reste à payer : 1 500\s*FCFA/.test(h2) && h2.includes('0 paiement'), h2);
+      check('F. aucune erreur', v.errs.length === 0, v.errs);
+      check('F. aucune écriture', v.log.writes.length === 0, v.log.writes);
       await v.ctx.close();
     }
   } finally {

@@ -7,6 +7,11 @@ import {
   normalizeReferralCode,
   generateReferralCode,
   isDuplicateCodeError,
+  paymentHistory,
+  ndjamenaDate,
+  paymentCountLabel,
+  orderCountLabel,
+  orderRef,
 } from '../../src/lib/affiliateStats.ts';
 
 let ok = 0;
@@ -68,5 +73,26 @@ check('un code généré passe toujours le nettoyage du lien, sans changer', ['A
 
 check('code déjà pris : reconnu (code 23505 ou message « duplicate key »)', isDuplicateCodeError({ code: '23505', message: 'x' }) && isDuplicateCodeError({ message: 'duplicate key value violates unique constraint "profiles_referral_code_idx"' }));
 check('autre erreur ou aucune : pas un doublon', !isDuplicateCodeError(null) && !isDuplicateCodeError({ code: '42501', message: 'permission denied' }) && !isDuplicateCodeError({}));
+
+// historique des paiements (bouton « Déjà payé »)
+const paidRows = [
+  { order_id: 'o-99', order_number: 99, order_total: 22000, amount: 1100, paid: true, paid_at: '2026-11-21T08:00:00Z' },   // 21 nov. 9h00 à N'Djamena
+  { order_id: 'o-101', order_number: 101, order_total: 40000, amount: 2500, paid: true, paid_at: '2026-11-21T13:05:00Z' }, // 21 nov. 14h05
+  { order_id: 'o-96', order_number: 96, order_total: 18000, amount: 900, paid: true, paid_at: '2026-11-14T23:30:00Z' },    // 15 nov. 0h30 à N'Djamena (14 nov. en UTC)
+  { order_id: 'o-105', order_number: 105, order_total: 22000, amount: 1100, paid: false, paid_at: null },                  // pas payée
+  { order_id: 'oldoldold-1', order_number: null, order_total: null, amount: 500, paid: true, paid_at: null },              // payée, date perdue
+];
+const h = paymentHistory(paidRows);
+check('historique : 3 paiements (les 2 commissions du 21 novembre = un seul paiement), la non payée exclue', h.count === 3 && h.payments.length === 3, h.payments.map((p) => p.key));
+check('total payé : 5 000 FCFA (1 100 + 2 500 + 900 + 500)', h.total === 5000, h.total);
+check('le plus récent d\'abord : 21 novembre (3 600 FCFA), puis 15 novembre, puis la date perdue', h.payments[0].dateLabel === '21 novembre 2026' && h.payments[0].total === 3600 && h.payments[1].dateLabel === '15 novembre 2026' && h.payments[2].dateLabel === 'Date non enregistrée', h.payments.map((p) => [p.dateLabel, p.total]));
+check('l\'heure : celle du dernier règlement du jour, à N\'Djamena (14h05)', h.payments[0].timeLabel === '14h05', h.payments[0].timeLabel);
+check('payé à 23h30 UTC le 14 : compté le 15 novembre à 0h30 (heure de N\'Djamena)', h.payments[1].key === '2026-11-15' && h.payments[1].timeLabel === '0h30', h.payments[1]);
+check('commandes d\'un paiement : N° 101 puis N° 99, avec leur montant', h.payments[0].orders.map((o) => `${o.order_number}:${o.order_total}`).join(',') === '101:40000,99:22000');
+check('aucun paiement : 0, liste vide', JSON.stringify(paymentHistory([])) === JSON.stringify({ total: 0, count: 0, payments: [] }) && paymentHistory([paidRows[3]]).count === 0);
+check('date illisible ou vide : pas de date', ndjamenaDate('n\'importe quoi') === null && ndjamenaDate(null) === null && ndjamenaDate('') === null);
+check('1er janvier à 23h30 UTC : 2 janvier à N\'Djamena, mois en français', ndjamenaDate('2026-01-01T23:30:00Z')?.dateLabel === '2 janvier 2026' && ndjamenaDate('2026-08-05T10:07:00Z')?.dateLabel === '5 août 2026' && ndjamenaDate('2026-08-05T10:07:00Z')?.timeLabel === '11h07');
+check('libellés : 1 paiement / 3 paiements, 1 commande / 2 commandes', paymentCountLabel(1) === '1 paiement' && paymentCountLabel(3) === '3 paiements' && paymentCountLabel(0) === '0 paiement' && orderCountLabel(1) === '1 commande' && orderCountLabel(2) === '2 commandes');
+check('référence : N° 101, ou #8 caractères sans numéro', orderRef({ order_number: 101, order_id: 'x' }) === 'N° 101' && orderRef({ order_number: null, order_id: 'oldoldold-1' }) === '#oldoldol');
 
 console.log(process.exitCode ? '\nIL Y A DES ECHECS' : `\nTOUS LES CONTROLES REUSSIS (${ok})`);
