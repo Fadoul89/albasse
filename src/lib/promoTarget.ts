@@ -48,15 +48,19 @@ export function promoTargetLabel(
   promo: { product_id: string | null; category_id: string | null },
   products: { id: string; name: string; is_active?: boolean }[],
   categories: { id: string; name: string }[],
+  // listes encore en chargement : on ne crie pas « plus en vente » à tort
+  loading = false,
 ): { text: string; warn: boolean } {
   if (promo.product_id) {
     const p = products.find((x) => x.id === promo.product_id);
     if (p && p.is_active !== false) return { text: `🎯 Ouvre l'article : ${p.name.trim()}`, warn: false };
+    if (loading) return { text: "🎯 Ouvre l'article ciblé", warn: false };
     return { text: "⚠️ L'article ciblé n'est plus en vente : le bouton ouvre WhatsApp", warn: true };
   }
   if (promo.category_id) {
     const c = categories.find((x) => x.id === promo.category_id);
     if (c) return { text: `🎯 Ouvre la catégorie : ${c.name.trim()}`, warn: false };
+    if (loading) return { text: '🎯 Ouvre la catégorie ciblée', warn: false };
     return { text: "⚠️ La catégorie ciblée n'existe plus : le bouton ouvre WhatsApp", warn: true };
   }
   return { text: '⚠️ Sans ciblage : le bouton ouvre WhatsApp (offre déjà écrite)', warn: true };

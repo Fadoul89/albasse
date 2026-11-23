@@ -45,7 +45,7 @@ export function AdminPromotionsScreen() {
   const profile = useAuthStore((s) => s.profile);
   const { promotions, isLoading, refresh } = useSmartPromotions();
   const { categories } = useCategories();
-  const { products } = useProducts({ raw: true });
+  const { products, isLoading: productsLoading } = useProducts({ raw: true });
   const { settings: storeSettings, refresh: refreshStoreSettings } = useStoreSettings();
   const showToast = useToastStore((s) => s.show);
 
@@ -591,7 +591,7 @@ export function AdminPromotionsScreen() {
                 {item.end_date}
               </Text>
               {(() => {
-                const t = promoTargetLabel(item, products, categories);
+                const t = promoTargetLabel(item, products, categories, productsLoading || categories.length === 0);
                 return (
                   <Text style={[styles.rowTarget, t.warn && styles.rowTargetWarn]} testID={`promo-target-${item.id}`}>
                     {t.text}

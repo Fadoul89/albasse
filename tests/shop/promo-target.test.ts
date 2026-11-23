@@ -30,6 +30,7 @@ check('admin : « Ouvre l\'article : Ensemble safari »', promoTargetLabel({ pro
 check('admin : « Ouvre la catégorie : Chaussures »', promoTargetLabel({ product_id: null, category_id: 'c1' }, products, categories).text === '🎯 Ouvre la catégorie : Chaussures');
 check('admin : sans ciblage → avertissement WhatsApp', promoTargetLabel({ product_id: null, category_id: null }, products, categories).warn && /Sans ciblage/.test(promoTargetLabel({ product_id: null, category_id: null }, products, categories).text));
 check('admin : article plus en vente → avertissement', promoTargetLabel({ product_id: 'p2', category_id: null }, products, categories).warn);
+check('listes encore en chargement : pas de faux « plus en vente »', !promoTargetLabel({ product_id: 'zz', category_id: null }, [], [], true).warn && promoTargetLabel({ product_id: 'zz', category_id: null }, [], [], true).text === "🎯 Ouvre l'article ciblé" && !promoTargetLabel({ product_id: null, category_id: 'zz' }, [], [], true).warn);
 check('avertissement du formulaire : dit quoi faire', /Produit précis/.test(NO_TARGET_WARNING) && /WhatsApp/.test(NO_TARGET_WARNING));
 
 console.log(process.exitCode ? '\nIL Y A DES ECHECS' : `\nTOUS LES CONTROLES REUSSIS (${ok})`);

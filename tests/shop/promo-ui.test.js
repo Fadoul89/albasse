@@ -82,41 +82,85 @@ async function visitor(b, profile, promos) {
   await sleep(1000);
   const b = await chromium.launch();
   try {
-    // 1. client, promotion SANS ciblage : WhatsApp, offre déjà écrite
+    const IMG = 'https://xtitsmmccpkelxfjyqyh.supabase.co/storage/v1/object/public/product-images/1795440629757-iodmho9vj6m.jpeg';
+    // la photo de l'offre : entière (pas coupée), à sa vraie forme, 45 % de l'écran au plus
+    const photo = (page) =>
+      page.evaluate(() => {
+        const img = document.querySelector('[data-testid="promo-image"] img');
+        if (!img || !img.complete || !img.naturalWidth) return null;
+        const r = img.getBoundingClientRect();
+        return { nw: img.naturalWidth, nh: img.naturalHeight, w: Math.round(r.width), h: Math.round(r.height), fit: getComputedStyle(img).objectFit, max: Math.round(window.innerHeight * 0.45), tag: /Voir l'article/.test(document.querySelector('[data-testid="promo-image"]').innerText) };
+      });
+    const fullPhoto = (f) => !!f && f.fit === 'contain' && (Math.abs(f.w / f.h - f.nw / f.nh) < 0.03 || f.h <= f.max + 1);
+
+    // 1. client, promotion SANS ciblage : seulement le bouton vert WhatsApp, offre déjà écrite
     {
-      const v = await visitor(b, CUSTOMER, [promo({})]);
+      const v = await visitor(b, CUSTOMER, [promo({ image_url: IMG })]);
       await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
-      await v.page.getByTestId('promo-claim').waitFor({ timeout: 60000 });
+      await v.page.getByTestId('promo-whatsapp').waitFor({ timeout: 60000 });
+      await v.page.waitForFunction(() => { const i = document.querySelector('[data-testid="promo-image"] img'); return i && i.complete && i.naturalWidth > 0; }, null, { timeout: 20000 }).catch(() => null);
       await sleep(600);
-      await v.page.screenshot({ path: path.join(OUT, 'promo-fenetre.png') });
-      await v.page.getByTestId('promo-claim').click();
+      const f = await photo(v.page);
+      check('sans ciblage : la photo s\'affiche en entier (pas coupée)', fullPhoto(f), f);
+      check('sans ciblage : pas de bouton or ni « Voir l\'article » (aucun article à ouvrir), seulement le bouton vert', (await v.page.getByTestId('promo-claim').count()) === 0 && f && !f.tag);
+      await v.page.screenshot({ path: path.join(OUT, 'promo-sans-ciblage.png') });
+      await v.page.getByTestId('promo-whatsapp').click();
       for (let i = 0; i < 30 && !(await v.page.evaluate(() => window.__opened.length)); i++) await sleep(200);
       const opened = await v.page.evaluate(() => window.__opened.slice());
       const url = opened[0] || '';
       const text = url.includes('?text=') ? decodeURIComponent(url.split('?text=')[1]) : '';
-      check('sans ciblage : le clic est compté (bénéficiaire)', v.log.claims === 1, v.log.claims);
-      check('sans ciblage : WhatsApp s\'ouvre (numéro des commandes) — avant : rien', url.startsWith('https://wa.me/23599221017?text='), opened);
-      check('le message est déjà écrit : prénom, nom de l\'offre, texte de l\'offre', text.startsWith("Bonjour Albasse Shopping 👋 C'est Aminata.") && text.includes("« Cadeau »") && text.includes('4XL 3XL 2XL XL'), text);
+      check('le clic est compté (bénéficiaire)', v.log.claims === 1, v.log.claims);
+      check('WhatsApp s\'ouvre (numéro des commandes)', url.startsWith('https://wa.me/23599221017?text='), opened);
+      check('le message est déjà écrit : prénom, nom de l\'offre, texte, photo', text.startsWith("Bonjour Albasse Shopping 👋 C'est Aminata.") && text.includes('« Cadeau »') && text.includes('4XL 3XL 2XL XL') && text.includes(IMG), text);
       await sleep(400);
-      const t = await v.page.evaluate(() => document.body.innerText);
-      check('message au client : « Écrivez-nous sur WhatsApp : votre message est déjà prêt »', /Écrivez-nous sur WhatsApp : votre message est déjà prêt/.test(t));
-      check('la fenêtre de l\'offre se ferme', (await v.page.getByTestId('promo-claim').count()) === 0);
+      check('message au client : « votre message WhatsApp est déjà prêt »', /Votre message WhatsApp est déjà prêt/.test(await v.page.evaluate(() => document.body.innerText)));
+      check('la fenêtre de l\'offre se ferme', (await v.page.getByTestId('promo-whatsapp').count()) === 0);
       check('aucune erreur (sans ciblage)', v.errs.length === 0, v.errs);
       check('aucune écriture directe (seul le compteur de l\'offre)', v.log.writes.length === 0, v.log.writes);
       await v.ctx.close();
     }
 
-    // 2. client, promotion ciblée sur un article : la fiche de l'article
+    // 2. client, promotion ciblée sur un article : la photo et le bouton or ouvrent l'article ; le bouton vert ouvre WhatsApp
+    const targeted = promo({ id: 'aaaaaaaa-0000-4000-8000-000000000002', name: 'Article', product_id: real.id, image_url: IMG });
     {
-      const v = await visitor(b, CUSTOMER, [promo({ id: 'aaaaaaaa-0000-4000-8000-000000000002', name: 'Article', product_id: real.id })]);
+      const v = await visitor(b, CUSTOMER, [targeted]);
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
+      await v.page.getByTestId('promo-claim').waitFor({ timeout: 60000 });
+      await v.page.waitForFunction(() => { const i = document.querySelector('[data-testid="promo-image"] img'); return i && i.complete && i.naturalWidth > 0; }, null, { timeout: 20000 }).catch(() => null);
+      await sleep(600);
+      const f = await photo(v.page);
+      check('article ciblé : la photo en entier, avec « 👆 Voir l\'article »', fullPhoto(f) && f.tag, f);
+      check('article ciblé : le bouton or ET le bouton vert « Commander sur WhatsApp »', (await v.page.getByTestId('promo-claim').count()) === 1 && /Commander sur WhatsApp/.test(await v.page.getByTestId('promo-whatsapp').innerText()));
+      const order = await v.page.evaluate(() => { const a = document.querySelector('[data-testid="promo-claim"]').getBoundingClientRect(); const w = document.querySelector('[data-testid="promo-whatsapp"]').getBoundingClientRect(); return { orTop: a.top, waTop: w.top, bg: getComputedStyle(document.querySelector('[data-testid="promo-whatsapp"]')).backgroundColor }; });
+      check('le bouton vert (WhatsApp) sous le bouton or', order.waTop > order.orTop && order.bg === 'rgb(37, 211, 102)', order);
+      await v.page.screenshot({ path: path.join(OUT, 'promo-article.png') });
+      await v.page.getByTestId('promo-image').click();
+      await v.page.waitForURL((u) => new URL(u).pathname.startsWith('/produit/'), { timeout: 15000 }).catch(() => null);
+      check(`toucher la photo : la fiche de l'article s'ouvre (/produit/${real.slug}), le clic est compté`, new URL(v.page.url()).pathname === `/produit/${real.slug}` && v.log.claims === 1, { url: v.page.url(), claims: v.log.claims });
+      check('toucher la photo : pas de WhatsApp', (await v.page.evaluate(() => window.__opened.length)) === 0);
+      check('aucune erreur (photo)', v.errs.length === 0, v.errs);
+      await v.ctx.close();
+    }
+    {
+      const v = await visitor(b, CUSTOMER, [targeted]);
       await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
       await v.page.getByTestId('promo-claim').waitFor({ timeout: 60000 });
       await sleep(600);
       await v.page.getByTestId('promo-claim').click();
       await v.page.waitForURL((u) => new URL(u).pathname.startsWith('/produit/'), { timeout: 15000 }).catch(() => null);
-      check(`article ciblé : la fiche de l'article s'ouvre (/produit/${real.slug})`, new URL(v.page.url()).pathname === `/produit/${real.slug}`, v.page.url());
-      check('article ciblé : pas de WhatsApp', (await v.page.evaluate(() => window.__opened.length)) === 0);
-      check('aucune erreur (article ciblé)', v.errs.length === 0, v.errs);
+      check('bouton or : la fiche de l\'article', new URL(v.page.url()).pathname === `/produit/${real.slug}` && v.log.claims === 1, v.page.url());
+      await v.ctx.close();
+    }
+    {
+      const v = await visitor(b, CUSTOMER, [targeted]);
+      await v.page.goto(`${BASE}/`, { waitUntil: 'load' });
+      await v.page.getByTestId('promo-whatsapp').waitFor({ timeout: 60000 });
+      await sleep(600);
+      await v.page.getByTestId('promo-whatsapp').click();
+      for (let i = 0; i < 30 && !(await v.page.evaluate(() => window.__opened.length)); i++) await sleep(200);
+      const opened = await v.page.evaluate(() => window.__opened.slice());
+      const text = opened[0] && opened[0].includes('?text=') ? decodeURIComponent(opened[0].split('?text=')[1]) : '';
+      check('bouton vert (article ciblé) : WhatsApp avec l\'offre écrite, le clic est compté, on reste sur la page', opened[0]?.startsWith('https://wa.me/23599221017?text=') && text.includes('« Article »') && v.log.claims === 1 && new URL(v.page.url()).pathname === '/', { opened, url: v.page.url() });
       await v.ctx.close();
     }
 
@@ -126,7 +170,9 @@ async function visitor(b, profile, promos) {
       const v = await visitor(b, ADMIN, promos);
       await v.page.goto(`${BASE}/admin/promotions`, { waitUntil: 'load' });
       await v.page.getByTestId('promo-target-aaaaaaaa-0000-4000-8000-000000000001').waitFor({ timeout: 30000 });
-      await sleep(1200);
+      // la liste des articles arrive : le libellé de « Montre » donne alors le nom de l'article
+      await v.page.waitForFunction(() => /Ouvre l'article :/.test(document.querySelector('[data-testid="promo-target-aaaaaaaa-0000-4000-8000-000000000002"]')?.innerText || ''), null, { timeout: 30000 }).catch(() => null);
+      await sleep(500);
       const t1 = await v.page.getByTestId('promo-target-aaaaaaaa-0000-4000-8000-000000000001').innerText();
       const t2 = await v.page.getByTestId('promo-target-aaaaaaaa-0000-4000-8000-000000000002').innerText();
       check('liste : « Cadeau » → « ⚠️ Sans ciblage : le bouton ouvre WhatsApp »', /Sans ciblage : le bouton ouvre WhatsApp/.test(t1), t1);
