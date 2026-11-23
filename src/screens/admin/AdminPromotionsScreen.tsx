@@ -23,6 +23,7 @@ import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { uploadProductImage } from '../../lib/imageUpload';
 import { pickAndUploadVoiceover } from '../../lib/voiceoverUpload';
 import { colors, fonts, radius, spacing } from '../../theme';
+import { NO_TARGET_WARNING, promoTargetLabel } from '../../lib/promoTarget';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { GoldButton } from '../../components/GoldButton';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
@@ -453,6 +454,12 @@ export function AdminPromotionsScreen() {
                 <Text style={[styles.chipText, targetType === 'product' && styles.chipTextActive]}>Produit précis</Text>
               </Pressable>
             </View>
+            {/* sans ciblage, le bouton n'ouvre aucun article : on le dit (demande du patron, 23 novembre 2026) */}
+            {targetType === 'none' && (
+              <Text style={styles.noTargetWarn} testID="promo-no-target-warning">
+                {NO_TARGET_WARNING}
+              </Text>
+            )}
 
             {targetType === 'category' && (
               <View style={styles.chipsRow}>
@@ -583,6 +590,14 @@ export function AdminPromotionsScreen() {
                 {item.max_beneficiaries !== null ? `/${item.max_beneficiaries}` : ''} bénéficiaire(s) · jusqu'au{' '}
                 {item.end_date}
               </Text>
+              {(() => {
+                const t = promoTargetLabel(item, products, categories);
+                return (
+                  <Text style={[styles.rowTarget, t.warn && styles.rowTargetWarn]} testID={`promo-target-${item.id}`}>
+                    {t.text}
+                  </Text>
+                );
+              })()}
             </View>
             <Pressable onPress={() => startEdit(item)}>
               <Text style={styles.editLink}>Modifier</Text>
@@ -666,6 +681,9 @@ function AdItemsEditor({
 }
 
 const styles = StyleSheet.create({
+  noTargetWarn: { color: '#ffd27a', fontFamily: fonts.bodyMedium, fontSize: 12, lineHeight: 17, backgroundColor: 'rgba(255, 196, 0, 0.1)', borderRadius: radius.sm, borderWidth: 1, borderColor: 'rgba(255, 196, 0, 0.35)', padding: 10, marginBottom: spacing.md },
+  rowTarget: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 11, marginTop: 3 },
+  rowTargetWarn: { color: '#ffd27a' },
   screen: { flex: 1, backgroundColor: colors.background },
   denied: { color: colors.creamFaint, fontFamily: fonts.body, textAlign: 'center', marginTop: 40 },
   form: { marginBottom: spacing.lg },

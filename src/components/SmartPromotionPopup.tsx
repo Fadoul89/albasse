@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, Modal } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Modal, Linking } from 'react-native';
 import { Image } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
@@ -17,6 +17,7 @@ import { getProductSales } from '../lib/assistantData';
 import type { SalesMap } from '../lib/assistantSales';
 import { isSeniorProfession, productAdLine, zaraAdsDelaySeconds } from '../lib/zaraAds';
 import { colors, fonts, radius, spacing } from '../theme';
+import { promoAction } from '../lib/promoTarget';
 
 const SHOW_DELAY_MS = 1500;
 
@@ -76,8 +77,9 @@ export function SmartPromotionPopup() {
       : '🎉 Offre spéciale ALBASSE SHOPPING !';
   const body = promotion.message.replace(/\{prenom\}/gi, firstName ?? 'cher client');
 
-  const targetCategory = promotion.category_id ? categories.find((c) => c.id === promotion.category_id) : null;
   const targetProduct = promotion.product_id ? products.find((p) => p.id === promotion.product_id) : null;
+  // où mène le bouton : l'article, la catégorie, sinon WhatsApp avec l'offre déjà écrite (lib/promoTarget)
+  const action = promoAction(promotion, products, categories, isAuthenticated ? firstName : null);
 
   const zaraLine = zaraAds && targetProduct && sales ? productAdLine({ id: targetProduct.id, stock: targetProduct.stock }, sales, isSeniorProfession(profile?.profession)) : null;
 
@@ -86,9 +88,16 @@ export function SmartPromotionPopup() {
     await AsyncStorage.setItem(seenKey(promotion.id), '1');
   };
 
-  const goToOffer = () => {
-    if (targetProduct) navigation.navigate('Product', { slug: targetProduct.slug });
-    else if (targetCategory) navigation.navigate('Category', { slug: targetCategory.slug });
+  const goToOffer = async () => {
+    if (action.kind === 'product') return navigation.navigate('Product', { slug: action.slug });
+    if (action.kind === 'category') return navigation.navigate('Category', { slug: action.slug });
+    // un article ciblé absent de la liste (pas encore chargée) : on le cherche dans la base avant de passer à WhatsApp
+    if (promotion.product_id) {
+      const { data } = await supabase.from('products').select('slug, is_active').eq('id', promotion.product_id).maybeSingle();
+      const row = data as { slug: string; is_active: boolean } | null;
+      if (row && row.is_active !== false) return navigation.navigate('Product', { slug: row.slug });
+    }
+    await Linking.openURL(action.url);
   };
 
   const handleClaim = async () => {
@@ -105,14 +114,14 @@ export function SmartPromotionPopup() {
       return;
     }
 
-    showToast('Offre notée ! Profitez-en dès maintenant. 🎉', { title: 'Merci !', type: 'success' });
+    showToast(action.kind === 'whatsapp' ? 'Offre notée ! Écrivez-nous sur WhatsApp : votre message est déjà prêt. 🎉' : 'Offre notée ! Profitez-en dès maintenant. 🎉', { title: 'Merci !', type: 'success' });
     await dismiss();
-    goToOffer();
+    await goToOffer();
   };
 
   const handleDiscover = async () => {
     await dismiss();
-    goToOffer();
+    await goToOffer();
   };
 
   const validityLabel =
@@ -142,7 +151,7 @@ export function SmartPromotionPopup() {
           <Text style={styles.validity}>⏰ {validityLabel}</Text>
 
           {isAuthenticated ? (
-            <Pressable style={styles.primaryBtn} onPress={handleClaim} disabled={claiming}>
+            <Pressable style={styles.primaryBtn} onPress={handleClaim} disabled={claiming} testID="promo-claim">
               <Text style={styles.primaryBtnText}>{claiming ? '…' : `🛍️ ${promotion.button_text}`}</Text>
             </Pressable>
           ) : (
@@ -156,7 +165,7 @@ export function SmartPromotionPopup() {
               >
                 <Text style={styles.secondaryBtnText}>Se connecter</Text>
               </Pressable>
-              <Pressable style={styles.primaryBtn} onPress={handleDiscover}>
+              <Pressable style={styles.primaryBtn} onPress={handleDiscover} testID="promo-discover">
                 <Text style={styles.primaryBtnText}>Découvrir</Text>
               </Pressable>
             </View>
