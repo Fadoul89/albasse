@@ -128,6 +128,10 @@ export function ProductScreen({ route }: Props) {
     Linking.openURL(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(getShareUrl())}`);
   };
 
+  const shareToLinkedIn = () => {
+    Linking.openURL(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(getShareUrl())}`);
+  };
+
   const handleShare = async () => {
     const url = getShareUrl();
 
@@ -206,6 +210,9 @@ export function ProductScreen({ route }: Props) {
             </Pressable>
             <Pressable style={[styles.shareBtn, styles.shareBtnFacebook]} onPress={shareToFacebook}>
               <Text style={styles.shareBtnText}>📘 Facebook</Text>
+            </Pressable>
+            <Pressable style={[styles.shareBtn, styles.shareBtnLinkedIn]} onPress={shareToLinkedIn}>
+              <Text style={styles.shareBtnText}>💼 LinkedIn</Text>
             </Pressable>
           </View>
 
@@ -322,6 +329,7 @@ const styles = StyleSheet.create({
   shareBtn: { borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 6 },
   shareBtnWhatsApp: { backgroundColor: '#25D366' },
   shareBtnFacebook: { backgroundColor: '#1877F2' },
+  shareBtnLinkedIn: { backgroundColor: '#0A66C2' },
   shareBtnText: { color: '#ffffff', fontFamily: fonts.bodyBold, fontSize: 12 },
   description: {
     fontFamily: fonts.body,
