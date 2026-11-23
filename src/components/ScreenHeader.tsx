@@ -55,8 +55,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
   },
-  side: { width: 76 },
-  sideStart: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  // ← + l'icône d'accueil (34 px) tiennent dans 84 px sans toucher le titre (avant : 76 px, l'icône débordait sur un titre long)
+  side: { width: 84 },
+  sideStart: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   back: { color: colors.gold, fontSize: 28 },
   title: {
     flex: 1,

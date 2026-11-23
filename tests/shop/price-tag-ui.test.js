@@ -125,12 +125,40 @@ const readCards = (page) =>
         return { found: !!ic, w: r && Math.round(r.width), h: r && Math.round(r.height), radius: ic && getComputedStyle(ic).borderRadius, emoji: !!h && h.innerText.includes('🏠'), label: h && h.getAttribute('aria-label') };
       });
       check('en haut de la page : la nouvelle icône d\'accueil (rond de 34 px), plus l\'émoji 🏠, nommée « Accueil »', head.found && head.w === 34 && head.h === 34 && head.radius === '17px' && !head.emoji && head.label === 'Accueil', head);
+      // l'icône d'accueil ne touche pas le titre
+      const ov = await v.page.evaluate(() => {
+        const home = document.querySelector('[data-testid="header-home"]');
+        const side = home.parentElement;
+        const title = [...side.parentElement.children].find((c) => c !== side && c.innerText && c.innerText.trim().length > 3);
+        const range = document.createRange(); range.selectNodeContents(title); const tr = range.getBoundingClientRect();
+        return { iconRight: Math.round(home.getBoundingClientRect().right), sideRight: Math.round(side.getBoundingClientRect().right), textLeft: Math.round(tr.left), title: title.innerText };
+      });
+      check('l\'icône d\'accueil reste dans sa place, à gauche du titre', ov.iconRight <= ov.sideRight && ov.iconRight < ov.textLeft, ov);
       await v.page.screenshot({ path: path.join(OUT, 'prix-categorie.png') });
       await v.page.getByTestId('header-home').click();
       await v.page.waitForURL((u) => new URL(u).pathname === '/', { timeout: 10000 }).catch(() => null);
       check('toucher l\'icône ramène à l\'accueil', new URL(v.page.url()).pathname === '/', v.page.url());
       check('aucune erreur (catégorie)', v.errs.length === 0, v.errs);
       check('aucune écriture (catégorie)', v.log.writes.length === 0, v.log.writes);
+      await v.ctx.close();
+    }
+
+    // petit téléphone, titre long : l'icône ne touche pas le titre
+    {
+      const v = await visitor(b, { width: 360, height: 780 });
+      await v.page.goto(`${BASE}/categorie/velos-pour-enfants-jouets-et-jeux`, { waitUntil: 'load' });
+      await v.page.getByTestId('header-home').waitFor({ timeout: 30000 });
+      await sleep(1500);
+      const o = await v.page.evaluate(() => {
+        const home = document.querySelector('[data-testid="header-home"]');
+        const side = home.parentElement;
+        const title = [...side.parentElement.children].find((c) => c !== side && c.innerText && c.innerText.trim().length > 3);
+        const range = document.createRange(); range.selectNodeContents(title); const tr = range.getBoundingClientRect();
+        return { iconRight: Math.round(home.getBoundingClientRect().right), sideRight: Math.round(side.getBoundingClientRect().right), textLeft: Math.round(tr.left), title: title.innerText };
+      });
+      check('petit téléphone, titre long (« ' + o.title + ' ») : l\'icône reste à gauche du titre', o.iconRight <= o.sideRight && o.iconRight < o.textLeft, o);
+      await v.page.screenshot({ path: path.join(OUT, 'titre-long.png') });
+      check('aucune erreur (titre long)', v.errs.length === 0, v.errs);
       await v.ctx.close();
     }
 
