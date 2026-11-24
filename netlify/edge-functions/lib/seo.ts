@@ -108,13 +108,30 @@ export function productTitle(name: string, price: number | string): string {
   return `${cut(name, room)}${suffix}`;
 }
 
+// une ligne de hashtags ajoutée en fin de description (ex. « #Tchad #NDjamena #AlbasseShopping ») reste affichée au client,
+// mais n'a rien à faire dans la phrase de résumé lue par Google : on la retire avant de construire la meta description.
+export function withoutTrailingHashtagLine(value: unknown): string {
+  const lines = String(value ?? '').split(/\r?\n/);
+  while (lines.length > 0 && lines[lines.length - 1].trim() === '') lines.pop();
+  if (lines.length > 0 && /^(#\S+\s*)+$/.test(lines[lines.length - 1].trim())) lines.pop();
+  return lines.join('\n').trim();
+}
+
 export function productDescription(p: SeoProduct, categoryName?: string | null): string {
-  const base = cleanText(p.description);
+  const base = cleanText(withoutTrailingHashtagLine(p.description));
   const price = fcfa(p.price);
   // une description courte mais utile (« 110 Degrees Emper pour homme ») est gardée ; la phrase de secours ne sert que sans description
   if (base.length >= 10) return cut(`${cut(base, 105).replace(/[.\s]+$/, '')}. Prix : ${price}. Livraison au Tchad.`, 160);
   const cat = categoryName ? ` (${cleanText(categoryName)})` : '';
   return cut(`Achetez ${cleanText(p.name)}${cat} à ${price} sur ${SITE_NAME}. Livraison au Tchad, paiement à la livraison à ${HOME_CITY}.`, 160);
+}
+
+// meta "keywords" : sans effet sur le classement Google (ignorée depuis 2009), gardée pour les autres moteurs/annuaires qui la lisent encore.
+export function productKeywords(p: SeoProduct, categoryName?: string | null): string {
+  const parts = [cleanText(p.name), categoryName ? cleanText(categoryName) : null, 'Tchad', HOME_CITY, SITE_NAME].filter(
+    (v): v is string => !!v
+  );
+  return parts.join(', ');
 }
 
 export function categoryTitle(name: string): string {
@@ -249,6 +266,7 @@ export function jsonLdScript(data: unknown): string {
 export interface PageOptions {
   title: string;
   description: string;
+  keywords?: string;
   canonical: string;
   image: string;
   type: 'website' | 'product';
@@ -260,6 +278,7 @@ export interface PageOptions {
 
 export function renderPage(o: PageOptions): string {
   const robots = o.noindex ? '<meta name="robots" content="noindex" />\n' : '';
+  const keywords = o.keywords ? `<meta name="keywords" content="${escapeHtml(o.keywords)}" />\n` : '';
   return `<!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -267,7 +286,7 @@ export function renderPage(o: PageOptions): string {
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>${escapeHtml(o.title)}</title>
 <meta name="description" content="${escapeHtml(o.description)}" />
-${robots}<link rel="canonical" href="${escapeHtml(o.canonical)}" />
+${keywords}${robots}<link rel="canonical" href="${escapeHtml(o.canonical)}" />
 <meta property="og:site_name" content="${SITE_NAME}" />
 <meta property="og:locale" content="fr_FR" />
 <meta property="og:type" content="${o.type}" />
@@ -347,6 +366,7 @@ export function productPage(p: SeoProduct, category?: SeoCategory | null, canoni
   return renderPage({
     title: productTitle(p.name, p.price),
     description: productDescription(p, category?.name),
+    keywords: productKeywords(p, category?.name),
     canonical: canonicalUrl,
     image: images[0] ?? SITE_LOGO,
     type: 'product',
