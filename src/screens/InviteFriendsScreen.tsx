@@ -99,7 +99,7 @@ export function InviteFriendsScreen() {
           <Text style={styles.step}>1️⃣  Tu envoies ton lien à tes amis.</Text>
           <Text style={styles.step}>2️⃣  Ils créent leur compte avec ton lien.</Text>
           <Text style={styles.step}>3️⃣  Ils installent l’application Albasse et l’ouvrent : ils comptent pour toi.</Text>
-          <Text style={styles.step}>🎁  Chaque fois que 5 amis comptent : 1 parfum gratuit. L’équipe vérifie vos amis, puis vous contacte sur WhatsApp.</Text>
+          <Text style={styles.step}>🎁  Chaque fois que 5 amis comptent : 1 parfum gratuit, jusqu’à {progress.maxRewards} parfums maximum. L’équipe vérifie vos amis, puis vous contacte sur WhatsApp.</Text>
         </View>
 
         {view.waitingInstall > 0 && (

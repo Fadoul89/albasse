@@ -66,25 +66,33 @@ const v4 = progressView({ goal: 5, joined: 4, installed: 4 });
 check('4 amis : « Encore 1 ami » (au singulier)', /Encore 1 ami pour/.test(v4.headline) && !/amis pour/.test(v4.headline));
 const v5 = progressView({ goal: 5, joined: 5, installed: 5 });
 check('5 amis : 1 parfum gagné, la barre repart à 0 / 5, encore 5 pour le suivant', v5.earned === 1 && v5.barLabel === '0 / 5 amis' && v5.toNext === 5 && /un autre parfum/.test(v5.headline));
-const v12 = progressView({ goal: 5, joined: 13, installed: 12 });
-check('12 amis : 2 parfums gagnés, 2 / 5 pour le 3e', v12.earned === 2 && v12.barLabel === '2 / 5 amis' && v12.toNext === 3 && v12.waitingInstall === 1);
 check('un « but » absurde (0, absent) retombe sur 5', progressView({ goal: 0, joined: 6, installed: 6 }).earned === 1);
+
+// --- le plafond (24 novembre 2026, demande du patron) : jamais plus de 2 parfums par client -------------------------------------------------
+check('maxRewards absent ou 0 : retombe sur 2 (le plafond par défaut)', progressView({ goal: 5, joined: 0, installed: 0 }).maxRewards === 2);
+const v10 = progressView({ goal: 5, joined: 10, installed: 10 });
+check('10 amis (2 tranches de 5) avec le plafond par défaut (2) : maximum atteint, barre pleine, plus rien à gagner', v10.earned === 2 && v10.capped === true && v10.toNext === 0 && v10.barLabel === '5 / 5 amis' && /maximum de 2 parfums/.test(v10.headline));
+const v12capped = progressView({ goal: 5, joined: 13, installed: 12 });
+check('12 amis, plafond par défaut déjà dépassé : toujours capped, jamais plus de 2 parfums comptés', v12capped.earned === 2 && v12capped.capped === true, v12capped);
+const v12uncapped = progressView({ goal: 5, joined: 13, installed: 12, maxRewards: 10 });
+check('12 amis avec un plafond plus haut (10) : pas encore capped, 2 / 5 pour le 3e parfum', v12uncapped.capped === false && v12uncapped.earned === 2 && v12uncapped.barLabel === '2 / 5 amis' && v12uncapped.toNext === 3 && v12uncapped.waitingInstall === 1, v12uncapped);
 
 // --- lire ce que la base répond ----------------------------------------------------------------------------------------------------------------
 const raw = {
   code: 'abcd2345',
   goal: 5,
+  max_rewards: 2,
   joined: '6',
   installed: 4,
   friends: [{ name: 'Fatimé', installed: true }, { name: '  ', installed: false }, { installed: true }, null, 'x'],
   rewards: [{ number: 1, status: 'a_valider' }, { number: 2, status: 'n_importe_quoi' }, { number: 3, status: 'remis' }],
 };
 const p = parseProgress(raw);
-check('progression lue : code remis en forme, nombres, amis (nom vide = « Un ami »)', !!p && p.code === 'ABCD2345' && p.joined === 6 && p.installed === 4 && p.friends.length === 3 && p.friends[1].name === 'Un ami' && p.friends[0].installed && !p.friends[1].installed, p);
+check('progression lue : code remis en forme, nombres, amis (nom vide = « Un ami »), plafond lu', !!p && p.code === 'ABCD2345' && p.joined === 6 && p.installed === 4 && p.maxRewards === 2 && p.friends.length === 3 && p.friends[1].name === 'Un ami' && p.friends[0].installed && !p.friends[1].installed, p);
 check('progression lue : un état de gain inconnu est ignoré', !!p && p.rewards.length === 2 && p.rewards[0].status === 'a_valider' && p.rewards[1].status === 'remis');
 check('progression illisible = rien (pas de plantage)', parseProgress(null) === null && parseProgress('x') === null && parseProgress(undefined) === null && parseProgress(42) === null);
 const empty = parseProgress({});
-check('progression vide : tout à zéro, le but reste 5', !!empty && empty.code === null && empty.goal === 5 && empty.joined === 0 && empty.friends.length === 0 && empty.rewards.length === 0);
+check('progression vide : tout à zéro, le but reste 5, le plafond reste 2', !!empty && empty.code === null && empty.goal === 5 && empty.maxRewards === 2 && empty.joined === 0 && empty.friends.length === 0 && empty.rewards.length === 0);
 
 // --- les textes des gains ----------------------------------------------------------------------------------------------------------------------
 check('gain à valider : « l\'équipe vérifie », jamais « remis »', /vérifie/.test(rewardStatusLabel('a_valider')) && !/remis/.test(rewardStatusLabel('a_valider')));

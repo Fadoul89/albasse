@@ -143,7 +143,7 @@ end $$;
 select t.ok('10 amis installés : 2 gains (n° 1 et n° 2), sans doublon', (public.invite_my_progress()->>'installed')::int = 10 and (select count(*) from public.invite_rewards) = 2 and (select string_agg(number::text, ',' order by number) from public.invite_rewards) = '1,2');
 select t.as_user(26); select public.invite_claim((select c from t_code)); select public.invite_mark_app_opened();
 select t.as_user(1);
-select t.ok('un 11e ami : pas de 3e gain avant 15', (public.invite_my_progress()->>'installed')::int = 11 and (select count(*) from public.invite_rewards) = 2);
+select t.ok('un 11e ami : toujours 2 gains (plafond à 2, voir section 9bis)', (public.invite_my_progress()->>'installed')::int = 11 and (select count(*) from public.invite_rewards) = 2);
 
 -- 8. un ami qui ouvre l'application AVANT de se déclarer invité compte aussi dès qu'il se déclare
 select t.as_user(27); select public.invite_mark_app_opened();
@@ -161,6 +161,21 @@ set role authenticated;
 select t.as_user(1);
 select t.ok('ami banni : plus compté (11), le gain déjà gagné reste', (public.invite_my_progress()->>'installed')::int = 11 and (select count(*) from public.invite_rewards) = 2);
 
+-- 9bis. plafond (24 novembre 2026, demande du patron) : jamais plus de 2 gains, même à 15 amis et au-delà
+set role authenticated;
+do $$
+declare g integer;
+begin
+  for g in 28..31 loop
+    perform t.as_user(g);
+    perform public.invite_claim((select c from t_code));
+    perform public.invite_mark_app_opened();
+  end loop;
+  perform t.as_user(1);
+end $$;
+select t.ok('15 amis installés : toujours seulement 2 gains (n° 1 et n° 2), jamais de n° 3', (public.invite_my_progress()->>'installed')::int = 15 and (select count(*) from public.invite_rewards) = 2 and (select string_agg(number::text, ',' order by number) from public.invite_rewards) = '1,2');
+select t.ok('la progression dit le plafond (max_rewards = 2)', (public.invite_my_progress()->>'max_rewards')::int = 2);
+
 -- 10. administrateur
 select t.as_user(10);
 select t.fails('un client ne peut pas lire le tableau de l''administrateur', $q$select public.admin_invite_overview()$q$, 'réservé aux administrateurs');
@@ -169,7 +184,7 @@ select t.as_user(11);
 select set_config('test.is_admin', 'on', false);
 select t.ok('admin : totaux (1 qui invite, 2 gains à valider)', (public.admin_invite_overview()->'totals'->>'inviters')::int = 1 and (public.admin_invite_overview()->'totals'->>'to_validate')::int = 2 and (public.admin_invite_overview()->>'goal')::int = 5);
 select t.ok('admin : chaque gain montre le client (nom, téléphone) et ses amis (nom, téléphone, installé)', public.admin_invite_overview()->'rewards'->0->'user'->>'name' = 'Amina Hassan' and public.admin_invite_overview()->'rewards'->0->'user'->>'phone' = '66000001' and jsonb_array_length(public.admin_invite_overview()->'rewards'->0->'friends') >= 12 and public.admin_invite_overview()->'rewards'->0->'friends'->0->>'phone' ~ '^66000');
-select t.ok('admin : la liste des clients qui invitent (12 inscrits)', (public.admin_invite_overview()->'inviters'->0->>'joined')::int = 12 and public.admin_invite_overview()->'inviters'->0->>'name' = 'Amina Hassan');
+select t.ok('admin : la liste des clients qui invitent (16 inscrits, dont 1 banni ; 15 installés)', (public.admin_invite_overview()->'inviters'->0->>'joined')::int = 16 and (public.admin_invite_overview()->'inviters'->0->>'installed')::int = 15 and public.admin_invite_overview()->'inviters'->0->>'name' = 'Amina Hassan');
 select public.admin_invite_reward_set((select id from public.invite_rewards where number = 1), 'valide', 'Parfum choisi par téléphone');
 select t.ok('admin : gain n° 1 validé, avec sa note et sa date', (select status from public.invite_rewards where number = 1) = 'valide' and (select note from public.invite_rewards where number = 1) = 'Parfum choisi par téléphone' and (select handled_at from public.invite_rewards where number = 1) is not null);
 select public.admin_invite_reward_set((select id from public.invite_rewards where number = 1), 'remis', null);
