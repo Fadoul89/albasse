@@ -1,7 +1,8 @@
 -- Parrainage « Invite 5 amis, gagne un parfum » (demande du patron, 5 novembre 2026).
 -- Un client qui a un compte reçoit un lien. Un ami COMPTE seulement s'il (1) crée son compte avec ce lien (dans les 2 jours qui suivent la création de son
 -- compte) ET (2) ouvre l'application installée sur son téléphone (icône sur l'écran d'accueil) en étant connecté. À chaque tranche de 5 amis, le client
--- gagne 1 parfum gratuit. Le gain arrive « à valider » : c'est le patron qui vérifie les amis (Admin › Parrainages) avant de remettre le parfum.
+-- gagne 1 parfum gratuit, jusqu'à 2 parfums maximum par client (10 amis au total ; demande du patron, 24 novembre 2026). Le gain arrive
+-- « à valider » : c'est le patron qui vérifie les amis (Admin › Parrainages) avant de remettre le parfum.
 -- Sans danger à relancer. Aucun compte, article ni commande n'est modifié ; les colonnes ajoutées sont vides pour tout le monde au départ.
 -- Rien à voir avec le programme d'affiliation (commissions sur les ventes) : le code d'invitation est une autre colonne (invite_code).
 --
@@ -78,7 +79,7 @@ as $$
   where f.invited_by = p_inviter and f.app_opened_at is not null and coalesce(f.banned, false) = false;
 $$;
 
--- 1 gain par tranche de 5 amis (5 → n° 1, 10 → n° 2…). Sans doublon.
+-- 1 gain par tranche de 5 amis (5 → n° 1, 10 → n° 2…). Sans doublon, 2 gains maximum par client.
 create or replace function public.invite_refresh_rewards(p_inviter uuid)
 returns void
 language plpgsql
@@ -86,7 +87,7 @@ security definer
 set search_path = public
 as $$
 declare
-  tranches integer := public.invite_qualified_count(p_inviter) / 5;
+  tranches integer := least(public.invite_qualified_count(p_inviter) / 5, 2);
   k integer;
 begin
   for k in 1..tranches loop
@@ -230,6 +231,7 @@ begin
   return jsonb_build_object(
     'code', public.invite_my_code(),
     'goal', 5,
+    'max_rewards', 2,
     'joined', (select count(*) from public.profiles f where f.invited_by = uid and coalesce(f.banned, false) = false),
     'installed', public.invite_qualified_count(uid),
     'friends', coalesce((

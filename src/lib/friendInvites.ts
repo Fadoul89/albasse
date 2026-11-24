@@ -5,6 +5,7 @@
 import { SITE_URL } from './relanceMessage';
 
 export const INVITE_GOAL = 5; // amis qui comptent pour gagner 1 parfum
+export const INVITE_MAX_REWARDS = 2; // un client ne gagne jamais plus de 2 parfums (10 amis au total)
 export const INVITE_PARAM = 'invite'; // adresse du lien : https://www.albasseshopping.com/?invite=ABCD2345
 export const INVITE_STORAGE_DAYS = 30; // le code reçu par le lien est gardé 30 jours (l'ami peut s'inscrire plus tard)
 
@@ -79,6 +80,7 @@ export interface InviteReward {
 export interface InviteProgress {
   code: string | null;
   goal: number;
+  maxRewards: number;
   joined: number;
   installed: number;
   friends: InviteFriend[];
@@ -97,6 +99,7 @@ export function parseProgress(raw: unknown): InviteProgress | null {
   return {
     code: normalizeInviteCode(r.code),
     goal: int(r.goal) || INVITE_GOAL,
+    maxRewards: int(r.max_rewards) || INVITE_MAX_REWARDS,
     joined: int(r.joined),
     installed: int(r.installed),
     friends: arr(r.friends).map((f) => ({ name: String(f.name ?? 'Un ami').trim() || 'Un ami', installed: f.installed === true })),
@@ -110,24 +113,30 @@ export interface ProgressView {
   installed: number;
   joined: number;
   inTranche: number; // les amis de la tranche en cours : 0 à 4 (le 5e fait gagner un parfum et remet la barre à zéro)
-  toNext: number; // amis qui manquent pour le prochain parfum
-  earned: number; // parfums gagnés (installed / 5)
+  toNext: number; // amis qui manquent pour le prochain parfum (0 une fois le maximum atteint)
+  earned: number; // parfums gagnés, jamais plus que maxRewards
+  maxRewards: number;
+  capped: boolean; // maximum de parfums déjà atteint : inviter plus d'amis ne rapporte plus rien de nouveau
   waitingInstall: number; // amis inscrits qui n'ont pas encore ouvert l'application
   headline: string;
   barLabel: string;
 }
 
-export function progressView(p: Pick<InviteProgress, 'goal' | 'joined' | 'installed'>): ProgressView {
+export function progressView(p: Pick<InviteProgress, 'goal' | 'joined' | 'installed' | 'maxRewards'>): ProgressView {
   const goal = p.goal > 0 ? p.goal : INVITE_GOAL;
-  const earned = Math.floor(p.installed / goal);
-  const inTranche = p.installed - earned * goal;
-  const toNext = goal - inTranche;
+  const maxRewards = p.maxRewards > 0 ? p.maxRewards : INVITE_MAX_REWARDS;
+  const rawEarned = Math.floor(p.installed / goal);
+  const capped = rawEarned >= maxRewards;
+  const earned = Math.min(rawEarned, maxRewards);
+  const inTranche = capped ? goal : p.installed - earned * goal;
+  const toNext = capped ? 0 : goal - inTranche;
   const waitingInstall = Math.max(0, p.joined - p.installed);
-  const headline =
-    p.installed === 0
+  const headline = capped
+    ? `Vous avez gagné le maximum de ${maxRewards} parfum${maxRewards > 1 ? 's' : ''} 🎉 Merci d’avoir fait découvrir Albasse Shopping à vos amis !`
+    : p.installed === 0
       ? `Invite ${goal} amis : ils créent leur compte avec ton lien et installent l’application, tu gagnes un parfum gratuit.`
       : `Encore ${toNext} ami${toNext > 1 ? 's' : ''} pour gagner ${earned > 0 ? 'un autre parfum' : 'un parfum gratuit'}.`;
-  return { installed: p.installed, joined: p.joined, inTranche, toNext, earned, waitingInstall, headline, barLabel: `${inTranche} / ${goal} amis` };
+  return { installed: p.installed, joined: p.joined, inTranche, toNext, earned, maxRewards, capped, waitingInstall, headline, barLabel: `${inTranche} / ${goal} amis` };
 }
 
 // Ce que le client lit sur chaque gain (jamais de promesse que le patron n'a pas faite : le gain reste « à valider » tant qu'il n'a pas vérifié)

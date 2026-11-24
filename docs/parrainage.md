@@ -4,6 +4,8 @@ Demande du patron (5 novembre 2026) : *« les clients qui ont déjà créé un c
 
 Réponses du patron : **un parfum à chaque tranche de 5 amis (5, 10, 15…)**, et **c'est le patron qui valide** puis l'équipe écrit au gagnant sur WhatsApp. Aucun parfum n'est donné automatiquement.
 
+**Limite (24 novembre 2026) : 2 parfums maximum par client (10 amis au total).** Au-delà, le client peut continuer à inviter des amis mais ne gagne plus rien de nouveau ; l'écran le dit clairement (« Vous avez gagné le maximum de 2 parfums »), jamais de fausse promesse de continuer à gagner.
+
 Ce n'est pas le programme d'affiliation (commissions sur les ventes, lien `?ref=`) : le parrainage a son propre code et son propre lien `?invite=`.
 
 ## Comment un ami « compte »
@@ -40,11 +42,11 @@ Sans danger à relancer. Aucun compte, article ni commande n'est modifié ; les 
 - 4 colonnes sur `profiles` : `invite_code`, `invited_by`, `invited_at`, `app_opened_at`. **Un client ne peut pas les écrire lui-même** (garde-fou) : seules les fonctions les remplissent.
 - Une table `invite_rewards` (les gains : à valider, validé, remis, refusé). Droits donnés explicitement : le client lit **ses** gains ; l'écriture passe seulement par les fonctions.
 - Les fonctions : `invite_my_code`, `invite_lookup` (le prénom de celui qui invite), `invite_claim` (« j'ai été invité par ce code »), `invite_mark_app_opened`, `invite_my_progress`, et pour l'administrateur `admin_invite_overview` et `admin_invite_reward_set` (refusées à un client).
-- 1 gain par tranche de 5 amis qui comptent, **sans doublon** ; un gain déjà gagné reste même si un ami est banni ensuite (le patron décide).
+- 1 gain par tranche de 5 amis qui comptent, **sans doublon**, **2 gains maximum par client** ; un gain déjà gagné reste même si un ami est banni ensuite (le patron décide).
 
 **Avant le script SQL** : le site marche exactement comme avant. Aucune carte dans Mon compte, l'écran dit « pas encore disponible », Admin › Parrainages dit « Lancez d'abord le script add-friend-invites.sql ». L'inscription, la connexion et l'ouverture de l'application ne peuvent jamais échouer à cause du parrainage.
 
-Test sur un Postgres local jetable (jamais la vraie base) : `sh tests/sql/run-friend-invites.sh` (59 contrôles).
+Test sur un Postgres local jetable (jamais la vraie base) : `sh tests/sql/run-friend-invites.sh` (58 contrôles).
 
 ## Honnêteté
 
