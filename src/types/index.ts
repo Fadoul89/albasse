@@ -111,6 +111,8 @@ export interface ProductNotification {
   title: string;
   message: string;
   created_at: string;
+  // présent seulement quand add-push-clicks-auto.sql est lancé
+  clicks?: number;
 }
 
 export type SanctionAction = 'ban' | 'reactivate';
