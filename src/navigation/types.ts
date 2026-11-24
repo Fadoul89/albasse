@@ -27,6 +27,7 @@ export type RootStackParamList = {
   AdminMarketingAI: undefined;
   AdminMarketing: undefined;
   AdminBrowsing: undefined;
+  AdminVisitorRegions: undefined;
   AdminCallbacks: undefined;
   AdminAbandonedCarts: undefined;
   AdminNotifications: undefined;

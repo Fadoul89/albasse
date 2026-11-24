@@ -167,6 +167,17 @@ export function AdminDashboardScreen() {
               <Text style={styles.sourceLinkArrow}>→</Text>
             </Pressable>
 
+            <Pressable style={styles.sourceLinkCard} onPress={() => navigation.navigate('AdminVisitorRegions')} testID="dashboard-visitor-regions-link">
+              <Text style={styles.sourceLinkIcon}>📍</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sourceLinkTitle}>Visiteurs par région (GPS)</Text>
+                <Text style={styles.sourceLinkSubtitle}>
+                  D'où viennent vraiment les visiteurs, d'après leur position GPS détectée sur le site
+                </Text>
+              </View>
+              <Text style={styles.sourceLinkArrow}>→</Text>
+            </Pressable>
+
             <Pressable style={styles.sourceLinkCard} onPress={() => navigation.navigate('AdminCallbacks')} testID="dashboard-callbacks-link">
               <Text style={styles.sourceLinkIcon}>📲</Text>
               <View style={{ flex: 1 }}>

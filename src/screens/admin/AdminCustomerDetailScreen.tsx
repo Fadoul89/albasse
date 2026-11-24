@@ -8,6 +8,7 @@ import { useToastStore } from '../../store/toastStore';
 import { useCustomers } from '../../hooks/useCustomers';
 import { useCustomerActivity } from '../../hooks/useCustomerActivity';
 import { useCustomerSanctions } from '../../hooks/useCustomerSanctions';
+import { useLastVisitorLocation } from '../../hooks/useLastVisitorLocation';
 import { supabase } from '../../lib/supabase';
 import {
   formatDuration,
@@ -47,6 +48,7 @@ export function AdminCustomerDetailScreen({ route }: Props) {
   const { customers, refresh: refreshCustomers } = useCustomers();
   const { orders, viewedProducts, cartAddCount, isLoading } = useCustomerActivity(userId);
   const { sanctions, refresh: refreshSanctions } = useCustomerSanctions(userId);
+  const { location: gpsLocation } = useLastVisitorLocation(userId);
   // les articles déjà commandés par ce client (commandes non annulées, vraies) : Zara ne les repropose jamais
   const orderedProductIds = React.useMemo(
     () => [...new Set(orders.filter((o) => o.status !== 'cancelled' && !o.is_flagged_fake).flatMap((o) => (o.items ?? []).map((i) => i.product_id)))].filter((id) => typeof id === 'string' && id),
@@ -277,6 +279,13 @@ export function AdminCustomerDetailScreen({ route }: Props) {
           <Row label="Ville" value={profile.region ?? '—'} />
           <Row label="Pays" value={profile.country ?? '—'} />
           <Row label="Adresse" value={profile.address ?? '—'} />
+          <View testID="admin-gps-location">
+            <Row
+              label="📍 Position détectée (GPS)"
+              value={gpsLocation ? (gpsLocation.address ?? [gpsLocation.city, gpsLocation.region, gpsLocation.country].filter(Boolean).join(', ') || 'Coordonnées sans adresse') : 'Jamais partagée'}
+            />
+            {gpsLocation ? <Text style={styles.gpsDate}>Détectée le {formatDateTime(gpsLocation.createdAt)}</Text> : null}
+          </View>
           <Row label="Email" value={visibleEmail(profile.email) ?? '— (compte créé avec le numéro)'} />
           <Row label="🚩 Fausses commandes signalées" value={`${profile.fake_order_count} / 3`} />
         </Section>
@@ -422,6 +431,7 @@ const styles = StyleSheet.create({
   msgTextarea: { minHeight: 90, textAlignVertical: 'top' },
   codeHelp: { color: colors.creamMuted, fontFamily: fonts.body, fontSize: 12, lineHeight: 18 },
   genderClear: { color: colors.gold, fontFamily: fonts.bodyMedium, fontSize: 12, marginBottom: spacing.sm },
+  gpsDate: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 11, marginTop: -4, marginBottom: spacing.sm },
   codeBox: {
     backgroundColor: colors.panelAlt,
     borderRadius: radius.sm,

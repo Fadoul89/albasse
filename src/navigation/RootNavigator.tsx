@@ -15,6 +15,7 @@ import { startShortcutInstallTracking, trackAppInstallIfNeeded } from '../lib/ap
 import { captureInviteCodeFromUrl, trackInviteAppOpen } from '../lib/friendInvitesApi';
 import { recordPushClickFromUrl } from '../lib/pushClicks';
 import { initBrowsingTracker } from '../lib/browsingTracker';
+import { initVisitorLocation } from '../lib/visitorLocationTracker';
 import { isIosDevice, isRunningAsInstalledPwa } from '../lib/pwaInstallPrompt';
 import { hasWebPushPermission, isWebPushSupported, subscribeToWebPush, syncWebPushSubscription } from '../lib/webPushSubscription';
 import { useAuthStore } from '../store/authStore';
@@ -46,6 +47,7 @@ import { AdminZaraStatsScreen } from '../screens/admin/AdminZaraStatsScreen';
 import { AdminMarketingAIScreen } from '../screens/admin/AdminMarketingAIScreen';
 import { AdminMarketingScreen } from '../screens/admin/AdminMarketingScreen';
 import { AdminBrowsingScreen } from '../screens/admin/AdminBrowsingScreen';
+import { AdminVisitorRegionsScreen } from '../screens/admin/AdminVisitorRegionsScreen';
 import { AdminCallbacksScreen } from '../screens/admin/AdminCallbacksScreen';
 import { AdminAbandonedCartsScreen } from '../screens/admin/AdminAbandonedCartsScreen';
 import { AdminNotificationsScreen } from '../screens/admin/AdminNotificationsScreen';
@@ -238,6 +240,8 @@ export function RootNavigator() {
     startShortcutInstallTracking();
     recordPushClickFromUrl();
     initBrowsingTracker();
+    // Option GPS : la position du visiteur, demandée une seule fois par appareil, à tous, dès l'arrivée sur le site.
+    initVisitorLocation();
     // Pour les visiteurs qui ont deja installe le raccourci (PWA) : on
     // propose l'activation des notifications a l'ouverture plutot que
     // d'attendre qu'ils reinstallent.
@@ -312,6 +316,7 @@ export function RootNavigator() {
             <Stack.Screen name="AdminMarketingAI" component={AdminMarketingAIScreen} />
             <Stack.Screen name="AdminMarketing" component={AdminMarketingScreen} />
             <Stack.Screen name="AdminBrowsing" component={AdminBrowsingScreen} />
+            <Stack.Screen name="AdminVisitorRegions" component={AdminVisitorRegionsScreen} />
             <Stack.Screen name="AdminCallbacks" component={AdminCallbacksScreen} />
             <Stack.Screen name="AdminAbandonedCarts" component={AdminAbandonedCartsScreen} />
             <Stack.Screen name="AdminNotifications" component={AdminNotificationsScreen} />
