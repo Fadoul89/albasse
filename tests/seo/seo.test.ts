@@ -38,6 +38,14 @@ check('sans description : phrase de secours avec des faits connus seulement', no
 const short = seo.productDescription({ name: '110 Degrees', slug: 'x', price: 15000, description: '110 Degrees Emper pour homme' }, 'Parfum');
 check('description courte mais utile : gardée, avec le prix', short === '110 Degrees Emper pour homme. Prix : 15 000 FCFA. Livraison au Tchad.', short);
 check('description trop vide (< 10 caractères) : phrase de secours', /^Achetez /.test(seo.productDescription({ name: 'X', slug: 'x', price: 1000, description: 'ok' })));
+
+// --- hashtags de description (ligne ajoutée par add-tchad-hashtags.sql) : visibles au client, absents du résumé lu par Google ---
+check('withoutTrailingHashtagLine : retire la ligne de hashtags en fin de texte', seo.withoutTrailingHashtagLine('Montre élégante.\n\n#Tchad #NDjamena #AlbasseShopping') === 'Montre élégante.');
+check('withoutTrailingHashtagLine : texte sans hashtags inchangé', seo.withoutTrailingHashtagLine('Montre élégante.') === 'Montre élégante.');
+check('withoutTrailingHashtagLine : uniquement des hashtags (rien avant)', seo.withoutTrailingHashtagLine('#Tchad #NDjamena') === '');
+const withHashtags = seo.productDescription({ name: 'Montre', slug: 'm', price: 11000, description: 'Montre de sport étanche, bracelet souple.\n\n#Tchad #NDjamena #AlbasseShopping' });
+check('description produit : la ligne de hashtags n\'apparaît pas dans le résumé SEO', !/#Tchad/.test(withHashtags), withHashtags);
+check('mots-clés produit : nom, catégorie, Tchad, N\'Djamena, nom du site', seo.productKeywords({ name: 'Montre KEEP MOVING', slug: 'm', price: 11000 }, 'Montres') === 'Montre KEEP MOVING, Montres, Tchad, N\'Djamena, Albasse Shopping');
 check('description catégorie : nombre d\'articles écrit', /12 articles/.test(seo.categoryDescription('Montres', 12)) && /1 article,/.test(seo.categoryDescription('Montres', 1)));
 check('description accueil : 160 caractères au plus', seo.homeDescription([{ name: 'Montres', slug: 'm' }, { name: 'Parfums', slug: 'p' }, { name: 'Chaussures', slug: 'c' }, { name: 'Cosmétique', slug: 'co' }, { name: 'Lunettes', slug: 'l' }, { name: 'Autre', slug: 'a' }]).length <= 160);
 
@@ -61,6 +69,7 @@ check('Product : jamais de note, avis, marque ou code GTIN inventés', !/aggrega
   const pageHtml = seo.productPage(prod, { name: 'Montres', slug: 'montres' });
   const page = JSON.parse((pageHtml.match(/<script type="application\/ld\+json">(.*?)<\/script>/s) ?? [])[1] ?? '{}');
   check('retours : présents dans la page envoyée à Google, ET la page « Conditions de retour » dit bien que seuls les articles incorrects ou défectueux sont à notre charge', page?.offers?.hasMerchantReturnPolicy?.itemDefectReturnFees === 'https://schema.org/FreeReturn' && /à notre charge/.test(seo.infoPage(seo.infoPageDef('/conditions-de-retour')!)) && /à la charge du client/.test(seo.infoPage(seo.infoPageDef('/conditions-de-retour')!)));
+  check('page produit : balise meta "keywords" présente (nom, catégorie, Tchad)', /<meta name="keywords" content="Montre KEEP MOVING, Montres, Tchad/.test(pageHtml), pageHtml.match(/<meta name="keywords"[^>]*>/)?.[0]);
 }
 const sh: any = ld.offers.shippingDetails;
 check('Product : livraison (shippingDetails) : Tchad, frais de 0 à 2 500 FCFA (gratuit à N\'Djamena, 2 500 ailleurs)', sh?.['@type'] === 'OfferShippingDetails' && sh.shippingDestination?.addressCountry === 'TD' && sh.shippingRate?.currency === 'XAF' && sh.shippingRate?.minValue === 0 && sh.shippingRate?.maxValue === 2500, sh);
