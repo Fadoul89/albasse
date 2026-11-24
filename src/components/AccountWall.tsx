@@ -61,7 +61,8 @@ export function AccountWall() {
 const styles = StyleSheet.create({
   cover: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.background, zIndex: 50 },
   content: { flexGrow: 1, alignItems: 'center', padding: spacing.md, paddingTop: spacing.lg, paddingBottom: spacing.xl * 2 },
-  logo: { width: 64, height: 64, borderRadius: 32, marginBottom: 6, borderWidth: 2, borderColor: colors.gold },
+  // pas de bordure dorée ici : l'image du logo a déjà son propre anneau doré (un seul cercle, pas un double)
+  logo: { width: 110, height: 110, borderRadius: 55, marginBottom: 6 },
   brand: { fontFamily: fonts.display, fontSize: 22, color: colors.goldLight, letterSpacing: 1, marginBottom: spacing.sm },
   title: { fontFamily: fonts.bodyBold, fontSize: 22, color: colors.cream, marginBottom: 4 },
   text: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: colors.creamMuted, textAlign: 'center', maxWidth: 360 },
