@@ -16,7 +16,7 @@
       "package": "com.albasseshopping.app",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
-        "backgroundColor": "#0c0c0f",
+        "backgroundColor": "#010C2A",
         "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
       "predictiveBackGestureEnabled": false
