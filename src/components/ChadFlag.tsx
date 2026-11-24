@@ -1,7 +1,9 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 
-const CHAD_BLUE = '#0033A0';
+// Bleu plus foncé que le bleu cobalt clair de la Roumanie (#0033A0) : seule différence entre les deux
+// drapeaux, Pantone 287C pour le Tchad.
+const CHAD_BLUE = '#002664';
 const CHAD_YELLOW = '#FECB00';
 const CHAD_RED = '#D21034';
 
