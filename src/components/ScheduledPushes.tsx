@@ -18,11 +18,14 @@ import {
   createScheduledPush,
   defaultChadSlot,
   fetchScheduledPushes,
+  fetchZaraNotifications,
   pushTitleFor,
   scheduleProblem,
   sendScheduledPushNow,
   type ScheduledPush,
+  type ZaraNotification,
 } from '../lib/scheduledPush';
+import { formatRelativeTime } from '../lib/formatDuration';
 import type { Product } from '../types';
 
 const formatXAF = (n: number) => `${Math.round(n).toLocaleString('fr-FR')} FCFA`;
@@ -55,6 +58,8 @@ export function ScheduledPushes({ products }: { products: Product[] }) {
   const [problem, setProblem] = useState<string | null>(null);
   const [pending, setPending] = useState<{ kind: 'cancel' | 'now'; row: ScheduledPush } | null>(null);
   const [acting, setActing] = useState(false);
+  const [zaraRows, setZaraRows] = useState<ZaraNotification[]>([]);
+  const [zaraClicksMissing, setZaraClicksMissing] = useState(false);
 
   const load = async () => {
     const res = await fetchScheduledPushes();
@@ -62,8 +67,14 @@ export function ScheduledPushes({ products }: { products: Product[] }) {
     setMissing(res.missing);
     setLoadError(res.missing ? null : res.error);
   };
+  const loadZara = async () => {
+    const res = await fetchZaraNotifications();
+    setZaraRows(res.rows);
+    setZaraClicksMissing(res.missingClicks);
+  };
   useEffect(() => {
     void load();
+    void loadZara();
   }, []);
 
   const product = productId ? products.find((p) => p.id === productId) ?? null : null;
@@ -292,6 +303,21 @@ export function ScheduledPushes({ products }: { products: Product[] }) {
         <PushRow key={r.id} row={r} />
       ))}
 
+      <View style={styles.historyHead} testID="zara-notifications-head">
+        <Text style={[styles.listTitle, { marginBottom: 0 }]}>📣 Notifications automatiques de Zara ({zaraRows.length})</Text>
+        <Pressable onPress={() => void loadZara()} hitSlop={8} testID="zara-notifications-refresh">
+          <Text style={styles.link}>↻ Actualiser les clics</Text>
+        </Pressable>
+      </View>
+      <Text style={styles.helper}>
+        Nouveaux articles et ventes flash envoyés automatiquement par Zara (pas celles programmées à la main ci-dessus).
+        {zaraClicksMissing ? ' Lancez le script « add-push-clicks-auto.sql » pour compter leurs clics.' : ''}
+      </Text>
+      {zaraRows.length === 0 ? <Text style={styles.empty}>Aucune notification automatique pour le moment.</Text> : null}
+      {zaraRows.map((r) => (
+        <ZaraNotificationRow key={r.id} row={r} showClicks={!zaraClicksMissing} />
+      ))}
+
       <ConfirmDialog
         visible={!!pending}
         title={pending?.kind === 'cancel' ? 'Annuler cette notification ?' : 'Envoyer maintenant ?'}
@@ -349,6 +375,29 @@ function ClickBadge({ row }: { row: ScheduledPush }) {
     <View style={styles.clickBadge} testID={`push-clicks-${row.id}`}>
       <Text style={styles.clickMain}>{stats.main}</Text>
       {stats.sub ? <Text style={styles.clickSub}>{stats.sub}</Text> : null}
+    </View>
+  );
+}
+
+function ZaraNotificationRow({ row, showClicks }: { row: ZaraNotification; showClicks: boolean }) {
+  const image = row.product?.images?.[0];
+  return (
+    <View style={styles.row} testID={`zara-notification-row-${row.id}`}>
+      {image ? <Image accessibilityLabel="" source={{ uri: image }} style={styles.smallThumb} contentFit="cover" /> : null}
+      <View style={{ flex: 1 }}>
+        <Text style={styles.rowTitle} numberOfLines={1}>
+          {row.product?.name ?? row.title}
+        </Text>
+        <Text style={styles.rowMessage} numberOfLines={2}>
+          {row.message}
+        </Text>
+        <Text style={styles.rowMeta}>{formatRelativeTime(row.created_at)}</Text>
+        {showClicks ? (
+          <View style={styles.clickBadge} testID={`zara-notification-clicks-${row.id}`}>
+            <Text style={styles.clickMain}>{clickStats(row.clicks, null).main}</Text>
+          </View>
+        ) : null}
+      </View>
     </View>
   );
 }

@@ -45,6 +45,30 @@ export async function fetchScheduledPushes(): Promise<{ rows: ScheduledPush[]; m
   return { rows: (data ?? []) as unknown as ScheduledPush[], missing: false, error: null };
 }
 
+// Notifications AUTOMATIQUES de Zara (nouvel article, promotion : add-push-gate.sql) — pas celles programmées
+// à la main ci-dessus. recipients n'existe pas pour celles-ci (seuls les clics sont comptés, add-push-clicks-auto.sql).
+export interface ZaraNotification {
+  id: string;
+  product_id: string;
+  title: string;
+  message: string;
+  created_at: string;
+  clicks?: number;
+  product: { name: string; slug: string; images: string[] | null } | null;
+}
+
+export async function fetchZaraNotifications(): Promise<{ rows: ZaraNotification[]; missingClicks: boolean; error: string | null }> {
+  if (!isSupabaseConfigured) return { rows: [], missingClicks: false, error: null };
+  const query = (columns: string) =>
+    supabase.from('product_notifications').select(columns).order('created_at', { ascending: false }).limit(30);
+  const base = 'id, product_id, title, message, created_at, product:products(name, slug, images)';
+  let { data, error } = await query(`${base}, clicks`);
+  const missingClicks = !!error && (error.code === '42703' || /clicks/.test(error.message ?? ''));
+  if (missingClicks) ({ data, error } = await query(base));
+  if (error) return { rows: [], missingClicks: false, error: error.message };
+  return { rows: (data ?? []) as unknown as ZaraNotification[], missingClicks, error: null };
+}
+
 export async function createScheduledPush(row: { productId: string; title: string; message: string; sendAt: string }): Promise<string | null> {
   const { error } = await supabase
     .from('scheduled_pushes')
