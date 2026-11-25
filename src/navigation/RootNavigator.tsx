@@ -352,13 +352,14 @@ export function RootNavigator() {
         {!mfaGate && <AdminOrderAlert />}
         {/* le tutoriel iPhone reste disponible sans compte : la page /installer le demande aux visiteurs qui n'ont pas encore de compte */}
         {!SINGLE && <IosInstallGuide />}
+        {/* ne dépend pas du mur « compte obligatoire » : vise ceux qui ont DÉJÀ l'app installée, pas les nouveaux visiteurs */}
+        {!SINGLE && !mfaGate && <LogoUpdateGuide />}
         {!signUpFirst && !SINGLE && !mfaGate && (
           <>
             <Assistant />
             <SmartPromotionPopup />
             {WHEEL_ENABLED && <WheelPopup />}
             <AppDownloadPopup />
-            <LogoUpdateGuide />
             <GlowBorder />
           </>
         )}
