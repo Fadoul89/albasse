@@ -55,6 +55,7 @@ import { SmartPromotionPopup } from '../components/SmartPromotionPopup';
 import { WheelPopup } from '../components/WheelPopup';
 import { WHEEL_ENABLED } from '../lib/featureFlags';
 import { AppDownloadPopup } from '../components/AppDownloadPopup';
+import { LogoUpdateGuide } from '../components/LogoUpdateGuide';
 import { IosInstallGuide } from '../components/IosInstallGuide';
 import { GlowBorder } from '../components/GlowBorder';
 import { AdminStoreSettingsScreen } from '../screens/admin/AdminStoreSettingsScreen';
@@ -357,6 +358,7 @@ export function RootNavigator() {
             <SmartPromotionPopup />
             {WHEEL_ENABLED && <WheelPopup />}
             <AppDownloadPopup />
+            <LogoUpdateGuide />
             <GlowBorder />
           </>
         )}
