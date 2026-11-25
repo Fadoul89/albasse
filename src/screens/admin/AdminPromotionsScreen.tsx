@@ -34,6 +34,7 @@ import { StoreSettingToggle } from '../../components/StoreSettingToggle';
 import { ZaraAdsDelay } from '../../components/ZaraAdsDelay';
 import { ZaraAdsAudiences } from '../../components/ZaraAdsAudiences';
 import { ZaraPromoPicker } from '../../components/ZaraPromoPicker';
+import { PasteProductLinkField } from '../../components/PasteProductLinkField';
 import type { SmartPromotion, AdItem } from '../../types';
 import { MENU_AD_MAX, MENU_AD_TEXT } from '../../lib/menuAd';
 
@@ -503,6 +504,14 @@ export function AdminPromotionsScreen() {
                     ))}
                   </View>
                 )}
+                <PasteProductLinkField
+                  products={products}
+                  onFound={(p) => {
+                    setProductId(p.id);
+                    setProductQuery(p.name);
+                  }}
+                  testID="promo-paste-product-link"
+                />
                 {productId && <Text style={styles.selectedNote}>✓ Produit sélectionné</Text>}
               </View>
             )}

@@ -3,6 +3,7 @@ import { View, Text, TextInput, StyleSheet, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import { colors, fonts, radius, spacing } from '../theme';
 import { GoldButton } from './GoldButton';
+import { PasteProductLinkField } from './PasteProductLinkField';
 import { ConfirmDialog } from './ConfirmDialog';
 import { DateField } from './DateField';
 import { TimeField } from './TimeField';
@@ -202,6 +203,14 @@ export function ScheduledPushes({ products }: { products: Product[] }) {
               ))}
             </View>
           ) : null}
+          <PasteProductLinkField
+            products={products}
+            onFound={(p) => {
+              setProductId(p.id);
+              setProblem(null);
+            }}
+            testID="push-paste-product-link"
+          />
         </View>
       )}
 
