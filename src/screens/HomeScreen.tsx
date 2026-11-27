@@ -18,6 +18,7 @@ import { SideAdBanner } from '../components/SideAdBanner';
 import { ChadFlag } from '../components/ChadFlag';
 import { CityClock } from '../components/CityClock';
 import { ZaraAdCard } from '../components/ZaraAdCard';
+import { BlackFridayBadge } from '../components/BlackFridayBadge';
 import { MenuButton, SideMenu } from '../components/SideMenu';
 import { TargetedAdCard } from '../components/TargetedAdCard';
 import { WebPushBanner } from '../components/WebPushBanner';
@@ -152,6 +153,7 @@ export function HomeScreen() {
       >
         <Text style={styles.brand}>ALBASSE</Text>
         <Text style={styles.brandSub}>SHOPPING</Text>
+        <BlackFridayBadge style={styles.homeBlackFridayBadge} />
         <View style={styles.taglineFrame} testID="home-tagline" onLayout={(e) => setTagWidth(e.nativeEvent.layout.width)}>
           <View style={styles.taglineRow}>
             <Animated.Text
@@ -421,6 +423,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
+  homeBlackFridayBadge: { marginTop: 10 },
   brand: {
     fontFamily: fonts.displayBold,
     fontSize: 34,

@@ -10,6 +10,7 @@ import { realDiscountPct, shownOldPrice } from '../lib/promotions';
 import { colors, fonts, radius, spacing } from '../theme';
 import { StarRating } from './StarRating';
 import { FavoriteButton } from './FavoriteButton';
+import { BlackFridayBadge } from './BlackFridayBadge';
 
 // largeur par défaut (accueil, articles du même genre…) : selon la fenêtre ACTUELLE (avant : figée à l'ouverture du site)
 function cardWidth(windowWidth: number, columns: number) {
@@ -50,6 +51,7 @@ export function ProductCard({ product, columns = 2, width }: { product: Product;
             <Text style={styles.badgeText}>-{discount}%</Text>
           </View>
         )}
+        {discount && <BlackFridayBadge compact style={styles.blackFridayBadge} />}
         <FavoriteButton productId={product.id} likes={product.likes_count} style={styles.favoriteBtn} />
       </View>
       <Text style={styles.name} numberOfLines={1}>
@@ -97,6 +99,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   badgeText: { color: '#ffffff', fontFamily: fonts.bodyBold, fontSize: 11 },
+  blackFridayBadge: { position: 'absolute', top: 30, left: 8 },
   favoriteBtn: { position: 'absolute', top: 8, right: 8 },
   name: { color: colors.cream, fontFamily: fonts.bodySemiBold, fontSize: 13, marginBottom: 5 },
   priceRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, rowGap: 4, marginBottom: 4 },
