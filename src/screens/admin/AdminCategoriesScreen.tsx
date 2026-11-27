@@ -27,6 +27,7 @@ import {
   uniqueSlug,
 } from '../../lib/subCategories';
 import { isMissingColumn } from '../../lib/dbErrors';
+import { cloudinaryUrl } from '../../lib/cloudinaryUrl';
 import { colors, fonts, radius, spacing } from '../../theme';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { GoldButton } from '../../components/GoldButton';
@@ -219,7 +220,7 @@ export function AdminCategoriesScreen() {
               {uploadingImage ? (
                 <ActivityIndicator color={colors.gold} />
               ) : imageUrl ? (
-                <Image accessibilityLabel="Image de la catégorie" source={{ uri: imageUrl }} style={styles.imagePreview} contentFit="cover" />
+                <Image accessibilityLabel="Image de la catégorie" source={{ uri: cloudinaryUrl(imageUrl, 400) }} style={styles.imagePreview} contentFit="cover" />
               ) : (
                 <Text style={styles.imagePickerText}>＋ Photo</Text>
               )}
@@ -321,7 +322,7 @@ export function AdminCategoriesScreen() {
                 </Pressable>
               </View>
               {item.image_url ? (
-                <Image accessibilityLabel={item.name} source={{ uri: item.image_url }} style={styles.rowImage} contentFit="cover" />
+                <Image accessibilityLabel={item.name} source={{ uri: cloudinaryUrl(item.image_url, 400) }} style={styles.rowImage} contentFit="cover" />
               ) : (
                 <View style={styles.rowImagePlaceholder} />
               )}

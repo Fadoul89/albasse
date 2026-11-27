@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { cloudinaryUrl } from '../lib/cloudinaryUrl';
 import { useStoreSettings } from '../hooks/useStoreSettings';
 import { StoreSettingToggle } from './StoreSettingToggle';
 import { useToastStore } from '../store/toastStore';
@@ -176,7 +177,7 @@ function PickList({ title, picks, testID }: { title: string; picks: PromoPick[];
       {picks.length === 0 ? <Text style={styles.small}>Aucun article.</Text> : null}
       {picks.map((p) => (
         <View key={p.id} style={styles.row} testID={`${testID}-item`}>
-          {p.image ? <Image accessibilityLabel="" source={{ uri: p.image }} style={styles.thumb} contentFit="cover" /> : <View style={[styles.thumb, { backgroundColor: colors.panelAlt }]} />}
+          {p.image ? <Image accessibilityLabel="" source={{ uri: cloudinaryUrl(p.image, 400) }} style={styles.thumb} contentFit="cover" /> : <View style={[styles.thumb, { backgroundColor: colors.panelAlt }]} />}
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={styles.name} numberOfLines={2}>{p.name.trim()}</Text>
             <Text style={styles.price}>

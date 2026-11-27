@@ -21,26 +21,10 @@ async function resizeForUpload(uri: string): Promise<string> {
   }
 }
 
-export async function uploadProductImage(uri: string): Promise<{ url: string | null; error: string | null }> {
-  try {
-    const resizedUri = await resizeForUpload(uri);
-    const response = await fetch(resizedUri);
-    const blob = await response.blob();
-    const ext = blob.type.split('/')[1] ?? 'jpg';
-    const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from('product-images')
-      .upload(path, blob, { contentType: blob.type || 'image/jpeg', cacheControl: ONE_YEAR_SECONDS });
-
-    if (uploadError) return { url: null, error: uploadError.message };
-
-    const { data } = supabase.storage.from('product-images').getPublicUrl(path);
-    return { url: data.publicUrl, error: null };
-  } catch (e) {
-    return { url: null, error: e instanceof Error ? e.message : 'Échec du téléversement.' };
-  }
-}
+// Articles, catégories, publicités (Admin) : toutes les photos ajoutées depuis l'admin passent par Cloudinary
+// (cloud name + upload preset non signé, voir .env.example). Les anciennes photos restent sur Supabase Storage
+// tant que le script de migration (scripts/migrate-images-to-cloudinary.mjs) n'a pas été lancé.
+export { uploadToCloudinary as uploadProductImage } from './cloudinaryUpload';
 
 export async function uploadAvatar(
   uri: string,

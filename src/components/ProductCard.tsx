@@ -7,6 +7,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import type { Product } from '../types';
 import { realDiscountPct, shownOldPrice } from '../lib/promotions';
+import { cloudinaryUrl } from '../lib/cloudinaryUrl';
 import { colors, fonts, radius, spacing } from '../theme';
 import { StarRating } from './StarRating';
 import { FavoriteButton } from './FavoriteButton';
@@ -44,7 +45,7 @@ export function ProductCard({ product, columns = 2, width }: { product: Product;
       onPress={() => navigation.navigate('Product', { slug: product.slug })}
     >
       <View style={styles.imageWrap}>
-        <Image accessibilityLabel={product.name} source={{ uri: product.images[0] }} style={styles.image} contentFit="cover" transition={150} />
+        <Image accessibilityLabel={product.name} source={{ uri: cloudinaryUrl(product.images[0], 400) }} style={styles.image} contentFit="cover" transition={150} />
         {discount && (
           <View style={styles.badge} testID="product-discount-badge">
             <Text style={styles.badgeText}>-{discount}%</Text>

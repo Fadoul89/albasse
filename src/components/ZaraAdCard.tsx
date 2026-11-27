@@ -9,9 +9,9 @@ import type { SalesMap } from '../lib/assistantSales';
 import { isSeniorProfession, pickAds, zaraAdsDelaySeconds } from '../lib/zaraAds';
 import { adAllowedProducts } from '../lib/adSensitive';
 import { useAssistantStore } from '../store/assistantStore';
+import { cloudinaryUrl } from '../lib/cloudinaryUrl';
+import { ZARA_AVATAR_URL } from '../lib/zaraAvatar';
 import { colors, fonts, radius, spacing } from '../theme';
-
-const AVATAR = require('../../assets/assistante-avatar.jpg');
 const ROTATE_MS = 7000;
 const MAX_ADS = 3;
 
@@ -85,7 +85,7 @@ export function ZaraAdCard({ products, categories = [] }: { products: Product[];
       >
         <Animated.View style={{ opacity: fade }}>
           <View style={styles.header}>
-            <Image accessibilityLabel="Zara, assistante de vente" source={AVATAR} style={styles.avatar} contentFit="cover" />
+            <Image accessibilityLabel="Zara, assistante de vente" source={{ uri: ZARA_AVATAR_URL }} style={styles.avatar} contentFit="cover" />
             <View style={styles.headerText}>
               <Text style={styles.who}>ZARA VOUS CONSEILLE</Text>
               <Text style={styles.line} testID="zara-ad-line">
@@ -94,7 +94,7 @@ export function ZaraAdCard({ products, categories = [] }: { products: Product[];
             </View>
           </View>
           <View style={styles.product}>
-            <Image accessibilityLabel={p.name} source={{ uri: p.images[0] }} style={styles.thumb} contentFit="cover" />
+            <Image accessibilityLabel={p.name} source={{ uri: cloudinaryUrl(p.images[0], 400) }} style={styles.thumb} contentFit="cover" />
             <View style={styles.productText}>
               <Text style={styles.name} numberOfLines={2} testID="zara-ad-name">
                 {p.name.trim()}

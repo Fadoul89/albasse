@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Pressable, StyleSheet, Linking, Animated, Easing, type LayoutChangeEvent } from 'react-native';
 import { Image } from 'expo-image';
 import { colors, radius } from '../theme';
+import { cloudinaryUrl } from '../lib/cloudinaryUrl';
 import type { AdItem } from '../types';
 
 const ROTATE_MS = 4500;
@@ -30,7 +31,7 @@ export function SideAdBanner({ items, height = 120 }: { items: AdItem[]; height?
 
   useEffect(() => {
     if (items.length === 0) return;
-    Image.prefetch(items.map((item) => item.image_url)).catch(() => {});
+    Image.prefetch(items.map((item) => cloudinaryUrl(item.image_url, 800))).catch(() => {});
   }, [items]);
 
   useEffect(() => {
@@ -73,7 +74,7 @@ export function SideAdBanner({ items, height = 120 }: { items: AdItem[]; height?
   };
 
   const renderSlot = (item: AdItem, active: boolean) => {
-    const image = <Image accessibilityLabel="Publicité Albasse Shopping" source={{ uri: item.image_url }} style={styles.image} contentFit="cover" />;
+    const image = <Image accessibilityLabel="Publicité Albasse Shopping" source={{ uri: cloudinaryUrl(item.image_url, 800) }} style={styles.image} contentFit="cover" />;
     return item.link && active ? (
       <Pressable style={styles.slot} onPress={() => Linking.openURL(item.link!)}>
         {image}

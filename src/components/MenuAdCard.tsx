@@ -12,6 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { fonts } from '../theme';
 import type { AdItem } from '../types';
 import { MENU_AD_HEIGHT, MENU_AD_SHOW_MS, MENU_AD_SLIDE_MS, MENU_AD_TEXT } from '../lib/menuAd';
+import { cloudinaryUrl } from '../lib/cloudinaryUrl';
 
 const native = Platform.OS !== 'web';
 const shadow = Platform.select({ web: { boxShadow: '0 6px 18px rgba(10,20,50,0.28)' } as object, default: { shadowColor: '#0a1432', shadowOpacity: 0.28, shadowRadius: 9, shadowOffset: { width: 0, height: 6 }, elevation: 5 } });
@@ -40,7 +41,7 @@ export function MenuAdCard({ items, onOpen }: { items: AdItem[]; onOpen: (item: 
   }, []);
 
   React.useEffect(() => {
-    Image.prefetch(items.map((i) => i.image_url)).catch(() => {});
+    Image.prefetch(items.map((i) => cloudinaryUrl(i.image_url, 1200))).catch(() => {});
   }, [items]);
 
   // zoom lent, reflet, petit saut de « Voir › » : en boucle tant que la carte est là
@@ -146,7 +147,7 @@ export function MenuAdCard({ items, onOpen }: { items: AdItem[]; onOpen: (item: 
         {slides.map((it, i) => (
           <View key={`${it.image_url}-${i}`} style={[styles.slide, { width: Math.max(1, w) }]} testID={`menu-ad-slide-${i}`}>
             <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ scale }, { translateX: drift }] }]} testID={i === 0 ? 'menu-ad-zoom' : undefined}>
-              <Image accessibilityLabel={MENU_AD_TEXT.label(n, i % n)} source={{ uri: it.image_url }} style={styles.image} contentFit="cover" />
+              <Image accessibilityLabel={MENU_AD_TEXT.label(n, i % n)} source={{ uri: cloudinaryUrl(it.image_url, 1200) }} style={styles.image} contentFit="cover" />
             </Animated.View>
           </View>
         ))}

@@ -12,6 +12,7 @@ import { usePaymentSettings } from '../hooks/usePaymentSettings';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { GoldButton } from '../components/GoldButton';
 import { createOrder } from '../lib/orders';
+import { cloudinaryUrl } from '../lib/cloudinaryUrl';
 import { initiatePayment } from '../lib/payments';
 import { paymentInitiatedText } from '../lib/payments/initiatedText';
 import { CityPicker } from '../components/CityPicker';
@@ -286,7 +287,7 @@ export function CheckoutScreen() {
         <Text style={styles.sectionTitle}>Votre article</Text>
         <View style={styles.itemCard} testID="checkout-item">
           {item.product.images[0] ? (
-            <Image accessibilityLabel={item.product.name} source={{ uri: item.product.images[0] }} style={styles.itemImage} contentFit="cover" />
+            <Image accessibilityLabel={item.product.name} source={{ uri: cloudinaryUrl(item.product.images[0], 400) }} style={styles.itemImage} contentFit="cover" />
           ) : (
             <View style={styles.itemImage} />
           )}

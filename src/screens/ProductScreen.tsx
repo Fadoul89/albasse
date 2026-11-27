@@ -19,6 +19,7 @@ import type { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing } from '../theme';
 import { useProductBySlug, useProducts } from '../hooks/useProducts';
 import { shownOldPrice } from '../lib/promotions';
+import { cloudinaryUrl } from '../lib/cloudinaryUrl';
 import { offerTexts, studentDeal } from '../lib/studentOffer';
 import { useReviews } from '../hooks/useReviews';
 import { useCategories } from '../hooks/useCategories';
@@ -267,7 +268,7 @@ export function ProductScreen({ route }: Props) {
       />
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }}>
         <Image
-          source={{ uri: product.images[activeImage] }}
+          source={{ uri: cloudinaryUrl(product.images[activeImage], 1000) }}
           accessibilityLabel={product.images.length > 1 ? `${product.name} - photo ${activeImage + 1}` : product.name}
           style={styles.mainImage}
           contentFit="cover"
@@ -285,7 +286,7 @@ export function ProductScreen({ route }: Props) {
                 }}
               >
                 <Image
-                  source={{ uri }}
+                  source={{ uri: cloudinaryUrl(uri, 400) }}
                   accessibilityLabel={`${product.name} - miniature ${i + 1}`}
                   style={[styles.thumb, i === activeImage && styles.thumbActive]}
                   contentFit="cover"

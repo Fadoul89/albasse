@@ -21,6 +21,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import { GIFT_CLIENT_LINE, hasChatGift } from '../lib/assistantWords';
+import { cloudinaryUrl } from '../lib/cloudinaryUrl';
 import type { Order, OrderStatus } from '../types';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
@@ -221,7 +222,7 @@ function OrderCard({
         {order.items.map((oi, idx) => (
           <View key={`${oi.product_id}-${idx}`} style={styles.itemRow}>
             {oi.product_image ? (
-              <Image accessibilityLabel={oi.product_name} source={{ uri: oi.product_image }} style={styles.itemImage} contentFit="cover" />
+              <Image accessibilityLabel={oi.product_name} source={{ uri: cloudinaryUrl(oi.product_image, 400) }} style={styles.itemImage} contentFit="cover" />
             ) : (
               <View style={styles.itemImagePlaceholder} />
             )}

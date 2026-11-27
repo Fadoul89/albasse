@@ -5,6 +5,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Animated, AccessibilityInfo } from 'react-native';
 import { Image } from 'expo-image';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { cloudinaryUrl } from '../lib/cloudinaryUrl';
 import { colors, fonts, radius, spacing } from '../theme';
 import { ENTRY_BENEFITS, ENTRY_PRICE_BANDS, ENTRY_ROTATE_MS, entryPrice, pickEntrySets, type EntryCategory, type EntryProduct } from '../lib/entryScreen';
 
@@ -94,7 +95,7 @@ export function EntryPreview() {
           <Animated.View style={[styles.cards, { opacity: fade }]} testID="entry-set">
             {products.map((p, i) => (
               <View key={p.id} style={styles.card} testID={`entry-product-${i}`}>
-                <Image accessibilityLabel={p.name} source={{ uri: (p.images ?? []).find((u) => !!u) ?? undefined }} style={styles.photo} contentFit="cover" />
+                <Image accessibilityLabel={p.name} source={{ uri: cloudinaryUrl((p.images ?? []).find((u) => !!u), 400) || undefined }} style={styles.photo} contentFit="cover" />
                 <Text style={styles.price} numberOfLines={1}>
                   {entryPrice(p.price)}
                 </Text>

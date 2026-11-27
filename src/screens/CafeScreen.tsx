@@ -16,6 +16,7 @@ import { GoldButton } from '../components/GoldButton';
 import { trackProductView, trackAddToCart } from '../lib/analytics';
 import { endProductView, enrichProductMeta, startProductView } from '../lib/browsingTracker';
 import { shownOldPrice } from '../lib/promotions';
+import { cloudinaryUrl } from '../lib/cloudinaryUrl';
 import { isSinglePage } from '../lib/singlePage';
 import { guestOrderAllowed } from '../lib/accountWall';
 import { CAFE_FACTS, CAFE_PAGE, CAFE_POINTS, cafeLowStock, cafeNeedsChoice, cafeStatus, cafeWhatsAppUrl } from '../lib/landingCafe';
@@ -115,7 +116,7 @@ export function CafeScreen() {
         <Text style={styles.pageName} testID="cafe-page-name">{CAFE_PAGE.name}</Text>
 
         <View style={styles.imageWrap} testID="cafe-image">
-          {image ? <Image accessibilityLabel={CAFE_PAGE.name} source={{ uri: image }} style={styles.image} contentFit="cover" transition={150} /> : <Text style={styles.imageFallback}>☕</Text>}
+          {image ? <Image accessibilityLabel={CAFE_PAGE.name} source={{ uri: cloudinaryUrl(image, 1000) }} style={styles.image} contentFit="cover" transition={150} /> : <Text style={styles.imageFallback}>☕</Text>}
         </View>
 
         <Text style={styles.title} testID="cafe-title">{name}</Text>

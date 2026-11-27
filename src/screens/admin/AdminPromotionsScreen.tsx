@@ -37,6 +37,7 @@ import { ZaraPromoPicker } from '../../components/ZaraPromoPicker';
 import { PasteProductLinkField } from '../../components/PasteProductLinkField';
 import type { SmartPromotion, AdItem } from '../../types';
 import { MENU_AD_MAX, MENU_AD_TEXT } from '../../lib/menuAd';
+import { cloudinaryUrl } from '../../lib/cloudinaryUrl';
 
 type TargetType = 'category' | 'product' | 'none';
 
@@ -559,7 +560,7 @@ export function AdminPromotionsScreen() {
               {uploadingImage ? (
                 <ActivityIndicator color={colors.gold} />
               ) : imageUrl ? (
-                <Image accessibilityLabel="Image de la promotion" source={{ uri: imageUrl }} style={styles.imagePreview} contentFit="cover" />
+                <Image accessibilityLabel="Image de la promotion" source={{ uri: cloudinaryUrl(imageUrl, 400) }} style={styles.imagePreview} contentFit="cover" />
               ) : (
                 <Text style={styles.imagePickerText}>＋ Photo</Text>
               )}
@@ -665,7 +666,7 @@ function AdItemsEditor({
       {items.map((item, index) => (
         <View key={`${item.image_url}-${index}`} style={styles.adItemCard}>
           <View style={styles.adItemHeader}>
-            <Image accessibilityLabel="Image de la publicité" source={{ uri: item.image_url }} style={styles.adItemThumb} contentFit="cover" />
+            <Image accessibilityLabel="Image de la publicité" source={{ uri: cloudinaryUrl(item.image_url, 400) }} style={styles.adItemThumb} contentFit="cover" />
             <Text style={styles.adItemNumber}>Photo {index + 1}</Text>
             <Pressable onPress={() => onRemove(index)} hitSlop={8} style={{ marginLeft: 'auto' }}>
               <Text style={[styles.voiceoverAction, { color: colors.errorText }]}>✕ Retirer</Text>

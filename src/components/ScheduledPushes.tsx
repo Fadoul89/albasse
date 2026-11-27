@@ -27,6 +27,7 @@ import {
   type ZaraNotification,
 } from '../lib/scheduledPush';
 import { formatRelativeTime } from '../lib/formatDuration';
+import { cloudinaryUrl } from '../lib/cloudinaryUrl';
 import type { Product } from '../types';
 
 const formatXAF = (n: number) => `${Math.round(n).toLocaleString('fr-FR')} FCFA`;
@@ -155,7 +156,7 @@ export function ScheduledPushes({ products }: { products: Product[] }) {
       <Text style={styles.label}>1. L'article</Text>
       {product ? (
         <View style={styles.productCard} testID="push-product-selected">
-          {product.images?.[0] ? <Image accessibilityLabel={product.name} source={{ uri: product.images[0] }} style={styles.thumb} contentFit="cover" /> : null}
+          {product.images?.[0] ? <Image accessibilityLabel={product.name} source={{ uri: cloudinaryUrl(product.images[0], 400) }} style={styles.thumb} contentFit="cover" /> : null}
           <View style={{ flex: 1 }}>
             <Text style={styles.productName} numberOfLines={2}>
               {product.name}
@@ -194,7 +195,7 @@ export function ScheduledPushes({ products }: { products: Product[] }) {
                   }}
                   testID={`push-product-option-${p.id}`}
                 >
-                  {p.images?.[0] ? <Image accessibilityLabel={p.name} source={{ uri: p.images[0] }} style={styles.smallThumb} contentFit="cover" /> : null}
+                  {p.images?.[0] ? <Image accessibilityLabel={p.name} source={{ uri: cloudinaryUrl(p.images[0], 400) }} style={styles.smallThumb} contentFit="cover" /> : null}
                   <Text style={styles.suggestionText} numberOfLines={1}>
                     {p.name}
                   </Text>
@@ -240,7 +241,7 @@ export function ScheduledPushes({ products }: { products: Product[] }) {
               {message.trim() || '…'}
             </Text>
           </View>
-          {product?.images?.[0] ? <Image accessibilityLabel={product?.name ?? 'Article'} source={{ uri: product.images[0] }} style={styles.previewImage} contentFit="cover" /> : null}
+          {product?.images?.[0] ? <Image accessibilityLabel={product?.name ?? 'Article'} source={{ uri: cloudinaryUrl(product.images[0], 400) }} style={styles.previewImage} contentFit="cover" /> : null}
         </View>
       ) : null}
 
@@ -359,7 +360,7 @@ function PushRow({ row, children }: { row: ScheduledPush; children?: React.React
   const image = row.product?.images?.[0];
   return (
     <View style={styles.row} testID={`push-row-${row.id}`}>
-      {image ? <Image accessibilityLabel="" source={{ uri: image }} style={styles.smallThumb} contentFit="cover" /> : null}
+      {image ? <Image accessibilityLabel="" source={{ uri: cloudinaryUrl(image, 400) }} style={styles.smallThumb} contentFit="cover" /> : null}
       <View style={{ flex: 1 }}>
         <Text style={styles.rowTitle} numberOfLines={1}>
           {row.product?.name ?? row.title}
@@ -392,7 +393,7 @@ function ZaraNotificationRow({ row, showClicks }: { row: ZaraNotification; showC
   const image = row.product?.images?.[0];
   return (
     <View style={styles.row} testID={`zara-notification-row-${row.id}`}>
-      {image ? <Image accessibilityLabel="" source={{ uri: image }} style={styles.smallThumb} contentFit="cover" /> : null}
+      {image ? <Image accessibilityLabel="" source={{ uri: cloudinaryUrl(image, 400) }} style={styles.smallThumb} contentFit="cover" /> : null}
       <View style={{ flex: 1 }}>
         <Text style={styles.rowTitle} numberOfLines={1}>
           {row.product?.name ?? row.title}

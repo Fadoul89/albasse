@@ -5,13 +5,12 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { colors, fonts, radius, spacing } from '../theme';
-
-const AVATAR = require('../../assets/assistante-avatar.jpg');
+import { ZARA_AVATAR_URL } from '../lib/zaraAvatar';
 
 export function ZaraSays({ text, testID }: { text: string; testID?: string }) {
   return (
     <View style={styles.row} testID={testID}>
-      <Image source={AVATAR} style={styles.avatar} contentFit="cover" accessibilityLabel="Zara" />
+      <Image source={{ uri: ZARA_AVATAR_URL }} style={styles.avatar} contentFit="cover" accessibilityLabel="Zara" />
       <View style={styles.bubble}>
         <Text style={styles.name}>Zara</Text>
         <Text style={styles.text}>{text}</Text>

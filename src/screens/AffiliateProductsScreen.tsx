@@ -9,6 +9,7 @@ import { useAffiliateSettings } from '../hooks/useAffiliateSettings';
 import { useToastStore } from '../store/toastStore';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { downloadSignedPhotos } from '../lib/signedPhoto';
+import { cloudinaryUrl } from '../lib/cloudinaryUrl';
 import { colors, fonts, radius, spacing } from '../theme';
 
 const SITE_URL = 'https://www.albasseshopping.com';
@@ -151,7 +152,7 @@ export function AffiliateProductsScreen() {
           filtered.map((r) => (
             <View key={r.product.id} style={styles.row}>
               {r.product.images[0] ? (
-                <Image accessibilityLabel={r.product.name} source={{ uri: r.product.images[0] }} style={styles.thumb} contentFit="cover" />
+                <Image accessibilityLabel={r.product.name} source={{ uri: cloudinaryUrl(r.product.images[0], 400) }} style={styles.thumb} contentFit="cover" />
               ) : (
                 <View style={styles.thumbPlaceholder} />
               )}

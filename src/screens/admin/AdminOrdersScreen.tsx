@@ -19,6 +19,7 @@ import { SCHEDULED_DELIVERY } from '../../constants/shopRules';
 import { GIFT_ADMIN_BADGE, hasChatGift } from '../../lib/assistantWords';
 import { fetchPartnerData, type PartnerData } from '../../lib/partnersData';
 import { partnerByProduct, partnerCallLink, partnerPhoneLabel, partnerWhatsappLink } from '../../lib/partners';
+import { cloudinaryUrl } from '../../lib/cloudinaryUrl';
 import type { Order, OrderStatus } from '../../types';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
@@ -293,7 +294,7 @@ export function AdminOrdersScreen() {
                   <View key={`${oi.product_id}-${idx}`}>
                     <View style={styles.itemRow}>
                       {oi.product_image ? (
-                        <Image accessibilityLabel={oi.product_name} source={{ uri: oi.product_image }} style={styles.itemImage} contentFit="cover" />
+                        <Image accessibilityLabel={oi.product_name} source={{ uri: cloudinaryUrl(oi.product_image, 400) }} style={styles.itemImage} contentFit="cover" />
                       ) : (
                         <View style={styles.itemImagePlaceholder} />
                       )}
