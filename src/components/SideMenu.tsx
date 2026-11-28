@@ -28,6 +28,8 @@ import { menuAdItems, menuAdTarget } from '../lib/menuAd';
 import type { AdItem } from '../types';
 import { YoutubeIcon } from './YoutubeIcon';
 import { YOUTUBE_CHANNEL_URL, YOUTUBE_SUBSCRIBE_URL } from '../lib/youtube';
+import { TelegramIcon } from './TelegramIcon';
+import { TELEGRAM_BOT, telegramLinkUrl } from '../lib/telegramLink';
 
 const ICONS: Record<string, string> = {
   costumes: '🕴️', chemises: '👔', cravates: '🎀', chaussures: '👟', montres: '⌚', montre: '⌚', accessoires: '💍', parfum: '🧴', vetements: '👔',
@@ -312,6 +314,21 @@ export function SideMenu({ visible, onClose, categories }: { visible: boolean; o
                 <Text style={styles.ytBtnText}>{MENU_TEXT.youtubeSubscribe}</Text>
               </Pressable>
             </Pressable>
+
+            {/* Telegram : recevoir les nouveautés et offres (lié au compte si connecté, sinon le bot explique comment faire) */}
+            <Pressable
+              style={[styles.tgCard, shadow(0.12, 10)]}
+              onPress={() => Linking.openURL(profile ? telegramLinkUrl(profile.id) : `https://t.me/${TELEGRAM_BOT}`)}
+              accessibilityRole="link"
+              accessibilityLabel="Recevoir les nouveautés et offres sur Telegram"
+              testID="menu-telegram"
+            >
+              <TelegramIcon width={40} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.tgTitle}>Recevez nos offres sur Telegram</Text>
+                <Text style={styles.tgSub}>Nouveautés et promotions, directement dans votre Telegram</Text>
+              </View>
+            </Pressable>
           </ScrollView>
         </Animated.View>
         {/* toucher à côté du panneau le ferme */}
@@ -404,6 +421,9 @@ const styles = StyleSheet.create({
   ytSub: { color: G.muted, fontFamily: fonts.body, fontSize: 11, marginTop: 2 },
   ytBtn: { backgroundColor: '#ff0000', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 6 },
   ytBtnText: { color: '#ffffff', fontFamily: fonts.bodyBold, fontSize: 11 },
+  tgCard: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 10, marginBottom: 6, paddingHorizontal: 12, paddingVertical: 12, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: 1.5, borderColor: '#229ED9' },
+  tgTitle: { color: G.text, fontFamily: fonts.bodyBold, fontSize: 14 },
+  tgSub: { color: G.muted, fontFamily: fonts.body, fontSize: 11, marginTop: 2 },
   footIcon: { width: 28, height: 28, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.22)', alignItems: 'center', justifyContent: 'center' },
   footEmoji: { fontSize: 14, color: G.ink },
 });
