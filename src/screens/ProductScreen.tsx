@@ -113,35 +113,17 @@ export function ProductScreen({ route }: Props) {
     }
   }, [redirectSlug]);
 
-  if (!product || !product.is_active) {
-    if (isLoading) {
-      return (
-        <View style={styles.screen}>
-          <ScreenHeader title="Produit" showBack />
-        </View>
-      );
-    }
+  // article retiré ou jamais existé (lien périmé, partagé sur WhatsApp…) : on renvoie directement à l'accueil,
+  // sans page « produit indisponible » à afficher (demande du patron, 28 novembre 2026).
+  const notFound = !isLoading && (!product || !product.is_active);
+  useEffect(() => {
+    if (notFound) navigation.reset({ index: 0, routes: [{ name: 'Tabs', params: { screen: 'Home' } }] });
+  }, [notFound]);
 
-    const suggestions = allProducts.filter((p) => p.is_active).slice(0, 4);
+  if (!product || !product.is_active) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="Produit indisponible" showBack />
-        <ScrollView contentContainerStyle={styles.body}>
-          <Text style={styles.notFoundTitle}>Produit indisponible</Text>
-          <Text style={styles.notFound}>
-            Ce produit n'existe plus ou a été retiré de la boutique.
-          </Text>
-          {suggestions.length > 0 && (
-            <>
-              <Text style={[styles.selectorLabel, { marginTop: spacing.xl }]}>Vous aimerez peut-être</Text>
-              <View style={styles.suggestionsGrid}>
-                {suggestions.map((p) => (
-                  <ProductCard key={p.id} product={p} />
-                ))}
-              </View>
-            </>
-          )}
-        </ScrollView>
+        <ScreenHeader title="Produit" showBack />
       </View>
     );
   }
@@ -460,8 +442,6 @@ export function ProductScreen({ route }: Props) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   shareIcon: { color: colors.gold, fontSize: 20, fontFamily: fonts.bodyBold },
-  notFoundTitle: { fontFamily: fonts.display, fontSize: 22, color: colors.cream, marginBottom: 8 },
-  notFound: { color: colors.creamFaint, fontFamily: fonts.body, fontSize: 14 },
   suggestionsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginTop: spacing.md },
   mainImage: { width, aspectRatio: 0.85, backgroundColor: colors.panel },
   thumbRow: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: 8 },
