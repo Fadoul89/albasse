@@ -422,6 +422,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+    // Carte penchée en 3D (demande du patron) : inclinaison bien visible, en permanence.
+    transform: [{ perspective: 600 }, { rotateX: '10deg' }, { rotateY: '-14deg' }],
+    shadowColor: '#000',
+    shadowOffset: { width: 18, height: 22 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 10,
   },
   homeBlackFridayBadge: { marginTop: 10 },
   brand: {
