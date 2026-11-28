@@ -25,6 +25,7 @@ import { CURVE_INSET, CurvedGlass } from './CurvedGlass';
 import { MenuAdCard } from './MenuAdCard';
 import { useStoreSettings } from '../hooks/useStoreSettings';
 import { menuAdItems, menuAdTarget } from '../lib/menuAd';
+import { cloudinaryUrl } from '../lib/cloudinaryUrl';
 import type { AdItem } from '../types';
 import { YoutubeIcon } from './YoutubeIcon';
 import { YOUTUBE_CHANNEL_URL, YOUTUBE_SUBSCRIBE_URL } from '../lib/youtube';
@@ -91,7 +92,7 @@ function useOpenCategorySlug(): string | null {
 function CatIcon({ c }: { c: Category }) {
   return (
     <View style={[styles.catIcon, shadow(0.14, 4)]}>
-      {c.image_url ? <Image accessibilityLabel={c.name} source={{ uri: c.image_url }} style={styles.catImage} contentFit="cover" /> : <Text style={styles.catEmoji}>{ICONS[c.slug] ?? '✨'}</Text>}
+      {c.image_url ? <Image accessibilityLabel={c.name} source={{ uri: cloudinaryUrl(c.image_url, 400) }} style={styles.catImage} contentFit="cover" /> : <Text style={styles.catEmoji}>{ICONS[c.slug] ?? '✨'}</Text>}
     </View>
   );
 }

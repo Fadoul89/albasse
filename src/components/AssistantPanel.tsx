@@ -28,8 +28,9 @@ import { openInChrome } from '../lib/pwaInstallPrompt';
 import { downloadOrOpenInvoice } from '../lib/invoiceDownload';
 import { ASSISTANT_NAME, WHATSAPP_URL } from '../constants/assistant';
 import { photoAllowed } from '../lib/zaraPhotoCore';
+import { ZARA_AVATAR_URL } from '../lib/zaraAvatar';
+import { cloudinaryUrl } from '../lib/cloudinaryUrl';
 
-const AVATAR = require('../../assets/assistante-avatar.jpg');
 const DESKTOP_WIDTH = 640;
 const COMPACT_WIDTH = 430;
 // Sur téléphone, la fenêtre de Zara n'est pas en plein écran : c'est une fenêtre qui monte du bas, sur environ 60 % de la zone visible
@@ -121,7 +122,7 @@ function ProductCards({ products, lang, onOpen, onAdd }: { products: AssistantPr
           <Pressable key={p.slug} testID="assistant-card" style={styles.card} onPress={() => onOpen(p.slug)} accessibilityRole="link" accessibilityLabel={`${t.card.see} ${p.name}`}>
             <View style={styles.cardImageWrap}>
               {p.image ? (
-                <Image accessibilityLabel={p.name} source={{ uri: p.image }} style={styles.cardImage} contentFit="cover" transition={150} />
+                <Image accessibilityLabel={p.name} source={{ uri: cloudinaryUrl(p.image, 400) }} style={styles.cardImage} contentFit="cover" transition={150} />
               ) : (
                 <View style={[styles.cardImage, styles.cardNoImage]}>
                   <Text style={styles.cardNoImageText}>🛍️</Text>
@@ -232,7 +233,7 @@ function Bubble({
   return (
     <View style={styles.group}>
       <View style={[styles.row, mine ? styles.rowMine : styles.rowBot]}>
-        {!mine && <Image accessibilityLabel="Zara, assistante de vente" source={AVATAR} style={styles.smallAvatar} contentFit="cover" />}
+        {!mine && <Image accessibilityLabel="Zara, assistante de vente" source={{ uri: ZARA_AVATAR_URL }} style={styles.smallAvatar} contentFit="cover" />}
         <View style={styles.bubbleColumn}>
           {mine && message.image ? <ChatPhoto image={message.image} mine /> : null}
           {mine ? (
@@ -449,7 +450,7 @@ export function AssistantPanel() {
     >
       <LinearGradient colors={[colors.panelAlt, colors.panel]} style={[styles.header, compact && styles.headerCompact]}>
         <View style={[styles.avatarRing, compact && styles.avatarRingCompact]}>
-          <Image accessibilityLabel="Zara, assistante de vente" source={AVATAR} style={styles.headerAvatar} contentFit="cover" />
+          <Image accessibilityLabel="Zara, assistante de vente" source={{ uri: ZARA_AVATAR_URL }} style={styles.headerAvatar} contentFit="cover" />
           <View style={styles.onlineDot} />
         </View>
         <View style={styles.headerText}>
@@ -517,7 +518,7 @@ export function AssistantPanel() {
 
         {loading ? (
           <View style={[styles.row, styles.rowBot]}>
-            <Image accessibilityLabel="Zara, assistante de vente" source={AVATAR} style={styles.smallAvatar} contentFit="cover" />
+            <Image accessibilityLabel="Zara, assistante de vente" source={{ uri: ZARA_AVATAR_URL }} style={styles.smallAvatar} contentFit="cover" />
             <View style={[styles.bubble, styles.bubbleBot]}>
               <TypingDots label={t.ui.writing} />
             </View>

@@ -17,6 +17,7 @@ import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { StoreSettingToggle } from '../../components/StoreSettingToggle';
 import { fetchPartnerData, type PartnerData } from '../../lib/partnersData';
 import { partnerByProduct } from '../../lib/partners';
+import { cloudinaryUrl } from '../../lib/cloudinaryUrl';
 import type { Product } from '../../types';
 
 const formatXAF = (n: number) => `${n.toLocaleString('fr-FR')} FCFA`;
@@ -230,7 +231,7 @@ export function AdminProductsScreen() {
         renderItem={({ item }) => (
           <View style={styles.row}>
             <View style={styles.rowTop}>
-              <Image accessibilityLabel={item.name} source={{ uri: item.images[0] }} style={styles.thumb} contentFit="cover" />
+              <Image accessibilityLabel={item.name} source={{ uri: cloudinaryUrl(item.images[0], 400) }} style={styles.thumb} contentFit="cover" />
               <View style={{ flex: 1 }}>
                 <Text style={styles.name} numberOfLines={1}>
                   {item.name}

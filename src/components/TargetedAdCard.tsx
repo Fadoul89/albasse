@@ -15,6 +15,7 @@ import type { City } from '../lib/assistantBrain';
 import { getBrowsingProfile } from '../lib/browsingTracker';
 import { AD_ADVERTISER, AD_CTA, AD_LABEL, addClosedAd, addClosedAds, adHeadline, adWhy, closedState, deliveryLine, parseClosedAds, pickTargetedAd, type ClosedAd } from '../lib/adTargeting';
 import { shownOldPrice } from '../lib/promotions';
+import { cloudinaryUrl } from '../lib/cloudinaryUrl';
 import { dealFromPrice, offerTexts } from '../lib/studentOffer';
 import { colors, fonts, radius, spacing } from '../theme';
 
@@ -117,7 +118,7 @@ export function TargetedAdCard({ products, categories }: { products: Product[]; 
             </Text>
 
             <Pressable onPress={() => open(p.slug)} accessibilityRole="button" accessibilityLabel={`${p.name.trim()} : ${text.buy}`} testID="targeted-ad-image">
-              <Image accessibilityLabel={p.name} source={{ uri: p.images[0] }} style={styles.interestImage} contentFit="contain" />
+              <Image accessibilityLabel={p.name} source={{ uri: cloudinaryUrl(p.images[0], 400) }} style={styles.interestImage} contentFit="contain" />
             </Pressable>
             <Text style={[styles.interestName, align]} numberOfLines={2} testID="targeted-ad-name">{p.name.trim()}</Text>
             <View style={styles.priceRow}>
@@ -128,7 +129,7 @@ export function TargetedAdCard({ products, categories }: { products: Product[]; 
             <View style={styles.tilesRow}>
               {tiles.map((t, i) => (
                 <Pressable key={t.id} style={styles.tile} onPress={() => open(t.slug)} accessibilityRole="button" accessibilityLabel={`${t.name.trim()} : ${text.buy}`} testID={`interest-tile-${i + 1}`}>
-                  <Image accessibilityLabel={t.name} source={{ uri: t.images[0] }} style={styles.tileImage} contentFit="contain" />
+                  <Image accessibilityLabel={t.name} source={{ uri: cloudinaryUrl(t.images[0], 400) }} style={styles.tileImage} contentFit="contain" />
                   <Text style={[styles.tileName, align]} numberOfLines={2} testID={`interest-tile-${i + 1}-name`}>{t.name.trim()}</Text>
                   <Text style={styles.tilePrice} testID={`interest-tile-${i + 1}-price`}>{formatXAF(t.price)}</Text>
                 </Pressable>
@@ -192,7 +193,7 @@ export function TargetedAdCard({ products, categories }: { products: Product[]; 
               </Text>
 
               <Pressable onPress={buy} accessibilityRole="button" accessibilityLabel={`${p.name.trim()} : ${text.buy}`} testID="targeted-ad-image">
-                <Image accessibilityLabel={p.name} source={{ uri: p.images[0] }} style={styles.posterImage} contentFit="contain" />
+                <Image accessibilityLabel={p.name} source={{ uri: cloudinaryUrl(p.images[0], 400) }} style={styles.posterImage} contentFit="contain" />
                 <View style={styles.pctBadge} testID="student-offer-pct">
                   <Text style={styles.pctText}>{offerTexts.pct(deal, lang)}</Text>
                 </View>
@@ -258,7 +259,7 @@ export function TargetedAdCard({ products, categories }: { products: Product[]; 
         </Text>
 
         <Pressable onPress={() => navigation.navigate('Product', { slug: p.slug })} accessibilityRole="button" accessibilityLabel={`${p.name.trim()} : ${text.buy}`} testID="targeted-ad-image">
-          <Image accessibilityLabel={p.name} source={{ uri: p.images[0] }} style={styles.image} contentFit="contain" />
+          <Image accessibilityLabel={p.name} source={{ uri: cloudinaryUrl(p.images[0], 400) }} style={styles.image} contentFit="contain" />
         </Pressable>
 
         <View style={styles.productRow}>

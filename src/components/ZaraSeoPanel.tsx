@@ -8,6 +8,7 @@ import { Image } from 'expo-image';
 import { useToastStore } from '../store/toastStore';
 import { colors, fonts, radius, spacing } from '../theme';
 import { GoldButton } from './GoldButton';
+import { cloudinaryUrl } from '../lib/cloudinaryUrl';
 import {
   BATCH_SIZE,
   WEAK_MIN_LEN,
@@ -170,7 +171,7 @@ export function ZaraSeoPanel() {
             return (
               <View key={d.item.id} style={[styles.draft, !d.keep && { opacity: 0.55 }]} testID="zara-seo-draft">
                 <View style={styles.draftHead}>
-                  {photo ? <Image accessibilityLabel="" source={{ uri: photo }} style={styles.thumb} contentFit="cover" /> : <View style={[styles.thumb, { backgroundColor: colors.panelAlt }]} />}
+                  {photo ? <Image accessibilityLabel="" source={{ uri: cloudinaryUrl(photo, 400) }} style={styles.thumb} contentFit="cover" /> : <View style={[styles.thumb, { backgroundColor: colors.panelAlt }]} />}
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={styles.name} numberOfLines={2}>{d.item.name.replace(/\s+/g, ' ').trim()}</Text>
                     <Text style={styles.badge}>{d.item.source === 'ia' ? '📷 écrit d’après la photo' : '🧩 écrit avec les faits connus (nom, catégorie, couleurs, tailles)'}</Text>

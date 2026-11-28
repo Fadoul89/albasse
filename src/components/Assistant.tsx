@@ -10,8 +10,8 @@ import { texts } from '../lib/assistantText';
 import { pushReminderNow } from '../lib/pushReminder';
 import { AssistantPanel } from './AssistantPanel';
 import { TAB_BAR_HEIGHT } from '../navigation/tabLayout';
+import { ZARA_AVATAR_URL } from '../lib/zaraAvatar';
 
-const AVATAR = require('../../assets/assistante-avatar.jpg');
 const TEASER_DELAY_MS = 5000;
 // Le client connecté est salué par son prénom 10 secondes après sa connexion (et non 5).
 const MEMBER_TEASER_DELAY_MS = 10000;
@@ -351,7 +351,7 @@ function FabButton({
             <View ref={ring1Ref} pointerEvents="none" style={[styles.ring, styles.ringHidden]} />
             <View ref={ring2Ref} pointerEvents="none" style={[styles.ring, styles.ringHidden]} />
             <View ref={shakeRef} style={styles.fab}>
-              <Image accessibilityLabel="Zara, assistante de vente" source={AVATAR} style={styles.avatar} contentFit="cover" />
+              <Image accessibilityLabel="Zara, assistante de vente" source={{ uri: ZARA_AVATAR_URL }} style={styles.avatar} contentFit="cover" />
               <View style={styles.dot} />
             </View>
           </>
@@ -360,7 +360,7 @@ function FabButton({
             <Animated.View pointerEvents="none" style={[styles.ring, nativeRing(ring1)]} />
             <Animated.View pointerEvents="none" style={[styles.ring, nativeRing(ring2)]} />
             <Animated.View style={[styles.fab, nativeShake]}>
-              <Image accessibilityLabel="Zara, assistante de vente" source={AVATAR} style={styles.avatar} contentFit="cover" />
+              <Image accessibilityLabel="Zara, assistante de vente" source={{ uri: ZARA_AVATAR_URL }} style={styles.avatar} contentFit="cover" />
               <View style={styles.dot} />
             </Animated.View>
           </>

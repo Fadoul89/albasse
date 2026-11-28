@@ -18,6 +18,7 @@ import type { SalesMap } from '../lib/assistantSales';
 import { isSeniorProfession, productAdLine, zaraAdsDelaySeconds } from '../lib/zaraAds';
 import { colors, fonts, radius, spacing } from '../theme';
 import { promoAction, promoWhatsappUrl } from '../lib/promoTarget';
+import { cloudinaryUrl } from '../lib/cloudinaryUrl';
 
 const SHOW_DELAY_MS = 1500;
 
@@ -157,7 +158,7 @@ export function SmartPromotionPopup() {
             >
               <Image
                 accessibilityLabel="Promotion Albasse Shopping"
-                source={{ uri: promotion.image_url }}
+                source={{ uri: cloudinaryUrl(promotion.image_url, 1000) }}
                 style={[styles.image, { aspectRatio: imageRatio ?? 1, maxHeight: Math.round(windowHeight * 0.45) }]}
                 contentFit="contain"
                 onLoad={(e) => {
