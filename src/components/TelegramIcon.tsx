@@ -1,11 +1,16 @@
-// Le rond bleu Telegram avec son avion en papier : pas d'image à charger (même esprit que YoutubeIcon).
+// Icône Telegram dorée (couronne + liserés laurier, assortie au style doré du site) : image hébergée sur Cloudinary.
 import React from 'react';
-import { View, Text } from 'react-native';
+import { Image } from 'expo-image';
+
+const TELEGRAM_ICON_GOLD_URL = 'https://res.cloudinary.com/c3sblcwg/image/upload/v1795900510/telegram_icon_gold.png';
 
 export function TelegramIcon({ width = 30 }: { width?: number }) {
   return (
-    <View style={{ width, height: width, borderRadius: width / 2, backgroundColor: '#229ED9', alignItems: 'center', justifyContent: 'center' }}>
-      <Text style={{ fontSize: Math.round(width * 0.5) }}>✈️</Text>
-    </View>
+    <Image
+      accessibilityLabel="Telegram"
+      source={{ uri: TELEGRAM_ICON_GOLD_URL }}
+      style={{ width, height: width }}
+      contentFit="contain"
+    />
   );
 }
